@@ -5,6 +5,7 @@ import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
 import { Prisma, PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
+import { awardPropertyXP } from '@/lib/gamification/xp'
 
 const updateSchema = z.object({
   address: z.string().min(1).optional(),
@@ -112,6 +113,14 @@ export async function PATCH(
         payload: JSON.parse(JSON.stringify(parsed.data)) as Prisma.InputJsonValue,
       },
     })
+
+    // Award XP for status milestones (Under Contract, Sold)
+    if (status && (status === 'UNDER_CONTRACT' || status === 'SOLD')) {
+      const assignee = property.assignedToId ?? session.userId
+      awardPropertyXP(session.tenantId, assignee, params.propertyId, status).catch((err) => {
+        console.warn(`[Properties] XP award failed:`, err)
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (err) {

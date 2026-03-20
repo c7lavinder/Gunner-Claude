@@ -6,6 +6,7 @@ import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { gradeCall } from '@/lib/ai/grading'
 import { createPropertyFromContact } from '@/lib/properties'
+import { awardTaskXP } from '@/lib/gamification/xp'
 
 export type GHLWebhookEvent = {
   type: string
@@ -330,10 +331,22 @@ async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
   const ghlTaskId = taskData.taskId ?? taskData.id
   if (!ghlTaskId) return
 
+  const updated = await db.task.findFirst({
+    where: { tenantId, ghlTaskId },
+    select: { id: true, assignedToId: true, category: true },
+  })
+
   await db.task.updateMany({
     where: { tenantId, ghlTaskId },
     data: { status: 'COMPLETED', completedAt: new Date() },
   })
+
+  // Award XP for task completion
+  if (updated?.assignedToId) {
+    awardTaskXP(tenantId, updated.assignedToId, updated.id, updated.category ?? undefined).catch((err) => {
+      console.warn(`[Webhook] XP award failed for task ${updated.id}:`, err)
+    })
+  }
 }
 
 // ─── Appointment Created → Log it ──────────────────────────────────────────

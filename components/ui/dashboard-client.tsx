@@ -2,7 +2,7 @@
 // components/ui/dashboard-client.tsx
 
 import Link from 'next/link'
-import { Phone, CheckSquare, Building2, TrendingUp, ArrowUpRight, Clock, Star, Zap, Target } from 'lucide-react'
+import { Phone, CheckSquare, Building2, TrendingUp, ArrowUpRight, Clock, Star, Zap, Target, Trophy, Award } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 interface DashboardData {
@@ -13,6 +13,8 @@ interface DashboardData {
     avgScore: number; tasksCompleted: number; propertiesActive: number
   }
   scoreTrend: ScoreTrendPoint[]
+  leaderboard: LeaderboardEntry[]
+  userBadges: EarnedBadge[]
   priorityLeads: PriorityLead[]
   recentCalls: CallSummary[]
   todayTasks: TaskSummary[]
@@ -21,6 +23,13 @@ interface DashboardData {
 
 interface ScoreTrendPoint {
   date: string; avgScore: number; count: number
+}
+interface LeaderboardEntry {
+  rank: number; userId: string; name: string; role: string
+  totalXp: number; weeklyXp: number; level: number
+}
+interface EarnedBadge {
+  type: string; name: string; description: string; earned: boolean; earnedAt: string | null
 }
 interface PriorityLead {
   id: string; address: string; city: string; state: string; status: string
@@ -157,6 +166,73 @@ export function DashboardClient({ data, tenantSlug }: { data: DashboardData; ten
           )}
         </div>
       </div>
+
+      {/* Leaderboard + Badges */}
+      {(data.leaderboard.length > 0 || data.userBadges.length > 0) && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Leaderboard */}
+          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+            <h2 className="text-sm font-medium text-white flex items-center gap-2 mb-4">
+              <Trophy size={14} className="text-yellow-400" />
+              Leaderboard
+            </h2>
+            {data.leaderboard.length === 0 ? (
+              <EmptyState icon={<Trophy size={20} />} message="XP leaderboard appears once calls are graded" />
+            ) : (
+              <div className="space-y-1.5">
+                {data.leaderboard.slice(0, 8).map((entry) => (
+                  <div key={entry.userId} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      entry.rank === 1 ? 'bg-yellow-500/20 text-yellow-400' :
+                      entry.rank === 2 ? 'bg-gray-400/20 text-gray-300' :
+                      entry.rank === 3 ? 'bg-orange-700/20 text-orange-400' :
+                      'bg-white/5 text-gray-500'
+                    }`}>
+                      {entry.rank}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{entry.name}</p>
+                      <p className="text-xs text-gray-600">Lv.{entry.level}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-orange-400">{entry.totalXp.toLocaleString()}</p>
+                      <p className="text-xs text-gray-600">+{entry.weeklyXp} this week</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Badges */}
+          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+            <h2 className="text-sm font-medium text-white flex items-center gap-2 mb-4">
+              <Award size={14} className="text-purple-400" />
+              Your badges
+            </h2>
+            {data.userBadges.length === 0 ? (
+              <EmptyState icon={<Award size={20} />} message="Earn badges by grading calls, closing deals, and hitting streaks" />
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {data.userBadges.map((badge) => (
+                  <div
+                    key={badge.type}
+                    className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
+                      <Award size={14} className="text-purple-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-white truncate">{badge.name}</p>
+                      <p className="text-xs text-gray-600 truncate">{badge.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="grid lg:grid-cols-3 gap-6">

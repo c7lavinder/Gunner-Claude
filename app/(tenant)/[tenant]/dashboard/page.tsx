@@ -6,6 +6,7 @@ import { db } from '@/lib/db/client'
 import { DashboardClient } from '@/components/ui/dashboard-client'
 import { formatDistanceToNow, startOfDay, endOfDay, subDays, startOfWeek, startOfMonth } from 'date-fns'
 import type { UserRole } from '@/types/roles'
+import { getLeaderboard, getUserBadges } from '@/lib/gamification/xp'
 
 interface PageProps {
   params: { tenant: string }
@@ -26,7 +27,7 @@ export default async function DashboardPage({ params }: PageProps) {
   const monthStart = startOfMonth(today)
 
   // Fetch today's data in parallel
-  const [recentCalls, todayTasks, unreadCount, recentProperties, scoreTrendCalls, priorityLeads] = await Promise.all([
+  const [recentCalls, todayTasks, unreadCount, recentProperties, scoreTrendCalls, priorityLeads, leaderboard, userBadges] = await Promise.all([
     // Recent calls for this user
     db.call.findMany({
       where: {
@@ -100,6 +101,10 @@ export default async function DashboardPage({ params }: PageProps) {
         _count: { select: { calls: true } },
       },
     }),
+
+    // Leaderboard + current user badges
+    getLeaderboard(tenantId),
+    getUserBadges(tenantId, userId),
   ])
 
   // KPI counts — extended with week/month for context
@@ -156,6 +161,11 @@ export default async function DashboardPage({ params }: PageProps) {
       propertiesActive,
     },
     scoreTrend,
+    leaderboard,
+    userBadges: userBadges.filter(b => b.earned).map(b => ({
+      ...b,
+      earnedAt: b.earnedAt?.toISOString() ?? null,
+    })),
     priorityLeads: priorityLeads.map((p) => ({
       id: p.id,
       address: p.address,
