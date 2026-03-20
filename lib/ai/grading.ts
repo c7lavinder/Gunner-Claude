@@ -1,10 +1,12 @@
 // lib/ai/grading.ts
 // Automatic call grading using Claude API
-// Enriches call data with GHL conversation context before grading
+// Duration routing: <30s skip, 30-60s summary only, 60s+ full grading
+// Transcribes via Deepgram when recording URL available
 
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
+import { transcribeRecording } from '@/lib/ai/transcribe'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -37,6 +39,36 @@ export async function gradeCall(callId: string): Promise<void> {
 
     if (!call) throw new Error(`Call ${callId} not found`)
 
+    const duration = call.durationSeconds ?? 0
+
+    // Duration routing: <30s should not reach here (filtered by webhook handler)
+    // But handle defensively
+    if (duration > 0 && duration < 30) {
+      await db.call.update({
+        where: { id: callId },
+        data: { gradingStatus: 'COMPLETED', score: 0, aiSummary: 'Dial attempt — call under 30 seconds.' },
+      })
+      return
+    }
+
+    // Transcribe if recording URL exists
+    let transcript = call.transcript
+    if (!transcript && call.recordingUrl) {
+      console.log(`[Call Grading] Transcribing recording for call ${callId}...`)
+      const transcription = await transcribeRecording(call.recordingUrl)
+      if (transcription.status === 'success' && transcription.transcript) {
+        transcript = transcription.transcript
+        // Save transcript to DB so we don't re-transcribe
+        await db.call.update({
+          where: { id: callId },
+          data: { transcript },
+        })
+        console.log(`[Call Grading] Transcription complete: ${transcript.length} chars`)
+      } else {
+        console.warn(`[Call Grading] Transcription failed: ${transcription.error}`)
+      }
+    }
+
     // Get rubric for this user's role
     const rubric = call.assignedTo
       ? await db.callRubric.findFirst({
@@ -50,6 +82,9 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const rubricCriteria = rubric?.criteria as RubricCriteria[] | null ?? getDefaultRubric(call.assignedTo?.role)
 
+    // 30-60s calls: summary only, limited grading
+    const isSummaryOnly = duration > 0 && duration < 60
+
     // Enrich with GHL context if connected
     let ghlContext: GHLCallContext | null = null
     if (call.ghlCallId && call.tenant.ghlAccessToken) {
@@ -57,8 +92,11 @@ export async function gradeCall(callId: string): Promise<void> {
     }
 
     // Build and send the grading prompt
-    const systemPrompt = buildGradingSystemPrompt(rubricCriteria)
-    const userPrompt = buildGradingUserPrompt(call, rubricCriteria, ghlContext)
+    const systemPrompt = isSummaryOnly
+      ? buildSummaryOnlySystemPrompt()
+      : buildGradingSystemPrompt(rubricCriteria)
+    const callWithTranscript = { ...call, transcript }
+    const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext)
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -208,6 +246,24 @@ async function fetchGHLCallContext(tenantId: string, ghlConversationId: string):
 }
 
 // ─── Prompt builders ────────────────────────────────────────────────────────
+
+function buildSummaryOnlySystemPrompt(): string {
+  return `You are a sales call analyst for a real estate wholesaling company.
+
+This was a SHORT call (30-60 seconds). Provide a brief summary and basic score.
+Do not deeply evaluate rubric criteria — there isn't enough call content.
+
+You MUST respond with valid JSON only.
+
+Response format:
+{
+  "overallScore": <number 0-100 — be generous for short calls that seem productive>,
+  "rubricScores": {},
+  "summary": "<1-2 sentence summary of what likely happened>",
+  "feedback": "<brief note on the call>",
+  "coachingTips": ["<one tip>"]
+}`
+}
 
 function buildGradingSystemPrompt(criteria: RubricCriteria[]): string {
   return `You are an expert sales call coach and grader for a real estate wholesaling company.

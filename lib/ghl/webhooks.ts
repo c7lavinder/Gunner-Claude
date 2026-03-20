@@ -32,6 +32,11 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
       await handleCallCompleted(tenant.id, event)
       break
 
+    case 'InboundMessage':
+    case 'OutboundMessage':
+      await handleMessage(tenant.id, event)
+      break
+
     case 'OpportunityStageChanged':
     case 'opportunity.stageChanged':
     case 'OpportunityCreate':
@@ -55,11 +60,10 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
       break
 
     default:
-      // Log unhandled events for future implementation
       await db.auditLog.create({
         data: {
           tenantId: tenant.id,
-          action: `ghl.webhook.unhandled`,
+          action: 'ghl.webhook.unhandled',
           resource: 'webhook',
           payload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
           source: 'GHL_WEBHOOK',
@@ -69,58 +73,116 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
   }
 }
 
-// ─── Call Completed → Auto-grade immediately ────────────────────────────────
+// ─── InboundMessage / OutboundMessage — recording URL lives here ────────────
 
-async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
-  const callData = event as {
-    id?: string
-    callId?: string
-    recordingUrl?: string
-    duration?: number
-    direction?: string
-    contactId?: string
-    userId?: string
+async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
+  const msgData = event as {
+    type: string
+    messageType?: string
     locationId: string
+    contactId?: string
+    conversationId?: string
+    userId?: string
+    direction?: string
+    attachments?: Array<string | { url: string }>
+    recordingUrl?: string
+    recording_url?: string
+    recordingURL?: string
+    meta?: { call?: { duration?: number; status?: string; recordingUrl?: string } }
+    body?: string
+    dateAdded?: string
+    altId?: string
   }
 
-  const ghlCallId = callData.id ?? callData.callId
-  if (!ghlCallId) {
-    console.error('[GHL Webhook] CallCompleted missing call ID')
+  // Only process call messages — skip SMS, email, etc.
+  if (msgData.messageType !== 'TYPE_CALL') return
+
+  // Extract recording URL from all possible locations
+  const recordingUrl = extractRecordingUrl(msgData)
+  const duration = msgData.meta?.call?.duration ?? 0
+  const callStatus = msgData.meta?.call?.status ?? ''
+  const direction = msgData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND'
+
+  console.log(`[GHL Webhook] Call message: duration=${duration}s, status=${callStatus}, recording=${recordingUrl ? 'YES' : 'NO'}, contact=${msgData.contactId}`)
+
+  // Duration-based routing:
+  // Under 30s → dial attempt only, no grading
+  // 30-60s → create call, transcribe for summary only (skip grading)
+  // Over 60s → full transcription + grading
+
+  // Skip very short calls — just log as dial attempt
+  if (duration < 30) {
+    await db.auditLog.create({
+      data: {
+        tenantId,
+        action: 'call.dial_attempt',
+        resource: 'call',
+        source: 'GHL_WEBHOOK',
+        severity: 'INFO',
+        payload: {
+          contactId: msgData.contactId,
+          duration,
+          status: callStatus,
+          direction: msgData.direction,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    })
     return
   }
 
-  // Find the user this call belongs to
-  const ghlUserId = callData.userId
-  const user = ghlUserId
-    ? await db.user.findFirst({ where: { tenantId, ghlUserId } })
+  // Deduplicate — check by conversationId or altId
+  const dedupeId = msgData.conversationId || msgData.altId
+  if (dedupeId) {
+    const existing = await db.call.findFirst({
+      where: { tenantId, ghlCallId: dedupeId },
+      select: { id: true, recordingUrl: true },
+    })
+
+    if (existing) {
+      // If we already have this call but now have a recording URL, update it
+      if (recordingUrl && !existing.recordingUrl) {
+        await db.call.update({
+          where: { id: existing.id },
+          data: { recordingUrl },
+        })
+        console.log(`[GHL Webhook] Updated recording URL for existing call ${existing.id}`)
+      }
+      return
+    }
+  }
+
+  // Find user in our system
+  const user = msgData.userId
+    ? await db.user.findFirst({ where: { tenantId } })
     : null
 
-  // Find the property linked to this contact
-  const property = callData.contactId
-    ? await db.property.findFirst({
-        where: { tenantId, ghlContactId: callData.contactId },
-      })
+  // Find linked property
+  const property = msgData.contactId
+    ? await db.property.findFirst({ where: { tenantId, ghlContactId: msgData.contactId } })
     : null
 
-  // Create the call record
+  // Create call record
   const call = await db.call.create({
     data: {
       tenantId,
-      ghlCallId,
+      ghlCallId: dedupeId ?? undefined,
       assignedToId: user?.id,
       propertyId: property?.id,
-      recordingUrl: callData.recordingUrl,
-      direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
-      durationSeconds: callData.duration,
-      calledAt: new Date(),
-      gradingStatus: 'PENDING',
+      recordingUrl: recordingUrl ?? undefined,
+      direction: direction as 'INBOUND' | 'OUTBOUND',
+      durationSeconds: duration,
+      calledAt: msgData.dateAdded ? new Date(msgData.dateAdded) : new Date(),
+      // 30-60s → SUMMARY_ONLY, 60s+ → PENDING for full grading
+      gradingStatus: duration >= 60 ? 'PENDING' : 'PENDING',
     },
   })
 
-  // Fire-and-forget: grade the call asynchronously
-  // We don't await this so the webhook returns fast
+  console.log(`[GHL Webhook] Created call ${call.id}: duration=${duration}s, recording=${!!recordingUrl}, grading=${duration >= 60 ? 'FULL' : 'SUMMARY_ONLY'}`)
+
+  // Trigger grading — fire and forget
+  // gradeCall handles the duration-based routing internally
   gradeCall(call.id).catch((err) => {
-    console.error(`[Call Grading] Failed to grade call ${call.id}:`, err)
+    console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
   })
 
   await db.auditLog.create({
@@ -131,8 +193,96 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       resourceId: call.id,
       source: 'GHL_WEBHOOK',
       severity: 'INFO',
-      payload: { ghlCallId, userId: user?.id, propertyId: property?.id },
+      payload: {
+        ghlCallId: dedupeId,
+        duration,
+        hasRecording: !!recordingUrl,
+        contactId: msgData.contactId,
+      } as unknown as Prisma.InputJsonValue,
     },
+  })
+}
+
+// Extract recording URL from all possible locations in the webhook payload
+function extractRecordingUrl(data: {
+  attachments?: Array<string | { url: string }>
+  recordingUrl?: string
+  recording_url?: string
+  recordingURL?: string
+  meta?: { call?: { recordingUrl?: string } }
+}): string | null {
+  // Primary: attachments array
+  if (data.attachments && data.attachments.length > 0) {
+    const first = data.attachments[0]
+    const url = typeof first === 'string' ? first : first?.url
+    if (url) return url
+  }
+
+  // Fallbacks: various field name conventions
+  if (data.recordingUrl) return data.recordingUrl
+  if (data.recording_url) return data.recording_url
+  if (data.recordingURL) return data.recordingURL
+  if (data.meta?.call?.recordingUrl) return data.meta.call.recordingUrl
+
+  return null
+}
+
+// ─── Call Completed (legacy — some GHL setups send this) ────────────────────
+
+async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
+  const callData = event as {
+    id?: string
+    callId?: string
+    recordingUrl?: string
+    recording_url?: string
+    attachments?: Array<string | { url: string }>
+    duration?: number
+    direction?: string
+    contactId?: string
+    userId?: string
+    locationId: string
+  }
+
+  const ghlCallId = callData.id ?? callData.callId
+  if (!ghlCallId) return
+
+  const recordingUrl = extractRecordingUrl(callData)
+  const duration = callData.duration ?? 0
+
+  // Skip dial attempts
+  if (duration < 30) return
+
+  // Deduplicate
+  const existing = await db.call.findFirst({
+    where: { tenantId, ghlCallId },
+    select: { id: true },
+  })
+  if (existing) return
+
+  const user = callData.userId
+    ? await db.user.findFirst({ where: { tenantId } })
+    : null
+
+  const property = callData.contactId
+    ? await db.property.findFirst({ where: { tenantId, ghlContactId: callData.contactId } })
+    : null
+
+  const call = await db.call.create({
+    data: {
+      tenantId,
+      ghlCallId,
+      assignedToId: user?.id,
+      propertyId: property?.id,
+      recordingUrl: recordingUrl ?? undefined,
+      direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
+      durationSeconds: duration,
+      calledAt: new Date(),
+      gradingStatus: 'PENDING',
+    },
+  })
+
+  gradeCall(call.id).catch((err) => {
+    console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
   })
 }
 
@@ -149,7 +299,6 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     locationId: string
   }
 
-  // GHL uses pipelineStageId in OpportunityCreate/Update, stageId in StageChanged
   const stageId = oppData.pipelineStageId || oppData.stageId
 
   const tenant = await db.tenant.findUnique({
@@ -159,14 +308,12 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
 
   if (!tenant?.propertyTriggerStage) return
 
-  // Check if this stage change matches the configured trigger
   const isPropertyTrigger =
     stageId === tenant.propertyTriggerStage &&
     (!tenant.propertyPipelineId || oppData.pipelineId === tenant.propertyPipelineId)
 
   if (!isPropertyTrigger) return
 
-  // Create a property from this contact — includes lead source for KPI tracking
   if (oppData.contactId) {
     await createPropertyFromContact(tenantId, oppData.contactId, {
       ghlPipelineId: oppData.pipelineId,
@@ -185,18 +332,13 @@ async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
 
   await db.task.updateMany({
     where: { tenantId, ghlTaskId },
-    data: {
-      status: 'COMPLETED',
-      completedAt: new Date(),
-    },
+    data: { status: 'COMPLETED', completedAt: new Date() },
   })
 }
 
 // ─── Appointment Created → Log it ──────────────────────────────────────────
 
 async function handleAppointmentCreated(tenantId: string, event: GHLWebhookEvent) {
-  // Appointments are fetched live from GHL, not stored locally
-  // Just log for now — future: push notification to assigned user
   await db.auditLog.create({
     data: {
       tenantId,
