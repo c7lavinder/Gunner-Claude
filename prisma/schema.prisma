@@ -57,6 +57,13 @@ model Tenant {
   auditLogs     AuditLog[]
   callRubrics   CallRubric[]
   roleConfigs   RoleConfig[]
+  userXp              UserXp[]
+  userBadges          UserBadge[]
+  xpEvents            XpEvent[]
+  leadSourceCosts     LeadSourceCost[]
+  coachLogs           CoachLog[]
+  workflowDefinitions WorkflowDefinition[]
+  workflowExecutions  WorkflowExecution[]
 
   @@map("tenants")
 }
@@ -107,6 +114,10 @@ model User {
   assignedProperties Property[] @relation("PropertyAssignedTo")
   kpiSnapshots       KpiSnapshot[]
   auditLogs          AuditLog[]
+  xp                 UserXp?
+  badges             UserBadge[]
+  xpEvents           XpEvent[]
+  coachLogs          CoachLog[]
 
   @@map("users")
 }
@@ -158,6 +169,11 @@ model Property {
 
   // Lead tracking
   leadSource       String? @map("lead_source") // GHL opportunity source — tracked for KPIs
+
+  // TCP — True Conversion Probability (0.0 to 1.0)
+  tcpScore     Float?    @map("tcp_score")
+  tcpFactors   Json?     @map("tcp_factors") // {callSentiment, touchCount, equity, motivation, ...}
+  tcpUpdatedAt DateTime? @map("tcp_updated_at")
 
   // GHL sync
   ghlContactId     String? @map("ghl_contact_id")
@@ -268,6 +284,15 @@ model Call {
   aiFeedback    String?       @db.Text @map("ai_feedback")
   aiCoachingTips Json?        @map("ai_coaching_tips")
   gradedAt      DateTime?     @map("graded_at")
+
+  // AI Analysis (populated during grading)
+  sentiment        Float?    // -1.0 to 1.0
+  objections       Json?     // [{objection, response, handled}]
+  talkRatio        Float?    @map("talk_ratio") // rep talk % vs seller talk %
+  keyMoments       Json?     @map("key_moments") // [{timestamp, type, description}]
+  callOutcome      String?   @map("call_outcome") // appointment_set, follow_up, dead, contract, not_interested
+  sellerMotivation Float?    @map("seller_motivation") // 0.0 to 1.0
+  nextBestAction   String?   @map("next_best_action") // AI suggested next step
 
   @@map("calls")
 }
@@ -464,4 +489,140 @@ enum AuditSeverity {
   CRITICAL
 
   @@map("audit_severity")
+}
+
+// ─────────────────────────────────────────
+// GAMIFICATION — XP, Badges, Leaderboard
+// ─────────────────────────────────────────
+
+model UserXp {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  totalXp  Int @default(0) @map("total_xp")
+  weeklyXp Int @default(0) @map("weekly_xp")
+  level    Int @default(1)
+
+  @@unique([tenantId, userId])
+  @@map("user_xp")
+}
+
+model UserBadge {
+  id       String   @id @default(cuid())
+  earnedAt DateTime @default(now()) @map("earned_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId    String @map("user_id")
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  badgeType String @map("badge_type") // first_call, sharp_shooter, on_fire, deal_maker, etc.
+
+  @@unique([tenantId, userId, badgeType])
+  @@map("user_badges")
+}
+
+model XpEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId    String @map("user_id")
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  eventType String @map("event_type") // call_made, score_over_60, appointment_set, streak_5, etc.
+  xpAwarded Int    @map("xp_awarded")
+  relatedId String? @map("related_id") // callId, propertyId, etc.
+
+  @@map("xp_events")
+}
+
+// ─────────────────────────────────────────
+// LEAD SOURCE COSTS — monthly spend tracking
+// ─────────────────────────────────────────
+
+model LeadSourceCost {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  source String // Facebook, Direct Mail, Cold Call, PPC, Referral, Other
+  cost   Decimal @db.Decimal(12, 2)
+  month  Int // 1-12
+  year   Int
+
+  @@unique([tenantId, source, month, year])
+  @@map("lead_source_costs")
+}
+
+// ─────────────────────────────────────────
+// AI COACH LOGS — all interactions, admin visible
+// ─────────────────────────────────────────
+
+model CoachLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  message String @db.Text // user message
+  role    String // user or assistant
+  actions Json?  // actions executed [{type, target, status}]
+
+  @@map("coach_logs")
+}
+
+// ─────────────────────────────────────────
+// WORKFLOW ENGINE — sequences built in Gunner, executed via GHL
+// ─────────────────────────────────────────
+
+model WorkflowDefinition {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name     String
+  steps    Json   // [{delay, condition, action, content}]
+  isActive Boolean @default(true) @map("is_active")
+
+  executions WorkflowExecution[]
+
+  @@map("workflow_definitions")
+}
+
+model WorkflowExecution {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  workflowId String              @map("workflow_id")
+  workflow   WorkflowDefinition  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  contactId   String  @map("contact_id") // GHL contact ID
+  currentStep Int     @default(0) @map("current_step")
+  status      String  @default("active") // active, completed, paused, failed
+
+  @@map("workflow_executions")
 }
