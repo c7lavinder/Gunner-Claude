@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Phase**: PHASE 3 COMPLETE — ready for Phase 4
+**Phase**: PHASE 4 IN PROGRESS — 4A + 4B done
 **App state**: Live on Railway + running locally
 **Auth**: Real login on Railway, DEV_BYPASS_AUTH in .env.local only
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude ✅
@@ -67,6 +67,19 @@
   - properties/[propertyId] PATCH — missing tenantId in where clause
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
+
+### Session 24 — Phase 4B: Workflow Engine (2026-03-20)
+**What was done:**
+- Built lib/workflows/engine.ts (240 lines):
+  - 4 trigger types: property_created, stage_changed, call_graded, task_completed
+  - 5 step types: send_sms, create_task, update_status, notify, wait
+  - Delayed execution with nextRunAt for cron processing
+  - Simple condition evaluator (score > 70, status == UNDER_CONTRACT)
+  - processWaitingWorkflows() for cron to advance delayed steps
+- Wired triggers into: properties.ts, grading.ts, webhooks.ts
+- Built GET/POST /api/workflows (CRUD + toggle)
+- Added Workflows tab to Settings with visual builder
+- Schema updates: triggerEvent on definitions, propertyId/context/nextRunAt on executions
 
 ### Session 23 — Phase 4A: Disposition Hub — buyers + deal blasting (2026-03-20)
 **What was done:**
@@ -360,20 +373,18 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ## Next Session — Start Exactly Here
 
-**Task:** Phase 4B — Workflow Engine + remaining Phase 4 items
+**Task:** Phase 4C–4F — Lead source ROI, multi-pipeline, API access, polish
 
 **First message to Claude Code:**
 
 Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
 
-Phase 4A Disposition Hub is built. Remaining Phase 4:
+Phase 4A (Disposition Hub) + 4B (Workflow Engine) done. Remaining:
 
-**4B — Workflow Engine:**
-1. Build workflow builder UI (/{tenant}/settings → Workflows section)
-2. Trigger types: property created, stage changed, call graded, task completed
-3. Step types: wait, send_sms, create_task, update_status, notify_user
-4. Workflow execution engine using workflow_definitions + workflow_executions tables
-5. Exit criteria: one automated workflow running on production
+**4C — Lead Source ROI:** Track cost per lead source, calculate ROI per channel
+**4D — Multi-Pipeline:** Support multiple pipelines per tenant
+**4E — API Access:** Tenant-scoped API keys for integrations
+**4F — Polish:** Password reset, mobile responsive, error boundaries, loading states
 
 ---
 
