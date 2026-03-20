@@ -24,7 +24,7 @@ export async function POST(
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
   await db.task.update({
-    where: { id: taskId },
+    where: { id: taskId, tenantId },
     data: { status: 'COMPLETED', completedAt: new Date() },
   })
 

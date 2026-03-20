@@ -52,7 +52,7 @@ export async function PATCH(
     await db.$transaction(async (tx) => {
       // Update property
       await tx.property.update({
-        where: { id: params.propertyId },
+        where: { id: params.propertyId, tenantId: session.tenantId },
         data: {
           ...(address && { address }),
           ...(city && { city }),

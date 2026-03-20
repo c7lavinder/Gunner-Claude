@@ -52,6 +52,22 @@
 
 ## Session Log
 
+### Session 12 — Multi-tenancy audit + call grading pipeline (2026-03-20)
+**What was done:**
+- Fixed inbox crash: GHL returns dateUpdated as Unix ms, not ISO string
+- Fixed inbox data: mapped contactName, phone, lastMessageBody from GHL conversation data
+- Fixed poll-calls.ts: rewrote to use /conversations/search (TYPE_CALL) — /calls endpoint doesn't exist
+- Fixed grading: removed hard FAIL when no transcript — Claude now grades on metadata
+- Verified end-to-end: 17 real calls found, grading confirmed working
+- Added calendars/events.readonly scope to OAuth URLs for future reconnects
+- **MULTI-TENANCY AUDIT — 3 critical vulnerabilities fixed:**
+  - call-rubrics/[id] DELETE — missing tenantId in where clause
+  - call-rubrics/[id] PATCH — missing tenantId in where clause
+  - tasks/[taskId]/complete — missing tenantId in where clause
+  - properties/[propertyId] PATCH — missing tenantId in where clause
+- Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
+- Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
+
 ### Session 11 — Full deployment night (2026-03-19)
 **What was done:**
 - Deployed to Railway — fixed Next.js CVE (14.2.3→14.2.35), ESLint config, Suspense boundaries, health check public path
@@ -115,6 +131,10 @@
 | 10 | GHL webhook registration returns 404 — Marketplace Apps may not support /locations/{id}/webhooks endpoint | lib/ghl/client.ts | HIGH | Investigate correct GHL v2 webhook API or rely on polling |
 | 11 | Appointments page returns 401 — calendars/events scope may not be covered by calendars.readonly | lib/ghl/client.ts | HIGH | Add correct scope to GHL Marketplace App |
 | 12 | GHL API version header may be outdated (2021-07-28) — some endpoints return 404 | lib/ghl/client.ts | MEDIUM | Test with newer version string |
+| 13 | ~~call-rubrics/[id] DELETE/PATCH missing tenantId in where clause~~ | call-rubrics/[id]/route.ts | ~~CRITICAL~~ | ✅ FIXED — audit |
+| 14 | ~~tasks/[taskId]/complete UPDATE missing tenantId in where clause~~ | tasks/[taskId]/complete/route.ts | ~~CRITICAL~~ | ✅ FIXED — audit |
+| 15 | ~~properties/[propertyId] PATCH missing tenantId in where clause~~ | properties/[propertyId]/route.ts | ~~CRITICAL~~ | ✅ FIXED — audit |
+| 16 | DEV_BYPASS_AUTH code references hardcoded apex-dev slug and owner@apex.dev email | middleware.ts, session.ts, page.tsx | MEDIUM | Clean up before adding tenant #2 locally |
 
 ---
 

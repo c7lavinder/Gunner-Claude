@@ -18,7 +18,7 @@ export async function DELETE(
 
   if (!rubric) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await db.callRubric.delete({ where: { id: params.id } })
+  await db.callRubric.delete({ where: { id: params.id, tenantId: session.tenantId } })
 
   await db.auditLog.create({
     data: {
@@ -60,7 +60,7 @@ export async function PATCH(
   }
 
   const updated = await db.callRubric.update({
-    where: { id: params.id },
+    where: { id: params.id, tenantId: session.tenantId },
     data: {
       ...(body.name && { name: body.name }),
       ...(body.isDefault !== undefined && { isDefault: body.isDefault }),
