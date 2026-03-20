@@ -171,6 +171,7 @@ using only PROGRESS.md + AGENTS.md? If no → handoff is incomplete.
 - TypeScript strict mode — no any, no @ts-ignore
 - Every async function has try/catch — errors log to audit_logs
 - Server components fetch. Client components display.
+- **No phase is complete until every feature is verified end-to-end on production** — manual replays, local-only tests, and "should work" do not count. If it hasn't been observed working on the live Railway URL with real data, it is not done.
 
 ---
 

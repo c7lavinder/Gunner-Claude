@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   '/register',
   '/onboarding',
   '/api/auth',
+  '/api/cron',
   '/api/health',
   '/api/tenants/register',
   '/api/webhooks',

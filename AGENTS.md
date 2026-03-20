@@ -31,6 +31,7 @@ A task is complete when:
 2. PROGRESS.md is updated
 3. The specific acceptance criteria from the task are met
 4. Structured JSON status has been returned confirming completion
+5. **The feature has been verified working end-to-end on the live Railway URL with real data** — local tests, manual replays, and "should work" do not count as verification
 
 ---
 
