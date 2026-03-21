@@ -108,12 +108,12 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
   console.log(`[GHL Webhook] Call message: duration=${duration}s, status=${callStatus}, recording=${recordingUrl ? 'YES' : 'NO'}, contact=${msgData.contactId}`)
 
   // Duration-based routing:
-  // Under 30s → dial attempt only, no grading
-  // 30-60s → create call, transcribe for summary only (skip grading)
-  // Over 60s → full transcription + grading
+  // 0s or under 45s → dial attempt / no answer, skip entirely
+  // 45-90s → create call, summary only (no rubric score)
+  // Over 90s → full transcription + grading
 
-  // Skip very short calls — just log as dial attempt
-  if (duration < 30) {
+  // Zero duration also caught here (0 < 45 is true) — no answer calls
+  if (duration < 45) {
     await db.auditLog.create({
       data: {
         tenantId,
@@ -175,11 +175,11 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       durationSeconds: duration,
       calledAt: msgData.dateAdded ? new Date(msgData.dateAdded) : new Date(),
       // 30-60s → SUMMARY_ONLY, 60s+ → PENDING for full grading
-      gradingStatus: duration >= 60 ? 'PENDING' : 'PENDING',
+      gradingStatus: 'PENDING',
     },
   })
 
-  console.log(`[GHL Webhook] Created call ${call.id}: duration=${duration}s, recording=${!!recordingUrl}, grading=${duration >= 60 ? 'FULL' : 'SUMMARY_ONLY'}`)
+  console.log(`[GHL Webhook] Created call ${call.id}: duration=${duration}s, recording=${!!recordingUrl}, grading=${duration >= 90 ? 'FULL' : 'SUMMARY_ONLY'}`)
 
   // Trigger grading — fire and forget
   // gradeCall handles the duration-based routing internally
@@ -251,8 +251,8 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
   const recordingUrl = extractRecordingUrl(callData)
   const duration = callData.duration ?? 0
 
-  // Skip dial attempts
-  if (duration < 30) return
+  // Skip dial attempts / no answer (0s or under 45s)
+  if (duration < 45) return
 
   // Deduplicate
   const existing = await db.call.findFirst({

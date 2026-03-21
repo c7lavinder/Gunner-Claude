@@ -68,6 +68,18 @@ async function pollCalls() {
           // Determine call direction from conversation
           const direction = conv.lastMessageDirection === 'inbound' ? 'INBOUND' : 'OUTBOUND'
 
+          // Extract duration if available
+          const convDuration =
+            (conv as unknown as { durationSeconds?: number; duration?: number }).durationSeconds
+            ?? (conv as unknown as { durationSeconds?: number; duration?: number }).duration
+            ?? null
+
+          // Skip no-answer/short calls before creating a record
+          if (convDuration !== null && convDuration < 45) {
+            console.log(`[poll-calls] Skipping short/no-answer call (${convDuration}s) for conv ${conv.id}`)
+            continue
+          }
+
           // Create the call record
           const newCall = await db.call.create({
             data: {
@@ -77,6 +89,7 @@ async function pollCalls() {
               assignedToId: user?.id ?? null,
               direction: direction as 'INBOUND' | 'OUTBOUND',
               calledAt: new Date(conv.lastMessageDate || conv.dateUpdated || Date.now()),
+              durationSeconds: convDuration ?? undefined,
               gradingStatus: 'PENDING',
             },
           })

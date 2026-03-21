@@ -54,6 +54,7 @@ export default async function CallsPage({ params }: { params: { tenant: string }
         gradingStatus: c.gradingStatus,
         callType: c.callType,
         callOutcome: c.callOutcome,
+        callResult: c.callResult,
         direction: c.direction,
         durationSeconds: c.durationSeconds,
         calledAt: c.calledAt?.toISOString() ?? c.createdAt.toISOString(),

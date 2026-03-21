@@ -13,9 +13,10 @@ import { useToast } from '@/components/ui/toaster'
 
 interface Call {
   id: string; score: number | null; gradingStatus: string
-  callType: string | null; callOutcome: string | null; direction: string
-  durationSeconds: number | null; calledAt: string; recordingUrl: string | null
-  aiSummary: string | null; aiFeedback: string | null; contactName: string | null
+  callType: string | null; callOutcome: string | null; callResult: string | null
+  direction: string; durationSeconds: number | null; calledAt: string
+  recordingUrl: string | null; aiSummary: string | null; aiFeedback: string | null
+  contactName: string | null
   assignedTo: { id: string; name: string; role: string } | null
   property: { id: string; address: string; city: string; state: string } | null
 }
@@ -97,7 +98,11 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const reviewCalls = calls.filter(c => ['PENDING', 'PROCESSING', 'FAILED'].includes(c.gradingStatus))
   const processingCalls = reviewCalls.filter(c => ['PENDING', 'PROCESSING'].includes(c.gradingStatus))
   const failedCalls = reviewCalls.filter(c => c.gradingStatus === 'FAILED')
-  const shortCalls = calls.filter(c => c.durationSeconds !== null && c.durationSeconds < 30)
+  const shortCalls = calls.filter(c =>
+    (c.durationSeconds !== null && c.durationSeconds < 45) ||
+    c.callResult === 'no_answer' ||
+    (c.gradingStatus === 'FAILED' && (c.aiSummary?.includes('No answer') || c.aiSummary?.includes('no answer')))
+  )
 
   // Apply filters on All tab
   let filtered = tab === 'all' ? allCalls : tab === 'review' ? reviewCalls : shortCalls
@@ -154,7 +159,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: 'all', label: 'All graded', count: allCalls.length },
     { id: 'review', label: 'Needs review', count: reviewCalls.length },
-    { id: 'short', label: 'Short calls', count: shortCalls.length },
+    { id: 'short', label: 'No answer', count: shortCalls.length },
   ]
 
   return (
@@ -321,7 +326,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
         <div className="space-y-4">
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-blue-300">
             <Info size={14} className="shrink-0 mt-0.5" />
-            <p>Calls under 30 seconds — likely dial attempts or voicemails. Not graded automatically. Reprocess any call here if it has a recording worth grading.</p>
+            <p>Under 45 seconds or no answer — not graded. These are dial attempts, voicemails, or calls that were not picked up.</p>
           </div>
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
             {shortCalls.length === 0 ? (

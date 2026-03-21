@@ -68,6 +68,33 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 29 — Fix no-answer calls graded as F + 45s threshold (2026-03-20)
+**What was done:**
+- **grading.ts:** Zero duration → FAILED + callResult: no_answer (was COMPLETED score 0). Under 45s → FAILED + no_answer (was 30s). Summary-only threshold raised 60s → 90s. No score set on no-answer calls.
+- **webhooks.ts:** Skip threshold raised 30s → 45s. Fixed duplicate gradingStatus bug. Updated console log to show 90s FULL threshold.
+- **poll-calls.ts:** Added duration extraction from conversations. Skips calls < 45s before creating DB records. Saves durationSeconds on creation.
+- **calls-client.tsx:** "Short calls" tab renamed to "No answer". Filter catches: < 45s duration, callResult 'no_answer', FAILED + 'No answer' in summary. callResult added to Call interface.
+- **calls/page.tsx:** Now passes callResult field to client.
+
+**Manual DB cleanup required — run once in Supabase SQL Editor:**
+```sql
+UPDATE calls
+SET
+  grading_status = 'FAILED',
+  score = NULL,
+  ai_summary = 'No answer — retroactively corrected.',
+  call_result = 'no_answer'
+WHERE
+  grading_status = 'COMPLETED'
+  AND (
+    duration_seconds = 0
+    OR duration_seconds < 45
+    OR (score = 0 AND ai_summary ILIKE '%no answer%')
+    OR (score = 0 AND ai_summary ILIKE '%dial attempt%')
+    OR (score = 0 AND ai_summary ILIKE '%under 30%')
+  );
+```
+
 ### Session 28 — PropertyMilestone system end to end (2026-03-20)
 **What was done:**
 - **Schema:** PropertyMilestone model with 5 types (LEAD, APPOINTMENT_SET, OFFER_MADE, UNDER_CONTRACT, CLOSED), relations on Property/User/Tenant, migration created + applied

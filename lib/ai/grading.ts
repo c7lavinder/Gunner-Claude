@@ -44,12 +44,32 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const duration = call.durationSeconds ?? 0
 
-    // Duration routing: <30s should not reach here (filtered by webhook handler)
-    // But handle defensively
-    if (duration > 0 && duration < 30) {
+    // Duration routing: <45s and 0s caught here
+    // 45-90s: summary only (no rubric score)
+    // 90s+: full grading with rubric score
+
+    // Zero duration = no answer (GHL sends 0 when unanswered)
+    if (duration === 0) {
       await db.call.update({
         where: { id: callId },
-        data: { gradingStatus: 'COMPLETED', score: 0, aiSummary: 'Dial attempt — call under 30 seconds.' },
+        data: {
+          gradingStatus: 'FAILED',
+          aiSummary: 'No answer — zero duration.',
+          callResult: 'no_answer',
+        },
+      })
+      return
+    }
+
+    // Under 45s = dial attempt or no answer — do not grade
+    if (duration < 45) {
+      await db.call.update({
+        where: { id: callId },
+        data: {
+          gradingStatus: 'FAILED',
+          aiSummary: 'No answer — call under 45 seconds.',
+          callResult: 'no_answer',
+        },
       })
       return
     }
@@ -86,7 +106,7 @@ export async function gradeCall(callId: string): Promise<void> {
     const rubricCriteria = rubric?.criteria as RubricCriteria[] | null ?? getDefaultRubric(call.assignedTo?.role)
 
     // 30-60s calls: summary only, limited grading
-    const isSummaryOnly = duration > 0 && duration < 60
+    const isSummaryOnly = duration >= 45 && duration < 90
 
     // Enrich with GHL context if connected
     let ghlContext: GHLCallContext | null = null
