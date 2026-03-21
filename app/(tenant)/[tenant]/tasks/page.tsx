@@ -158,19 +158,30 @@ export default async function TasksPage({ params }: { params: { tenant: string }
 
     // Build enriched tasks
     enrichedTasks = tasks.map(t => {
+      // Prefer inline contactDetails from GHL response, fall back to bulk-fetched
+      const inlineName = t.contactDetails
+        ? `${t.contactDetails.firstName ?? ''} ${t.contactDetails.lastName ?? ''}`.trim()
+        : null
       const contact = contactMap.get(t.contactId)
+      const contactName = inlineName || (contact?.name ?? null)
+
+      // Prefer inline assignedToUserDetails, fall back to user map
+      const inlineAssigned = t.assignedToUserDetails
+        ? `${t.assignedToUserDetails.firstName ?? ''} ${t.assignedToUserDetails.lastName ?? ''}`.trim()
+        : null
+      const assignedUserId = t.assignedTo ?? null
+      const assignedToName = inlineAssigned || (assignedUserId ? ghlUserMap.get(assignedUserId) ?? null : null)
+
       const category = classifyTask(t.title || '', t.body || '')
       const score = scoreTask(category, t.dueDate)
       const dueDate = t.dueDate ? new Date(t.dueDate) : null
       const taskIsOverdue = dueDate ? isPast(dueDate) && !isToday(dueDate) : false
       const taskIsDueToday = dueDate ? isToday(dueDate) : false
-      const assignedUserId = t.assignedTo ?? null
-      const assignedToName = assignedUserId ? ghlUserMap.get(assignedUserId) ?? null : null
 
       const callStatus = amPmMap.get(t.contactId) ?? { am: false, pm: false }
 
       return {
-        id: t.id,
+        id: t.id || t._id || '',
         title: t.title || 'Untitled task',
         body: t.body ?? null,
         category,
@@ -179,7 +190,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         isOverdue: taskIsOverdue,
         isDueToday: taskIsDueToday,
         contactId: t.contactId,
-        contactName: contact?.name ?? null,
+        contactName,
         contactPhone: contact?.phone ?? null,
         contactAddress: contact?.address ?? null,
         assignedToName,

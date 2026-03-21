@@ -132,10 +132,40 @@ export class GHLClient {
   // ─── Tasks (search from GHL) ───────────────────────────────────────────────
 
   async searchTasks(status: 'incompleted' | 'completed' = 'incompleted') {
-    return this.request<{ tasks: GHLTaskItem[] }>('POST', `/locations/${this.locationId}/tasks/search`, {
-      locationId: this.locationId,
-      status,
-    })
+    // GHL tasks/search rejects body params — send empty body, location inferred from URL
+    // Paginate using searchAfter cursor (25 per page)
+    const allTasks: GHLTaskItem[] = []
+    let searchAfter: unknown[] | undefined
+
+    for (let page = 0; page < 20; page++) { // safety cap: 500 tasks max
+      const body: Record<string, unknown> = {}
+      if (searchAfter) body.searchAfter = searchAfter
+
+      const result = await this.request<GHLTaskSearchResponse>('POST', `/locations/${this.locationId}/tasks/search`, body)
+      const pageTasks = result.tasks ?? []
+      if (pageTasks.length === 0) break
+
+      // Map _id to id for consistency
+      for (const t of pageTasks) {
+        if (!t.id && t._id) t.id = t._id
+      }
+      allTasks.push(...pageTasks)
+
+      // Get cursor from last task for next page
+      const lastTask = pageTasks[pageTasks.length - 1]
+      if (lastTask.searchAfter) {
+        searchAfter = lastTask.searchAfter as unknown[]
+      } else {
+        break // no cursor means no more pages
+      }
+
+      if (pageTasks.length < 25) break // partial page = last page
+    }
+
+    // Filter by status client-side
+    if (status === 'incompleted') return { tasks: allTasks.filter(t => !t.completed) }
+    if (status === 'completed') return { tasks: allTasks.filter(t => t.completed) }
+    return { tasks: allTasks }
   }
 
   // ─── Appointments ──────────────────────────────────────────────────────────
@@ -438,12 +468,21 @@ export interface GHLTaskSearchResult {
 
 export interface GHLTaskItem {
   id: string
+  _id?: string
   title: string
   body?: string
   dueDate: string
   completed: boolean
   contactId: string
   assignedTo?: string
+  contactDetails?: { firstName?: string; lastName?: string }
+  assignedToUserDetails?: { id?: string; firstName?: string; lastName?: string }
+  searchAfter?: unknown[]
+}
+
+interface GHLTaskSearchResponse {
+  tasks: GHLTaskItem[]
+  total?: number
 }
 
 export interface GHLPipelineList {
