@@ -6,7 +6,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Phone, Clock, ArrowDownLeft, ArrowUpRight as ArrowUp, AlertCircle, RefreshCw, RotateCcw, Loader2, Info, SkipForward } from 'lucide-react'
-import { formatDistanceToNow, subDays, subMonths } from 'date-fns'
+import { format, subDays, subMonths } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
 
@@ -292,7 +292,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
                     <Loader2 size={16} className="text-blue-400 animate-spin shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
-                      <p className="text-xs text-gray-500">{c.gradingStatus.toLowerCase()} · {formatDistanceToNow(new Date(c.calledAt), { addSuffix: true })}</p>
+                      <p className="text-xs text-gray-500">{c.gradingStatus.toLowerCase()} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
                     </div>
                     <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">{c.gradingStatus.toLowerCase()}</span>
                   </div>
@@ -356,7 +356,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
-                    <p className="text-xs text-gray-500">{formatDuration(c.durationSeconds)} · {formatDistanceToNow(new Date(c.calledAt), { addSuffix: true })}</p>
+                    <p className="text-xs text-gray-500">{formatDuration(c.durationSeconds)} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
                   </div>
                   {c.recordingUrl && (
                     <button onClick={() => callAction(c.id, 'reprocess')} disabled={actionLoading === `${c.id}-reprocess`}
@@ -435,7 +435,7 @@ function CallRow({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
           {formatDuration(call.durationSeconds)}
         </div>
         <p className="text-xs text-gray-600">
-          {formatDistanceToNow(new Date(call.calledAt), { addSuffix: true })}
+          {format(new Date(call.calledAt), 'MMM d, h:mm a')}
         </p>
       </div>
     </Link>
