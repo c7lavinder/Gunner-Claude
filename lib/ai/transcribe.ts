@@ -1,6 +1,7 @@
 // lib/ai/transcribe.ts
 // Transcribes call recordings using Deepgram
-// Accepts a URL — Deepgram fetches the audio directly, no download needed
+// GHL recording URLs require authentication, so we download the audio first
+// then send the raw audio buffer to Deepgram
 
 interface TranscriptionResult {
   status: 'success' | 'error'
@@ -9,22 +10,56 @@ interface TranscriptionResult {
   error?: string
 }
 
-export async function transcribeRecording(recordingUrl: string): Promise<TranscriptionResult> {
+export async function transcribeRecording(
+  recordingUrl: string,
+  ghlAccessToken?: string,
+): Promise<TranscriptionResult> {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) {
     return { status: 'error', error: 'DEEPGRAM_API_KEY not configured' }
   }
 
   try {
-    // Use Deepgram REST API directly — simpler and more reliable than SDK
-    const response = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&diarize=true&punctuate=true&utterances=true', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${apiKey}`,
-        'Content-Type': 'application/json',
+    // Step 1: Download the recording (GHL URLs require Bearer token)
+    const isGHLUrl = recordingUrl.includes('leadconnectorhq.com') || recordingUrl.includes('services.leadconnector')
+    let audioBuffer: ArrayBuffer
+
+    if (isGHLUrl && ghlAccessToken) {
+      const downloadRes = await fetch(recordingUrl, {
+        headers: {
+          'Authorization': `Bearer ${ghlAccessToken}`,
+          'Version': '2021-04-15',
+        },
+      })
+      if (!downloadRes.ok) {
+        return { status: 'error', error: `Recording download failed (${downloadRes.status}): ${(await downloadRes.text()).slice(0, 200)}` }
+      }
+      audioBuffer = await downloadRes.arrayBuffer()
+    } else {
+      // Public URL — download directly
+      const downloadRes = await fetch(recordingUrl)
+      if (!downloadRes.ok) {
+        return { status: 'error', error: `Recording download failed (${downloadRes.status})` }
+      }
+      audioBuffer = await downloadRes.arrayBuffer()
+    }
+
+    if (audioBuffer.byteLength < 1000) {
+      return { status: 'error', error: `Recording too small (${audioBuffer.byteLength} bytes) — likely not a valid audio file` }
+    }
+
+    // Step 2: Send raw audio to Deepgram
+    const response = await fetch(
+      'https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&diarize=true&punctuate=true&utterances=true',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${apiKey}`,
+          'Content-Type': 'audio/mpeg',
+        },
+        body: audioBuffer,
       },
-      body: JSON.stringify({ url: recordingUrl }),
-    })
+    )
 
     if (!response.ok) {
       const errText = await response.text()

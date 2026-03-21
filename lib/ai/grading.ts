@@ -81,7 +81,8 @@ export async function gradeCall(callId: string): Promise<void> {
     let transcript = call.transcript
     if (!transcript && call.recordingUrl) {
       console.log(`[Call Grading] Transcribing recording for call ${callId}...`)
-      const transcription = await transcribeRecording(call.recordingUrl)
+      const ghlToken = (call.tenant as { ghlAccessToken?: string | null }).ghlAccessToken ?? undefined
+      const transcription = await transcribeRecording(call.recordingUrl, ghlToken ?? undefined)
       if (transcription.status === 'success' && transcription.transcript) {
         transcript = transcription.transcript
         // Save transcript to DB so we don't re-transcribe
