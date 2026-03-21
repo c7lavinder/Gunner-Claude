@@ -10,12 +10,13 @@ import { exchangeGHLCode, getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 
 const GHL_WEBHOOK_EVENTS = [
+  'InboundMessage',
+  'OutboundMessage',
   'CallCompleted',
   'OpportunityStageChanged',
   'ContactCreated',
   'TaskCompleted',
   'AppointmentCreated',
-  'InboundMessage',
 ]
 
 export async function GET(request: NextRequest) {
