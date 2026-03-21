@@ -424,8 +424,10 @@ export interface GHLAppointment {
   startTime: string
   endTime: string
   contactId: string
-  userId: string
-  status: string
+  userId?: string
+  assignedUserId?: string    // GHL actual field name
+  status?: string
+  appointmentStatus?: string // GHL actual field name
   calendarId: string
 }
 

@@ -53,8 +53,8 @@ export default async function AppointmentsPage({ params }: { params: { tenant: s
       endTime: a.endTime,
       contactId: a.contactId,
       contactName: contactMap.get(a.contactId) ?? null,
-      assignedUserName: apptUserMap.get(a.userId) ?? null,
-      status: a.status,
+      assignedUserName: apptUserMap.get(a.assignedUserId || a.userId || '') ?? null,
+      status: a.appointmentStatus || a.status || 'new',
     }))
   } catch (err) {
     const statusCode = err instanceof GHLError ? err.statusCode : null
