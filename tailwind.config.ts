@@ -1,7 +1,6 @@
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
-  darkMode: ['class'],
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -11,6 +10,35 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Gunner Design System
+        gunner: {
+          red: '#C0392B',
+          'red-light': '#FAEDEC',
+          'red-dark': '#922B21',
+        },
+        surface: {
+          primary: '#FFFFFF',
+          secondary: '#F8F7F4',
+          tertiary: '#F0EEE9',
+        },
+        txt: {
+          primary: '#1A1A18',
+          secondary: '#6B6B66',
+          muted: '#9B9A94',
+        },
+        semantic: {
+          green: '#1D9E75',
+          'green-bg': '#E1F5EE',
+          amber: '#BA7517',
+          'amber-bg': '#FAEEDA',
+          red: '#A32D2D',
+          'red-bg': '#FCEBEB',
+          blue: '#185FA5',
+          'blue-bg': '#E6F1FB',
+          purple: '#534AB7',
+          'purple-bg': '#EEEDFE',
+        },
+        // Shadcn compat
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -46,6 +74,18 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontSize: {
+        'ds-fine': ['11px', { lineHeight: '16px' }],
+        'ds-body': ['13px', { lineHeight: '20px' }],
+        'ds-label': ['14px', { lineHeight: '20px' }],
+        'ds-card': ['15px', { lineHeight: '22px' }],
+        'ds-section': ['20px', { lineHeight: '28px' }],
+        'ds-page': ['24px', { lineHeight: '32px' }],
+        'ds-hero': ['30px', { lineHeight: '36px' }],
+      },
+      boxShadow: {
+        'ds-float': '0 1px 2px rgba(0,0,0,0.06)',
+      },
       keyframes: {
         'accordion-down': {
           from: { height: '0' },
@@ -53,7 +93,7 @@ const config: Config = {
         },
         'accordion-up': {
           from: { height: 'var(--radix-accordion-content-height)' },
-          to: { height: '0' },
+          to: { height: 'var(--radix-accordion-content-height)' },
         },
       },
       animation: {

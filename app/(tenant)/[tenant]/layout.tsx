@@ -1,12 +1,10 @@
 import { requireSession } from '@/lib/auth/session'
 // app/(tenant)/[tenant]/layout.tsx
-// Main app shell — sidebar + top bar for all tenant pages
+// Main app shell — top nav bar (52px sticky) + content area
+// Design system: docs/DESIGN.md
 
 import { redirect } from 'next/navigation'
-
-
-import { SidebarNav } from '@/components/ui/sidebar-nav'
-import { TopBar } from '@/components/ui/top-bar'
+import { TopNav } from '@/components/ui/top-nav'
 
 interface TenantLayoutProps {
   children: React.ReactNode
@@ -15,20 +13,16 @@ interface TenantLayoutProps {
 
 export default async function TenantLayout({ children, params }: TenantLayoutProps) {
   const session = await requireSession()
-  
 
   const tenantSlug = session.tenantSlug
   if (tenantSlug !== params.tenant) redirect(`/${tenantSlug}/dashboard`)
 
   return (
-    <div className="flex h-screen bg-[#0f1117] overflow-hidden">
-      <SidebarNav tenantSlug={params.tenant} />
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar />
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
-      </div>
+    <div className="min-h-screen bg-surface-primary">
+      <TopNav tenantSlug={params.tenant} />
+      <main className="px-8 py-6 max-w-[1400px] mx-auto">
+        {children}
+      </main>
     </div>
   )
 }

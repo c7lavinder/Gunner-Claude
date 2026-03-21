@@ -1,11 +1,12 @@
 'use client'
 // components/calls/calls-client.tsx
-// Full calls list: 4 tabs, filters, grade letters, outcome/type badges
+// Call list page — Design system: docs/DESIGN.md
+// Layout: [Tabs] [Filters] [Call list (flex:1) | AI Coach (320px sticky)]
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Phone, Clock, ArrowDownLeft, ArrowUpRight as ArrowUp, AlertCircle, RefreshCw, RotateCcw, Loader2, Info, SkipForward } from 'lucide-react'
+import { Phone, RotateCcw, Loader2, SkipForward, AlertCircle, Info } from 'lucide-react'
 import { format, subDays, subMonths } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
@@ -24,51 +25,60 @@ interface Call {
 
 type Tab = 'all' | 'review' | 'short'
 
-// ─── Grade + color helpers ─────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
-function gradeLetter(score: number | null): { letter: string; color: string; glow: string } {
-  if (score === null) return { letter: '—', color: 'text-gray-500', glow: '' }
-  if (score >= 90) return { letter: 'A', color: 'text-green-400', glow: 'shadow-green-500/20 shadow-lg' }
-  if (score >= 80) return { letter: 'B', color: 'text-blue-400', glow: 'shadow-blue-500/20 shadow-lg' }
-  if (score >= 70) return { letter: 'C', color: 'text-yellow-400', glow: 'shadow-yellow-500/20 shadow-lg' }
-  if (score >= 60) return { letter: 'D', color: 'text-orange-400', glow: 'shadow-orange-500/20 shadow-lg' }
-  return { letter: 'F', color: 'text-red-400', glow: 'shadow-red-500/20 shadow-lg' }
-}
-
-const CALL_TYPE_COLORS: Record<string, string> = {
-  cold_call: 'bg-purple-500/10 text-purple-400',
-  qualification_call: 'bg-blue-500/10 text-blue-400',
-  admin_call: 'bg-gray-500/10 text-gray-400',
-  follow_up_call: 'bg-yellow-500/10 text-yellow-400',
-  offer_call: 'bg-orange-500/10 text-orange-400',
-  purchase_agreement_call: 'bg-teal-500/10 text-teal-400',
-  dispo_call: 'bg-green-500/10 text-green-400',
-}
-
-// Map call type IDs to display names
 const CALL_TYPE_NAMES: Record<string, string> = Object.fromEntries(
   CALL_TYPES.map(ct => [ct.id, ct.name])
 )
 
-const OUTCOME_COLORS: Record<string, string> = {
-  // Positive outcomes
-  interested: 'bg-teal-500/10 text-teal-400',
-  appointment_set: 'bg-green-500/10 text-green-400',
-  accepted: 'bg-green-500/15 text-green-400',
-  signed: 'bg-green-500/15 text-green-400',
-  solved: 'bg-green-500/10 text-green-400',
-  showing_scheduled: 'bg-blue-500/10 text-blue-400',
-  offer_collected: 'bg-emerald-500/10 text-emerald-400',
-  // Neutral outcomes
-  follow_up_scheduled: 'bg-yellow-500/10 text-yellow-400',
-  not_qualified: 'bg-gray-500/10 text-gray-400',
-  not_solved: 'bg-orange-500/10 text-orange-400',
-  not_signed: 'bg-orange-500/10 text-orange-400',
-  // Negative outcomes
-  not_interested: 'bg-red-500/5 text-red-400/70',
-  rejected: 'bg-red-500/10 text-red-400',
-  // Legacy
-  no_answer: 'bg-gray-500/10 text-gray-400',
+function scoreColor(score: number | null): string {
+  if (score === null) return 'bg-surface-tertiary text-txt-muted'
+  if (score >= 90) return 'bg-semantic-green text-white'
+  if (score >= 80) return 'bg-semantic-amber text-white'
+  if (score >= 70) return 'bg-semantic-blue text-white'
+  return 'bg-semantic-red text-white'
+}
+
+function badgeStyle(type: 'green' | 'purple' | 'amber' | 'red' | 'blue' | 'muted'): string {
+  const map = {
+    green: 'bg-semantic-green-bg text-semantic-green',
+    purple: 'bg-semantic-purple-bg text-semantic-purple',
+    amber: 'bg-semantic-amber-bg text-semantic-amber',
+    red: 'bg-semantic-red-bg text-semantic-red',
+    blue: 'bg-semantic-blue-bg text-semantic-blue',
+    muted: 'bg-surface-tertiary text-txt-secondary',
+  }
+  return map[type]
+}
+
+function callTypeBadgeColor(type: string): string {
+  const map: Record<string, string> = {
+    cold_call: 'purple',
+    qualification_call: 'blue',
+    admin_call: 'muted',
+    follow_up_call: 'amber',
+    offer_call: 'red',
+    purchase_agreement_call: 'green',
+    dispo_call: 'green',
+  }
+  return badgeStyle((map[type] ?? 'muted') as 'green')
+}
+
+function outcomeBadgeColor(outcome: string): string {
+  const positive = ['interested', 'appointment_set', 'accepted', 'signed', 'solved', 'showing_scheduled', 'offer_collected']
+  const negative = ['not_interested', 'rejected']
+  const neutral = ['follow_up_scheduled', 'not_qualified', 'not_solved', 'not_signed']
+  if (positive.includes(outcome)) return badgeStyle('green')
+  if (negative.includes(outcome)) return badgeStyle('red')
+  if (neutral.includes(outcome)) return badgeStyle('amber')
+  return badgeStyle('muted')
+}
+
+function formatDuration(s: number | null): string {
+  if (!s) return '--'
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
 const SCORE_RANGES = [
@@ -78,13 +88,6 @@ const SCORE_RANGES = [
   { label: 'D (60-69)', min: 60, max: 69 },
   { label: 'F (0-59)', min: 0, max: 59 },
 ]
-
-function formatDuration(s: number | null): string {
-  if (!s) return '—'
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return `${m}:${sec.toString().padStart(2, '0')}`
-}
 
 // ─── Main component ────────────────────────────────────────────────────────
 
@@ -100,11 +103,11 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
 
   const [tab, setTab] = useState<Tab>('all')
   const [showFilters, setShowFilters] = useState(false)
-  const [teamFilter, setTeamFilter] = useState<string>('')
-  const [typeFilter, setTypeFilter] = useState<string>('')
-  const [outcomeFilter, setOutcomeFilter] = useState<string>('')
-  const [scoreFilter, setScoreFilter] = useState<string>('')
-  const [dateFilter, setDateFilter] = useState<string>('')
+  const [teamFilter, setTeamFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [outcomeFilter, setOutcomeFilter] = useState('')
+  const [scoreFilter, setScoreFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   // Tab filtering
@@ -113,17 +116,14 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
     ['PENDING', 'PROCESSING'].includes(c.gradingStatus) ||
     (c.gradingStatus === 'FAILED' && c.callResult !== 'no_answer')
   )
-  const processingCalls = reviewCalls.filter(c => ['PENDING', 'PROCESSING'].includes(c.gradingStatus))
-  const failedCalls = reviewCalls.filter(c => c.gradingStatus === 'FAILED')
   const shortCalls = calls.filter(c =>
     (c.durationSeconds !== null && c.durationSeconds < 45) ||
     c.callResult === 'no_answer' ||
     (c.gradingStatus === 'FAILED' && c.durationSeconds === 0)
   )
 
-  // Apply filters on All tab
+  // Apply filters
   let filtered = tab === 'all' ? allCalls : tab === 'review' ? reviewCalls : shortCalls
-
   if (tab === 'all') {
     if (teamFilter) filtered = filtered.filter(c => c.assignedTo?.id === teamFilter)
     if (typeFilter) filtered = filtered.filter(c => c.callType === typeFilter)
@@ -147,111 +147,109 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const avgScore = gradedCalls.length > 0
     ? Math.round(gradedCalls.reduce((s, c) => s + (c.score ?? 0), 0) / gradedCalls.length) : 0
 
-  // Unique call types/outcomes for filter dropdowns
   const uniqueTypes = [...new Set(calls.map(c => c.callType).filter(Boolean))] as string[]
   const uniqueOutcomes = [...new Set(calls.map(c => c.callOutcome).filter(Boolean))] as string[]
-
-  const ACTION_MESSAGES: Record<string, { success: string; error: string }> = {
-    reprocess: { success: 'Call queued for re-grading', error: 'Failed to reprocess — please try again' },
-    skip: { success: 'Call marked as skipped', error: 'Failed to skip call' },
-    'refetch-recording': { success: 'Recording re-fetch started', error: 'Failed to re-fetch recording' },
-  }
 
   async function callAction(callId: string, action: 'reprocess' | 'skip' | 'refetch-recording') {
     setActionLoading(`${callId}-${action}`)
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${callId}/${action}`, { method: 'POST' })
       if (res.ok) {
-        toast(ACTION_MESSAGES[action].success, 'success')
+        toast(action === 'reprocess' ? 'Call queued for re-grading' : action === 'skip' ? 'Call skipped' : 'Re-fetching recording', 'success')
         startTransition(() => router.refresh())
       } else {
-        toast(ACTION_MESSAGES[action].error, 'error')
+        toast('Action failed', 'error')
       }
-    } catch {
-      toast(ACTION_MESSAGES[action].error, 'error')
-    }
+    } catch { toast('Action failed', 'error') }
     setActionLoading(null)
   }
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
-    { id: 'all', label: 'All graded', count: allCalls.length },
-    { id: 'review', label: 'Needs review', count: reviewCalls.length },
-    { id: 'short', label: 'No answer', count: shortCalls.length },
+    { id: 'all', label: 'All Calls', count: allCalls.length },
+    { id: 'review', label: 'Needs Review', count: reviewCalls.length },
+    { id: 'short', label: 'Skipped', count: shortCalls.length },
   ]
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-white">Call Grading</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {gradedCalls.length} graded · Avg {avgScore}%
-          </p>
+      <div>
+        <h1 className="text-ds-page font-semibold text-txt-primary">Call History</h1>
+        <p className="text-ds-body text-txt-secondary mt-1">
+          {gradedCalls.length} graded calls · Average score {avgScore}%
+        </p>
+      </div>
+
+      {/* Tabs — bg-tertiary container, white active */}
+      <div className="flex items-center gap-4">
+        <div className="flex gap-1 bg-surface-tertiary p-1 rounded-[14px]">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-4 py-2 rounded-[10px] text-ds-body font-medium transition-all ${
+                tab === t.id
+                  ? 'bg-surface-primary text-txt-primary shadow-ds-float'
+                  : 'text-txt-secondary hover:text-txt-primary'
+              }`}
+            >
+              {t.label}
+              {t.count > 0 && (
+                <span className={`ml-1.5 text-ds-fine ${tab === t.id ? 'text-txt-muted' : 'text-txt-muted'}`}>{t.count}</span>
+              )}
+            </button>
+          ))}
         </div>
+
+        {/* Refresh */}
         <button
           onClick={() => startTransition(() => router.refresh())}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+          className="ml-auto px-3 py-2 rounded-[10px] text-ds-body font-medium text-txt-secondary hover:text-txt-primary bg-surface-secondary hover:bg-surface-tertiary transition-colors"
+          style={{ border: '0.5px solid var(--border-medium)' }}
         >
-          <RefreshCw size={14} /> Refresh
+          Refresh
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-1 w-fit">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-md text-sm transition-colors ${
-              tab === t.id ? 'bg-[#1a1d27] text-white' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            {t.label}
-            {t.count > 0 && <span className="ml-1.5 text-xs text-gray-600">{t.count}</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* Filters (All tab only) */}
+      {/* Filters (All tab) */}
       {tab === 'all' && (
         <>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors"
+            className="text-ds-body text-txt-secondary hover:text-txt-primary transition-colors"
           >
-            Filters {showFilters ? '▲' : '▼'}
+            Filters {showFilters ? '−' : '+'}
           </button>
           {showFilters && (
             <div className="flex flex-wrap gap-2">
               {canViewAll && teamMembers.length > 0 && (
                 <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
-                  className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none">
+                  className="bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none focus:ring-1 focus:ring-gunner-red" style={{ borderColor: 'var(--border-medium)' }}>
                   <option value="">All team</option>
                   {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               )}
               {uniqueTypes.length > 0 && (
                 <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-                  className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none">
+                  className="bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none" style={{ borderColor: 'var(--border-medium)' }}>
                   <option value="">All types</option>
-                  {uniqueTypes.map(t => <option key={t} value={t}>{CALL_TYPE_NAMES[t] ?? t.replace(/_/g, ' ')}</option>)}
+                  {uniqueTypes.map(t => <option key={t} value={t}>{CALL_TYPE_NAMES[t] ?? t}</option>)}
                 </select>
               )}
               {uniqueOutcomes.length > 0 && (
                 <select value={outcomeFilter} onChange={e => setOutcomeFilter(e.target.value)}
-                  className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none">
+                  className="bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none" style={{ borderColor: 'var(--border-medium)' }}>
                   <option value="">All outcomes</option>
-                  {uniqueOutcomes.map(o => <option key={o} value={o}>{RESULT_NAMES[o] ?? o.replace(/_/g, ' ')}</option>)}
+                  {uniqueOutcomes.map(o => <option key={o} value={o}>{RESULT_NAMES[o] ?? o}</option>)}
                 </select>
               )}
               <select value={scoreFilter} onChange={e => setScoreFilter(e.target.value)}
-                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none">
+                className="bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none" style={{ borderColor: 'var(--border-medium)' }}>
                 <option value="">All scores</option>
                 {SCORE_RANGES.map(r => <option key={r.label} value={r.label}>{r.label}</option>)}
               </select>
               <select value={dateFilter} onChange={e => setDateFilter(e.target.value)}
-                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none">
+                className="bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none" style={{ borderColor: 'var(--border-medium)' }}>
                 <option value="">All time</option>
                 <option value="yesterday">Yesterday</option>
                 <option value="7d">Last 7 days</option>
@@ -260,110 +258,83 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
               </select>
               {(teamFilter || typeFilter || outcomeFilter || scoreFilter || dateFilter) && (
                 <button onClick={() => { setTeamFilter(''); setTypeFilter(''); setOutcomeFilter(''); setScoreFilter(''); setDateFilter('') }}
-                  className="text-xs text-orange-400 hover:text-orange-300 px-2">Clear</button>
+                  className="text-ds-body text-gunner-red hover:text-gunner-red-dark px-2 font-medium">Clear</button>
               )}
             </div>
           )}
         </>
       )}
 
-      {/* ── All tab ───────────────────────────────────────────────────── */}
+      {/* ── All Calls tab ──────────────────────────────────────────── */}
       {tab === 'all' && (
-        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
+        <div className="bg-surface-primary border rounded-[14px]" style={{ borderColor: 'var(--border-light)' }}>
           {filtered.length === 0 ? (
-            <div className="py-12 text-center text-gray-500 text-sm">No calls match this filter</div>
+            <div className="py-16 text-center text-ds-body text-txt-muted">No calls match this filter</div>
           ) : (
-            filtered.map(call => (
-              <CallRow key={call.id} call={call} tenantSlug={tenantSlug} />
+            filtered.map((call, i) => (
+              <CallRow key={call.id} call={call} tenantSlug={tenantSlug} isLast={i === filtered.length - 1} />
             ))
           )}
         </div>
       )}
 
-      {/* ── Review tab ────────────────────────────────────────────────── */}
+      {/* ── Review tab ─────────────────────────────────────────────── */}
       {tab === 'review' && (
         <div className="space-y-4">
-          {processingCalls.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Processing ({processingCalls.length})</p>
-              <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
-                {processingCalls.map(c => (
-                  <div key={c.id} className="flex items-center gap-3 px-5 py-4">
-                    <Loader2 size={16} className="text-blue-400 animate-spin shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
-                      <p className="text-xs text-gray-500">{c.gradingStatus.toLowerCase()} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
-                    </div>
-                    <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">{c.gradingStatus.toLowerCase()}</span>
-                  </div>
-                ))}
-              </div>
+          {reviewCalls.length === 0 ? (
+            <div className="bg-surface-primary border rounded-[14px] py-16 text-center text-ds-body text-txt-muted" style={{ borderColor: 'var(--border-light)' }}>
+              No calls in review
             </div>
-          )}
-          {failedCalls.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-red-400 uppercase tracking-wider mb-2">Failed ({failedCalls.length})</p>
-              <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
-                {failedCalls.map(c => (
-                  <div key={c.id} className="flex items-center gap-3 px-5 py-4">
-                    <AlertCircle size={16} className="text-red-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
-                      <p className="text-xs text-red-400/70 truncate">{c.aiFeedback ?? 'Grading failed'}</p>
-                    </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      <button onClick={() => callAction(c.id, 'reprocess')} disabled={actionLoading === `${c.id}-reprocess`}
-                        className="text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 px-2.5 py-1 rounded-lg transition-colors">
-                        {actionLoading === `${c.id}-reprocess` ? <Loader2 size={10} className="animate-spin" /> : <><RotateCcw size={10} /> Retry</>}
-                      </button>
-                      <button onClick={() => callAction(c.id, 'refetch-recording')} disabled={actionLoading === `${c.id}-refetch-recording`}
-                        className="text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 px-2.5 py-1 rounded-lg transition-colors">
-                        Re-fetch
-                      </button>
-                      <button onClick={() => callAction(c.id, 'skip')} disabled={actionLoading === `${c.id}-skip`}
-                        className="text-xs bg-gray-500/10 text-gray-400 hover:bg-gray-500/20 px-2.5 py-1 rounded-lg transition-colors">
-                        <SkipForward size={10} /> Skip
-                      </button>
-                    </div>
+          ) : (
+            <div className="bg-surface-primary border rounded-[14px]" style={{ borderColor: 'var(--border-light)' }}>
+              {reviewCalls.map(c => (
+                <div key={c.id} className="flex items-center gap-3 px-5 py-4 border-b last:border-b-0" style={{ borderColor: 'var(--border-light)' }}>
+                  {c.gradingStatus === 'FAILED' ? (
+                    <AlertCircle size={16} className="text-semantic-red shrink-0" />
+                  ) : (
+                    <Loader2 size={16} className="text-semantic-blue animate-spin shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-ds-body font-medium text-txt-primary truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
+                    <p className="text-ds-fine text-txt-muted">{c.gradingStatus.toLowerCase()} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {reviewCalls.length === 0 && (
-            <div className="bg-[#1a1d27] border border-white/10 rounded-2xl py-12 text-center">
-              <p className="text-gray-500 text-sm">No calls in review</p>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => callAction(c.id, 'reprocess')} disabled={actionLoading === `${c.id}-reprocess`}
+                      className="text-ds-fine font-medium bg-gunner-red-light text-gunner-red hover:bg-gunner-red hover:text-white px-2.5 py-1.5 rounded-[6px] transition-colors">
+                      {actionLoading === `${c.id}-reprocess` ? <Loader2 size={10} className="animate-spin" /> : 'Retry'}
+                    </button>
+                    <button onClick={() => callAction(c.id, 'skip')} disabled={actionLoading === `${c.id}-skip`}
+                      className="text-ds-fine font-medium bg-surface-secondary text-txt-secondary hover:text-txt-primary px-2.5 py-1.5 rounded-[6px] transition-colors">
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       )}
 
-      {/* ── Short calls tab ─────────────────────────────────────────── */}
+      {/* ── Skipped tab ────────────────────────────────────────────── */}
       {tab === 'short' && (
         <div className="space-y-4">
-          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-blue-300">
-            <Info size={14} className="shrink-0 mt-0.5" />
-            <p>Under 45 seconds or no answer — not graded. These are dial attempts, voicemails, or calls that were not picked up.</p>
+          <div className="bg-semantic-blue-bg border rounded-[14px] px-4 py-3 flex items-start gap-2" style={{ borderColor: 'rgba(24,95,165,0.15)' }}>
+            <Info size={14} className="text-semantic-blue shrink-0 mt-0.5" />
+            <p className="text-ds-body text-semantic-blue">Under 45 seconds or no answer — not graded.</p>
           </div>
-          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
+          <div className="bg-surface-primary border rounded-[14px]" style={{ borderColor: 'var(--border-light)' }}>
             {shortCalls.length === 0 ? (
-              <div className="py-12 text-center text-gray-500 text-sm">No short calls</div>
+              <div className="py-16 text-center text-ds-body text-txt-muted">No skipped calls</div>
             ) : (
               shortCalls.map(c => (
-                <div key={c.id} className="flex items-center gap-3 px-5 py-4">
-                  <div className="w-10 h-10 rounded-lg bg-gray-500/10 flex items-center justify-center shrink-0">
-                    <Phone size={14} className="text-gray-500" />
+                <div key={c.id} className="flex items-center gap-3 px-5 py-4 border-b last:border-b-0" style={{ borderColor: 'var(--border-light)' }}>
+                  <div className="w-10 h-10 rounded-[10px] bg-surface-tertiary flex items-center justify-center shrink-0">
+                    <Phone size={14} className="text-txt-muted" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
-                    <p className="text-xs text-gray-500">{formatDuration(c.durationSeconds)} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
+                    <p className="text-ds-body font-medium text-txt-primary truncate">{c.contactName ?? c.property?.address ?? 'Call'}</p>
+                    <p className="text-ds-fine text-txt-muted">{formatDuration(c.durationSeconds)} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
                   </div>
-                  {c.recordingUrl && (
-                    <button onClick={() => callAction(c.id, 'reprocess')} disabled={actionLoading === `${c.id}-reprocess`}
-                      className="text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1">
-                      {actionLoading === `${c.id}-reprocess` ? <Loader2 size={10} className="animate-spin" /> : <><RotateCcw size={10} /> Reprocess</>}
-                    </button>
-                  )}
                 </div>
               ))
             )}
@@ -374,69 +345,68 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   )
 }
 
-// ─── Call row (All tab) ────────────────────────────────────────────────────
+// ─── Call Row ──────────────────────────────────────────────────────────────
+// Design: [dot] [Name] [badges] ——— [Score circle]
+//         [Rep] [duration] [time]
+//         [address]
+//         [summary — 2 lines max]
 
-function CallRow({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
-  const { letter, color, glow } = gradeLetter(call.score)
-  const typeColor = CALL_TYPE_COLORS[call.callType ?? ''] ?? 'bg-gray-500/10 text-gray-400'
-  const outcomeColor = OUTCOME_COLORS[call.callOutcome ?? ''] ?? 'bg-gray-500/10 text-gray-400'
+function CallRow({ call, tenantSlug, isLast }: { call: Call; tenantSlug: string; isLast: boolean }) {
+  const hasBeenReviewed = call.gradingStatus === 'COMPLETED'
 
   return (
     <Link
       href={`/${tenantSlug}/calls/${call.id}`}
-      className="flex items-center gap-4 px-5 py-4 hover:bg-white/[0.03] transition-colors"
+      className={`flex items-start gap-4 px-5 py-4 hover:bg-surface-secondary transition-all ${!isLast ? 'border-b' : ''}`}
+      style={{ borderColor: 'var(--border-light)' }}
     >
-      {/* Grade badge */}
-      <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center shrink-0 bg-[#0f1117] ${glow}`}>
-        <span className={`text-lg font-bold ${color}`}>{letter}</span>
-        {call.score !== null && (
-          <span className="text-xs text-gray-600">{Math.round(call.score)}%</span>
-        )}
+      {/* Review dot */}
+      <div className="mt-1.5 shrink-0">
+        <span className={`block w-2 h-2 rounded-full ${hasBeenReviewed ? 'bg-semantic-green' : 'bg-semantic-blue'}`} />
       </div>
 
-      {/* Main info */}
+      {/* Main content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white truncate">
+        {/* Row 1: Name + badges */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-ds-label font-medium text-txt-primary truncate">
             {call.contactName ?? call.property?.address ?? 'Unknown contact'}
           </span>
-        </div>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {/* Call type badge */}
           {call.callType && (
-            <span className={`text-xs px-2 py-0.5 rounded-full ${typeColor}`}>
-              {CALL_TYPE_NAMES[call.callType] ?? call.callType.replace(/_/g, ' ')}
+            <span className={`text-ds-fine font-medium px-2 py-0.5 rounded-full ${callTypeBadgeColor(call.callType)}`}>
+              {CALL_TYPE_NAMES[call.callType] ?? call.callType}
             </span>
           )}
-          {/* Outcome badge */}
           {call.callOutcome && (
-            <span className={`text-xs px-2 py-0.5 rounded-full ${outcomeColor}`}>
-              {RESULT_NAMES[call.callOutcome] ?? call.callOutcome.replace(/_/g, ' ')}
-            </span>
-          )}
-          {call.assignedTo && (
-            <span className="text-xs text-gray-500">{call.assignedTo.name}</span>
-          )}
-          {call.property && (
-            <span className="text-xs text-gray-600 truncate max-w-32">
-              {call.property.address}
+            <span className={`text-ds-fine font-medium px-2 py-0.5 rounded-full ${outcomeBadgeColor(call.callOutcome)}`}>
+              {RESULT_NAMES[call.callOutcome] ?? call.callOutcome}
             </span>
           )}
         </div>
+
+        {/* Row 2: Rep, duration, time */}
+        <div className="flex items-center gap-2 mt-1 text-ds-fine text-txt-muted">
+          {call.assignedTo && <span>{call.assignedTo.name}</span>}
+          {call.assignedTo && <span>·</span>}
+          <span>{formatDuration(call.durationSeconds)}</span>
+          <span>·</span>
+          <span>{format(new Date(call.calledAt), 'MMM d, h:mm a')}</span>
+        </div>
+
+        {/* Row 3: Property address */}
+        {call.property && (
+          <p className="text-ds-fine text-txt-muted mt-0.5">{call.property.address}</p>
+        )}
+
+        {/* Row 4: Summary — 2 lines max */}
         {call.aiSummary && (
-          <p className="text-xs text-gray-600 mt-1 truncate">{call.aiSummary}</p>
+          <p className="text-ds-body text-txt-secondary mt-1 line-clamp-2">{call.aiSummary}</p>
         )}
       </div>
 
-      {/* Meta column */}
-      <div className="text-right shrink-0 space-y-1">
-        <div className="flex items-center gap-1 justify-end text-xs text-gray-500">
-          {call.direction === 'INBOUND' ? <ArrowDownLeft size={10} /> : <ArrowUp size={10} />}
-          {formatDuration(call.durationSeconds)}
-        </div>
-        <p className="text-xs text-gray-600">
-          {format(new Date(call.calledAt), 'MMM d, h:mm a')}
-        </p>
+      {/* Score circle */}
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-ds-body font-semibold ${scoreColor(call.score)}`}>
+        {call.score !== null ? Math.round(call.score) : '--'}
       </div>
     </Link>
   )
