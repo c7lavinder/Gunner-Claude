@@ -10,6 +10,8 @@
 
 import { PrismaClient } from '@prisma/client'
 import { fetchCallRecording } from '../lib/ghl/fetch-recording'
+import { transcribeRecording } from '../lib/ai/transcribe'
+import { gradeCall } from '../lib/ai/grading'
 
 const db = new PrismaClient()
 
@@ -104,6 +106,12 @@ async function main() {
       if (startAfterId) params.set('startAfterId', startAfterId)
 
       const convRes = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
+      if (convRes.status === 429) {
+        console.log(`[sync-calls] Rate limited — waiting 30s...`)
+        await sleep(30_000)
+        page-- // retry this page
+        continue
+      }
       if (!convRes.ok) {
         console.error(`[sync-calls] Conversations fetch failed: ${convRes.status}`)
         break
@@ -123,15 +131,17 @@ async function main() {
       const conversations = convData.conversations ?? []
       if (conversations.length === 0) break
 
-      // STEP 2: For each conversation, get messages
+      // STEP 2: For each conversation, get messages (with rate limit spacing)
       for (const conv of conversations) {
         conversationsScanned++
+        await sleep(50) // space out requests to avoid 429
 
         let lastMessageId: string | undefined
 
         for (let msgPage = 0; msgPage < 10; msgPage++) {
           const msgUrl = `${GHL_BASE_URL}/conversations/${conv.id}/messages${lastMessageId ? `?lastMessageId=${lastMessageId}` : ''}`
           const msgRes = await fetch(msgUrl, { headers })
+          if (msgRes.status === 429) { await sleep(30_000); msgPage--; continue }
           if (!msgRes.ok) break
 
           const msgData = await msgRes.json() as {
@@ -233,9 +243,28 @@ async function main() {
                 data: { recordingUrl: recordingResult.recordingUrl },
               })
               recordingsFound++
-              console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | RECORDING: YES`)
+
+              // Transcribe immediately
+              const transcription = await transcribeRecording(recordingResult.recordingUrl, tenant.ghlAccessToken!)
+              if (transcription.status === 'success' && transcription.transcript) {
+                await db.call.update({
+                  where: { id: call.id },
+                  data: { transcript: transcription.transcript },
+                })
+                console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | TRANSCRIBED (${transcription.transcript.length} chars)`)
+              } else {
+                console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | RECORDING: YES | transcribe failed: ${transcription.error?.slice(0, 80)}`)
+              }
+
+              // Grade with transcript
+              await gradeCall(call.id).catch(err => {
+                console.log(`  Grade failed: ${err instanceof Error ? err.message.slice(0, 80) : err}`)
+              })
             } else {
-              console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | recording: ${recordingResult.status}`)
+              console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | recording: ${recordingResult.status} — SKIPPING (no recording = no transcript)`)
+              // Delete calls without recordings — no point keeping them
+              await db.call.delete({ where: { id: call.id } })
+              callsCreated--
             }
           }
 
