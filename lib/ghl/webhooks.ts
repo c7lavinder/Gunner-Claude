@@ -96,11 +96,17 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     altId?: string
   }
 
-  // Log all incoming message types for debugging
-  console.log(`[GHL Webhook] Message: type=${msgData.messageType}, direction=${msgData.direction}, contact=${msgData.contactId}, hasAttachments=${!!(msgData.attachments?.length)}, hasRecording=${!!(msgData.recordingUrl || msgData.recording_url)}`)
+  // Log ALL incoming webhook data for debugging (first 500 chars of full payload)
+  console.log(`[GHL Webhook] Message payload: ${JSON.stringify(event).slice(0, 500)}`)
+
+  // Accept both webhook format ("CALL") and API format ("TYPE_CALL")
+  const msgType = (msgData.messageType ?? '').toUpperCase()
+  const isCallMessage = msgType === 'TYPE_CALL' || msgType === 'CALL'
+
+  console.log(`[GHL Webhook] Message: messageType=${msgData.messageType}, isCall=${isCallMessage}, direction=${msgData.direction}, contact=${msgData.contactId}, hasAttachments=${!!(msgData.attachments?.length)}, hasRecording=${!!(msgData.recordingUrl || msgData.recording_url)}`)
 
   // Only process call messages — skip SMS, email, etc.
-  if (msgData.messageType !== 'TYPE_CALL') return
+  if (!isCallMessage) return
 
   // Extract recording URL from all possible locations
   const recordingUrl = extractRecordingUrl(msgData)

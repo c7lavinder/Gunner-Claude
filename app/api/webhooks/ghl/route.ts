@@ -21,6 +21,9 @@ export async function POST(request: NextRequest) {
 
     const event = JSON.parse(body)
 
+    // Log every incoming webhook for debugging
+    console.log(`[GHL Webhook] RECEIVED: type=${event.type}, keys=${Object.keys(event).join(',')}, body=${body.slice(0, 300)}`)
+
     // Process async — return 200 immediately so GHL doesn't retry
     handleGHLWebhook(event).catch((err) => {
       console.error('[GHL Webhook] Processing error:', err)
