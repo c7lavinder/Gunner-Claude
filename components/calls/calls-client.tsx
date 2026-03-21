@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { Phone, Clock, ArrowDownLeft, ArrowUpRight as ArrowUp, AlertCircle, RefreshCw, RotateCcw, Loader2, Info, SkipForward } from 'lucide-react'
 import { formatDistanceToNow, subDays, subMonths } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
-import { CALL_TYPES } from '@/lib/call-types'
+import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -51,17 +51,24 @@ const CALL_TYPE_NAMES: Record<string, string> = Object.fromEntries(
 )
 
 const OUTCOME_COLORS: Record<string, string> = {
-  appointment_set: 'bg-green-500/10 text-green-400',
-  offer_made: 'bg-orange-500/10 text-orange-400',
-  offer_rejected: 'bg-red-500/10 text-red-400',
+  // Positive outcomes
   interested: 'bg-teal-500/10 text-teal-400',
+  appointment_set: 'bg-green-500/10 text-green-400',
+  accepted: 'bg-green-500/15 text-green-400',
+  signed: 'bg-green-500/15 text-green-400',
+  solved: 'bg-green-500/10 text-green-400',
+  showing_scheduled: 'bg-blue-500/10 text-blue-400',
+  offer_collected: 'bg-emerald-500/10 text-emerald-400',
+  // Neutral outcomes
+  follow_up_scheduled: 'bg-yellow-500/10 text-yellow-400',
+  not_qualified: 'bg-gray-500/10 text-gray-400',
+  not_solved: 'bg-orange-500/10 text-orange-400',
+  not_signed: 'bg-orange-500/10 text-orange-400',
+  // Negative outcomes
   not_interested: 'bg-red-500/5 text-red-400/70',
-  callback_scheduled: 'bg-yellow-500/10 text-yellow-400',
-  left_vm: 'bg-gray-500/10 text-gray-400',
+  rejected: 'bg-red-500/10 text-red-400',
+  // Legacy
   no_answer: 'bg-gray-500/10 text-gray-400',
-  dead: 'bg-red-500/15 text-red-500',
-  follow_up: 'bg-yellow-500/10 text-yellow-400',
-  contract: 'bg-green-500/15 text-green-400',
 }
 
 const SCORE_RANGES = [
@@ -235,7 +242,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
                 <select value={outcomeFilter} onChange={e => setOutcomeFilter(e.target.value)}
                   className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none">
                   <option value="">All outcomes</option>
-                  {uniqueOutcomes.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+                  {uniqueOutcomes.map(o => <option key={o} value={o}>{RESULT_NAMES[o] ?? o.replace(/_/g, ' ')}</option>)}
                 </select>
               )}
               <select value={scoreFilter} onChange={e => setScoreFilter(e.target.value)}
@@ -404,7 +411,7 @@ function CallRow({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
           {/* Outcome badge */}
           {call.callOutcome && (
             <span className={`text-xs px-2 py-0.5 rounded-full ${outcomeColor}`}>
-              {call.callOutcome.replace(/_/g, ' ')}
+              {RESULT_NAMES[call.callOutcome] ?? call.callOutcome.replace(/_/g, ' ')}
             </span>
           )}
           {call.assignedTo && (

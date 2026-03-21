@@ -446,10 +446,18 @@ export function SettingsClient({
           />
 
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
-            <h2 className="text-sm font-medium text-white mb-3">Call results</h2>
-            <div className="flex flex-wrap gap-2">
-              {(tenant.callResults as string[]).map((r) => (
-                <span key={r} className="text-xs bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-gray-300">{r}</span>
+            <h2 className="text-sm font-medium text-white mb-1">Call results</h2>
+            <p className="text-xs text-gray-500 mb-4">Each call type has its own set of possible results. These are used by the AI and shown when classifying calls.</p>
+            <div className="space-y-3">
+              {CALL_TYPES.map((ct) => (
+                <div key={ct.id} className="flex items-start gap-3">
+                  <span className="text-xs text-gray-400 w-40 shrink-0 pt-1 font-medium">{ct.name}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ct.results.map((r) => (
+                      <span key={r.id} className="text-xs bg-white/5 border border-white/10 rounded-full px-2.5 py-1 text-gray-300">{r.name}</span>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
