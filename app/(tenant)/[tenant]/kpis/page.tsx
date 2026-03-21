@@ -35,12 +35,31 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
     : { tenantId, assignedToId: userId }
 
   // Fetch all metrics in parallel
+  // Scoped property IDs for milestone queries
+  const propertyScope = canViewAll
+    ? { tenantId }
+    : canViewTeam
+      ? { tenantId, assignedTo: { OR: [{ id: userId }, { reportsTo: userId }] } }
+      : { tenantId, assignedToId: userId }
+
+  const scopedPropertyIds = (await db.property.findMany({
+    where: propertyScope,
+    select: { id: true },
+  })).map(p => p.id)
+
+  const milestoneWhere = (type: string, since: Date) => ({
+    tenantId,
+    type: type as never,
+    propertyId: { in: scopedPropertyIds },
+    createdAt: { gte: since },
+  })
+
   const [
     callsToday, callsWeek, callsMonth,
     avgScoreToday, avgScoreWeek, avgScoreMonth,
     apptToday, apptWeek, apptMonth,
-    contractsMonth,
-    propertiesActive, propertiesNew, propertiesSold,
+    offersMonth, contractsMonth, closedMonth,
+    propertiesActive, propertiesNew,
     tasksCompleted, tasksPending,
   ] = await Promise.all([
     db.call.count({ where: { ...callFilter, createdAt: { gte: dayStart } } }),
@@ -51,15 +70,17 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
     db.call.aggregate({ where: { ...callFilter, gradingStatus: 'COMPLETED', createdAt: { gte: weekStart } }, _avg: { score: true } }),
     db.call.aggregate({ where: { ...callFilter, gradingStatus: 'COMPLETED', createdAt: { gte: monthStart } }, _avg: { score: true } }),
 
-    db.task.count({ where: { tenantId, ...userFilter, category: { contains: 'ppointment' }, status: 'COMPLETED', completedAt: { gte: dayStart } } }),
-    db.task.count({ where: { tenantId, ...userFilter, category: { contains: 'ppointment' }, status: 'COMPLETED', completedAt: { gte: weekStart } } }),
-    db.task.count({ where: { tenantId, ...userFilter, category: { contains: 'ppointment' }, status: 'COMPLETED', completedAt: { gte: monthStart } } }),
+    // Milestones: appointments, offers, contracts, closed
+    db.propertyMilestone.count({ where: milestoneWhere('APPOINTMENT_SET', dayStart) }),
+    db.propertyMilestone.count({ where: milestoneWhere('APPOINTMENT_SET', weekStart) }),
+    db.propertyMilestone.count({ where: milestoneWhere('APPOINTMENT_SET', monthStart) }),
 
-    db.property.count({ where: { tenantId, status: 'UNDER_CONTRACT', updatedAt: { gte: monthStart } } }),
+    db.propertyMilestone.count({ where: milestoneWhere('OFFER_MADE', monthStart) }),
+    db.propertyMilestone.count({ where: milestoneWhere('UNDER_CONTRACT', monthStart) }),
+    db.propertyMilestone.count({ where: milestoneWhere('CLOSED', monthStart) }),
 
     db.property.count({ where: { tenantId, status: { notIn: ['SOLD', 'DEAD'] } } }),
     db.property.count({ where: { tenantId, createdAt: { gte: monthStart } } }),
-    db.property.count({ where: { tenantId, status: 'SOLD', updatedAt: { gte: monthStart } } }),
 
     db.task.count({ where: { tenantId, assignedToId: userId, status: 'COMPLETED', completedAt: { gte: dayStart } } }),
     db.task.count({ where: { tenantId, assignedToId: userId, status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
@@ -104,8 +125,10 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
       month: Math.round(avgScoreMonth._avg.score ?? 0),
     },
     appointments: { today: apptToday, week: apptWeek, month: apptMonth },
+    offers: { month: offersMonth },
     contracts: { month: contractsMonth },
-    properties: { active: propertiesActive, newThisMonth: propertiesNew, soldThisMonth: propertiesSold },
+    closed: { month: closedMonth },
+    properties: { active: propertiesActive, newThisMonth: propertiesNew },
     tasks: { completedToday: tasksCompleted, open: tasksPending },
     scoreDistribution: distribution,
     tcpLeads: tcpProperties.map(p => ({

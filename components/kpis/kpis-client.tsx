@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Phone, Star, Calendar, FileSignature, Building2, CheckSquare, TrendingUp, Target } from 'lucide-react'
+import { Phone, Star, Calendar, FileSignature, Building2, CheckSquare, TrendingUp, Target, DollarSign, FileText } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { UserRole } from '@/types/roles'
 
@@ -13,8 +13,10 @@ interface Metrics {
   calls: { today: number; week: number; month: number }
   avgScore: { today: number; week: number; month: number }
   appointments: { today: number; week: number; month: number }
+  offers: { month: number }
   contracts: { month: number }
-  properties: { active: number; newThisMonth: number; soldThisMonth: number }
+  closed: { month: number }
+  properties: { active: number; newThisMonth: number }
   tasks: { completedToday: number; open: number }
   scoreDistribution: Array<{ range: string; count: number }>
   tcpLeads: Array<{ id: string; address: string; tcpScore: number; status: string }>
@@ -56,6 +58,14 @@ export function KpisClient({ metrics, role, userName, tenantSlug }: {
       show: ['LEAD_MANAGER', 'ACQUISITION_MANAGER', 'TEAM_LEAD', 'ADMIN', 'OWNER'].includes(role),
     },
     {
+      icon: <FileText size={16} />,
+      label: 'Offers made',
+      value: metrics.offers.month,
+      color: 'purple',
+      show: ['ACQUISITION_MANAGER', 'TEAM_LEAD', 'ADMIN', 'OWNER'].includes(role),
+      note: 'This month',
+    },
+    {
       icon: <FileSignature size={16} />,
       label: 'Contracts signed',
       value: metrics.contracts.month,
@@ -71,9 +81,9 @@ export function KpisClient({ metrics, role, userName, tenantSlug }: {
       show: ['DISPOSITION_MANAGER', 'TEAM_LEAD', 'ADMIN', 'OWNER'].includes(role),
     },
     {
-      icon: <TrendingUp size={16} />,
+      icon: <DollarSign size={16} />,
       label: 'Deals closed',
-      value: metrics.properties.soldThisMonth,
+      value: metrics.closed.month,
       color: 'teal',
       show: ['DISPOSITION_MANAGER', 'TEAM_LEAD', 'ADMIN', 'OWNER'].includes(role),
       note: 'This month',
@@ -258,7 +268,7 @@ export function KpisClient({ metrics, role, userName, tenantSlug }: {
               <p className="text-xs text-gray-400 mt-1">Active</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold text-green-400">{metrics.properties.soldThisMonth}</p>
+              <p className="text-2xl font-semibold text-green-400">{metrics.closed.month}</p>
               <p className="text-xs text-gray-400 mt-1">Closed</p>
             </div>
           </div>

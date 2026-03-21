@@ -122,6 +122,24 @@ export async function PATCH(
       })
     }
 
+    // Auto-log CLOSED milestone when property status → SOLD
+    if (status === 'SOLD') {
+      const existingClose = await db.propertyMilestone.findFirst({
+        where: { propertyId: params.propertyId, type: 'CLOSED' },
+      })
+      if (!existingClose) {
+        await db.propertyMilestone.create({
+          data: {
+            tenantId: session.tenantId,
+            propertyId: params.propertyId,
+            type: 'CLOSED',
+            loggedById: session.userId,
+            source: 'AUTO_WEBHOOK',
+          },
+        }).catch(() => {})
+      }
+    }
+
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[Properties] Update error:', err)

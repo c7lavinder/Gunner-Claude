@@ -73,6 +73,7 @@ model Tenant {
   workflowExecutions  WorkflowExecution[]
   buyers              Buyer[]
   dealBlasts          DealBlast[]
+  milestones          PropertyMilestone[]
 
   @@map("tenants")
 }
@@ -128,6 +129,7 @@ model User {
   xpEvents           XpEvent[]
   coachLogs          CoachLog[]
   dealBlasts         DealBlast[] @relation("BlastCreatedBy")
+  loggedMilestones   PropertyMilestone[] @relation("MilestoneLoggedBy")
 
   @@map("users")
 }
@@ -203,8 +205,42 @@ model Property {
   calls      Call[]
   tasks      Task[]
   dealBlasts DealBlast[]
+  milestones PropertyMilestone[]
 
   @@map("properties")
+}
+
+// ─────────────────────────────────────────
+// PROPERTY MILESTONES — deal progress tracking
+// ─────────────────────────────────────────
+
+model PropertyMilestone {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId  String @map("tenant_id")
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  propertyId String   @map("property_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  type       MilestoneType
+  loggedById String? @map("logged_by_id")
+  loggedBy   User?   @relation("MilestoneLoggedBy", fields: [loggedById], references: [id])
+  source     String  @default("MANUAL") // "MANUAL" | "AUTO_WEBHOOK"
+  notes      String?
+
+  @@map("property_milestones")
+}
+
+enum MilestoneType {
+  LEAD
+  APPOINTMENT_SET
+  OFFER_MADE
+  UNDER_CONTRACT
+  CLOSED
+
+  @@map("milestone_type")
 }
 
 enum PropertyStatus {

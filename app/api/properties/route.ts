@@ -77,6 +77,17 @@ export async function POST(request: NextRequest) {
       return prop
     })
 
+    // Auto-log LEAD milestone
+    await db.propertyMilestone.create({
+      data: {
+        tenantId: session.tenantId,
+        propertyId: property.id,
+        type: 'LEAD',
+        loggedById: session.userId,
+        source: 'MANUAL',
+      },
+    }).catch(() => {}) // non-fatal
+
     await db.auditLog.create({
       data: {
         tenantId: session.tenantId,

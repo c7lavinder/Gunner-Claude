@@ -1,9 +1,12 @@
 'use client'
 // components/ui/dashboard-client.tsx
 
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Phone, CheckSquare, Building2, TrendingUp, ArrowUpRight, Clock, Star, Zap, Target, Trophy, Award } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Phone, CheckSquare, Building2, TrendingUp, ArrowUpRight, Clock, Star, Zap, Target, Trophy, Award, CalendarCheck, FileSignature, Handshake } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { useToast } from '@/components/ui/toaster'
 
 interface DashboardData {
   userName: string
@@ -13,6 +16,7 @@ interface DashboardData {
     avgScore: number; tasksCompleted: number; propertiesActive: number
   }
   scoreTrend: ScoreTrendPoint[]
+  activeProperties: Array<{ id: string; address: string; city: string; state: string }>
   leaderboard: LeaderboardEntry[]
   userBadges: EarnedBadge[]
   priorityLeads: PriorityLead[]
@@ -61,6 +65,11 @@ export function DashboardClient({ data, tenantSlug }: { data: DashboardData; ten
         </h1>
         <p className="text-gray-400 text-sm mt-1">Here's your command center for today</p>
       </div>
+
+      {/* Daily entry widget */}
+      {data.activeProperties.length > 0 && (
+        <DailyEntryWidget activeProperties={data.activeProperties} />
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -412,6 +421,122 @@ function EmptyState({ icon, message }: { icon: React.ReactNode; message: string 
     <div className="flex flex-col items-center justify-center py-8 text-center">
       <div className="text-gray-600 mb-3">{icon}</div>
       <p className="text-xs text-gray-500 max-w-48">{message}</p>
+    </div>
+  )
+}
+
+// ─── Daily Entry Widget ────────────────────────────────────────────────────
+
+const MILESTONE_BUTTONS = [
+  { type: 'APPOINTMENT_SET', label: 'Appointment Set', icon: CalendarCheck, color: 'blue' },
+  { type: 'OFFER_MADE', label: 'Offer Made', icon: FileSignature, color: 'orange' },
+  { type: 'UNDER_CONTRACT', label: 'Under Contract', icon: Handshake, color: 'green' },
+] as const
+
+function DailyEntryWidget({ activeProperties }: {
+  activeProperties: Array<{ id: string; address: string; city: string; state: string }>
+}) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const { toast } = useToast()
+  const [activeType, setActiveType] = useState<string | null>(null)
+  const [selectedProperty, setSelectedProperty] = useState('')
+  const [notes, setNotes] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const colorMap: Record<string, string> = {
+    blue: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border-blue-500/20',
+    orange: 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border-orange-500/20',
+    green: 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border-green-500/20',
+  }
+
+  const activeColorMap: Record<string, string> = {
+    blue: 'bg-blue-500 text-white border-blue-500',
+    orange: 'bg-orange-500 text-white border-orange-500',
+    green: 'bg-green-500 text-white border-green-500',
+  }
+
+  async function submit() {
+    if (!selectedProperty || !activeType) return
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/milestones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId: selectedProperty, type: activeType, notes: notes || undefined }),
+      })
+      if (res.ok) {
+        const label = MILESTONE_BUTTONS.find(b => b.type === activeType)?.label ?? 'Milestone'
+        toast(`${label} logged!`, 'success')
+        setActiveType(null)
+        setSelectedProperty('')
+        setNotes('')
+        startTransition(() => router.refresh())
+      } else {
+        toast('Failed to log milestone', 'error')
+      }
+    } catch {
+      toast('Failed to log milestone', 'error')
+    }
+    setSubmitting(false)
+  }
+
+  return (
+    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+      <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Log today's activity</p>
+      <div className="flex gap-2 flex-wrap">
+        {MILESTONE_BUTTONS.map(btn => {
+          const isActive = activeType === btn.type
+          const Icon = btn.icon
+          return (
+            <button
+              key={btn.type}
+              onClick={() => setActiveType(isActive ? null : btn.type)}
+              className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg border transition-colors ${
+                isActive ? activeColorMap[btn.color] : colorMap[btn.color]
+              }`}
+            >
+              <Icon size={14} /> {btn.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {activeType && (
+        <div className="mt-4 pt-4 border-t border-white/10 flex flex-col gap-3">
+          <select
+            value={selectedProperty}
+            onChange={e => setSelectedProperty(e.target.value)}
+            className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+          >
+            <option value="">Select property...</option>
+            {activeProperties.map(p => (
+              <option key={p.id} value={p.id}>{p.address}, {p.city} {p.state}</option>
+            ))}
+          </select>
+          <input
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Notes (optional)"
+            className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={submit}
+              disabled={!selectedProperty || submitting}
+              className="bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              {submitting ? 'Logging...' : 'Submit'}
+            </button>
+            <button
+              onClick={() => { setActiveType(null); setSelectedProperty(''); setNotes('') }}
+              className="text-gray-400 hover:text-white text-sm px-3 py-2"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

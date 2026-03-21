@@ -44,13 +44,15 @@ interface PropertyDetail {
 }
 
 export function PropertyDetailClient({
-  property, tenantSlug, canEdit, canManage, ghlContactId,
+  property, tenantSlug, canEdit, canManage, ghlContactId, milestoneHit, milestoneCounts,
 }: {
   property: PropertyDetail
   tenantSlug: string
   canEdit: boolean
   canManage: boolean
   ghlContactId: string | null
+  milestoneHit?: Record<string, boolean>
+  milestoneCounts?: Record<string, number>
 }) {
   const [showSmsPanel, setShowSmsPanel] = useState(false)
   const [showNotePanel, setShowNotePanel] = useState(false)
@@ -115,6 +117,9 @@ export function PropertyDetailClient({
             )}
           </div>
         </div>
+
+        {/* Deal progress bar */}
+        {milestoneHit && <DealProgressBar milestoneHit={milestoneHit} milestoneCounts={milestoneCounts ?? {}} />}
 
         {/* Financials */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
@@ -282,6 +287,60 @@ export function PropertyDetailClient({
             )}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Deal Progress Bar ─────────────────────────────────────────────────────
+
+import { Check } from 'lucide-react'
+
+const PROGRESS_STEPS = [
+  { key: 'LEAD', label: 'Lead' },
+  { key: 'APPOINTMENT_SET', label: 'Appt Set' },
+  { key: 'OFFER_MADE', label: 'Offer Made' },
+  { key: 'UNDER_CONTRACT', label: 'Contract' },
+  { key: 'CLOSED', label: 'Closed' },
+]
+
+function DealProgressBar({ milestoneHit, milestoneCounts }: {
+  milestoneHit: Record<string, boolean>
+  milestoneCounts: Record<string, number>
+}) {
+  return (
+    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl px-6 py-5 mb-4">
+      <p className="text-xs text-gray-500 uppercase tracking-wider mb-4">Deal Progress</p>
+      <div className="flex items-center">
+        {PROGRESS_STEPS.map((step, i) => {
+          const hit = milestoneHit[step.key] ?? false
+          const nextHit = i < PROGRESS_STEPS.length - 1 ? (milestoneHit[PROGRESS_STEPS[i + 1].key] ?? false) : false
+          const count = milestoneCounts[step.key]
+
+          return (
+            <div key={step.key} className="flex items-center flex-1 last:flex-none">
+              {/* Step circle + label */}
+              <div className="flex flex-col items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                  hit ? 'bg-orange-500 text-white' : 'border-2 border-white/10 text-gray-600'
+                }`}>
+                  {hit ? <Check size={14} /> : <span className="text-xs">{i + 1}</span>}
+                </div>
+                <span className={`text-xs mt-1.5 ${hit ? 'text-white' : 'text-gray-500'}`}>{step.label}</span>
+                {count && count > 1 && (
+                  <span className="text-xs text-gray-500">(×{count})</span>
+                )}
+              </div>
+
+              {/* Connecting line */}
+              {i < PROGRESS_STEPS.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-2 rounded ${
+                  hit && nextHit ? 'bg-orange-500/60' : 'bg-white/10'
+                }`} />
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

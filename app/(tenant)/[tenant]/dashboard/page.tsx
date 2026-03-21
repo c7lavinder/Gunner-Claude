@@ -6,6 +6,7 @@ import { db } from '@/lib/db/client'
 import { DashboardClient } from '@/components/ui/dashboard-client'
 import { formatDistanceToNow, startOfDay, endOfDay, subDays, startOfWeek, startOfMonth } from 'date-fns'
 import type { UserRole } from '@/types/roles'
+import { hasPermission } from '@/types/roles'
 import { getLeaderboard, getUserBadges } from '@/lib/gamification/xp'
 
 interface PageProps {
@@ -107,6 +108,20 @@ export default async function DashboardPage({ params }: PageProps) {
     getUserBadges(tenantId, userId),
   ])
 
+  const canViewAll = hasPermission(role, 'calls.view.all')
+
+  // Active properties for milestone entry widget
+  const activeProperties = await db.property.findMany({
+    where: {
+      tenantId,
+      status: { notIn: ['SOLD', 'DEAD'] },
+      ...(canViewAll ? {} : { assignedToId: userId }),
+    },
+    select: { id: true, address: true, city: true, state: true },
+    orderBy: { updatedAt: 'desc' },
+    take: 50,
+  })
+
   // KPI counts — extended with week/month for context
   const [callsToday, callsWeek, callsMonth, avgScore, tasksCompleted, propertiesActive] = await Promise.all([
     db.call.count({
@@ -161,6 +176,7 @@ export default async function DashboardPage({ params }: PageProps) {
       propertiesActive,
     },
     scoreTrend,
+    activeProperties,
     leaderboard,
     userBadges: userBadges.filter(b => b.earned).map(b => ({
       ...b,

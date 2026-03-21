@@ -129,6 +129,16 @@ export async function createPropertyFromContact(
 
     console.log(`[Property] Created ${property.id} at ${address || 'no address'} (source: ${leadSource || 'unknown'}) for contact ${ghlContactId}`)
 
+    // Auto-log LEAD milestone
+    await db.propertyMilestone.create({
+      data: {
+        tenantId,
+        propertyId: property.id,
+        type: 'LEAD',
+        source: 'AUTO_WEBHOOK',
+      },
+    }).catch(() => {}) // non-fatal
+
     // Trigger property_created workflows
     triggerWorkflows(tenantId, 'property_created', {
       contactId: ghlContactId,

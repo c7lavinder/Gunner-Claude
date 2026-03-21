@@ -68,6 +68,18 @@
 - Hardcoded values scan: only DEV_BYPASS_AUTH blocks reference hardcoded slugs (apex-dev, owner@apex.dev) — behind env var, not set on Railway
 - Architecture enforcement: all 14 API routes now verified SAFE, all 14 server pages verified SAFE, middleware validated
 
+### Session 28 — PropertyMilestone system end to end (2026-03-20)
+**What was done:**
+- **Schema:** PropertyMilestone model with 5 types (LEAD, APPOINTMENT_SET, OFFER_MADE, UNDER_CONTRACT, CLOSED), relations on Property/User/Tenant, migration created + applied
+- **Auto milestones:**
+  - LEAD auto-logged when property created via webhook (lib/properties.ts)
+  - LEAD auto-logged when property created manually (POST /api/properties)
+  - CLOSED auto-logged (once) when property status → SOLD (PATCH /api/properties/[id])
+- **Manual entry API:** POST /api/milestones for APPOINTMENT_SET, OFFER_MADE, UNDER_CONTRACT with validation + audit logging. GET /api/milestones?propertyId=xxx returns milestone history
+- **Dashboard widget:** "Log today's activity" with 3 buttons (Appointment Set, Offer Made, Under Contract), inline form with property dropdown + notes, toast feedback
+- **Property detail:** Deal progress bar showing 5 steps (Lead → Appt Set → Offer Made → Contract → Closed) with orange fill for hit milestones, connecting lines, count badges for multi-entry milestones
+- **KPI page:** Appointments, offers, contracts, closed all now query from PropertyMilestone table instead of tasks/property status approximations. Scoped to properties within user's hierarchy.
+
 ### Session 27 — Fix Inbox, Appointments, Tasks — 10 targeted fixes (2026-03-20)
 **What was done:**
 - **Inbox (3 fixes):**
