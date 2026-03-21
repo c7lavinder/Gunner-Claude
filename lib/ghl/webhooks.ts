@@ -8,6 +8,7 @@ import { gradeCall } from '@/lib/ai/grading'
 import { createPropertyFromContact } from '@/lib/properties'
 import { awardTaskXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
+import { fetchAndStoreRecording } from '@/lib/ghl/fetch-recording'
 
 export type GHLWebhookEvent = {
   type: string
@@ -48,7 +49,6 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
 
     case 'ContactCreated':
     case 'contact.created':
-      // No auto-property on contact create — only on pipeline stage
       break
 
     case 'TaskCompleted':
@@ -75,126 +75,121 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
   }
 }
 
-// ─── InboundMessage / OutboundMessage — recording URL lives here ────────────
+// ─── InboundMessage / OutboundMessage ──────────────────────────────────────
 
 async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
-  const msgData = event as {
+  const msg = event as {
     type: string
     messageType?: string
+    messageTypeId?: number
     locationId: string
+    id?: string          // message ID
+    messageId?: string   // alternate field
     contactId?: string
     conversationId?: string
     userId?: string
     direction?: string
+    callDuration?: number
+    callStatus?: string
     attachments?: Array<string | { url: string }>
     recordingUrl?: string
     recording_url?: string
-    recordingURL?: string
     meta?: { call?: { duration?: number; status?: string; recordingUrl?: string } }
     body?: string
     dateAdded?: string
     altId?: string
   }
 
-  // Log ALL incoming webhook data for debugging (first 500 chars of full payload)
-  console.log(`[GHL Webhook] Message payload: ${JSON.stringify(event).slice(0, 500)}`)
+  // Log full payload for debugging
+  console.log(`[GHL Webhook] Message: ${JSON.stringify(event).slice(0, 600)}`)
 
-  // Accept both webhook format ("CALL") and API format ("TYPE_CALL")
-  const msgType = (msgData.messageType ?? '').toUpperCase()
-  const isCallMessage = msgType === 'TYPE_CALL' || msgType === 'CALL'
+  // Check if this is a call message
+  const msgType = (msg.messageType ?? '').toUpperCase()
+  const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msg.messageTypeId === 1
 
-  console.log(`[GHL Webhook] Message: messageType=${msgData.messageType}, isCall=${isCallMessage}, direction=${msgData.direction}, contact=${msgData.contactId}, hasAttachments=${!!(msgData.attachments?.length)}, hasRecording=${!!(msgData.recordingUrl || msgData.recording_url)}`)
+  if (!isCall) return // skip SMS, email, chat
 
-  // Only process call messages — skip SMS, email, etc.
-  if (!isCallMessage) return
+  // Extract call metadata — check multiple field locations
+  const callDuration = msg.callDuration ?? msg.meta?.call?.duration ?? 0
+  const callStatus = (msg.callStatus ?? msg.meta?.call?.status ?? '').toLowerCase()
+  const direction = (msg.direction ?? '').toLowerCase() === 'inbound' ? 'INBOUND' : 'OUTBOUND'
+  const messageId = msg.id ?? msg.messageId ?? msg.altId ?? ''
 
-  // Extract recording URL from all possible locations
-  const recordingUrl = extractRecordingUrl(msgData)
-  const duration = msgData.meta?.call?.duration ?? 0
-  const callStatus = msgData.meta?.call?.status ?? ''
-  const direction = msgData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND'
+  console.log(`[GHL Webhook] Call: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}`)
 
-  console.log(`[GHL Webhook] Call message: duration=${duration}s, status=${callStatus}, recording=${recordingUrl ? 'YES' : 'NO'}, contact=${msgData.contactId}`)
-
-  // Duration-based routing:
-  // 0s or under 45s → dial attempt / no answer, skip entirely
-  // 45-90s → create call, summary only (no rubric score)
-  // Over 90s → full transcription + grading
-
-  // Zero duration also caught here (0 < 45 is true) — no answer calls
-  if (duration < 45) {
-    await db.auditLog.create({
-      data: {
-        tenantId,
-        action: 'call.dial_attempt',
-        resource: 'call',
-        source: 'GHL_WEBHOOK',
-        severity: 'INFO',
-        payload: {
-          contactId: msgData.contactId,
-          duration,
-          status: callStatus,
-          direction: msgData.direction,
-        } as unknown as Prisma.InputJsonValue,
-      },
-    })
+  // Filter: must be completed and over 45 seconds
+  if (callStatus !== 'completed' || callDuration < 45) {
+    // Log dial attempts for AM/PM tracking
+    if (callDuration < 45) {
+      await db.auditLog.create({
+        data: {
+          tenantId,
+          action: 'call.dial_attempt',
+          resource: 'call',
+          source: 'GHL_WEBHOOK',
+          severity: 'INFO',
+          payload: {
+            messageId,
+            contactId: msg.contactId,
+            duration: callDuration,
+            status: callStatus,
+            direction: msg.direction,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      })
+    }
     return
   }
 
-  // Deduplicate — use altId (Twilio Call SID) as primary key, fall back to message ID
-  const dedupeId = msgData.altId || msgData.conversationId
+  // Deduplicate by messageId or altId
+  const dedupeId = msg.altId || messageId
   if (dedupeId) {
     const existing = await db.call.findFirst({
-      where: { tenantId, ghlCallId: dedupeId },
+      where: {
+        tenantId,
+        OR: [
+          { ghlCallId: dedupeId },
+          ...(messageId && messageId !== dedupeId ? [{ ghlCallId: messageId }] : []),
+        ],
+      },
       select: { id: true, recordingUrl: true },
     })
-
     if (existing) {
-      // If we already have this call but now have a recording URL, update it
-      if (recordingUrl && !existing.recordingUrl) {
-        await db.call.update({
-          where: { id: existing.id },
-          data: { recordingUrl },
-        })
-        console.log(`[GHL Webhook] Updated recording URL for existing call ${existing.id}`)
-      }
+      console.log(`[GHL Webhook] Duplicate call ${dedupeId}, skipping`)
       return
     }
   }
 
-  // Find user in our system by GHL userId mapping
-  const user = msgData.userId
-    ? await db.user.findFirst({ where: { tenantId, ghlUserId: msgData.userId } })
+  // Find user by GHL userId
+  const user = msg.userId
+    ? await db.user.findFirst({ where: { tenantId, ghlUserId: msg.userId } })
     : null
 
   // Find linked property
-  const property = msgData.contactId
-    ? await db.property.findFirst({ where: { tenantId, ghlContactId: msgData.contactId } })
+  const property = msg.contactId
+    ? await db.property.findFirst({ where: { tenantId, ghlContactId: msg.contactId } })
     : null
+
+  // Check if recording URL was included in the webhook payload
+  const immediateRecordingUrl = extractRecordingUrl(msg)
 
   // Create call record
   const call = await db.call.create({
     data: {
       tenantId,
-      ghlCallId: dedupeId ?? undefined,
-      ghlContactId: msgData.contactId ?? undefined,
+      ghlCallId: dedupeId || messageId || undefined,
+      ghlContactId: msg.contactId ?? undefined,
       assignedToId: user?.id,
       propertyId: property?.id,
-      recordingUrl: recordingUrl ?? undefined,
+      recordingUrl: immediateRecordingUrl ?? undefined,
       direction: direction as 'INBOUND' | 'OUTBOUND',
-      durationSeconds: duration,
-      calledAt: msgData.dateAdded ? new Date(msgData.dateAdded) : new Date(),
+      durationSeconds: callDuration,
+      calledAt: msg.dateAdded ? new Date(msg.dateAdded) : new Date(),
       gradingStatus: 'PENDING',
     },
   })
 
-  console.log(`[GHL Webhook] Created call ${call.id}: duration=${duration}s, recording=${!!recordingUrl}, grading=${duration >= 90 ? 'FULL' : 'SUMMARY_ONLY'}`)
-
-  // Trigger grading — fire and forget
-  // gradeCall handles the duration-based routing internally
-  gradeCall(call.id).catch((err) => {
-    console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
-  })
+  console.log(`[GHL Webhook] Created call ${call.id}: ${callDuration}s, recording=${!!immediateRecordingUrl}`)
 
   await db.auditLog.create({
     data: {
@@ -206,35 +201,55 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       severity: 'INFO',
       payload: {
         ghlCallId: dedupeId,
-        duration,
-        hasRecording: !!recordingUrl,
-        contactId: msgData.contactId,
+        messageId,
+        duration: callDuration,
+        hasImmediateRecording: !!immediateRecordingUrl,
+        contactId: msg.contactId,
       } as unknown as Prisma.InputJsonValue,
     },
   })
+
+  // If no recording URL in the payload, fetch it after 90 second delay
+  // GHL needs time to process the recording after the call ends
+  if (!immediateRecordingUrl && messageId) {
+    console.log(`[GHL Webhook] Scheduling recording fetch in 90s for call ${call.id} (msg: ${messageId})`)
+    setTimeout(() => {
+      fetchAndStoreRecording(call.id, messageId)
+        .then(() => {
+          // After recording is fetched, trigger grading
+          gradeCall(call.id).catch(err => {
+            console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
+          })
+        })
+        .catch(err => {
+          console.error(`[Recording] Fetch failed for call ${call.id}:`, err instanceof Error ? err.message : err)
+          // Grade anyway with metadata only
+          gradeCall(call.id).catch(() => {})
+        })
+    }, 90_000) // 90 second delay
+  } else {
+    // Recording already available — grade immediately
+    gradeCall(call.id).catch(err => {
+      console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
+    })
+  }
 }
 
-// Extract recording URL from all possible locations in the webhook payload
+// Extract recording URL from webhook payload
 function extractRecordingUrl(data: {
   attachments?: Array<string | { url: string }>
   recordingUrl?: string
   recording_url?: string
-  recordingURL?: string
   meta?: { call?: { recordingUrl?: string } }
 }): string | null {
-  // Primary: attachments array
   if (data.attachments && data.attachments.length > 0) {
     const first = data.attachments[0]
     const url = typeof first === 'string' ? first : first?.url
     if (url) return url
   }
-
-  // Fallbacks: various field name conventions
   if (data.recordingUrl) return data.recordingUrl
   if (data.recording_url) return data.recording_url
-  if (data.recordingURL) return data.recordingURL
   if (data.meta?.call?.recordingUrl) return data.meta.call.recordingUrl
-
   return null
 }
 
@@ -244,46 +259,43 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
   const callData = event as {
     id?: string
     callId?: string
+    messageId?: string
     recordingUrl?: string
     recording_url?: string
     attachments?: Array<string | { url: string }>
     duration?: number
+    callDuration?: number
     direction?: string
     contactId?: string
     userId?: string
     locationId: string
   }
 
-  const ghlCallId = callData.id ?? callData.callId
-  if (!ghlCallId) return
+  const messageId = callData.messageId ?? callData.id ?? callData.callId
+  if (!messageId) return
 
-  const recordingUrl = extractRecordingUrl(callData)
-  const duration = callData.duration ?? 0
-
-  // Skip dial attempts / no answer (0s or under 45s)
+  const duration = callData.callDuration ?? callData.duration ?? 0
   if (duration < 45) return
 
   // Deduplicate
   const existing = await db.call.findFirst({
-    where: { tenantId, ghlCallId },
+    where: { tenantId, ghlCallId: messageId },
     select: { id: true },
   })
   if (existing) return
 
   const user = callData.userId
-    ? await db.user.findFirst({ where: { tenantId } })
+    ? await db.user.findFirst({ where: { tenantId, ghlUserId: callData.userId } })
     : null
 
-  const property = callData.contactId
-    ? await db.property.findFirst({ where: { tenantId, ghlContactId: callData.contactId } })
-    : null
+  const recordingUrl = extractRecordingUrl(callData)
 
   const call = await db.call.create({
     data: {
       tenantId,
-      ghlCallId,
+      ghlCallId: messageId,
+      ghlContactId: callData.contactId ?? undefined,
       assignedToId: user?.id,
-      propertyId: property?.id,
       recordingUrl: recordingUrl ?? undefined,
       direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
       durationSeconds: duration,
@@ -292,9 +304,17 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     },
   })
 
-  gradeCall(call.id).catch((err) => {
-    console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
-  })
+  if (!recordingUrl) {
+    setTimeout(() => {
+      fetchAndStoreRecording(call.id, messageId)
+        .then(() => gradeCall(call.id).catch(() => {}))
+        .catch(() => gradeCall(call.id).catch(() => {}))
+    }, 90_000)
+  } else {
+    gradeCall(call.id).catch(err => {
+      console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
+    })
+  }
 }
 
 // ─── Opportunity Stage Changed → Maybe create property ─────────────────────
@@ -351,14 +371,12 @@ async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
     data: { status: 'COMPLETED', completedAt: new Date() },
   })
 
-  // Award XP for task completion
   if (updated?.assignedToId) {
-    awardTaskXP(tenantId, updated.assignedToId, updated.id, updated.category ?? undefined).catch((err) => {
+    awardTaskXP(tenantId, updated.assignedToId, updated.id, updated.category ?? undefined).catch(err => {
       console.warn(`[Webhook] XP award failed for task ${updated.id}:`, err)
     })
   }
 
-  // Trigger task_completed workflows
   triggerWorkflows(tenantId, 'task_completed', { taskId: updated?.id }).catch(() => {})
 }
 
