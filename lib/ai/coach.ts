@@ -134,7 +134,7 @@ export async function getCoachResponse(
       where: { tenantId, assignedToId: userId, gradingStatus: 'COMPLETED' },
       orderBy: { createdAt: 'desc' },
       take: 5,
-      select: { score: true, aiFeedback: true, aiCoachingTips: true, callType: true, calledAt: true },
+      select: { score: true, aiFeedback: true, aiCoachingTips: true, callType: true, callOutcome: true, calledAt: true, contactName: true, transcript: true, aiSummary: true, keyMoments: true },
     }),
     db.call.findMany({
       where: { tenantId, assignedToId: userId, gradingStatus: 'COMPLETED', calledAt: { gte: weekAgo } },
@@ -178,11 +178,17 @@ ${activeTasks > 0 ? `- ${activeTasks} open tasks` : '- No open tasks'}
 ${recentProperties > 0 ? `- ${recentProperties} active properties assigned` : ''}
 ${xpRecord ? `- Level ${xpRecord.level} (${xpRecord.totalXp} total XP, +${xpRecord.weeklyXp} this week)` : ''}
 
-${recentCalls.length > 0 && recentCalls[0].aiFeedback ? `MOST RECENT CALL FEEDBACK:
-"${recentCalls[0].aiFeedback}"` : ''}
-
-${recentCalls.length > 0 && recentCalls[0].aiCoachingTips ? `COACHING TIPS FROM LAST CALL:
-${(recentCalls[0].aiCoachingTips as string[]).map((t, i) => `${i + 1}. ${t}`).join('\n')}` : ''}
+${recentCalls.length > 0 ? `RECENT CALL HISTORY:
+${recentCalls.map((c, i) => {
+  const tips = (c.aiCoachingTips as string[] | null) ?? []
+  const moments = (c.keyMoments as Array<{ type: string; description: string }> | null) ?? []
+  return `Call ${i + 1}: ${c.contactName ?? 'Unknown'} | ${c.callType ?? 'unknown type'} | Score: ${c.score ?? '-'}/100 | Outcome: ${c.callOutcome ?? 'unknown'}
+  Summary: ${c.aiSummary?.slice(0, 200) ?? 'No summary'}
+  Feedback: ${c.aiFeedback?.slice(0, 200) ?? 'No feedback'}
+  ${tips.length > 0 ? `Tips: ${tips.slice(0, 2).join('; ')}` : ''}
+  ${moments.length > 0 ? `Key moments: ${moments.slice(0, 2).map(m => m.description).join('; ')}` : ''}
+  ${c.transcript ? `Transcript excerpt: "${c.transcript.slice(0, 300)}..."` : ''}`
+}).join('\n\n')}` : ''}
 
 WHAT YOU KNOW:
 - Deep expertise in real estate wholesaling: cold calling, acquisitions, dispositions, ARV calculations, MAO, assigning contracts
