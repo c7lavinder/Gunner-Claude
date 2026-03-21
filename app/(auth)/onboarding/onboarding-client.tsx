@@ -55,7 +55,7 @@ export default function OnboardingClient() {
       response_type: 'code',
       redirect_uri: `${window.location.origin}/api/auth/crm/callback`,
       client_id: process.env.NEXT_PUBLIC_GHL_CLIENT_ID ?? '',
-      scope: 'contacts.readonly contacts.write opportunities.readonly opportunities.write conversations.readonly conversations.write conversations/message.readonly conversations/message.write calendars.readonly calendars/events.readonly locations.readonly users.readonly',
+      scope: 'contacts.readonly contacts.write opportunities.readonly opportunities.write conversations.readonly conversations.write conversations/message.readonly conversations/message.write calendars.readonly calendars/events.readonly locations.readonly locations/tasks.readonly locations/tasks.write users.readonly',
     })
     return `${base}?${params}`
   }

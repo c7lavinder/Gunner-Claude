@@ -313,7 +313,7 @@ export function SettingsClient({
             </div>
 
             <a
-              href={`https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(window.location.origin + '/api/auth/crm/callback')}&client_id=${process.env.NEXT_PUBLIC_GHL_CLIENT_ID ?? ''}&scope=contacts.readonly+contacts.write+opportunities.readonly+opportunities.write+conversations.readonly+conversations.write+conversations/message.readonly+conversations/message.write+calendars.readonly+calendars/events.readonly+locations.readonly+users.readonly`}
+              href={`https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(window.location.origin + '/api/auth/crm/callback')}&client_id=${process.env.NEXT_PUBLIC_GHL_CLIENT_ID ?? ''}&scope=contacts.readonly+contacts.write+opportunities.readonly+opportunities.write+conversations.readonly+conversations.write+conversations/message.readonly+conversations/message.write+calendars.readonly+calendars/events.readonly+locations.readonly+locations/tasks.readonly+locations/tasks.write+users.readonly`}
               className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
               <Zap size={14} /> {tenant.ghlConnected ? 'Reconnect Go High Level' : 'Connect Go High Level'}
