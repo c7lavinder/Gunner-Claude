@@ -1,6 +1,7 @@
 'use client'
 // components/calls/call-detail-client.tsx
 // Two-column call detail: grade + audio + highlights | 4 tabs
+// Redesigned to match docs/DESIGN.md — light theme, no gradients, no heavy shadows
 
 import { useState, useRef, useTransition } from 'react'
 import Link from 'next/link'
@@ -39,17 +40,25 @@ type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function gradeLetter(score: number | null): { letter: string; color: string; bg: string } {
-  if (score === null) return { letter: '—', color: 'text-gray-500', bg: 'bg-gray-500/10' }
-  if (score >= 90) return { letter: 'A', color: 'text-green-400', bg: 'bg-green-500/15' }
-  if (score >= 80) return { letter: 'B', color: 'text-blue-400', bg: 'bg-blue-500/15' }
-  if (score >= 70) return { letter: 'C', color: 'text-yellow-400', bg: 'bg-yellow-500/15' }
-  if (score >= 60) return { letter: 'D', color: 'text-orange-400', bg: 'bg-orange-500/15' }
-  return { letter: 'F', color: 'text-red-400', bg: 'bg-red-500/15' }
+function scoreColor(score: number | null): { text: string; bg: string; circle: string } {
+  if (score === null) return { text: 'text-txt-muted', bg: 'bg-surface-tertiary', circle: 'bg-[#9B9A94]' }
+  if (score >= 90) return { text: 'text-semantic-green', bg: 'bg-semantic-green-bg', circle: 'bg-semantic-green' }
+  if (score >= 80) return { text: 'text-semantic-amber', bg: 'bg-semantic-amber-bg', circle: 'bg-semantic-amber' }
+  if (score >= 70) return { text: 'text-semantic-blue', bg: 'bg-semantic-blue-bg', circle: 'bg-semantic-blue' }
+  return { text: 'text-semantic-red', bg: 'bg-semantic-red-bg', circle: 'bg-semantic-red' }
+}
+
+function gradeLetter(score: number | null): string {
+  if (score === null) return '\u2014'
+  if (score >= 90) return 'A'
+  if (score >= 80) return 'B'
+  if (score >= 70) return 'C'
+  if (score >= 60) return 'D'
+  return 'F'
 }
 
 function fmtDuration(s: number | null): string {
-  if (!s) return '—'
+  if (!s) return '\u2014'
   const m = Math.floor(s / 60)
   const sec = s % 60
   return `${m}:${sec.toString().padStart(2, '0')}`
@@ -88,7 +97,8 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [generatingSteps, setGeneratingSteps] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  const { letter, color, bg } = gradeLetter(call.score)
+  const { text: scoreTextColor, bg: scoreBgColor, circle: scoreCircleColor } = scoreColor(call.score)
+  const letter = gradeLetter(call.score)
   const outcome = call.callOutcome ?? call.property?.status ?? null
 
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
@@ -194,7 +204,10 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   return (
     <div className="space-y-5">
       {/* Back */}
-      <Link href={`/${tenantSlug}/calls`} className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+      <Link
+        href={`/${tenantSlug}/calls`}
+        className="inline-flex items-center gap-1.5 text-ds-body text-txt-secondary hover:text-txt-primary transition-colors"
+      >
         <ArrowLeft size={14} /> Back to calls
       </Link>
 
@@ -203,18 +216,30 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
         {/* ── LEFT COLUMN (2/5) ─────────────────────────────────── */}
         <div className="md:col-span-2 space-y-4">
           {/* Grade display */}
-          <div className={`${bg} border border-white/10 rounded-2xl p-6 text-center`}>
-            <div className={`text-7xl font-black ${color}`} style={{ textShadow: `0 0 30px currentColor` }}>
-              {letter}
+          <div
+            className={`${scoreBgColor} border rounded-[14px] p-6 text-center`}
+            style={{ borderColor: 'var(--border-light)' }}
+          >
+            {/* Score circle — 40px round, colored by score */}
+            <div
+              className={`${scoreCircleColor} w-10 h-10 rounded-full flex items-center justify-center mx-auto`}
+            >
+              <span className="text-ds-body font-semibold text-white">{letter}</span>
             </div>
-            <p className="text-lg text-gray-400 mt-1">
-              {call.score !== null ? `${Math.round(call.score)} / 100` : 'Not graded'}
+            <p className="text-ds-section font-semibold text-txt-primary mt-3">
+              {call.score !== null ? `${Math.round(call.score)}` : '\u2014'}
+              <span className="text-ds-body font-normal text-txt-muted"> / 100</span>
+            </p>
+            <p className="text-ds-fine text-txt-muted mt-1">
+              {call.score !== null ? 'Overall Score' : 'Not graded'}
             </p>
           </div>
 
-          {/* Info pills */}
+          {/* Info pills — 11px, font-weight 500, pill shape */}
           <div className="flex flex-wrap gap-1.5">
-            {call.callType && <Pill>{CALL_TYPES.find(ct => ct.id === call.callType)?.name ?? call.callType.replace(/_/g, ' ')}</Pill>}
+            {call.callType && (
+              <Pill>{CALL_TYPES.find(ct => ct.id === call.callType)?.name ?? call.callType.replace(/_/g, ' ')}</Pill>
+            )}
             {outcome && <Pill>{RESULT_NAMES[outcome] ?? outcome.replace(/_/g, ' ')}</Pill>}
             <Pill>{call.direction.toLowerCase()}</Pill>
             <Pill>{fmtDuration(call.durationSeconds)}</Pill>
@@ -224,24 +249,41 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* Property link */}
           {call.property ? (
-            <Link href={`/${tenantSlug}/inventory/${call.property.id}`}
-              className="block bg-[#1a1d27] border border-white/10 hover:border-white/20 rounded-xl px-4 py-3 transition-colors">
-              <p className="text-xs text-gray-500">Property</p>
-              <p className="text-sm text-white">{call.property.address}, {call.property.city} {call.property.state}</p>
-              {call.property.sellerName && <p className="text-xs text-gray-500 mt-0.5">{call.property.sellerName}</p>}
+            <Link
+              href={`/${tenantSlug}/inventory/${call.property.id}`}
+              className="block bg-surface-primary border rounded-[14px] px-4 py-3 transition-all hover:shadow-ds-float"
+              style={{ borderColor: 'var(--border-light)' }}
+            >
+              <p className="text-ds-fine text-txt-muted">Property</p>
+              <p className="text-ds-body text-txt-primary mt-0.5">
+                {call.property.address}, {call.property.city} {call.property.state}
+              </p>
+              {call.property.sellerName && (
+                <p className="text-ds-fine text-txt-muted mt-0.5">{call.property.sellerName}</p>
+              )}
             </Link>
           ) : (
-            <p className="text-xs text-gray-600 px-1">No property linked</p>
+            <p className="text-ds-fine text-txt-muted px-1">No property linked</p>
           )}
 
           {/* Audio player */}
           {call.recordingUrl && (
-            <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-4 space-y-3">
+            <div
+              className="bg-surface-primary border rounded-[14px] p-4 space-y-3"
+              style={{ borderColor: 'var(--border-light)' }}
+            >
               <audio ref={audioRef} controls src={call.recordingUrl} className="w-full h-8" />
               <div className="flex gap-1.5">
                 {[0.5, 1, 1.25, 1.5, 2].map(rate => (
-                  <button key={rate} onClick={() => changeSpeed(rate)}
-                    className={`text-xs px-2 py-1 rounded transition-colors ${playbackRate === rate ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:text-white'}`}>
+                  <button
+                    key={rate}
+                    onClick={() => changeSpeed(rate)}
+                    className={`text-ds-fine px-2 py-1 rounded-[10px] transition-colors ${
+                      playbackRate === rate
+                        ? 'bg-gunner-red text-white'
+                        : 'bg-surface-secondary text-txt-secondary hover:text-txt-primary'
+                    }`}
+                  >
                     {rate}x
                   </button>
                 ))}
@@ -251,16 +293,23 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* Key moments / highlights */}
           {call.keyMoments.length > 0 && (
-            <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-2">Key Moments</p>
+            <div
+              className="bg-surface-primary border rounded-[14px] p-4"
+              style={{ borderColor: 'var(--border-light)' }}
+            >
+              <p className="text-ds-fine text-txt-muted mb-2">Key Moments</p>
               <div className="flex flex-wrap gap-1.5">
                 {call.keyMoments.map((m, i) => {
                   const Icon = MOMENT_ICONS[m.type] ?? Zap
                   return (
-                    <button key={i} onClick={() => seekTo(m.timestamp)}
-                      className="flex items-center gap-1 text-xs bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2 py-1.5 text-gray-300 transition-colors">
-                      <Icon size={10} className="text-orange-400 shrink-0" />
-                      <span className="text-gray-500">{m.timestamp}</span>
+                    <button
+                      key={i}
+                      onClick={() => seekTo(m.timestamp)}
+                      className="flex items-center gap-1 text-ds-fine bg-surface-secondary border rounded-[6px] px-2 py-1.5 text-txt-secondary hover:text-txt-primary transition-colors"
+                      style={{ borderColor: 'var(--border-light)' }}
+                    >
+                      <Icon size={10} className="text-gunner-red shrink-0" />
+                      <span className="text-txt-muted">{m.timestamp}</span>
                       <span className="truncate max-w-24">{m.description}</span>
                     </button>
                   )
@@ -269,30 +318,46 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
             </div>
           )}
 
-          {/* Actions */}
+          {/* Actions — secondary button style */}
           <div className="flex flex-wrap gap-2">
-            <button onClick={reprocess} disabled={actionLoading === 'reprocess'}
-              className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+            <button
+              onClick={reprocess}
+              disabled={actionLoading === 'reprocess'}
+              className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
+              style={{ borderColor: 'var(--border-medium)' }}
+            >
               <RotateCcw size={10} /> Reprocess
             </button>
             <div className="relative">
-              <button onClick={() => setReclassifying(!reclassifying)}
-                className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+              <button
+                onClick={() => setReclassifying(!reclassifying)}
+                className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
+                style={{ borderColor: 'var(--border-medium)' }}
+              >
                 <Tag size={10} /> Reclassify
               </button>
               {reclassifying && (
-                <div className="absolute top-full left-0 mt-1 bg-[#1a1d27] border border-white/10 rounded-lg p-1 z-10 min-w-40">
+                <div
+                  className="absolute top-full left-0 mt-1 bg-surface-primary border rounded-[10px] p-1 z-10 min-w-40 shadow-ds-float"
+                  style={{ borderColor: 'var(--border-medium)' }}
+                >
                   {CALL_TYPES.map(ct => (
-                    <button key={ct.id} onClick={() => reclassify(ct.id)}
-                      className="block w-full text-left text-xs text-gray-300 hover:text-white hover:bg-white/5 px-3 py-1.5 rounded">
+                    <button
+                      key={ct.id}
+                      onClick={() => reclassify(ct.id)}
+                      className="block w-full text-left text-ds-body text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary px-3 py-1.5 rounded-[6px]"
+                    >
                       {ct.name}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            <button onClick={() => setShowFeedback(true)}
-              className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+            <button
+              onClick={() => setShowFeedback(true)}
+              className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
+              style={{ borderColor: 'var(--border-medium)' }}
+            >
               <MessageSquare size={10} /> Feedback
             </button>
           </div>
@@ -300,11 +365,18 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
         {/* ── RIGHT COLUMN (3/5) ────────────────────────────────── */}
         <div className="md:col-span-3 space-y-4">
-          {/* Tabs */}
-          <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-1 w-fit">
+          {/* Tab bar — bg-tertiary container, white active tab with shadow */}
+          <div className="flex gap-1 bg-surface-tertiary rounded-[14px] p-1 w-fit">
             {tabs.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm transition-colors ${tab === t.id ? 'bg-[#1a1d27] text-white' : 'text-gray-400 hover:text-white'}`}>
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-[10px] text-ds-body font-medium transition-all ${
+                  tab === t.id
+                    ? 'bg-surface-primary text-txt-primary shadow-ds-float'
+                    : 'text-txt-secondary hover:text-txt-primary'
+                }`}
+              >
                 {t.icon} {t.label}
               </button>
             ))}
@@ -314,23 +386,29 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           {tab === 'coaching' && (
             <div className="space-y-4">
               {call.aiSummary && (
-                <Section title="Call Summary">
-                  <p className="text-sm text-gray-300 leading-relaxed">{call.aiSummary}</p>
+                <Section title="Call Summary" ai>
+                  <p className="text-ds-body text-txt-secondary leading-relaxed">{call.aiSummary}</p>
                 </Section>
               )}
               {call.aiFeedback && (
-                <Section title="AI Feedback">
-                  <p className="text-sm text-gray-300 leading-relaxed">{call.aiFeedback}</p>
+                <Section title="AI Feedback" ai>
+                  <p className="text-ds-body text-txt-secondary leading-relaxed">{call.aiFeedback}</p>
                 </Section>
               )}
               {call.coachingTips.length > 0 && (
-                <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-5">
-                  <h3 className="text-sm font-medium text-orange-400 flex items-center gap-2 mb-3"><Lightbulb size={14} /> What to Improve</h3>
+                <div
+                  className="bg-semantic-purple-bg rounded-[14px] p-5"
+                  style={{ borderLeft: '2px solid var(--purple)' }}
+                >
+                  <h3 className="text-ds-label font-semibold text-semantic-purple flex items-center gap-2 mb-3">
+                    <Lightbulb size={14} /> What to Improve
+                    <AiBadge />
+                  </h3>
                   <ul className="space-y-3">
                     {call.coachingTips.map((tip, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-sm text-gray-300">
-                        <span className="w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="text-xs text-orange-400 font-bold">{i + 1}</span>
+                      <li key={i} className="flex items-start gap-2.5 text-ds-body text-txt-secondary">
+                        <span className="w-5 h-5 rounded-full bg-semantic-purple/10 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-ds-fine text-semantic-purple font-semibold">{i + 1}</span>
                         </span>
                         {tip}
                       </li>
@@ -344,10 +422,12 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                     {call.keyMoments.map((m, i) => {
                       const Icon = MOMENT_ICONS[m.type] ?? Zap
                       return (
-                        <div key={i} className="flex items-start gap-3 text-sm">
-                          <span className="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded shrink-0">{m.timestamp}</span>
-                          <Icon size={12} className="text-orange-400 shrink-0 mt-0.5" />
-                          <span className="text-gray-300">{m.description}</span>
+                        <div key={i} className="flex items-start gap-3 text-ds-body">
+                          <span className="text-ds-fine text-txt-muted bg-surface-secondary px-2 py-0.5 rounded-[6px] shrink-0">
+                            {m.timestamp}
+                          </span>
+                          <Icon size={12} className="text-gunner-red shrink-0 mt-0.5" />
+                          <span className="text-txt-secondary">{m.description}</span>
                         </div>
                       )
                     })}
@@ -358,13 +438,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                 <Section title="Objection Handling">
                   <div className="space-y-3">
                     {call.objections.map((obj, i) => (
-                      <div key={i} className="bg-white/5 rounded-lg p-3">
-                        <p className="text-xs text-gray-500 mb-1">Objection:</p>
-                        <p className="text-sm text-gray-300 italic">"{obj.objection}"</p>
-                        <p className="text-xs text-gray-500 mt-2 mb-1">Response:</p>
-                        <p className="text-sm text-gray-300">{obj.response}</p>
-                        <span className={`text-xs mt-1 inline-block ${obj.handled ? 'text-green-400' : 'text-red-400'}`}>
-                          {obj.handled ? '✓ Handled' : '✗ Not handled'}
+                      <div key={i} className="bg-surface-secondary rounded-[10px] p-3">
+                        <p className="text-ds-fine text-txt-muted mb-1">Objection:</p>
+                        <p className="text-ds-body text-txt-secondary italic">&ldquo;{obj.objection}&rdquo;</p>
+                        <p className="text-ds-fine text-txt-muted mt-2 mb-1">Response:</p>
+                        <p className="text-ds-body text-txt-secondary">{obj.response}</p>
+                        <span className={`text-ds-fine mt-1 inline-block ${obj.handled ? 'text-semantic-green' : 'text-semantic-red'}`}>
+                          {obj.handled ? '\u2713 Handled' : '\u2717 Not handled'}
                         </span>
                       </div>
                     ))}
@@ -374,17 +454,31 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               {(call.sentiment !== null || call.sellerMotivation !== null) && (
                 <div className="grid grid-cols-2 gap-3">
                   {call.sentiment !== null && (
-                    <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-4">
-                      <p className="text-xs text-gray-500 mb-1">Sentiment</p>
-                      <p className={`text-lg font-bold ${call.sentiment > 0.3 ? 'text-green-400' : call.sentiment > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    <div
+                      className="bg-surface-primary border rounded-[14px] p-4"
+                      style={{ borderColor: 'var(--border-light)' }}
+                    >
+                      <p className="text-ds-fine text-txt-muted mb-1">Sentiment</p>
+                      <p className={`text-ds-card font-semibold ${
+                        call.sentiment > 0.3 ? 'text-semantic-green'
+                        : call.sentiment > 0 ? 'text-semantic-amber'
+                        : 'text-semantic-red'
+                      }`}>
                         {call.sentiment > 0.3 ? 'Positive' : call.sentiment > 0 ? 'Neutral' : 'Negative'}
                       </p>
                     </div>
                   )}
                   {call.sellerMotivation !== null && (
-                    <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-4">
-                      <p className="text-xs text-gray-500 mb-1">Seller Motivation</p>
-                      <p className={`text-lg font-bold ${call.sellerMotivation > 0.6 ? 'text-green-400' : call.sellerMotivation > 0.3 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    <div
+                      className="bg-surface-primary border rounded-[14px] p-4"
+                      style={{ borderColor: 'var(--border-light)' }}
+                    >
+                      <p className="text-ds-fine text-txt-muted mb-1">Seller Motivation</p>
+                      <p className={`text-ds-card font-semibold ${
+                        call.sellerMotivation > 0.6 ? 'text-semantic-green'
+                        : call.sellerMotivation > 0.3 ? 'text-semantic-amber'
+                        : 'text-semantic-red'
+                      }`}>
                         {call.sellerMotivation > 0.6 ? 'High' : call.sellerMotivation > 0.3 ? 'Medium' : 'Low'}
                       </p>
                     </div>
@@ -401,20 +495,35 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           {tab === 'criteria' && (
             <div className="space-y-4">
               {Object.keys(call.rubricScores).length > 0 ? (
-                <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5 space-y-5">
+                <div
+                  className="bg-surface-primary border rounded-[14px] p-5 space-y-5"
+                  style={{ borderColor: 'var(--border-light)' }}
+                >
                   {Object.entries(call.rubricScores).map(([cat, data]) => {
                     const pct = data.maxScore > 0 ? Math.round((data.score / data.maxScore) * 100) : 0
-                    const barColor = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : pct >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                    const barColor =
+                      pct >= 90 ? 'bg-semantic-green'
+                      : pct >= 80 ? 'bg-semantic-amber'
+                      : pct >= 70 ? 'bg-semantic-blue'
+                      : 'bg-semantic-red'
                     return (
                       <div key={cat}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-gray-300 font-medium">{cat}</span>
-                          <span className="text-sm font-bold text-white">{data.score}<span className="text-gray-500 font-normal">/{data.maxScore}</span></span>
+                          <span className="text-ds-body text-txt-primary font-medium">{cat}</span>
+                          <span className="text-ds-body font-semibold text-txt-primary">
+                            {data.score}
+                            <span className="text-txt-muted font-normal">/{data.maxScore}</span>
+                          </span>
                         </div>
-                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                        <div className="h-2 bg-surface-tertiary rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${barColor} transition-all duration-700`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
-                        {data.notes && <p className="text-xs text-gray-500 mt-1.5">{data.notes}</p>}
+                        {data.notes && (
+                          <p className="text-ds-fine text-txt-muted mt-1.5">{data.notes}</p>
+                        )}
                       </div>
                     )
                   })}
@@ -431,11 +540,20 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               {call.transcript ? (
                 <>
                   <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Search transcript..." className="w-full bg-[#0f1117] border border-white/10 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500" />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Search transcript..."
+                      className="w-full bg-surface-secondary border rounded-[10px] pl-9 pr-4 py-2.5 text-ds-body text-txt-primary placeholder:text-txt-muted focus:outline-none focus:border-gunner-red"
+                      style={{ borderColor: 'var(--border-medium)' }}
+                    />
                   </div>
-                  <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5 max-h-[500px] overflow-y-auto">
+                  <div
+                    className="bg-surface-primary border rounded-[14px] p-5 max-h-[500px] overflow-y-auto"
+                    style={{ borderColor: 'var(--border-light)' }}
+                  >
                     <TranscriptView transcript={call.transcript} searchQuery={searchQuery} />
                   </div>
                 </>
@@ -459,49 +577,73 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           {tab === 'next-steps' && (
             <div className="space-y-4">
               {call.nextBestAction && (
-                <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5">
-                  <h3 className="text-sm font-medium text-blue-400 flex items-center gap-2 mb-2"><Zap size={14} /> AI Recommended Action</h3>
-                  <p className="text-sm text-gray-300">{call.nextBestAction}</p>
+                <div
+                  className="bg-semantic-purple-bg rounded-[14px] p-5"
+                  style={{ borderLeft: '2px solid var(--purple)' }}
+                >
+                  <h3 className="text-ds-label font-semibold text-semantic-purple flex items-center gap-2 mb-2">
+                    <Zap size={14} /> AI Recommended Action
+                    <AiBadge />
+                  </h3>
+                  <p className="text-ds-body text-txt-secondary">{call.nextBestAction}</p>
                 </div>
               )}
 
-              {/* Generate AI steps */}
+              {/* Generate AI steps — AI Generate button style (purple) */}
               {generatedSteps.length === 0 && (
-                <button onClick={generateNextSteps} disabled={generatingSteps}
-                  className="w-full bg-orange-500/10 hover:bg-orange-500/15 border border-orange-500/20 text-orange-400 text-sm font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-                  {generatingSteps ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : <><Zap size={14} /> Generate AI Next Steps</>}
+                <button
+                  onClick={generateNextSteps}
+                  disabled={generatingSteps}
+                  className="w-full bg-semantic-purple hover:opacity-90 text-white text-ds-body font-semibold py-3 rounded-[10px] transition-colors flex items-center justify-center gap-2"
+                >
+                  {generatingSteps ? (
+                    <><Loader2 size={14} className="animate-spin" /> Generating...</>
+                  ) : (
+                    <>{'\u2726'} Generate AI Next Steps</>
+                  )}
                 </button>
               )}
 
               {generatedSteps.length > 0 && (
-                <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5 space-y-3">
-                  <h3 className="text-sm font-medium text-white mb-2">AI-Generated Steps</h3>
+                <div
+                  className="bg-surface-primary border rounded-[14px] p-5 space-y-3"
+                  style={{ borderColor: 'var(--border-light)' }}
+                >
+                  <h3 className="text-ds-card font-semibold text-txt-primary mb-2">AI-Generated Steps</h3>
                   {generatedSteps.map((step, i) => (
-                    <div key={i} className="bg-white/5 rounded-xl p-3">
-                      <p className="text-sm text-white font-medium">{step.label}</p>
-                      <p className="text-xs text-gray-500 italic mt-1">{step.reasoning}</p>
-                      <span className="text-xs text-gray-600 mt-1 inline-block">{step.type.replace(/_/g, ' ')}</span>
+                    <div key={i} className="bg-surface-secondary rounded-[10px] p-3">
+                      <p className="text-ds-body text-txt-primary font-medium">{step.label}</p>
+                      <p className="text-ds-fine text-txt-muted italic mt-1">{step.reasoning}</p>
+                      <span className="text-ds-fine text-txt-muted mt-1 inline-block">
+                        {step.type.replace(/_/g, ' ')}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
 
               {/* Quick actions */}
-              <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5 space-y-2">
-                <h3 className="text-sm font-medium text-white mb-3">Quick Actions</h3>
+              <div
+                className="bg-surface-primary border rounded-[14px] p-5 space-y-2"
+                style={{ borderColor: 'var(--border-light)' }}
+              >
+                <h3 className="text-ds-card font-semibold text-txt-primary mb-3">Quick Actions</h3>
                 <QuickAction icon={<FileText size={14} />} label="Add call note to GHL" type="add_note" loading={actionLoading} onAction={quickAction} />
                 <QuickAction icon={<CheckCircle size={14} />} label="Create follow-up task" type="create_task" loading={actionLoading} onAction={quickAction} />
                 <QuickAction icon={<Send size={14} />} label="Send follow-up SMS" type="send_sms" loading={actionLoading} onAction={quickAction} />
               </div>
 
               {call.property && (
-                <Link href={`/${tenantSlug}/inventory/${call.property.id}`}
-                  className="flex items-center justify-between bg-[#1a1d27] border border-white/10 hover:border-white/20 rounded-2xl px-5 py-4 transition-colors">
+                <Link
+                  href={`/${tenantSlug}/inventory/${call.property.id}`}
+                  className="flex items-center justify-between bg-surface-primary border rounded-[14px] px-5 py-4 transition-all hover:shadow-ds-float"
+                  style={{ borderColor: 'var(--border-light)' }}
+                >
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">View Property</p>
-                    <p className="text-sm text-white">{call.property.address}, {call.property.city} {call.property.state}</p>
+                    <p className="text-ds-fine text-txt-muted mb-0.5">View Property</p>
+                    <p className="text-ds-body text-txt-primary">{call.property.address}, {call.property.city} {call.property.state}</p>
                   </div>
-                  <ChevronRight size={14} className="text-gray-500" />
+                  <ChevronRight size={14} className="text-txt-muted" />
                 </Link>
               )}
             </div>
@@ -517,14 +659,41 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs bg-white/5 border border-white/10 text-gray-400 px-2.5 py-1 rounded-full">{children}</span>
+/** AI badge — purple-bg, purple text, 11px, pill shape with ✦ prefix */
+function AiBadge() {
+  return (
+    <span className="text-ds-fine font-medium bg-semantic-purple-bg text-semantic-purple px-2 py-0.5 rounded-full">
+      {'\u2726'} AI
+    </span>
+  )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** Info pill — 11px, font-weight 500, pill shape, semantic colors */
+function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
-      <h3 className="text-sm font-medium text-white mb-3">{title}</h3>
+    <span
+      className="text-ds-fine font-medium bg-surface-secondary border text-txt-secondary px-2.5 py-1 rounded-full"
+      style={{ borderColor: 'var(--border-light)' }}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Card section — 14px border-radius, 0.5px border. AI variant gets purple left border + purple header. */
+function Section({ title, children, ai }: { title: string; children: React.ReactNode; ai?: boolean }) {
+  return (
+    <div
+      className="bg-surface-primary border rounded-[14px] p-5"
+      style={{
+        borderColor: 'var(--border-light)',
+        borderLeft: ai ? '2px solid var(--purple)' : undefined,
+      }}
+    >
+      <h3 className={`text-ds-card font-semibold mb-3 flex items-center gap-2 ${ai ? 'text-semantic-purple' : 'text-txt-primary'}`}>
+        {title}
+        {ai && <AiBadge />}
+      </h3>
       {children}
     </div>
   )
@@ -532,10 +701,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function EmptyTab({ icon, message, sub }: { icon: React.ReactNode; message: string; sub?: string }) {
   return (
-    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-8 text-center">
-      <div className="text-gray-600 mx-auto mb-3 flex justify-center">{icon}</div>
-      <p className="text-sm text-gray-500">{message}</p>
-      {sub && <p className="text-xs text-gray-600 mt-1">{sub}</p>}
+    <div
+      className="bg-surface-primary border rounded-[14px] p-8 text-center"
+      style={{ borderColor: 'var(--border-light)' }}
+    >
+      <div className="text-txt-muted mx-auto mb-3 flex justify-center">{icon}</div>
+      <p className="text-ds-body text-txt-secondary">{message}</p>
+      {sub && <p className="text-ds-fine text-txt-muted mt-1">{sub}</p>}
     </div>
   )
 }
@@ -557,15 +729,26 @@ function QuickAction({ icon, label, type, loading, onAction }: {
   }
 
   return (
-    <button onClick={handle} disabled={isLoading}
-      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-left">
-      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-gray-400">
-        {status === 'done' ? <CheckCircle size={14} className="text-green-400" /> : isLoading ? <Loader2 size={14} className="animate-spin" /> : icon}
+    <button
+      onClick={handle}
+      disabled={isLoading}
+      className="w-full flex items-center gap-3 px-4 py-3 rounded-[10px] hover:bg-surface-secondary transition-colors text-left"
+    >
+      <div className="w-8 h-8 rounded-[10px] bg-surface-secondary flex items-center justify-center shrink-0 text-txt-secondary">
+        {status === 'done' ? (
+          <CheckCircle size={14} className="text-semantic-green" />
+        ) : isLoading ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          icon
+        )}
       </div>
-      <p className="text-sm text-white font-medium flex-1">
+      <p className="text-ds-body text-txt-primary font-medium flex-1">
         {status === 'confirm' ? `Confirm: ${label}?` : status === 'done' ? 'Done!' : label}
       </p>
-      {status === 'confirm' && <span className="text-xs text-orange-400 shrink-0">Click to confirm</span>}
+      {status === 'confirm' && (
+        <span className="text-ds-fine text-gunner-red shrink-0">Click to confirm</span>
+      )}
     </button>
   )
 }
@@ -594,29 +777,56 @@ function FeedbackModal({ callId, tenantSlug, onClose }: { callId: string; tenant
   ]
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-surface-primary border rounded-[20px] p-6 w-full max-w-md shadow-ds-float"
+        style={{ borderColor: 'var(--border-light)' }}
+        onClick={e => e.stopPropagation()}
+      >
         {submitted ? (
           <div className="text-center py-4">
-            <CheckCircle size={24} className="text-green-400 mx-auto mb-2" />
-            <p className="text-sm text-white">Thank you — feedback submitted</p>
+            <CheckCircle size={24} className="text-semantic-green mx-auto mb-2" />
+            <p className="text-ds-body text-txt-primary">Thank you — feedback submitted</p>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-white">Submit Feedback</h3>
-              <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={14} /></button>
+              <h3 className="text-ds-card font-semibold text-txt-primary">Submit Feedback</h3>
+              <button onClick={onClose} className="text-txt-muted hover:text-txt-primary transition-colors">
+                <X size={14} />
+              </button>
             </div>
-            <select value={type} onChange={e => setType(e.target.value)}
-              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white mb-3 focus:outline-none">
-              {feedbackTypes.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+            <select
+              value={type}
+              onChange={e => setType(e.target.value)}
+              className="w-full bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary mb-3 focus:outline-none focus:border-gunner-red"
+              style={{ borderColor: 'var(--border-medium)' }}
+            >
+              {feedbackTypes.map(t => (
+                <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+              ))}
             </select>
-            <textarea value={details} onChange={e => setDetails(e.target.value)} rows={4} placeholder="Describe the issue (min 10 characters)..."
-              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 mb-3 focus:outline-none resize-none" />
+            <textarea
+              value={details}
+              onChange={e => setDetails(e.target.value)}
+              rows={4}
+              placeholder="Describe the issue (min 10 characters)..."
+              className="w-full bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder:text-txt-muted mb-3 focus:outline-none focus:border-gunner-red resize-none"
+              style={{ borderColor: 'var(--border-medium)' }}
+            />
             <div className="flex gap-2 justify-end">
-              <button onClick={onClose} className="text-sm text-gray-400 hover:text-white px-3 py-2">Cancel</button>
-              <button onClick={submit} disabled={details.length < 10 || submitting}
-                className="text-sm bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg">
+              <button
+                onClick={onClose}
+                className="text-ds-body font-medium text-txt-primary bg-surface-secondary border rounded-[10px] px-4 py-[9px] hover:border-[var(--border-medium)] transition-colors"
+                style={{ borderColor: 'var(--border-medium)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submit}
+                disabled={details.length < 10 || submitting}
+                className="text-ds-body font-semibold bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white px-4 py-[9px] rounded-[10px] transition-colors"
+              >
                 {submitting ? 'Submitting...' : 'Submit Feedback'}
               </button>
             </div>
@@ -636,12 +846,12 @@ function TranscriptView({ transcript, searchQuery }: { transcript: string; searc
     : lines
 
   if (searchQuery && filtered.length === 0) {
-    return <p className="text-sm text-gray-500">No matches for &ldquo;{searchQuery}&rdquo;</p>
+    return <p className="text-ds-body text-txt-muted">No matches for &ldquo;{searchQuery}&rdquo;</p>
   }
 
   return (
     <div className="space-y-2">
-      {searchQuery && <p className="text-xs text-gray-500 mb-2">{filtered.length} matches</p>}
+      {searchQuery && <p className="text-ds-fine text-txt-muted mb-2">{filtered.length} matches</p>}
       {filtered.map((line, i) => {
         const match = line.match(/^(Speaker \d+|Rep|Seller|Agent|Customer|Unknown):\s*/i)
         const speaker = match?.[1] ?? null
@@ -649,11 +859,13 @@ function TranscriptView({ transcript, searchQuery }: { transcript: string; searc
         const isRep = speaker?.toLowerCase().includes('rep') || speaker?.toLowerCase().includes('agent') || speaker === 'Speaker 0'
 
         return (
-          <div key={i} className={`text-sm leading-relaxed ${speaker ? 'flex gap-2' : ''}`}>
+          <div key={i} className={`text-ds-body leading-relaxed ${speaker ? 'flex gap-2' : ''}`}>
             {speaker && (
-              <span className={`text-xs font-medium shrink-0 mt-0.5 ${isRep ? 'text-blue-400' : 'text-orange-400'}`}>{speaker}:</span>
+              <span className={`text-ds-fine font-medium shrink-0 mt-0.5 ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
+                {speaker}:
+              </span>
             )}
-            <span className="text-gray-300">
+            <span className="text-txt-secondary">
               {searchQuery ? highlightText(content, searchQuery) : content}
             </span>
           </div>
@@ -667,6 +879,8 @@ function highlightText(text: string, query: string): React.ReactNode {
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
   const parts = text.split(regex)
   return parts.map((part, i) =>
-    regex.test(part) ? <mark key={i} className="bg-orange-500/30 text-orange-300 rounded px-0.5">{part}</mark> : part
+    regex.test(part)
+      ? <mark key={i} className="bg-semantic-amber-bg text-semantic-amber rounded px-0.5">{part}</mark>
+      : part
   )
 }

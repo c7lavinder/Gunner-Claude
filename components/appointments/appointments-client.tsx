@@ -16,11 +16,11 @@ interface AppointmentItem {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  confirmed: 'bg-green-500/10 text-green-400 border-green-500/20',
-  new: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
-  showed: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
-  'no-show': 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  confirmed: 'bg-semantic-green-bg text-semantic-green',
+  new: 'bg-semantic-blue-bg text-semantic-blue',
+  cancelled: 'bg-semantic-red-bg text-semantic-red',
+  showed: 'bg-semantic-green-bg text-semantic-green',
+  'no-show': 'bg-surface-tertiary text-txt-secondary',
 }
 
 function dayLabel(dateStr: string): string {
@@ -44,68 +44,70 @@ export function AppointmentsClient({ appointments, fetchError, tenantSlug }: {
   }, {})
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-semibold text-white">Appointments</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Next 7 days from Go High Level</p>
+        <h1 className="text-ds-page font-semibold text-txt-primary">Appointments</h1>
+        <p className="text-ds-body text-txt-secondary mt-1">Next 7 days from Go High Level</p>
       </div>
 
       {fetchError && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
-          <AlertCircle size={14} />
-          Could not load appointments. Your GHL connection may need additional permissions — try reconnecting GHL in Settings → Integrations.
+        <div className="bg-semantic-red-bg border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] px-5 py-4 flex items-start gap-3">
+          <AlertCircle size={14} className="text-semantic-red shrink-0 mt-0.5" />
+          <p className="text-ds-body text-semantic-red">
+            Could not load appointments. Your GHL connection may need additional permissions — try reconnecting GHL in Settings &rarr; Integrations.
+          </p>
         </div>
       )}
 
       {!fetchError && appointments.length === 0 && (
-        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl py-16 text-center">
-          <Calendar size={24} className="text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">No appointments in the next 7 days</p>
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] py-16 text-center">
+          <Calendar size={24} className="text-txt-muted mx-auto mb-3" />
+          <p className="text-txt-secondary text-ds-body">No appointments in the next 7 days</p>
         </div>
       )}
 
       {Object.entries(grouped).map(([day, appts]) => (
         <div key={day}>
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">{day}</p>
-          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl divide-y divide-white/5">
+          <p className="text-ds-fine font-medium text-txt-muted uppercase tracking-[0.08em] mb-2">{day}</p>
+          <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] divide-y divide-[rgba(0,0,0,0.06)]">
             {appts.map((appt) => {
               const start = parseISO(appt.startTime)
               const end = parseISO(appt.endTime)
               const statusColor = STATUS_COLORS[appt.status.toLowerCase()] ?? STATUS_COLORS.new
               return (
-                <div key={appt.id} className="flex items-center gap-4 px-5 py-4">
+                <div key={appt.id} className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors">
                   {/* Time column */}
                   <div className="w-16 shrink-0 text-right">
-                    <p className="text-sm font-medium text-white">{format(start, 'h:mm')}</p>
-                    <p className="text-xs text-gray-500">{format(start, 'a')}</p>
+                    <p className="text-ds-label font-medium text-txt-primary">{format(start, 'h:mm')}</p>
+                    <p className="text-ds-fine text-txt-muted">{format(start, 'a')}</p>
                   </div>
 
                   {/* Divider line */}
-                  <div className="w-px h-10 bg-orange-500/40 shrink-0" />
+                  <div className="w-px h-10 bg-gunner-red/30 shrink-0" />
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{appt.title}</p>
+                    <p className="text-ds-label font-medium text-txt-primary truncate">{appt.title}</p>
                     <div className="flex items-center gap-3 mt-1">
-                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                      <span className="flex items-center gap-1 text-ds-fine text-txt-muted">
                         <Clock size={10} />
                         {format(start, 'h:mm a')} – {format(end, 'h:mm a')}
                       </span>
                       {appt.contactName && (
-                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                        <span className="flex items-center gap-1 text-ds-fine text-txt-secondary">
                           <User size={10} />
                           {appt.contactName}
                         </span>
                       )}
                       {appt.assignedUserName && (
-                        <span className="text-xs text-blue-400/70 flex items-center gap-1">
+                        <span className="text-ds-fine text-semantic-blue flex items-center gap-1">
                           <User size={10} /> {appt.assignedUserName}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <span className={`text-xs px-2 py-1 rounded-full border shrink-0 ${statusColor}`}>
+                  <span className={`text-ds-fine font-medium px-2 py-[3px] rounded-[9999px] shrink-0 ${statusColor}`}>
                     {appt.status}
                   </span>
                 </div>

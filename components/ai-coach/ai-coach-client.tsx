@@ -1,5 +1,7 @@
 'use client'
 // components/ai-coach/ai-coach-client.tsx
+// AI Coach panel — Design system: docs/DESIGN.md
+// AI features: purple left border, purple section headers, purple badges
 
 import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Loader2, Zap, AlertTriangle, PartyPopper, Lightbulb } from 'lucide-react'
@@ -85,17 +87,22 @@ export function AiCoachClient({
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)] max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-white/10 shrink-0">
-        <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
-          <Bot size={18} className="text-orange-400" />
+      {/* Header — purple AI border */}
+      <div className="flex items-center gap-3 pb-4 border-b border-black/[0.08] shrink-0">
+        <div className="w-10 h-10 rounded-[14px] bg-semantic-purple-bg flex items-center justify-center">
+          <Bot size={18} className="text-semantic-purple" />
         </div>
         <div>
-          <h1 className="text-base font-semibold text-white">Gunner AI Coach</h1>
-          <p className="text-xs text-gray-400">Your personal wholesaling coach — knows your calls, your numbers, your game</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-ds-card font-semibold text-txt-primary">Gunner AI Coach</h1>
+            <span className="text-ds-fine font-medium text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">
+              &#x2726; AI
+            </span>
+          </div>
+          <p className="text-ds-fine text-txt-secondary">Your personal wholesaling coach — knows your calls, your numbers, your game</p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-3 py-1 rounded-full">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+        <div className="ml-auto flex items-center gap-1.5 text-ds-fine text-semantic-green bg-semantic-green-bg px-3 py-1 rounded-full font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-semantic-green" />
           Online
         </div>
       </div>
@@ -106,12 +113,12 @@ export function AiCoachClient({
           <div className="space-y-6">
             {/* Welcome */}
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot size={14} className="text-orange-400" />
+              <div className="w-8 h-8 rounded-[10px] bg-semantic-purple-bg flex items-center justify-center shrink-0 mt-0.5">
+                <Bot size={14} className="text-semantic-purple" />
               </div>
-              <div className="bg-[#1a1d27] border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3 max-w-lg">
-                <p className="text-sm text-white leading-relaxed">
-                  What's up {userName.split(' ')[0]}. I'm Gunner — your AI wholesaling coach. I know your recent call scores, your pipeline, and what you need to work on. Ask me anything.
+              <div className="bg-surface-secondary border-[0.5px] border-black/[0.08] rounded-[14px] rounded-tl-sm px-4 py-3 max-w-lg">
+                <p className="text-ds-body text-txt-primary leading-relaxed">
+                  What&apos;s up {userName.split(' ')[0]}. I&apos;m Gunner — your AI wholesaling coach. I know your recent call scores, your pipeline, and what you need to work on. Ask me anything.
                 </p>
               </div>
             </div>
@@ -121,22 +128,34 @@ export function AiCoachClient({
               <div className="pl-11 space-y-2">
                 {insights.map((insight, i) => {
                   const styles = {
-                    warning: { bg: 'bg-red-500/10 border-red-500/20', icon: <AlertTriangle size={14} className="text-red-400" />, color: 'text-red-300' },
-                    celebration: { bg: 'bg-green-500/10 border-green-500/20', icon: <PartyPopper size={14} className="text-green-400" />, color: 'text-green-300' },
-                    tip: { bg: 'bg-blue-500/10 border-blue-500/20', icon: <Lightbulb size={14} className="text-blue-400" />, color: 'text-blue-300' },
+                    warning: {
+                      wrapper: 'bg-semantic-red-bg border-l-2 border-l-semantic-red border-[0.5px] border-black/[0.08]',
+                      icon: <AlertTriangle size={14} className="text-semantic-red" />,
+                      titleColor: 'text-semantic-red',
+                    },
+                    celebration: {
+                      wrapper: 'bg-semantic-green-bg border-l-2 border-l-semantic-green border-[0.5px] border-black/[0.08]',
+                      icon: <PartyPopper size={14} className="text-semantic-green" />,
+                      titleColor: 'text-semantic-green',
+                    },
+                    tip: {
+                      wrapper: 'bg-semantic-blue-bg border-l-2 border-l-semantic-blue border-[0.5px] border-black/[0.08]',
+                      icon: <Lightbulb size={14} className="text-semantic-blue" />,
+                      titleColor: 'text-semantic-blue',
+                    },
                   }
                   const s = styles[insight.type]
                   return (
                     <button
                       key={i}
                       onClick={() => send(`Tell me more about: ${insight.title}`)}
-                      className={`w-full text-left ${s.bg} border rounded-xl p-3 hover:opacity-90 transition-opacity`}
+                      className={`w-full text-left ${s.wrapper} rounded-[14px] p-3 hover:border-black/[0.14] hover:shadow-ds-float transition-all`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         {s.icon}
-                        <span className={`text-xs font-medium ${s.color}`}>{insight.title}</span>
+                        <span className={`text-ds-fine font-medium ${s.titleColor}`}>{insight.title}</span>
                       </div>
-                      <p className="text-xs text-gray-400 pl-5">{insight.detail}</p>
+                      <p className="text-ds-fine text-txt-secondary pl-5">{insight.detail}</p>
                     </button>
                   )
                 })}
@@ -145,15 +164,15 @@ export function AiCoachClient({
 
             {/* Suggested prompts */}
             <div className="pl-11">
-              <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                <Zap size={10} className="text-orange-500" /> Quick starts
+              <p className="text-ds-fine text-txt-muted mb-2 flex items-center gap-1">
+                <Zap size={10} className="text-semantic-purple" /> Quick starts
               </p>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTED_PROMPTS.map((prompt) => (
                   <button
                     key={prompt}
                     onClick={() => send(prompt)}
-                    className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white px-3 py-2 rounded-xl transition-colors text-left"
+                    className="text-ds-fine bg-surface-secondary hover:bg-surface-tertiary border-[0.5px] border-black/[0.08] text-txt-secondary hover:text-txt-primary px-3 py-2 rounded-[10px] transition-colors text-left"
                   >
                     {prompt}
                   </button>
@@ -169,11 +188,11 @@ export function AiCoachClient({
 
         {loading && (
           <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0 mt-0.5">
-              <Bot size={14} className="text-orange-400" />
+            <div className="w-8 h-8 rounded-[10px] bg-semantic-purple-bg flex items-center justify-center shrink-0 mt-0.5">
+              <Bot size={14} className="text-semantic-purple" />
             </div>
-            <div className="bg-[#1a1d27] border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3">
-              <Loader2 size={14} className="text-orange-400 animate-spin" />
+            <div className="bg-surface-secondary border-[0.5px] border-black/[0.08] rounded-[14px] rounded-tl-sm px-4 py-3">
+              <Loader2 size={14} className="text-semantic-purple animate-spin" />
             </div>
           </div>
         )}
@@ -182,31 +201,33 @@ export function AiCoachClient({
       </div>
 
       {/* Input */}
-      <div className="shrink-0 pt-4 border-t border-white/10">
-        <div className="flex gap-3 items-end bg-[#1a1d27] border border-white/10 focus-within:border-orange-500/50 rounded-2xl px-4 py-3 transition-colors">
+      <div className="shrink-0 pt-4 border-t border-black/[0.08]">
+        <div className="flex gap-3 items-end bg-surface-primary border-[0.5px] border-black/[0.08] focus-within:border-semantic-purple rounded-[14px] px-4 py-3 transition-colors">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask anything about your calls, deals, scripts, or strategy…"
+            placeholder="Ask anything about your calls, deals, scripts, or strategy..."
             rows={1}
-            className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 focus:outline-none resize-none max-h-32 leading-relaxed"
+            className="flex-1 bg-transparent text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none resize-none max-h-32 leading-relaxed"
             style={{ scrollbarWidth: 'none' }}
           />
           <button
             onClick={() => send()}
             disabled={!input.trim() || loading}
-            className="w-8 h-8 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shrink-0 transition-colors"
+            className="w-8 h-8 rounded-[10px] bg-semantic-purple hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shrink-0 transition-opacity"
           >
             <Send size={13} className="text-white" />
           </button>
         </div>
-        <p className="text-xs text-gray-600 mt-2 text-center">Enter to send · Shift+Enter for new line</p>
+        <p className="text-ds-fine text-txt-muted mt-2 text-left">Enter to send · Shift+Enter for new line</p>
       </div>
     </div>
   )
 }
+
+// ─── Message Bubble ───────────────────────────────────────────────────────
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user'
@@ -214,11 +235,11 @@ function MessageBubble({ message }: { message: Message }) {
   if (isUser) {
     return (
       <div className="flex gap-3 justify-end">
-        <div className="bg-orange-500/20 border border-orange-500/20 rounded-2xl rounded-tr-sm px-4 py-3 max-w-lg">
-          <p className="text-sm text-white leading-relaxed whitespace-pre-wrap">{message.content}</p>
+        <div className="bg-surface-tertiary border-[0.5px] border-black/[0.08] rounded-[14px] rounded-tr-sm px-4 py-3 max-w-lg">
+          <p className="text-ds-body text-txt-primary leading-relaxed whitespace-pre-wrap">{message.content}</p>
         </div>
-        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
-          <User size={14} className="text-gray-300" />
+        <div className="w-8 h-8 rounded-[10px] bg-surface-tertiary flex items-center justify-center shrink-0 mt-0.5">
+          <User size={14} className="text-txt-secondary" />
         </div>
       </div>
     )
@@ -226,11 +247,11 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className="flex gap-3">
-      <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0 mt-0.5">
-        <Bot size={14} className="text-orange-400" />
+      <div className="w-8 h-8 rounded-[10px] bg-semantic-purple-bg flex items-center justify-center shrink-0 mt-0.5">
+        <Bot size={14} className="text-semantic-purple" />
       </div>
-      <div className="bg-[#1a1d27] border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3 max-w-lg">
-        <p className="text-sm text-white leading-relaxed whitespace-pre-wrap">{message.content}</p>
+      <div className="bg-surface-secondary border-[0.5px] border-black/[0.08] rounded-[14px] rounded-tl-sm px-4 py-3 max-w-lg">
+        <p className="text-ds-body text-txt-primary leading-relaxed whitespace-pre-wrap">{message.content}</p>
       </div>
     </div>
   )
