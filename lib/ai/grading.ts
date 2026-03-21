@@ -191,8 +191,8 @@ export async function gradeCall(callId: string): Promise<void> {
         gradedAt: new Date(),
         // 3-tier call type: 1) manual (already set) → 2) AI detection → 3) role fallback
         ...(!call.callType ? { callType: grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role) } : {}),
-        // Auto-classify outcome
-        ...(grading.callOutcome ? { callOutcome: grading.callOutcome } : {}),
+        // Auto-classify outcome — always set, use default if AI didn't pick one
+        callOutcome: grading.callOutcome ?? inferDefaultOutcome(grading.callType ?? call.callType ?? inferCallTypeFromRole(call.assignedTo?.role)),
         // Follow-up scheduled (separate from outcome)
         ...(grading.followUpScheduled !== undefined ? { callResult: grading.followUpScheduled ? 'follow_up_scheduled' : grading.callOutcome } : {}),
         // Key moments / highlights
@@ -551,6 +551,21 @@ function inferCallTypeFromRole(role?: string): string {
     case 'DISPOSITION_MANAGER': return 'dispo_call'
     case 'TEAM_LEAD': return 'follow_up_call'
     default: return 'cold_call'
+  }
+}
+
+// ─── Default outcome fallback (when AI returns null) ────────────────────────
+
+function inferDefaultOutcome(callType: string): string {
+  switch (callType) {
+    case 'cold_call': return 'not_interested'
+    case 'qualification_call': return 'follow_up_scheduled'
+    case 'admin_call': return 'solved'
+    case 'follow_up_call': return 'not_interested'
+    case 'offer_call': return 'follow_up_scheduled'
+    case 'purchase_agreement_call': return 'follow_up_scheduled'
+    case 'dispo_call': return 'not_interested'
+    default: return 'not_interested'
   }
 }
 
