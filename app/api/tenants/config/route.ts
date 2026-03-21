@@ -14,6 +14,7 @@ const configSchema = z.object({
   onboardingCompleted: z.boolean().optional(),
   callTypes: z.array(z.string()).optional(),
   callResults: z.union([z.array(z.string()), z.record(z.array(z.string()))]).optional(),
+  gradingMaterials: z.string().optional(),
   config: z.record(z.unknown()).optional(),
 })
 

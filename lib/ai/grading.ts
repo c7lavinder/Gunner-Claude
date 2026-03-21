@@ -8,7 +8,8 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
 import { calculateTCP } from '@/lib/ai/scoring'
-import { getCallTypeAIContext } from '@/lib/call-types'
+import { getCallTypeAIContext, getRubricForCallType } from '@/lib/call-types'
+import { INDUSTRY_KNOWLEDGE } from '@/lib/ai/industry-knowledge'
 import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 
@@ -36,6 +37,7 @@ export async function gradeCall(callId: string): Promise<void> {
             callResults: true,
             ghlAccessToken: true,
             ghlLocationId: true,
+            gradingMaterials: true,
           },
         },
       },
@@ -93,18 +95,41 @@ export async function gradeCall(callId: string): Promise<void> {
       }
     }
 
-    // Get rubric for this user's role
-    const rubric = call.assignedTo
-      ? await db.callRubric.findFirst({
-          where: {
-            tenantId: call.tenantId,
-            role: call.assignedTo.role,
-            isDefault: true,
-          },
-        })
-      : null
+    // Get rubric: call type rubric > tenant custom rubric > role default
+    // Priority 1: Tenant custom rubric for this call type
+    let rubricCriteria: RubricCriteria[] | null = null
+    if (call.callType) {
+      const customRubric = await db.callRubric.findFirst({
+        where: {
+          tenantId: call.tenantId,
+          callType: call.callType,
+          isDefault: true,
+        },
+      })
+      if (customRubric) rubricCriteria = customRubric.criteria as unknown as RubricCriteria[]
+    }
+    // Priority 2: Tenant custom rubric for this role
+    if (!rubricCriteria && call.assignedTo) {
+      const roleRubric = await db.callRubric.findFirst({
+        where: {
+          tenantId: call.tenantId,
+          role: call.assignedTo.role,
+          isDefault: true,
+        },
+      })
+      if (roleRubric) rubricCriteria = roleRubric.criteria as unknown as RubricCriteria[]
+    }
+    // Priority 3: Built-in call type rubric (from lib/call-types.ts)
+    if (!rubricCriteria && call.callType) {
+      rubricCriteria = getRubricForCallType(call.callType)
+    }
+    // Priority 4: Built-in role default
+    if (!rubricCriteria) {
+      rubricCriteria = getDefaultRubric(call.assignedTo?.role)
+    }
 
-    const rubricCriteria = rubric?.criteria as RubricCriteria[] | null ?? getDefaultRubric(call.assignedTo?.role)
+    // Tenant-specific grading materials (scripts, processes, standards)
+    const tenantMaterials = (call.tenant as { gradingMaterials?: string | null }).gradingMaterials ?? null
 
     // 30-60s calls: summary only, limited grading
     const isSummaryOnly = duration >= 45 && duration < 90
@@ -115,10 +140,10 @@ export async function gradeCall(callId: string): Promise<void> {
       ghlContext = await fetchGHLCallContext(call.tenantId, call.ghlCallId)
     }
 
-    // Build and send the grading prompt
+    // Build and send the grading prompt (3 layers: rubric + industry + tenant materials)
     const systemPrompt = isSummaryOnly
       ? buildSummaryOnlySystemPrompt()
-      : buildGradingSystemPrompt(rubricCriteria)
+      : buildGradingSystemPrompt(rubricCriteria, tenantMaterials)
     const callWithTranscript = { ...call, transcript }
     const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext)
 
@@ -314,10 +339,18 @@ Response format:
 }`
 }
 
-function buildGradingSystemPrompt(criteria: RubricCriteria[]): string {
-  return `You are an expert sales call coach and grader for a real estate wholesaling company.
+function buildGradingSystemPrompt(criteria: RubricCriteria[], tenantMaterials?: string | null): string {
+  const sections: string[] = []
+
+  // Layer 1: Core grading instructions
+  sections.push(`You are an expert sales call coach and grader for a real estate wholesaling company.
 
 Your job is to analyze sales calls and provide accurate, constructive scoring and feedback.
+You grade based on THREE sources of knowledge:
+1. RUBRIC — the specific scoring criteria for this call type (most important — this determines the score)
+2. INDUSTRY KNOWLEDGE — wholesale real estate best practices and standards
+3. COMPANY MATERIALS — this specific company's scripts, processes, and standards (if provided)
+
 You grade based on ALL available information — transcripts, call metadata, contact context, and conversation history.
 
 When a transcript is not available, you MUST still grade meaningfully based on:
@@ -330,9 +363,21 @@ A 5-minute completed outbound call to a warm lead is fundamentally different fro
 
 Do NOT give a score of 0 unless the call was genuinely a failure (no-answer, immediate hangup, etc.)
 
-You MUST respond with valid JSON only — no markdown, no preamble, no explanation outside the JSON.
+You MUST respond with valid JSON only — no markdown, no preamble, no explanation outside the JSON.`)
 
-Grading criteria:
+  // Layer 2: Industry knowledge
+  sections.push(INDUSTRY_KNOWLEDGE)
+
+  // Layer 3: Tenant-specific materials
+  if (tenantMaterials) {
+    sections.push(`COMPANY-SPECIFIC MATERIALS:
+The following are this company's own scripts, processes, and standards. Use these to inform your grading — if the rep followed the company's specific process, that should positively affect the score. If they deviated from it, note that in feedback.
+
+${tenantMaterials}`)
+  }
+
+  // Rubric criteria
+  sections.push(`GRADING RUBRIC (score each category):
 ${criteria.map((c) => `- ${c.category} (max ${c.maxPoints} pts): ${c.description}`).join('\n')}
 
 Response format:
@@ -348,7 +393,9 @@ Response format:
   "summary": "<2-3 sentence call summary>",
   "feedback": "<specific, actionable feedback paragraph>",
   "coachingTips": ["<tip 1>", "<tip 2>", "<tip 3>"]
-}`
+}`)
+
+  return sections.join('\n\n')
 }
 
 function buildGradingUserPrompt(

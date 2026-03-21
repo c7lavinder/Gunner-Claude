@@ -19,7 +19,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
       select: {
         id: true, name: true, slug: true,
         ghlLocationId: true, onboardingCompleted: true,
-        callTypes: true, callResults: true,
+        callTypes: true, callResults: true, gradingMaterials: true,
         propertyPipelineId: true, propertyTriggerStage: true,
       },
     }),
@@ -51,6 +51,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         callResults: tenant.callResults as string[],
         propertyPipelineId: tenant.propertyPipelineId ?? '',
         propertyTriggerStage: tenant.propertyTriggerStage ?? '',
+        gradingMaterials: tenant.gradingMaterials ?? '',
       }}
       teamMembers={teamMembers.map((u) => ({
         id: u.id,

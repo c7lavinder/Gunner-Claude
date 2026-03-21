@@ -21,6 +21,9 @@ interface TenantInfo {
   // WRITES TO: tenants.property_trigger_stage (String?)
   // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
   propertyTriggerStage: string
+  // WRITES TO: tenants.grading_materials (String?)
+  // READ BY: lib/ai/grading.ts → buildGradingSystemPrompt()
+  gradingMaterials: string
 }
 interface TeamMember {
   id: string; name: string; email: string; phone: string | null; role: string
@@ -447,6 +450,14 @@ export function SettingsClient({
 
           <CallResultsMap canManage={canManage} tenantId={tenant.id} />
 
+          <CallTypeRubrics />
+
+          {canManage && (
+            <GradingMaterialsEditor
+              initialMaterials={tenant.gradingMaterials}
+            />
+          )}
+
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
             <RubricEditor
               tenantId={tenant.id}
@@ -459,6 +470,106 @@ export function SettingsClient({
 
       {/* ── Workflows tab ────────────────────────────────────────────── */}
       {tab === 'workflows' && <WorkflowsTab canManage={canManage} />}
+    </div>
+  )
+}
+
+// ─── Call Type Rubrics (read-only view of default rubrics) ──────────────────
+
+function CallTypeRubrics() {
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  return (
+    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+      <h2 className="text-sm font-medium text-white mb-1">Grading rubrics by call type</h2>
+      <p className="text-xs text-gray-500 mb-4">Each call type has its own scoring criteria. The AI uses these to grade calls. Expand to see the breakdown.</p>
+      <div className="space-y-2">
+        {CALL_TYPES.map((ct) => {
+          const isExpanded = expanded === ct.id
+          return (
+            <div key={ct.id} className="border border-white/5 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setExpanded(isExpanded ? null : ct.id)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-white">{ct.name}</span>
+                  <span className="text-xs text-gray-500">{ct.rubric.length} criteria · 100 pts</span>
+                </div>
+                <span className="text-xs text-gray-500">{isExpanded ? 'Hide' : 'Show'}</span>
+              </button>
+              {isExpanded && (
+                <div className="px-4 pb-3 space-y-1.5">
+                  {ct.rubric.map((r, i) => (
+                    <div key={i} className="flex items-start gap-3 bg-black/20 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 shrink-0 w-48">
+                        <span className="text-xs font-medium text-white">{r.category}</span>
+                        <span className="text-xs text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">{r.maxPoints} pts</span>
+                      </div>
+                      <p className="text-xs text-gray-400 leading-relaxed">{r.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Grading Materials Editor ───────────────────────────────────────────────
+
+function GradingMaterialsEditor({ initialMaterials }: { initialMaterials: string }) {
+  const [materials, setMaterials] = useState(initialMaterials)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const save = useCallback(async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/tenants/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gradingMaterials: materials }),
+      })
+      if (!res.ok) throw new Error()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      // silent fail
+    } finally {
+      setSaving(false)
+    }
+  }, [materials])
+
+  return (
+    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+      <h2 className="text-sm font-medium text-white mb-1">Company grading materials</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        Paste your call scripts, processes, objection handling guides, or any company-specific standards here.
+        The AI will use these alongside the rubric and industry knowledge when grading calls.
+      </p>
+      <textarea
+        value={materials}
+        onChange={(e) => setMaterials(e.target.value)}
+        placeholder={"Example:\n\nOur cold call script:\n1. Hi [Name], this is [Rep] with New Again Houses...\n2. We buy houses as-is in the Nashville area...\n\nOur objection handling:\n- \"I'm not interested\" → \"I totally understand, most people aren't at first...\"\n\nOur qualifying checklist:\n- Timeline to sell\n- Motivation\n- Property condition\n- Decision maker on the call?"}
+        rows={8}
+        className="w-full bg-[#0f1117] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60 resize-y"
+      />
+      <div className="flex items-center justify-between mt-3">
+        <p className="text-xs text-gray-600">
+          {materials.length > 0 ? `${materials.length} characters` : 'No materials added yet'}
+        </p>
+        <button
+          onClick={save}
+          disabled={saving || materials === initialMaterials}
+          className="text-sm bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          {saving ? 'Saving...' : saved ? 'Saved' : 'Save materials'}
+        </button>
+      </div>
     </div>
   )
 }

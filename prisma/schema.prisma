@@ -54,6 +54,12 @@ model Tenant {
   callResults  Json @default("[]") @map("call_results")  // ["interested", "not interested", "callback"]
   config       Json @default("{}") // misc config blob
 
+  // Tenant-specific grading materials (scripts, processes, company standards)
+  // WRITES TO: tenants.grading_materials (String?)
+  // API ENDPOINT: PATCH /api/tenants/config
+  // READ BY: lib/ai/grading.ts → buildGradingSystemPrompt()
+  gradingMaterials String? @map("grading_materials") @db.Text
+
   // Relations
   users         User[]
   properties    Property[]
