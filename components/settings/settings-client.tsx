@@ -10,6 +10,7 @@ import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
 import { GHLDropdown } from '@/components/ui/ghl-dropdown'
+import { CALL_TYPES } from '@/lib/call-types'
 
 interface TenantInfo {
   id: string; name: string; slug: string; ghlConnected: boolean
@@ -438,15 +439,11 @@ export function SettingsClient({
          READS: call_rubrics table (via RubricEditor) */}
       {tab === 'calls' && (
         <div className="space-y-4">
-          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
-            <h2 className="text-sm font-medium text-white mb-3">Call types</h2>
-            <div className="flex flex-wrap gap-2">
-              {(tenant.callTypes as string[]).map((t) => (
-                <span key={t} className="text-xs bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-gray-300">{t}</span>
-              ))}
-            </div>
-            {canManage && <p className="text-xs text-gray-600 mt-3">Contact support to customize call types</p>}
-          </div>
+          <CallTypesSection
+            enabledTypes={tenant.callTypes as string[]}
+            canManage={canManage}
+            tenantId={tenant.id}
+          />
 
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
             <h2 className="text-sm font-medium text-white mb-3">Call results</h2>
@@ -460,7 +457,7 @@ export function SettingsClient({
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
             <RubricEditor
               tenantId={tenant.id}
-              callTypes={callTypes}
+              callTypes={CALL_TYPES.map(ct => ct.name)}
               existingRubrics={rubrics}
             />
           </div>
@@ -469,6 +466,101 @@ export function SettingsClient({
 
       {/* ── Workflows tab ────────────────────────────────────────────── */}
       {tab === 'workflows' && <WorkflowsTab canManage={canManage} />}
+    </div>
+  )
+}
+
+// ─── Call Types Section ─────────────────────────────────────────────────────
+
+function CallTypesSection({ enabledTypes, canManage, tenantId }: {
+  enabledTypes: string[]
+  canManage: boolean
+  tenantId: string
+}) {
+  const [enabled, setEnabled] = useState<Set<string>>(() => {
+    // Map legacy names to IDs, or keep IDs
+    const ids = new Set<string>()
+    for (const t of enabledTypes) {
+      const match = CALL_TYPES.find(ct => ct.id === t || ct.name.toLowerCase() === t.toLowerCase())
+      if (match) ids.add(match.id)
+    }
+    // Default: enable all if none mapped
+    if (ids.size === 0) CALL_TYPES.forEach(ct => ids.add(ct.id))
+    return ids
+  })
+  const [saving, setSaving] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  const toggle = useCallback(async (id: string) => {
+    if (!canManage) return
+    const next = new Set(enabled)
+    if (next.has(id)) {
+      if (next.size <= 1) return // must keep at least 1
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    setEnabled(next)
+
+    // Save to DB
+    setSaving(true)
+    try {
+      const res = await fetch('/api/tenants/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callTypes: CALL_TYPES.filter(ct => next.has(ct.id)).map(ct => ct.id) }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      // Revert on failure
+      setEnabled(enabled)
+    } finally {
+      setSaving(false)
+    }
+  }, [enabled, canManage])
+
+  return (
+    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+      <h2 className="text-sm font-medium text-white mb-1">Call types</h2>
+      <p className="text-xs text-gray-500 mb-4">Select which call types your team uses. The AI uses these definitions to grade each call type differently.</p>
+      <div className="space-y-2">
+        {CALL_TYPES.map((ct) => {
+          const isEnabled = enabled.has(ct.id)
+          const isExpanded = expanded === ct.id
+          return (
+            <div key={ct.id} className={`border rounded-xl transition-colors ${isEnabled ? 'border-orange-500/30 bg-orange-500/5' : 'border-white/5 bg-white/[0.02]'}`}>
+              <div className="flex items-center gap-3 px-4 py-3">
+                {canManage && (
+                  <button
+                    onClick={() => toggle(ct.id)}
+                    disabled={saving}
+                    className={`w-9 h-5 rounded-full transition-colors flex items-center shrink-0 ${isEnabled ? 'bg-orange-500 justify-end' : 'bg-white/10 justify-start'}`}
+                  >
+                    <span className="w-4 h-4 bg-white rounded-full mx-0.5 shadow-sm" />
+                  </button>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${isEnabled ? 'text-white' : 'text-gray-500'}`}>{ct.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{ct.description}</p>
+                </div>
+                <button
+                  onClick={() => setExpanded(isExpanded ? null : ct.id)}
+                  className="text-xs text-gray-500 hover:text-gray-300 shrink-0"
+                >
+                  {isExpanded ? 'Hide' : 'AI context'}
+                </button>
+              </div>
+              {isExpanded && (
+                <div className="px-4 pb-3 pt-0">
+                  <div className="bg-black/30 rounded-lg p-3 text-xs text-gray-400 leading-relaxed">
+                    {ct.aiContext}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

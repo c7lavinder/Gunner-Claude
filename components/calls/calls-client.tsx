@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { Phone, Clock, ArrowDownLeft, ArrowUpRight as ArrowUp, AlertCircle, RefreshCw, RotateCcw, Loader2, Info, SkipForward } from 'lucide-react'
 import { formatDistanceToNow, subDays, subMonths } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
+import { CALL_TYPES } from '@/lib/call-types'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -35,13 +36,19 @@ function gradeLetter(score: number | null): { letter: string; color: string; glo
 }
 
 const CALL_TYPE_COLORS: Record<string, string> = {
-  qualification: 'bg-blue-500/10 text-blue-400',
-  offer: 'bg-orange-500/10 text-orange-400',
   cold_call: 'bg-purple-500/10 text-purple-400',
-  follow_up: 'bg-yellow-500/10 text-yellow-400',
-  admin: 'bg-gray-500/10 text-gray-400',
-  dispo: 'bg-green-500/10 text-green-400',
+  qualification_call: 'bg-blue-500/10 text-blue-400',
+  admin_call: 'bg-gray-500/10 text-gray-400',
+  follow_up_call: 'bg-yellow-500/10 text-yellow-400',
+  offer_call: 'bg-orange-500/10 text-orange-400',
+  purchase_agreement_call: 'bg-teal-500/10 text-teal-400',
+  dispo_call: 'bg-green-500/10 text-green-400',
 }
+
+// Map call type IDs to display names
+const CALL_TYPE_NAMES: Record<string, string> = Object.fromEntries(
+  CALL_TYPES.map(ct => [ct.id, ct.name])
+)
 
 const OUTCOME_COLORS: Record<string, string> = {
   appointment_set: 'bg-green-500/10 text-green-400',
@@ -221,7 +228,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
                 <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
                   className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 focus:outline-none">
                   <option value="">All types</option>
-                  {uniqueTypes.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+                  {uniqueTypes.map(t => <option key={t} value={t}>{CALL_TYPE_NAMES[t] ?? t.replace(/_/g, ' ')}</option>)}
                 </select>
               )}
               {uniqueOutcomes.length > 0 && (
@@ -391,7 +398,7 @@ function CallRow({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
           {/* Call type badge */}
           {call.callType && (
             <span className={`text-xs px-2 py-0.5 rounded-full ${typeColor}`}>
-              {call.callType.replace(/_/g, ' ')}
+              {CALL_TYPE_NAMES[call.callType] ?? call.callType.replace(/_/g, ' ')}
             </span>
           )}
           {/* Outcome badge */}

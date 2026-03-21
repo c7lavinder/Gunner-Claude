@@ -8,6 +8,7 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
 import { calculateTCP } from '@/lib/ai/scoring'
+import { getCallTypeAIContext } from '@/lib/call-types'
 import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 
@@ -363,6 +364,12 @@ function buildGradingUserPrompt(
   ghlContext: GHLCallContext | null,
 ): string {
   const sections: string[] = []
+
+  // Call type context — gives the AI detailed understanding of what this call type means
+  const callTypeContext = call.callType ? getCallTypeAIContext(call.callType) : null
+  if (callTypeContext) {
+    sections.push(`CALL TYPE CONTEXT:\n${callTypeContext}`)
+  }
 
   // Call metadata
   sections.push(`CALL METADATA:
