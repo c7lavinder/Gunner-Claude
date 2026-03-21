@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleGHLWebhook } from '@/lib/ghl/webhooks'
+import { db } from '@/lib/db/client'
 import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
@@ -21,8 +22,29 @@ export async function POST(request: NextRequest) {
 
     const event = JSON.parse(body)
 
-    // Log every incoming webhook for debugging
-    console.log(`[GHL Webhook] RECEIVED: type=${event.type}, keys=${Object.keys(event).join(',')}, body=${body.slice(0, 300)}`)
+    // Log every webhook to audit_logs so we can debug without Railway logs
+    const locationId = event.locationId ?? 'unknown'
+    const tenant = await db.tenant.findUnique({ where: { ghlLocationId: locationId }, select: { id: true } })
+    if (tenant) {
+      await db.auditLog.create({
+        data: {
+          tenantId: tenant.id,
+          action: 'webhook.received',
+          resource: 'webhook',
+          source: 'GHL_WEBHOOK',
+          severity: 'INFO',
+          payload: {
+            type: event.type,
+            messageType: event.messageType,
+            direction: event.direction,
+            contactId: event.contactId,
+            hasAttachments: !!(event.attachments?.length),
+            hasRecordingUrl: !!(event.recordingUrl || event.recording_url),
+            bodyPreview: body.slice(0, 500),
+          },
+        },
+      }).catch(() => {}) // non-blocking
+    }
 
     // Process async — return 200 immediately so GHL doesn't retry
     handleGHLWebhook(event).catch((err) => {
