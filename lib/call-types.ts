@@ -23,7 +23,6 @@ export const CALL_TYPES: CallTypeDefinition[] = [
     results: [
       { id: 'not_interested', name: 'Not Interested' },
       { id: 'interested', name: 'Interested' },
-      { id: 'follow_up_scheduled', name: 'Follow-Up Scheduled' },
     ],
     aiContext: `COLD CALL — This is an outbound call to a seller who has never been contacted before. The rep is trying to determine if the homeowner has any interest in selling their house. Grade on: opening hook and tone (did they come across professional and non-pushy?), ability to quickly build rapport with a stranger, qualifying the seller's situation and motivation, handling initial resistance or objections ("I'm not interested"), and whether they secured a next step (callback, appointment, or clear follow-up). A great cold call leaves the door open even if the seller isn't ready today.`,
   },
@@ -45,7 +44,6 @@ export const CALL_TYPES: CallTypeDefinition[] = [
     results: [
       { id: 'solved', name: 'Solved' },
       { id: 'not_solved', name: 'Not Solved' },
-      { id: 'follow_up_scheduled', name: 'Follow-Up Scheduled' },
     ],
     aiContext: `ADMIN CALL — This is an administrative/operational call covering things like: scheduling a showing, getting an update on a problem, hearing about an issue, coordinating logistics, or general communication. The goal is to identify the problem or need and establish a clear next step. Grade on: professionalism, active listening to understand the issue, problem-solving ability, clear communication of next steps and timelines, and whether the call accomplished its purpose efficiently. Admin calls should be concise and action-oriented — the rep should leave the other party knowing exactly what happens next.`,
   },
@@ -57,7 +55,6 @@ export const CALL_TYPES: CallTypeDefinition[] = [
       { id: 'interested', name: 'Interested' },
       { id: 'not_interested', name: 'Not Interested' },
       { id: 'appointment_set', name: 'Appointment Set' },
-      { id: 'follow_up_scheduled', name: 'Follow-Up Scheduled' },
     ],
     aiContext: `FOLLOW-UP CALL — This is a call to someone already in follow-up. The rep is checking whether the seller is any more interested in selling compared to last time they spoke, and whether it's time to start the selling process. Grade on: referencing previous conversations (showing they remember the seller), reading the seller's current temperature, creating urgency without being pushy, re-qualifying any changes in situation (timeline, motivation, competing offers), and advancing the conversation toward a next step. A great follow-up call either moves the deal forward or sets a specific future touchpoint.`,
   },
@@ -92,7 +89,6 @@ export const CALL_TYPES: CallTypeDefinition[] = [
       { id: 'not_interested', name: 'Not Interested' },
       { id: 'showing_scheduled', name: 'Showing Scheduled' },
       { id: 'offer_collected', name: 'Offer Collected' },
-      { id: 'follow_up_scheduled', name: 'Follow-Up Scheduled' },
     ],
     aiContext: `DISPOSITION CALL — This is a call from the disposition team to a buyer or potential buyer about a deal/property. Grade on: clearly presenting the property details and opportunity, answering buyer questions accurately, creating urgency and anxiety around the deal (other buyers looking, timeline pressure), running numbers with the buyer (ARV, rehab estimates, profit potential), getting the buyer to commit to a number or to go walk the property, and overall salesmanship. A great dispo call either gets a firm offer from the buyer or gets them physically out to the property. The rep should know the deal inside and out.`,
   },

@@ -14,7 +14,7 @@ import { CALL_TYPES } from '@/lib/call-types'
 
 interface TenantInfo {
   id: string; name: string; slug: string; ghlConnected: boolean
-  callTypes: string[]; callResults: string[]
+  callTypes: string[]; callResults: Record<string, string[]> | string[]
   // WRITES TO: tenants.property_pipeline_id (String?)
   // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
   propertyPipelineId: string
@@ -445,22 +445,7 @@ export function SettingsClient({
             tenantId={tenant.id}
           />
 
-          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
-            <h2 className="text-sm font-medium text-white mb-1">Call results</h2>
-            <p className="text-xs text-gray-500 mb-4">Each call type has its own set of possible results. These are used by the AI and shown when classifying calls.</p>
-            <div className="space-y-3">
-              {CALL_TYPES.map((ct) => (
-                <div key={ct.id} className="flex items-start gap-3">
-                  <span className="text-xs text-gray-400 w-40 shrink-0 pt-1 font-medium">{ct.name}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {ct.results.map((r) => (
-                      <span key={r.id} className="text-xs bg-white/5 border border-white/10 rounded-full px-2.5 py-1 text-gray-300">{r.name}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <CallResultsMap canManage={canManage} tenantId={tenant.id} />
 
           <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
             <RubricEditor
@@ -474,6 +459,125 @@ export function SettingsClient({
 
       {/* ── Workflows tab ────────────────────────────────────────────── */}
       {tab === 'workflows' && <WorkflowsTab canManage={canManage} />}
+    </div>
+  )
+}
+
+// ─── Call Results Map ───────────────────────────────────────────────────────
+
+const RESULT_COLORS: Record<string, string> = {
+  interested: 'border-teal-500/40 bg-teal-500/10 text-teal-400',
+  appointment_set: 'border-green-500/40 bg-green-500/10 text-green-400',
+  accepted: 'border-green-500/40 bg-green-500/10 text-green-400',
+  signed: 'border-green-500/40 bg-green-500/10 text-green-400',
+  solved: 'border-green-500/40 bg-green-500/10 text-green-400',
+  showing_scheduled: 'border-blue-500/40 bg-blue-500/10 text-blue-400',
+  offer_collected: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400',
+  follow_up_scheduled: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400',
+  not_interested: 'border-red-500/30 bg-red-500/5 text-red-400/80',
+  not_qualified: 'border-gray-500/30 bg-gray-500/5 text-gray-400',
+  not_solved: 'border-orange-500/30 bg-orange-500/5 text-orange-400',
+  not_signed: 'border-orange-500/30 bg-orange-500/5 text-orange-400',
+  rejected: 'border-red-500/30 bg-red-500/5 text-red-400/80',
+}
+
+function CallResultsMap({ canManage, tenantId }: { canManage: boolean; tenantId: string }) {
+  // Build initial state from CALL_TYPES defaults
+  const [resultMap, setResultMap] = useState<Record<string, Set<string>>>(() => {
+    const map: Record<string, Set<string>> = {}
+    for (const ct of CALL_TYPES) {
+      map[ct.id] = new Set(ct.results.map(r => r.id))
+    }
+    return map
+  })
+  const [saving, setSaving] = useState(false)
+
+  const toggleResult = useCallback(async (callTypeId: string, resultId: string) => {
+    if (!canManage) return
+
+    const ct = CALL_TYPES.find(t => t.id === callTypeId)
+    if (!ct) return
+
+    const current = new Set(resultMap[callTypeId] ?? [])
+    if (current.has(resultId)) {
+      if (current.size <= 1) return // must keep at least 1 result
+      current.delete(resultId)
+    } else {
+      current.add(resultId)
+    }
+
+    const next = { ...resultMap, [callTypeId]: current }
+    setResultMap(next)
+
+    // Save to DB as map format
+    setSaving(true)
+    try {
+      const payload: Record<string, string[]> = {}
+      for (const [k, v] of Object.entries(next)) {
+        payload[k] = [...v]
+      }
+      await fetch('/api/tenants/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callResults: payload }),
+      })
+    } catch {
+      // Revert on failure
+      const revert = { ...resultMap }
+      setResultMap(revert)
+    } finally {
+      setSaving(false)
+    }
+  }, [resultMap, canManage])
+
+  // All unique results across all types (for the column headers)
+  const allResults = (() => {
+    const seen = new Map<string, string>()
+    for (const ct of CALL_TYPES) {
+      for (const r of ct.results) {
+        if (!seen.has(r.id)) seen.set(r.id, r.name)
+      }
+    }
+    return [...seen.entries()].map(([id, name]) => ({ id, name }))
+  })()
+
+  return (
+    <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-5">
+      <h2 className="text-sm font-medium text-white mb-1">Call type → Result map</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        {canManage
+          ? 'Toggle which results are available for each call type. The AI and your team will only see enabled results.'
+          : 'Shows which results are available for each call type.'}
+      </p>
+
+      <div className="space-y-3">
+        {CALL_TYPES.map((ct) => {
+          const enabledResults = resultMap[ct.id] ?? new Set()
+          return (
+            <div key={ct.id} className="border border-white/5 rounded-xl p-3">
+              <p className="text-xs font-medium text-white mb-2">{ct.name}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {ct.results.map((r) => {
+                  const isOn = enabledResults.has(r.id)
+                  const colorClass = isOn
+                    ? (RESULT_COLORS[r.id] ?? 'border-white/20 bg-white/5 text-gray-300')
+                    : 'border-white/5 bg-transparent text-gray-600 line-through'
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => canManage && toggleResult(ct.id, r.id)}
+                      disabled={saving || !canManage}
+                      className={`text-xs border rounded-full px-3 py-1.5 transition-all ${colorClass} ${canManage ? 'cursor-pointer hover:brightness-125' : ''}`}
+                    >
+                      {r.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
