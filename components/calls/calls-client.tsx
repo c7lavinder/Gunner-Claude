@@ -95,13 +95,16 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
 
   // Tab filtering
   const allCalls = calls.filter(c => c.gradingStatus === 'COMPLETED')
-  const reviewCalls = calls.filter(c => ['PENDING', 'PROCESSING', 'FAILED'].includes(c.gradingStatus))
+  const reviewCalls = calls.filter(c =>
+    ['PENDING', 'PROCESSING'].includes(c.gradingStatus) ||
+    (c.gradingStatus === 'FAILED' && c.callResult !== 'no_answer')
+  )
   const processingCalls = reviewCalls.filter(c => ['PENDING', 'PROCESSING'].includes(c.gradingStatus))
   const failedCalls = reviewCalls.filter(c => c.gradingStatus === 'FAILED')
   const shortCalls = calls.filter(c =>
     (c.durationSeconds !== null && c.durationSeconds < 45) ||
     c.callResult === 'no_answer' ||
-    (c.gradingStatus === 'FAILED' && (c.aiSummary?.includes('No answer') || c.aiSummary?.includes('no answer')))
+    (c.gradingStatus === 'FAILED' && c.durationSeconds === 0)
   )
 
   // Apply filters on All tab
