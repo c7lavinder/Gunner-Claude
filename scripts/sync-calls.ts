@@ -1,12 +1,13 @@
 #!/usr/bin/env tsx
 // scripts/sync-calls.ts
-// Historical bulk sync — pulls ALL calls from GHL, fetches recordings, stores in DB
+// Historical bulk sync — contact-based approach (finds ALL calls, not just recent conversations)
 // Run: npx tsx scripts/sync-calls.ts [--days=7] [--dry-run]
 //
-// STEP 1: Paginate all conversations (100 per page, cursor-based)
-// STEP 2: For each conversation, paginate messages, filter TYPE_CALL with duration > 45
-// STEP 3: For each qualifying call, fetch recording with rate limiting (10 req/s max)
-// STEP 4: Deduplicate by messageId before inserting
+// STEP 1: Paginate all contacts via GET /contacts/
+// STEP 2: For each contact, get their conversation + messages
+// STEP 3: Filter TYPE_CALL messages with real duration > 45s
+// STEP 4: Fetch recording, transcribe, grade
+// STEP 5: Deduplicate by messageId
 
 import { PrismaClient } from '@prisma/client'
 import { fetchCallRecording } from '../lib/ghl/fetch-recording'
@@ -17,32 +18,9 @@ const db = new PrismaClient()
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
 const GHL_API_VERSION = '2021-04-15'
-const RATE_LIMIT_MS = 100 // 10 requests per second
 const MIN_CALL_DURATION = 45
 
-interface GHLMessage {
-  id: string
-  messageType: string
-  messageTypeId?: number
-  direction: string
-  status: string
-  type: number
-  contactId: string
-  conversationId: string
-  userId?: string
-  dateAdded: string
-  dateUpdated?: string
-  meta?: { call?: { duration?: number; status?: string } }
-  altId?: string
-  from?: string
-  to?: string
-  callDuration?: number
-  callStatus?: string
-}
-
-async function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
 
 async function main() {
   const args = process.argv.slice(2)
@@ -52,9 +30,8 @@ async function main() {
 
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
   console.log(`[sync-calls] Syncing calls from last ${days} days (since ${cutoff.toISOString()})`)
-  if (dryRun) console.log('[sync-calls] DRY RUN — no writes')
+  if (dryRun) console.log('[sync-calls] DRY RUN')
 
-  // Get tenant
   const tenants = await db.tenant.findMany({
     where: { ghlAccessToken: { not: null }, ghlLocationId: { not: null } },
     select: { id: true, slug: true, ghlAccessToken: true, ghlLocationId: true },
@@ -66,7 +43,7 @@ async function main() {
   }
 
   for (const tenant of tenants) {
-    console.log(`\n[sync-calls] Processing tenant: ${tenant.slug}`)
+    console.log(`\n[sync-calls] Tenant: ${tenant.slug}`)
 
     const headers = {
       'Authorization': `Bearer ${tenant.ghlAccessToken}`,
@@ -74,225 +51,171 @@ async function main() {
       'Version': GHL_API_VERSION,
     }
 
-    // Pre-fetch existing call IDs for deduplication
-    const existingCalls = await db.call.findMany({
-      where: { tenantId: tenant.id },
-      select: { ghlCallId: true },
-    })
-    const existingIds = new Set(existingCalls.map(c => c.ghlCallId).filter(Boolean))
-    console.log(`[sync-calls] ${existingIds.size} existing calls in DB`)
+    // Pre-fetch existing call IDs for dedup
+    const existingIds = new Set(
+      (await db.call.findMany({ where: { tenantId: tenant.id }, select: { ghlCallId: true } }))
+        .map(c => c.ghlCallId).filter(Boolean) as string[]
+    )
 
-    // Pre-fetch team members for user mapping
+    // Pre-fetch team members
     const tenantUsers = await db.user.findMany({
       where: { tenantId: tenant.id, ghlUserId: { not: null } },
       select: { id: true, ghlUserId: true },
     })
 
-    let conversationsScanned = 0
-    let callsFound = 0
+    let contactsChecked = 0
     let callsCreated = 0
-    let callsSkippedDupe = 0
-    let recordingsFetched = 0
-    let recordingsFound = 0
-
-    // STEP 1: Paginate all conversations
+    let skippedDupe = 0
     let startAfterId: string | undefined
 
+    // STEP 1: Paginate contacts
     for (let page = 0; ; page++) {
-      const params = new URLSearchParams({
-        locationId: tenant.ghlLocationId!,
-        limit: '100',
-      })
+      const params = new URLSearchParams({ locationId: tenant.ghlLocationId!, limit: '100' })
       if (startAfterId) params.set('startAfterId', startAfterId)
 
-      const convRes = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
-      if (convRes.status === 429) {
-        console.log(`[sync-calls] Rate limited — waiting 30s...`)
+      const res = await fetch(`${GHL_BASE_URL}/contacts/?${params}`, { headers })
+
+      if (res.status === 429) {
+        console.log('  Rate limited — waiting 30s...')
         await sleep(30_000)
-        page-- // retry this page
+        page--
         continue
       }
-      if (!convRes.ok) {
-        console.error(`[sync-calls] Conversations fetch failed: ${convRes.status}`)
-        break
-      }
+      if (!res.ok) { console.log('  Contacts fetch failed:', res.status); break }
 
-      const convData = await convRes.json() as {
-        conversations?: Array<{
-          id: string
-          contactName?: string
-          fullName?: string
-          phone?: string
-          contactId?: string
-          userId?: string
-          assignedTo?: string
-        }>
-      }
-      const conversations = convData.conversations ?? []
-      if (conversations.length === 0) break
+      const data = await res.json() as { contacts?: Array<{ id: string; firstName?: string; lastName?: string; email?: string; phone?: string }> }
+      const contacts = data.contacts ?? []
+      if (contacts.length === 0) break
 
-      // STEP 2: For each conversation, get messages (with rate limit spacing)
-      for (const conv of conversations) {
-        conversationsScanned++
-        await sleep(50) // space out requests to avoid 429
+      // STEP 2: For each contact, get conversation + messages
+      for (const contact of contacts) {
+        contactsChecked++
+        await sleep(50) // rate limit spacing
 
-        let lastMessageId: string | undefined
+        try {
+          // Get conversation for this contact
+          const convRes = await fetch(
+            `${GHL_BASE_URL}/conversations/search?locationId=${tenant.ghlLocationId}&contactId=${contact.id}`,
+            { headers },
+          )
+          if (convRes.status === 429) { await sleep(30_000); continue }
+          if (!convRes.ok) continue
 
-        for (let msgPage = 0; msgPage < 10; msgPage++) {
-          const msgUrl = `${GHL_BASE_URL}/conversations/${conv.id}/messages${lastMessageId ? `?lastMessageId=${lastMessageId}` : ''}`
-          const msgRes = await fetch(msgUrl, { headers })
-          if (msgRes.status === 429) { await sleep(30_000); msgPage--; continue }
-          if (!msgRes.ok) break
+          const convData = await convRes.json() as { conversations?: Array<{ id: string; userId?: string; assignedTo?: string }> }
+          const conv = convData.conversations?.[0]
+          if (!conv) continue
 
-          const msgData = await msgRes.json() as {
-            messages?: {
-              messages?: GHLMessage[]
-              lastMessageId?: string
-              nextPage?: boolean
-            }
-          }
-          const pageData = msgData.messages
-          const messages = pageData?.messages ?? []
-          if (messages.length === 0) break
+          // Paginate messages
+          let lastMsgId: string | undefined
+          for (let mp = 0; mp < 5; mp++) {
+            const msgUrl = `${GHL_BASE_URL}/conversations/${conv.id}/messages${lastMsgId ? `?lastMessageId=${lastMsgId}` : ''}`
+            const msgRes = await fetch(msgUrl, { headers })
+            if (msgRes.status === 429) { await sleep(30_000); mp--; continue }
+            if (!msgRes.ok) break
 
-          let hitOldMessage = false
+            const msgData = await msgRes.json() as { messages?: { messages?: Array<Record<string, unknown>>; lastMessageId?: string; nextPage?: boolean } }
+            const pageData = msgData.messages
+            const msgs = pageData?.messages ?? []
+            if (msgs.length === 0) break
 
-          for (const msg of messages) {
-            // Check if this is a call message
-            const msgType = (msg.messageType ?? '').toUpperCase()
-            const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msg.type === 1 || msg.messageTypeId === 1
+            let hitOld = false
 
-            if (!isCall) continue
+            for (const msg of msgs) {
+              // Check call message
+              const msgType = (String(msg.messageType ?? '')).toUpperCase()
+              const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msg.type === 1
+              if (!isCall) continue
 
-            // Check date
-            const msgDate = new Date(msg.dateAdded)
-            if (msgDate < cutoff) {
-              hitOldMessage = true
-              continue
-            }
+              const msgDate = new Date(String(msg.dateAdded))
+              if (msgDate < cutoff) { hitOld = true; continue }
 
-            // Get real duration — use callDuration, meta.call.duration, or elapsed time
-            const metaDuration = msg.callDuration ?? msg.meta?.call?.duration ?? 0
-            const elapsed = msg.dateUpdated
-              ? Math.round((new Date(msg.dateUpdated).getTime() - new Date(msg.dateAdded).getTime()) / 1000)
-              : 0
-            const realDuration = Math.max(metaDuration, elapsed)
+              // Real duration
+              const metaDur = (msg.callDuration as number | undefined) ?? (msg.meta as { call?: { duration?: number } } | undefined)?.call?.duration ?? 0
+              const elapsed = msg.dateUpdated
+                ? Math.round((new Date(String(msg.dateUpdated)).getTime() - msgDate.getTime()) / 1000)
+                : 0
+              const realDuration = Math.min(Math.max(metaDur, elapsed), 1800)
 
-            // Check call status — accept completed or voicemail with real duration
-            // Reject initiated/ringing/failed — these have big elapsed times but no actual conversation
-            const status = (msg.callStatus ?? msg.meta?.call?.status ?? msg.status ?? '').toLowerCase()
-            const isRejectedStatus = status === 'initiated' || status === 'ringing' || status === 'failed' || status === 'busy'
-            if (isRejectedStatus) continue
+              // Reject bad statuses
+              const status = String((msg.callStatus ?? (msg.meta as { call?: { status?: string } })?.call?.status ?? msg.status) ?? '').toLowerCase()
+              if (['initiated', 'ringing', 'failed', 'busy'].includes(status)) continue
+              if (realDuration < MIN_CALL_DURATION) continue
 
-            // Cap elapsed time at 30 minutes — anything longer is a data artifact
-            const cappedDuration = Math.min(realDuration, 1800)
-            if (cappedDuration < MIN_CALL_DURATION) continue
+              // Dedup
+              const dedupeId = String(msg.altId || msg.id)
+              if (existingIds.has(dedupeId) || existingIds.has(String(msg.id))) { skippedDupe++; continue }
+              existingIds.add(dedupeId)
 
-            callsFound++
+              const contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || contact.email || contact.phone || null
+              const ghlUserId = String(msg.userId || conv.userId || conv.assignedTo || '')
+              const user = ghlUserId ? tenantUsers.find(u => u.ghlUserId === ghlUserId) : null
+              const direction = String(msg.direction) === 'inbound' ? 'INBOUND' : 'OUTBOUND'
 
-            // STEP 4: Deduplicate
-            const dedupeId = msg.altId || msg.id
-            if (existingIds.has(dedupeId) || existingIds.has(msg.id)) {
-              callsSkippedDupe++
-              continue
-            }
-
-            // Mark as seen
-            existingIds.add(dedupeId)
-            if (msg.id !== dedupeId) existingIds.add(msg.id)
-
-            const contactName = conv.contactName || conv.fullName || conv.phone || 'Unknown'
-            const ghlUserId = msg.userId || conv.userId || conv.assignedTo
-            const user = ghlUserId ? tenantUsers.find(u => u.ghlUserId === ghlUserId) : null
-            const direction = msg.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND'
-
-            if (dryRun) {
-              console.log(`  [dry] ${contactName} | ${cappedDuration}s (meta:${metaDuration}/elapsed:${elapsed}) | ${status} | ${direction.toLowerCase()} | ${msgDate.toLocaleString()}`)
-              callsCreated++
-              continue
-            }
-
-            // Create call record
-            const call = await db.call.create({
-              data: {
-                tenantId: tenant.id,
-                ghlCallId: dedupeId,
-                ghlContactId: msg.contactId ?? conv.contactId ?? undefined,
-                assignedToId: user?.id ?? undefined,
-                direction: direction as 'INBOUND' | 'OUTBOUND',
-                durationSeconds: cappedDuration,
-                calledAt: msgDate,
-                gradingStatus: 'PENDING',
-              },
-            })
-            callsCreated++
-
-            // STEP 3: Fetch recording with rate limiting
-            await sleep(RATE_LIMIT_MS)
-            recordingsFetched++
-
-            const recordingResult = await fetchCallRecording(
-              tenant.ghlAccessToken!,
-              tenant.ghlLocationId!,
-              msg.id, // use message ID, not altId
-            )
-
-            if (recordingResult.status === 'success' && recordingResult.recordingUrl) {
-              await db.call.update({
-                where: { id: call.id },
-                data: { recordingUrl: recordingResult.recordingUrl },
-              })
-              recordingsFound++
-
-              // Transcribe immediately
-              const transcription = await transcribeRecording(recordingResult.recordingUrl, tenant.ghlAccessToken!)
-              if (transcription.status === 'success' && transcription.transcript) {
-                await db.call.update({
-                  where: { id: call.id },
-                  data: { transcript: transcription.transcript },
-                })
-                console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | TRANSCRIBED (${transcription.transcript.length} chars)`)
-              } else {
-                console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | RECORDING: YES | transcribe failed: ${transcription.error?.slice(0, 80)}`)
+              if (dryRun) {
+                console.log(`  [dry] ${contactName} | ${realDuration}s | ${direction.toLowerCase()} | ${status}`)
+                callsCreated++
+                continue
               }
 
-              // Grade with transcript
-              await gradeCall(call.id).catch(err => {
-                console.log(`  Grade failed: ${err instanceof Error ? err.message.slice(0, 80) : err}`)
+              // Create call with cached contact name
+              const call = await db.call.create({
+                data: {
+                  tenantId: tenant.id,
+                  ghlCallId: dedupeId,
+                  ghlContactId: contact.id,
+                  contactName,
+                  assignedToId: user?.id ?? undefined,
+                  direction: direction as 'INBOUND' | 'OUTBOUND',
+                  durationSeconds: realDuration,
+                  calledAt: msgDate,
+                  gradingStatus: 'PENDING',
+                },
               })
-            } else {
-              console.log(`  Created: ${contactName} | ${cappedDuration}s | ${direction.toLowerCase()} | recording: ${recordingResult.status} — SKIPPING (no recording = no transcript)`)
-              // Delete calls without recordings — no point keeping them
-              await db.call.delete({ where: { id: call.id } })
-              callsCreated--
-            }
-          }
 
-          // Stop paginating messages if we hit old messages or no more pages
-          if (hitOldMessage || !pageData?.nextPage) break
-          lastMessageId = pageData?.lastMessageId
-        }
+              // Fetch recording
+              await sleep(100)
+              const rec = await fetchCallRecording(tenant.ghlAccessToken!, tenant.ghlLocationId!, String(msg.id))
+
+              if (rec.status === 'success' && rec.recordingUrl) {
+                await db.call.update({ where: { id: call.id }, data: { recordingUrl: rec.recordingUrl } })
+
+                // Transcribe
+                const trans = await transcribeRecording(rec.recordingUrl, tenant.ghlAccessToken!)
+                if (trans.status === 'success' && trans.transcript) {
+                  await db.call.update({ where: { id: call.id }, data: { transcript: trans.transcript } })
+                  await gradeCall(call.id).catch(() => {})
+                  callsCreated++
+                  console.log(`  ${contactName} | ${realDuration}s | ${direction.toLowerCase()} | TRANSCRIBED (${trans.transcript.length} ch)`)
+                } else {
+                  // No transcript — delete
+                  await db.call.delete({ where: { id: call.id } })
+                  console.log(`  ${contactName} | ${realDuration}s | transcribe failed — skipped`)
+                }
+              } else {
+                // No recording — delete
+                await db.call.delete({ where: { id: call.id } })
+              }
+            }
+
+            if (hitOld || !pageData?.nextPage) break
+            lastMsgId = pageData?.lastMessageId
+          }
+        } catch { continue }
       }
 
-      startAfterId = conversations[conversations.length - 1]?.id
-      if (conversations.length < 100) break // last page
+      startAfterId = contacts[contacts.length - 1]?.id
+      if (contacts.length < 100) break
 
       if ((page + 1) % 5 === 0) {
-        console.log(`  [progress] Page ${page + 1}: ${conversationsScanned} convs, ${callsFound} calls found, ${callsCreated} created`)
+        console.log(`  [progress] ${contactsChecked} contacts, ${callsCreated} new calls, ${skippedDupe} dupes`)
       }
     }
 
-    console.log(`\n[sync-calls] Tenant ${tenant.slug} complete:`)
-    console.log(`  Conversations scanned: ${conversationsScanned}`)
-    console.log(`  Gradeable calls found: ${callsFound}`)
-    console.log(`  New calls created: ${callsCreated}`)
-    console.log(`  Skipped (duplicate): ${callsSkippedDupe}`)
-    console.log(`  Recordings fetched: ${recordingsFetched}`)
-    console.log(`  Recordings found: ${recordingsFound}`)
+    console.log(`\n[sync-calls] ${tenant.slug} done: ${contactsChecked} contacts, ${callsCreated} calls created, ${skippedDupe} dupes`)
   }
 
   const total = await db.call.count()
-  console.log(`\n[sync-calls] Done. Total calls in DB: ${total}`)
+  console.log(`\n[sync-calls] Total calls in DB: ${total}`)
 }
 
 main()

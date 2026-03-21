@@ -1,8 +1,7 @@
 // app/(tenant)/[tenant]/calls/page.tsx
-// Calls list — fetches all calls with enriched data for the full calls UI
+// Calls list — uses cached contactName from DB, no live GHL lookups needed
 import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
-import { getGHLClient } from '@/lib/ghl/client'
 import { CallsClient } from '@/components/calls/calls-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
@@ -26,13 +25,12 @@ export default async function CallsPage({ params }: { params: { tenant: string }
   const calls = await db.call.findMany({
     where: whereClause,
     orderBy: { calledAt: 'desc' },
-    take: 100,
+    take: 200,
     include: {
       assignedTo: { select: { id: true, name: true, role: true } },
       property: {
         select: {
           id: true, address: true, city: true, state: true,
-          sellers: { include: { seller: { select: { name: true } } }, take: 1 },
         },
       },
     },
@@ -46,34 +44,6 @@ export default async function CallsPage({ params }: { params: { tenant: string }
         orderBy: { name: 'asc' },
       })
     : []
-
-  // Resolve contact names from GHL for calls without property-linked names
-  const contactNameMap = new Map<string, string>()
-  const contactIdsToResolve = [
-    ...new Set(
-      calls
-        .filter(c => c.ghlContactId && !c.property?.sellers[0]?.seller.name)
-        .map(c => c.ghlContactId!)
-    ),
-  ].slice(0, 30) // cap at 30 to avoid rate limits
-
-  if (contactIdsToResolve.length > 0) {
-    try {
-      const ghl = await getGHLClient(tenantId)
-      const results = await Promise.allSettled(
-        contactIdsToResolve.map(id => ghl.getContact(id))
-      )
-      results.forEach((res, i) => {
-        if (res.status === 'fulfilled' && res.value) {
-          const c = res.value
-          const name = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || c.email || null
-          if (name) contactNameMap.set(contactIdsToResolve[i], name)
-        }
-      })
-    } catch {
-      // GHL not connected or rate limited — continue without names
-    }
-  }
 
   return (
     <CallsClient
@@ -90,8 +60,7 @@ export default async function CallsPage({ params }: { params: { tenant: string }
         recordingUrl: c.recordingUrl,
         aiSummary: c.aiSummary,
         aiFeedback: c.aiFeedback,
-        contactName: c.property?.sellers[0]?.seller.name
-          ?? (c.ghlContactId ? contactNameMap.get(c.ghlContactId) ?? null : null),
+        contactName: c.contactName ?? null,
         assignedTo: c.assignedTo ? { id: c.assignedTo.id, name: c.assignedTo.name, role: c.assignedTo.role } : null,
         property: c.property ? { id: c.property.id, address: c.property.address, city: c.property.city, state: c.property.state } : null,
       }))}

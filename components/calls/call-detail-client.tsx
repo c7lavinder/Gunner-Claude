@@ -92,6 +92,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [showFeedback, setShowFeedback] = useState(false)
   const [reclassifying, setReclassifying] = useState(false)
+  const [settingOutcome, setSettingOutcome] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [generatedSteps, setGeneratedSteps] = useState<Array<{ type: string; label: string; reasoning: string }>>([])
   const [generatingSteps, setGeneratingSteps] = useState(false)
@@ -153,6 +154,26 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
       }
     } catch {
       toast('Failed to reclassify — please try again', 'error')
+    }
+    setActionLoading(null)
+  }
+
+  async function setOutcome(outcome: string) {
+    setSettingOutcome(false)
+    setActionLoading('outcome')
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/reclassify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callOutcome: outcome }),
+      })
+      if (res.ok) {
+        toast(`Outcome set to ${RESULT_NAMES[outcome] ?? outcome}`, 'success')
+        startTransition(() => router.refresh())
+      } else {
+        toast('Failed to set outcome', 'error')
+      }
+    } catch {
+      toast('Failed to set outcome', 'error')
     }
     setActionLoading(null)
   }
@@ -348,6 +369,35 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                       className="block w-full text-left text-ds-body text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary px-3 py-1.5 rounded-[6px]"
                     >
                       {ct.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                onClick={() => setSettingOutcome(!settingOutcome)}
+                className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
+                style={{ borderColor: 'var(--border-medium)' }}
+              >
+                <CheckCircle size={10} /> Outcome
+              </button>
+              {settingOutcome && (
+                <div
+                  className="absolute top-full left-0 mt-1 bg-surface-primary border rounded-[10px] p-1 z-10 min-w-44 shadow-ds-float"
+                  style={{ borderColor: 'var(--border-medium)' }}
+                >
+                  {(call.callType ? CALL_TYPES.find(ct => ct.id === call.callType)?.results ?? [] : CALL_TYPES.flatMap(ct => ct.results).filter((r, i, a) => a.findIndex(x => x.id === r.id) === i)).map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => setOutcome(r.id)}
+                      className={`block w-full text-left text-ds-body px-3 py-1.5 rounded-[6px] ${
+                        call.callOutcome === r.id
+                          ? 'text-gunner-red bg-gunner-red-light'
+                          : 'text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary'
+                      }`}
+                    >
+                      {r.name}
                     </button>
                   ))}
                 </div>
