@@ -112,14 +112,14 @@ export default function OnboardingClient() {
   const selectedPipelineObj = pipelines.find((p) => p.id === selectedPipeline)
 
   return (
-    <div className="min-h-screen bg-[#0f1117] flex">
+    <div className="min-h-screen bg-white flex">
       {/* Left sidebar — step tracker */}
-      <div className="w-72 border-r border-white/10 p-8 flex flex-col">
+      <div className="w-72 border-r border-[rgba(0,0,0,0.08)] bg-surface-secondary p-8 flex flex-col">
         <div className="flex items-center gap-2 mb-10">
-          <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center">
-            <span className="text-white font-bold text-xs">G</span>
+          <div className="w-7 h-7 rounded-[10px] bg-gunner-red flex items-center justify-center">
+            <span className="text-white font-semibold text-ds-fine">G</span>
           </div>
-          <span className="text-white font-semibold">Gunner AI</span>
+          <span className="text-txt-primary font-semibold text-ds-card">Gunner AI</span>
         </div>
 
         <div className="space-y-1 flex-1">
@@ -127,26 +127,26 @@ export default function OnboardingClient() {
             const done = step > s.id
             const active = step === s.id
             return (
-              <div key={s.id} className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${active ? 'bg-white/5' : ''}`}>
+              <div key={s.id} className={`flex items-start gap-3 p-3 rounded-[10px] transition-colors ${active ? 'bg-surface-tertiary' : ''}`}>
                 <div className="mt-0.5 shrink-0">
                   {done ? (
-                    <CheckCircle size={18} className="text-orange-500" />
+                    <CheckCircle size={18} className="text-gunner-red" />
                   ) : (
-                    <Circle size={18} className={active ? 'text-orange-500' : 'text-gray-600'} />
+                    <Circle size={18} className={active ? 'text-gunner-red' : 'text-txt-muted'} />
                   )}
                 </div>
                 <div>
-                  <p className={`text-sm font-medium ${active ? 'text-white' : done ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <p className={`text-ds-body font-medium ${active ? 'text-txt-primary' : done ? 'text-txt-secondary' : 'text-txt-muted'}`}>
                     {s.title}
                   </p>
-                  <p className="text-xs text-gray-600 mt-0.5">{s.description}</p>
+                  <p className="text-ds-fine text-txt-muted mt-0.5">{s.description}</p>
                 </div>
               </div>
             )
           })}
         </div>
 
-        <p className="text-xs text-gray-600 mt-6">Step {step} of {STEPS.length}</p>
+        <p className="text-ds-fine text-txt-muted mt-6">Step {step} of {STEPS.length}</p>
       </div>
 
       {/* Main content */}
@@ -157,26 +157,26 @@ export default function OnboardingClient() {
           {step === 1 && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-semibold text-white">Connect Go High Level</h1>
-                <p className="text-gray-400 mt-2 text-sm">
+                <h1 className="text-ds-page font-semibold text-txt-primary">Connect Go High Level</h1>
+                <p className="text-txt-secondary mt-2 text-ds-body">
                   Gunner AI connects to your GHL sub-account to sync calls, contacts, tasks, and appointments.
                 </p>
               </div>
 
               {ghlConnected ? (
-                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 flex items-center gap-3">
-                  <CheckCircle size={20} className="text-green-400 shrink-0" />
+                <div className="bg-semantic-green-bg border border-semantic-green/20 rounded-[14px] p-5 flex items-center gap-3">
+                  <CheckCircle size={20} className="text-semantic-green shrink-0" />
                   <div>
-                    <p className="text-green-400 font-medium text-sm">GHL connected successfully</p>
-                    <p className="text-gray-400 text-xs mt-0.5">Webhooks registered and ready</p>
+                    <p className="text-semantic-green font-medium text-ds-body">GHL connected successfully</p>
+                    <p className="text-txt-secondary text-ds-fine mt-0.5">Webhooks registered and ready</p>
                   </div>
                 </div>
               ) : (
-                <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-6 space-y-4">
+                <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] p-6 space-y-4">
                   <div className="space-y-2">
                     {['Sync calls for automatic grading', 'Pull contacts and pipeline data', 'Receive real-time updates', 'Send SMS, add notes, create tasks'].map((item) => (
-                      <div key={item} className="flex items-center gap-2 text-sm text-gray-300">
-                        <CheckCircle size={14} className="text-orange-500 shrink-0" />
+                      <div key={item} className="flex items-center gap-2 text-ds-body text-txt-secondary">
+                        <CheckCircle size={14} className="text-gunner-red shrink-0" />
                         {item}
                       </div>
                     ))}
@@ -184,7 +184,7 @@ export default function OnboardingClient() {
 
                   <a
                     href={typeof window !== 'undefined' ? buildGHLOAuthUrl() : '#'}
-                    className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg py-3 text-sm transition-colors"
+                    className="w-full flex items-center justify-center gap-2 bg-gunner-red hover:bg-gunner-red-dark text-white font-semibold rounded-[10px] py-3 text-ds-body transition-colors"
                   >
                     Connect Go High Level
                     <ExternalLink size={14} />
@@ -195,7 +195,7 @@ export default function OnboardingClient() {
               {ghlConnected && (
                 <button
                   onClick={() => setStep(2)}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg px-6 py-3 text-sm transition-colors"
+                  className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark text-white font-semibold rounded-[10px] px-6 py-3 text-ds-body transition-colors"
                 >
                   Continue <ArrowRight size={14} />
                 </button>
@@ -207,19 +207,19 @@ export default function OnboardingClient() {
           {step === 2 && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-semibold text-white">Set property trigger</h1>
-                <p className="text-gray-400 mt-2 text-sm">
+                <h1 className="text-ds-page font-semibold text-txt-primary">Set property trigger</h1>
+                <p className="text-txt-secondary mt-2 text-ds-body">
                   When a contact enters this pipeline stage, Gunner AI will automatically create a property in your inventory.
                 </p>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-gray-300 mb-1.5">Pipeline</label>
+                  <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Pipeline</label>
                   <select
                     value={selectedPipeline}
                     onChange={(e) => { setSelectedPipeline(e.target.value); setSelectedStage('') }}
-                    className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500"
+                    className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
                   >
                     <option value="">Select a pipeline…</option>
                     {pipelines.map((p) => (
@@ -230,11 +230,11 @@ export default function OnboardingClient() {
 
                 {selectedPipeline && selectedPipelineObj && (
                   <div>
-                    <label className="block text-sm text-gray-300 mb-1.5">Trigger stage</label>
+                    <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Trigger stage</label>
                     <select
                       value={selectedStage}
                       onChange={(e) => setSelectedStage(e.target.value)}
-                      className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500"
+                      className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
                     >
                       <option value="">Select a stage…</option>
                       {selectedPipelineObj.stages.map((s) => (
@@ -245,7 +245,7 @@ export default function OnboardingClient() {
                 )}
 
                 {selectedStage && (
-                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 text-sm text-orange-300">
+                  <div className="bg-gunner-red-light border border-gunner-red/10 rounded-[10px] p-4 text-ds-body text-txt-primary">
                     When a contact enters <strong>{selectedPipelineObj?.stages.find(s => s.id === selectedStage)?.name}</strong>, a property will be created automatically.
                   </div>
                 )}
@@ -254,7 +254,7 @@ export default function OnboardingClient() {
               <button
                 onClick={savePipelineTrigger}
                 disabled={!selectedStage || saving}
-                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white font-medium rounded-lg px-6 py-3 text-sm transition-colors"
+                className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white font-semibold rounded-[10px] px-6 py-3 text-ds-body transition-colors"
               >
                 {saving ? 'Saving…' : 'Save and continue'} <ArrowRight size={14} />
               </button>
@@ -265,24 +265,24 @@ export default function OnboardingClient() {
           {step === 3 && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-semibold text-white">Call types & scoring</h1>
-                <p className="text-gray-400 mt-2 text-sm">
+                <h1 className="text-ds-page font-semibold text-txt-primary">Call types & scoring</h1>
+                <p className="text-txt-secondary mt-2 text-ds-body">
                   We have set up sensible defaults for wholesalers. You can customize these anytime in Settings.
                 </p>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-5">
-                  <p className="text-sm font-medium text-gray-300 mb-3">Default call types</p>
+                <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
+                  <p className="text-ds-label font-medium text-txt-primary mb-3">Default call types</p>
                   <div className="flex flex-wrap gap-2">
                     {['Inbound lead', 'Outbound cold call', 'Follow-up', 'Appointment confirmation'].map((t) => (
-                      <span key={t} className="bg-white/5 border border-white/10 rounded-full px-3 py-1 text-xs text-gray-300">{t}</span>
+                      <span key={t} className="bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[9999px] px-3 py-1 text-ds-fine text-txt-secondary">{t}</span>
                     ))}
                   </div>
                 </div>
 
-                <div className="bg-[#1a1d27] border border-white/10 rounded-xl p-5">
-                  <p className="text-sm font-medium text-gray-300 mb-3">Default scoring rubric</p>
+                <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
+                  <p className="text-ds-label font-medium text-txt-primary mb-3">Default scoring rubric</p>
                   <div className="space-y-2">
                     {[
                       { label: 'Opening & rapport', pts: 20 },
@@ -291,20 +291,20 @@ export default function OnboardingClient() {
                       { label: 'Objection handling', pts: 20 },
                       { label: 'Clear next step', pts: 15 },
                     ].map((r) => (
-                      <div key={r.label} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-400">{r.label}</span>
-                        <span className="text-orange-400 font-medium">{r.pts} pts</span>
+                      <div key={r.label} className="flex items-center justify-between text-ds-body">
+                        <span className="text-txt-secondary">{r.label}</span>
+                        <span className="text-gunner-red font-medium">{r.pts} pts</span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-600 mt-3">Customize per role in Settings → Call Rubrics</p>
+                  <p className="text-ds-fine text-txt-muted mt-3">Customize per role in Settings → Call Rubrics</p>
                 </div>
               </div>
 
               <button
                 onClick={saveCallConfig}
                 disabled={saving}
-                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white font-medium rounded-lg px-6 py-3 text-sm transition-colors"
+                className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white font-semibold rounded-[10px] px-6 py-3 text-ds-body transition-colors"
               >
                 {saving ? 'Saving…' : 'Looks good, continue'} <ArrowRight size={14} />
               </button>
@@ -315,8 +315,8 @@ export default function OnboardingClient() {
           {step === 4 && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-semibold text-white">Invite your team</h1>
-                <p className="text-gray-400 mt-2 text-sm">
+                <h1 className="text-ds-page font-semibold text-txt-primary">Invite your team</h1>
+                <p className="text-txt-secondary mt-2 text-ds-body">
                   Add team members now or skip — you can always invite from Settings.
                 </p>
               </div>
@@ -328,12 +328,12 @@ export default function OnboardingClient() {
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="teammate@company.com"
-                    className="flex-1 bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-orange-500"
+                    className="flex-1 bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary placeholder-txt-muted text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
                   />
                   <select
                     value={inviteRole}
                     onChange={(e) => setInviteRole(e.target.value)}
-                    className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500"
+                    className="bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2.5 text-txt-primary text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
                   >
                     <option value="LEAD_MANAGER">Lead Manager</option>
                     <option value="ACQUISITION_MANAGER">Acquisition</option>
@@ -343,18 +343,18 @@ export default function OnboardingClient() {
                   </select>
                   <button
                     onClick={addInvite}
-                    className="bg-white/10 hover:bg-white/20 text-white rounded-lg px-4 py-2.5 text-sm transition-colors"
+                    className="bg-surface-secondary hover:bg-surface-tertiary border border-[rgba(0,0,0,0.14)] text-txt-primary rounded-[10px] px-4 py-2.5 text-ds-body font-medium transition-colors"
                   >
                     Add
                   </button>
                 </div>
 
                 {invites.length > 0 && (
-                  <div className="bg-[#1a1d27] border border-white/10 rounded-xl divide-y divide-white/5">
+                  <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] divide-y divide-[rgba(0,0,0,0.06)]">
                     {invites.map((inv, i) => (
                       <div key={i} className="flex items-center justify-between px-4 py-3">
-                        <span className="text-sm text-white">{inv.email}</span>
-                        <span className="text-xs text-gray-400 bg-white/5 px-2 py-0.5 rounded-full">{inv.role.replace('_', ' ')}</span>
+                        <span className="text-ds-body text-txt-primary">{inv.email}</span>
+                        <span className="text-ds-fine text-txt-secondary bg-surface-secondary px-2 py-0.5 rounded-[9999px]">{inv.role.replace('_', ' ')}</span>
                       </div>
                     ))}
                   </div>
@@ -364,14 +364,14 @@ export default function OnboardingClient() {
               <div className="flex gap-3">
                 <button
                   onClick={() => { setStep(5); fetch('/api/tenants/config', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ onboardingCompleted: true }) }) }}
-                  className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-3"
+                  className="text-ds-body text-txt-secondary hover:text-txt-primary transition-colors px-4 py-3"
                 >
                   Skip for now
                 </button>
                 <button
                   onClick={sendInvites}
                   disabled={invites.length === 0 || saving}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white font-medium rounded-lg px-6 py-3 text-sm transition-colors"
+                  className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white font-semibold rounded-[10px] px-6 py-3 text-ds-body transition-colors"
                 >
                   {saving ? 'Sending…' : 'Send invites'} <ArrowRight size={14} />
                 </button>
@@ -381,19 +381,19 @@ export default function OnboardingClient() {
 
           {/* Step 5: Done */}
           {step === 5 && (
-            <div className="text-center space-y-6">
-              <div className="w-16 h-16 rounded-2xl bg-orange-500/20 flex items-center justify-center mx-auto">
-                <CheckCircle size={32} className="text-orange-500" />
+            <div className="space-y-6">
+              <div className="w-16 h-16 rounded-[14px] bg-gunner-red-light flex items-center justify-center">
+                <CheckCircle size={32} className="text-gunner-red" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-white">You are all set!</h1>
-                <p className="text-gray-400 mt-2 text-sm">
+                <h1 className="text-ds-page font-semibold text-txt-primary">You are all set!</h1>
+                <p className="text-txt-secondary mt-2 text-ds-body">
                   Gunner AI is connected and ready. Calls will be graded automatically, properties will sync from GHL, and your team can start tracking KPIs.
                 </p>
               </div>
               <button
                 onClick={goToDashboard}
-                className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg px-8 py-3 text-sm transition-colors"
+                className="inline-flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark text-white font-semibold rounded-[10px] px-8 py-3 text-ds-body transition-colors"
               >
                 Open my dashboard <ArrowRight size={14} />
               </button>

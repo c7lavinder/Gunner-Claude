@@ -36,51 +36,51 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f1117] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">G</span>
+          <div className="w-8 h-8 rounded-[10px] bg-gunner-red flex items-center justify-center">
+            <span className="text-white font-semibold text-ds-body">G</span>
           </div>
-          <span className="text-white font-semibold">Gunner AI</span>
+          <span className="text-txt-primary font-semibold text-ds-section">Gunner AI</span>
         </div>
 
         {done ? (
-          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-6 text-center">
-            <Check size={32} className="text-green-400 mx-auto mb-3" />
-            <h2 className="text-lg font-semibold text-white mb-2">Check your email</h2>
-            <p className="text-sm text-gray-400 mb-4">
+          <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] p-6">
+            <Check size={32} className="text-semantic-green mb-3" />
+            <h2 className="text-ds-section font-semibold text-txt-primary mb-2">Check your email</h2>
+            <p className="text-ds-body text-txt-secondary mb-4">
               If an account exists for {email}, we've sent a temporary password.
             </p>
-            <Link href="/login" className="text-sm text-orange-400 hover:text-orange-300">
+            <Link href="/login" className="text-ds-body text-gunner-red hover:text-gunner-red-dark transition-colors">
               Back to login
             </Link>
           </div>
         ) : (
-          <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-1">Reset password</h2>
-            <p className="text-sm text-gray-400 mb-6">Enter your email and we'll send a temporary password.</p>
+          <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] p-6">
+            <h2 className="text-ds-section font-semibold text-txt-primary mb-1">Reset password</h2>
+            <p className="text-ds-body text-txt-secondary mb-6">Enter your email and we'll send a temporary password.</p>
 
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="your@email.com"
-              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 mb-3"
+              className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-3 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors mb-3"
               onKeyDown={e => e.key === 'Enter' && handleReset()}
             />
 
-            {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+            {error && <p className="text-ds-fine text-semantic-red mb-3">{error}</p>}
 
             <button
               onClick={handleReset}
               disabled={!email || loading}
-              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white font-medium py-3 rounded-lg text-sm transition-colors"
+              className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white font-semibold py-3 rounded-[10px] text-ds-body transition-colors"
             >
               {loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Send reset email'}
             </button>
 
-            <Link href="/login" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white mt-4 justify-center">
+            <Link href="/login" className="flex items-center gap-1 text-ds-body text-txt-secondary hover:text-txt-primary mt-4 justify-center transition-colors">
               <ArrowLeft size={12} /> Back to login
             </Link>
           </div>

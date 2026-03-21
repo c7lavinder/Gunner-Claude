@@ -132,15 +132,15 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-medium text-white">Call grading rubrics</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h2 className="text-ds-label font-medium text-txt-primary">Call grading rubrics</h2>
+          <p className="text-ds-fine text-txt-muted mt-1">
             Custom scoring criteria per role. Default rubrics are used when none are set.
           </p>
         </div>
         {!creating && (
           <button
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1.5 text-sm bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-ds-body font-semibold bg-gunner-red hover:bg-gunner-red-dark text-white px-4 py-2 rounded-[10px] transition-colors"
           >
             <Plus size={13} /> New rubric
           </button>
@@ -149,10 +149,10 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
 
       {/* Status message */}
       {message && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-[14px] text-ds-body ${
           message.type === 'success'
-            ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-            : 'bg-red-500/10 border border-red-500/20 text-red-400'
+            ? 'bg-semantic-green-bg border border-semantic-green/20 text-semantic-green'
+            : 'bg-semantic-red-bg border border-semantic-red/20 text-semantic-red'
         }`}>
           {message.type === 'success' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
           {message.text}
@@ -163,22 +163,25 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
       {rubrics.length > 0 ? (
         <div className="space-y-2">
           {rubrics.map((r) => (
-            <div key={r.id} className="flex items-center justify-between bg-[#1a1d27] border border-white/10 rounded-xl px-4 py-3">
+            <div
+              key={r.id}
+              className="flex items-center justify-between bg-surface-primary border border-[rgba(0,0,0,0.08)] rounded-[14px] px-5 py-4 transition-all duration-150 hover:shadow-ds-float hover:border-[rgba(0,0,0,0.14)]"
+            >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-white">{r.name}</span>
+                  <span className="text-ds-label font-medium text-txt-primary">{r.name}</span>
                   {r.isDefault && (
-                    <span className="text-xs text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">default</span>
+                    <span className="text-ds-fine font-medium text-gunner-red bg-gunner-red-light px-2 py-0.5 rounded-full">default</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-ds-fine text-txt-muted mt-1">
                   {ROLE_LABELS[r.role as UserRole] ?? r.role}
                   {r.callType ? ` · ${r.callType}` : ' · all call types'}
                 </p>
               </div>
               <button
                 onClick={() => deleteRubric(r.id, r.name)}
-                className="text-gray-600 hover:text-red-400 transition-colors ml-3 shrink-0"
+                className="text-txt-muted hover:text-semantic-red transition-colors ml-3 shrink-0"
                 title="Delete rubric"
               >
                 <Trash2 size={14} />
@@ -187,11 +190,11 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
           ))}
         </div>
       ) : !creating ? (
-        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl py-10 text-center">
-          <p className="text-sm text-gray-500">No custom rubrics yet — defaults are active</p>
+        <div className="bg-surface-primary border border-[rgba(0,0,0,0.08)] rounded-[14px] py-12 text-center">
+          <p className="text-ds-body text-txt-muted">No custom rubrics yet — defaults are active</p>
           <button
             onClick={() => setCreating(true)}
-            className="mt-3 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+            className="mt-3 text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark transition-colors"
           >
             Create your first rubric
           </button>
@@ -200,31 +203,31 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
 
       {/* Create rubric form */}
       {creating && (
-        <div className="bg-[#1a1d27] border border-orange-500/30 rounded-2xl p-6 space-y-5">
+        <div className="bg-surface-primary border border-[rgba(0,0,0,0.08)] rounded-[14px] p-6 space-y-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-white">New rubric</h3>
-            <button onClick={resetForm} className="text-gray-500 hover:text-white transition-colors">
+            <h3 className="text-ds-label font-medium text-txt-primary">New rubric</h3>
+            <button onClick={resetForm} className="text-txt-muted hover:text-txt-primary transition-colors">
               <X size={16} />
             </button>
           </div>
 
           {/* Rubric meta */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Rubric name *</label>
+              <label className="block text-ds-fine font-medium text-txt-secondary mb-1.5">Rubric name *</label>
               <input
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
                 placeholder="e.g. Acquisition standard"
-                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/60"
+                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none focus:border-[rgba(0,0,0,0.14)]"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Apply to role *</label>
+              <label className="block text-ds-fine font-medium text-txt-secondary mb-1.5">Apply to role *</label>
               <select
                 value={newRole}
                 onChange={e => setNewRole(e.target.value as UserRole)}
-                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/60"
+                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none focus:border-[rgba(0,0,0,0.14)]"
               >
                 {EDITABLE_ROLES.map(r => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -232,25 +235,25 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Call type (optional)</label>
+              <label className="block text-ds-fine font-medium text-txt-secondary mb-1.5">Call type (optional)</label>
               <select
                 value={newCallType}
                 onChange={e => setNewCallType(e.target.value)}
-                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500/60"
+                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none focus:border-[rgba(0,0,0,0.14)]"
               >
                 <option value="">All call types</option>
                 {callTypes.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <div className="flex items-center gap-2 pt-5">
+            <div className="flex items-center gap-2 pt-6">
               <button
                 type="button"
                 onClick={() => setNewIsDefault(!newIsDefault)}
-                className={`w-10 h-5 rounded-full transition-colors shrink-0 ${newIsDefault ? 'bg-orange-500' : 'bg-white/10'}`}
+                className={`w-10 h-5 rounded-full transition-colors shrink-0 ${newIsDefault ? 'bg-gunner-red' : 'bg-surface-tertiary'}`}
               >
-                <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform mx-0.5 ${newIsDefault ? 'translate-x-5' : 'translate-x-0'}`} />
+                <span className={`block w-4 h-4 rounded-full bg-white shadow-ds-float transition-transform mx-0.5 ${newIsDefault ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
-              <span className="text-xs text-gray-400">Set as default for this role</span>
+              <span className="text-ds-fine text-txt-secondary">Set as default for this role</span>
             </div>
           </div>
 
@@ -258,16 +261,16 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-300">Scoring criteria</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  totalPoints === 100 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'
+                <span className="text-ds-fine font-medium text-txt-primary">Scoring criteria</span>
+                <span className={`text-ds-fine font-medium px-2 py-0.5 rounded-full ${
+                  totalPoints === 100 ? 'bg-semantic-green-bg text-semantic-green' : 'bg-semantic-amber-bg text-semantic-amber'
                 }`}>
                   {totalPoints}/100 pts
                 </span>
               </div>
               <button
                 onClick={addCriteria}
-                className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 transition-colors"
+                className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors"
               >
                 <Plus size={11} /> Add criterion
               </button>
@@ -275,14 +278,14 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
 
             <div className="space-y-2">
               {newCriteria.map((c, idx) => (
-                <div key={idx} className="bg-[#0f1117] border border-white/10 rounded-xl p-3 space-y-2">
+                <div key={idx} className="bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[14px] p-3 space-y-2">
                   <div className="flex items-center gap-2">
-                    <GripVertical size={14} className="text-gray-600 shrink-0" />
+                    <GripVertical size={14} className="text-txt-muted shrink-0" />
                     <input
                       value={c.category}
                       onChange={e => updateCriteria(idx, 'category', e.target.value)}
                       placeholder="Category name"
-                      className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 focus:outline-none"
+                      className="flex-1 bg-transparent text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none"
                     />
                     <div className="flex items-center gap-1 shrink-0">
                       <input
@@ -291,12 +294,12 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
                         onChange={e => updateCriteria(idx, 'maxPoints', parseInt(e.target.value) || 0)}
                         min={1}
                         max={100}
-                        className="w-14 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-orange-500/60"
+                        className="w-14 bg-surface-primary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-2 py-1 text-ds-fine text-txt-primary text-center focus:outline-none focus:border-[rgba(0,0,0,0.14)]"
                       />
-                      <span className="text-xs text-gray-500">pts</span>
+                      <span className="text-ds-fine text-txt-muted">pts</span>
                     </div>
                     {newCriteria.length > 1 && (
-                      <button onClick={() => removeCriteria(idx)} className="text-gray-600 hover:text-red-400 transition-colors">
+                      <button onClick={() => removeCriteria(idx)} className="text-txt-muted hover:text-semantic-red transition-colors">
                         <X size={13} />
                       </button>
                     )}
@@ -305,7 +308,7 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
                     value={c.description}
                     onChange={e => updateCriteria(idx, 'description', e.target.value)}
                     placeholder="What does a perfect score look like?"
-                    className="w-full bg-transparent text-xs text-gray-400 placeholder-gray-600 focus:outline-none ml-5"
+                    className="w-full bg-transparent text-ds-fine text-txt-secondary placeholder-txt-muted focus:outline-none ml-5"
                   />
                 </div>
               ))}
@@ -316,16 +319,16 @@ export function RubricEditor({ tenantId, callTypes, existingRubrics }: Props) {
           <div className="flex gap-3 pt-1">
             <button
               onClick={resetForm}
-              className="text-sm text-gray-400 hover:text-white px-4 py-2 bg-white/5 border border-white/10 rounded-lg transition-colors"
+              className="text-ds-body font-medium text-txt-primary bg-surface-secondary border border-[rgba(0,0,0,0.14)] rounded-[10px] px-4 py-2 hover:border-[rgba(0,0,0,0.22)] transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={saveRubric}
               disabled={saving || !newName.trim() || totalPoints === 0}
-              className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+              className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold py-2 rounded-[10px] transition-colors"
             >
-              {saving ? 'Saving…' : 'Save rubric'}
+              {saving ? 'Saving...' : 'Save rubric'}
             </button>
           </div>
         </div>

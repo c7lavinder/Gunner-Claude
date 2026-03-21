@@ -31,15 +31,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const icons = {
-    success: <CheckCircle size={14} className="text-green-400 shrink-0" />,
-    error: <AlertCircle size={14} className="text-red-400 shrink-0" />,
-    info: <Info size={14} className="text-blue-400 shrink-0" />,
+    success: <CheckCircle size={14} className="text-semantic-green shrink-0" />,
+    error: <AlertCircle size={14} className="text-semantic-red shrink-0" />,
+    info: <Info size={14} className="text-semantic-blue shrink-0" />,
   }
 
-  const borders = {
-    success: 'border-green-500/30',
-    error: 'border-red-500/30',
-    info: 'border-blue-500/30',
+  const borderColors = {
+    success: 'border-semantic-green/20',
+    error: 'border-semantic-red/20',
+    info: 'border-semantic-blue/20',
+  }
+
+  const leftBorders = {
+    success: 'border-l-semantic-green',
+    error: 'border-l-semantic-red',
+    info: 'border-l-semantic-blue',
   }
 
   return (
@@ -49,13 +55,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`flex items-center gap-3 bg-[#1a1d27] border ${borders[t.type]} rounded-xl px-4 py-3 shadow-xl animate-in slide-in-from-right`}
+            className={`flex items-center gap-3 bg-surface-primary border ${borderColors[t.type]} border-l-2 ${leftBorders[t.type]} rounded-[14px] px-4 py-3 shadow-ds-float animate-in slide-in-from-right`}
           >
             {icons[t.type]}
-            <p className="text-sm text-white flex-1">{t.message}</p>
+            <p className="text-ds-body text-txt-primary flex-1">{t.message}</p>
             <button
               onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
-              className="text-gray-500 hover:text-white transition-colors"
+              className="text-txt-muted hover:text-txt-primary transition-colors"
             >
               <X size={12} />
             </button>

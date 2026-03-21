@@ -63,7 +63,7 @@ export function GHLDropdown({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-gray-500">
+      <div className="flex items-center gap-2 bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-ds-body text-txt-muted">
         <Loader2 size={14} className="animate-spin" />
         Loading from GHL...
       </div>
@@ -72,7 +72,7 @@ export function GHLDropdown({
 
   if (error) {
     return (
-      <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5 text-sm text-red-400">
+      <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-[10px] px-4 py-2.5 text-ds-body text-semantic-red">
         Failed to load: {error}
       </div>
     )
@@ -80,7 +80,7 @@ export function GHLDropdown({
 
   if (options.length === 0) {
     return (
-      <div className="bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-gray-500">
+      <div className="bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-ds-body text-txt-muted">
         No options available — connect GHL first
       </div>
     )
@@ -91,7 +91,7 @@ export function GHLDropdown({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500 disabled:opacity-50"
+      className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] disabled:opacity-50 transition-colors"
     >
       <option value="">{placeholder}</option>
       {options.map((opt) => (

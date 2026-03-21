@@ -59,19 +59,19 @@ export function PricingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f1117] flex flex-col items-center justify-center px-4 py-16">
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-16">
       {/* Header */}
-      <div className="text-center mb-12">
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-lg">G</span>
+      <div className="text-left mb-12 max-w-4xl w-full">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-gunner-red rounded-[10px] flex items-center justify-center">
+            <span className="text-white font-semibold text-ds-card">G</span>
           </div>
-          <span className="text-white font-semibold text-xl">Gunner AI</span>
+          <span className="text-txt-primary font-semibold text-ds-section">Gunner AI</span>
         </div>
-        <h1 className="text-3xl font-bold text-white mb-3">
+        <h1 className="text-ds-hero font-semibold text-txt-primary mb-3">
           Choose your plan
         </h1>
-        <p className="text-gray-400 max-w-md mx-auto">
+        <p className="text-txt-secondary text-ds-body max-w-md">
           Every call graded. Every lead scored. Every rep coached.
           Start growing revenue today.
         </p>
@@ -82,32 +82,32 @@ export function PricingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
         {PLANS.map((plan) => (
           <div
             key={plan.id}
-            className={`relative bg-[#1a1d27] border rounded-2xl p-6 flex flex-col ${
+            className={`relative bg-white border rounded-[14px] p-6 flex flex-col ${
               plan.popular
-                ? 'border-orange-500 shadow-lg shadow-orange-500/10'
-                : 'border-white/10'
+                ? 'border-gunner-red'
+                : 'border-[rgba(0,0,0,0.08)]'
             }`}
           >
             {plan.popular && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                <span className="bg-gunner-red text-white text-ds-fine font-semibold px-3 py-1 rounded-[9999px] flex items-center gap-1">
                   <Zap size={10} /> Most popular
                 </span>
               </div>
             )}
 
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
+              <h3 className="text-ds-card font-semibold text-txt-primary">{plan.name}</h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-4xl font-bold text-white">${plan.price}</span>
-                <span className="text-gray-500 text-sm">/month</span>
+                <span className="text-ds-hero font-semibold text-txt-primary">${plan.price}</span>
+                <span className="text-txt-muted text-ds-body">/month</span>
               </div>
             </div>
 
             <ul className="space-y-3 mb-8 flex-1">
               {plan.features.map((feature) => (
-                <li key={feature} className="flex items-center gap-2 text-sm text-gray-300">
-                  <Check size={14} className="text-orange-400 shrink-0" />
+                <li key={feature} className="flex items-center gap-2 text-ds-body text-txt-secondary">
+                  <Check size={14} className="text-gunner-red shrink-0" />
                   {feature}
                 </li>
               ))}
@@ -116,10 +116,10 @@ export function PricingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
             <button
               onClick={() => handleCheckout(plan.id)}
               disabled={loading !== null}
-              className={`w-full py-3 rounded-xl font-semibold text-sm transition-colors ${
+              className={`w-full py-3 rounded-[10px] font-semibold text-ds-body transition-colors ${
                 plan.popular
-                  ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                  : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                  ? 'bg-gunner-red hover:bg-gunner-red-dark text-white'
+                  : 'bg-surface-secondary hover:bg-surface-tertiary text-txt-primary border border-[rgba(0,0,0,0.14)]'
               } disabled:opacity-40`}
             >
               {loading === plan.id ? (
@@ -135,14 +135,14 @@ export function PricingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
       </div>
 
       {/* Footer */}
-      <div className="mt-12 text-center">
-        <p className="text-gray-600 text-xs">
+      <div className="mt-12 max-w-4xl w-full text-left">
+        <p className="text-txt-muted text-ds-fine">
           All plans include a 14-day free trial. Cancel anytime.
         </p>
         {!isLoggedIn && (
-          <p className="text-gray-500 text-sm mt-4">
+          <p className="text-txt-secondary text-ds-body mt-4">
             Already have an account?{' '}
-            <Link href="/login" className="text-orange-400 hover:text-orange-300">
+            <Link href="/login" className="text-gunner-red hover:text-gunner-red-dark transition-colors">
               Sign in
             </Link>
           </p>

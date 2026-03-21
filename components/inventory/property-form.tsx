@@ -115,9 +115,9 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
     }
   }
 
-  const inputCls = 'w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500/60 transition-colors'
-  const labelCls = 'block text-xs font-medium text-gray-400 mb-1.5'
-  const sectionCls = 'bg-[#1a1d27] border border-white/10 rounded-2xl p-6 space-y-4'
+  const inputCls = 'w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-4 py-2.5 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none focus:border-gunner-red/60 transition-colors'
+  const labelCls = 'block text-ds-fine font-medium text-txt-secondary mb-1.5'
+  const sectionCls = 'bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-6 space-y-4'
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -125,20 +125,20 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
       <div className="flex items-center gap-3">
         <Link
           href={mode === 'edit' ? `/${tenantSlug}/inventory/${form.id}` : `/${tenantSlug}/inventory`}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1.5 text-ds-body text-txt-secondary hover:text-txt-primary transition-colors"
         >
           <ArrowLeft size={14} />
           {mode === 'edit' ? 'Back to property' : 'Back to inventory'}
         </Link>
       </div>
-      <h1 className="text-xl font-semibold text-white">
+      <h1 className="text-ds-page font-semibold text-txt-primary">
         {mode === 'create' ? 'Add property' : 'Edit property'}
       </h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Property address */}
         <div className={sectionCls}>
-          <h2 className="text-sm font-medium text-white">Property address</h2>
+          <h2 className="text-ds-label font-medium text-txt-primary">Property address</h2>
           <div>
             <label className={labelCls}>Street address *</label>
             <input
@@ -184,7 +184,7 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
 
         {/* Financials */}
         <div className={sectionCls}>
-          <h2 className="text-sm font-medium text-white">Financials</h2>
+          <h2 className="text-ds-label font-medium text-txt-primary">Financials</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Asking price ($)</label>
@@ -211,7 +211,7 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
 
         {/* Seller */}
         <div className={sectionCls}>
-          <h2 className="text-sm font-medium text-white">Seller info</h2>
+          <h2 className="text-ds-label font-medium text-txt-primary">Seller info</h2>
           <div>
             <label className={labelCls}>Seller name</label>
             <input value={form.sellerName} onChange={update('sellerName')} placeholder="Robert Smith" className={inputCls} />
@@ -230,7 +230,7 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
 
         {/* Assignment */}
         <div className={sectionCls}>
-          <h2 className="text-sm font-medium text-white">Assignment</h2>
+          <h2 className="text-ds-label font-medium text-txt-primary">Assignment</h2>
           <div>
             <label className={labelCls}>Assigned to</label>
             <select value={form.assignedToId} onChange={update('assignedToId')} className={inputCls}>
@@ -245,7 +245,7 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
         </div>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
+          <div className="bg-semantic-red-bg border-[0.5px] border-semantic-red/20 rounded-[14px] px-4 py-3 text-semantic-red text-ds-body">
             {error}
           </div>
         )}
@@ -254,14 +254,14 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
         <div className="flex items-center gap-3">
           <Link
             href={mode === 'edit' ? `/${tenantSlug}/inventory/${form.id}` : `/${tenantSlug}/inventory`}
-            className="px-5 py-2.5 text-sm text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
+            className="px-5 py-2.5 text-ds-body text-txt-secondary hover:text-txt-primary bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] transition-colors font-medium"
           >
             Cancel
           </Link>
           <button
             type="submit"
             disabled={saving || !form.address || !form.city || !form.state}
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors"
+            className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-6 py-2.5 rounded-[10px] transition-colors"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {saving ? 'Saving…' : mode === 'create' ? 'Add property' : 'Save changes'}

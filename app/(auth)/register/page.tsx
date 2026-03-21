@@ -60,36 +60,36 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f1117] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
+        <div className="text-left mb-8">
           <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">G</span>
+            <div className="w-8 h-8 rounded-[10px] bg-gunner-red flex items-center justify-center">
+              <span className="text-white font-semibold text-ds-body">G</span>
             </div>
-            <span className="text-white font-semibold text-xl">Gunner AI</span>
+            <span className="text-txt-primary font-semibold text-ds-section">Gunner AI</span>
           </div>
-          <p className="text-gray-400 text-sm">Create your team's command center</p>
+          <p className="text-txt-secondary text-ds-body">Create your team's command center</p>
         </div>
 
         {/* Card */}
-        <div className="bg-[#1a1d27] border border-white/10 rounded-2xl p-8">
+        <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Company name</label>
+              <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Company name</label>
               <input
                 type="text"
                 value={form.companyName}
                 onChange={update('companyName')}
                 required
                 placeholder="Apex Wholesaling"
-                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary placeholder-txt-muted text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
               />
               {form.companyName && (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-ds-fine text-txt-muted">
                   Your URL:{' '}
-                  <span className="text-orange-400">
+                  <span className="text-gunner-red">
                     gunnerai.com/{form.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}
                   </span>
                 </p>
@@ -97,31 +97,31 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Your name</label>
+              <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Your name</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={update('name')}
                 required
                 placeholder="Alex Johnson"
-                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary placeholder-txt-muted text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Work email</label>
+              <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Work email</label>
               <input
                 type="email"
                 value={form.email}
                 onChange={update('email')}
                 required
                 placeholder="alex@company.com"
-                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary placeholder-txt-muted text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Password</label>
+              <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Password</label>
               <input
                 type="password"
                 value={form.password}
@@ -129,12 +129,12 @@ export default function RegisterPage() {
                 required
                 minLength={8}
                 placeholder="Min. 8 characters"
-                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary placeholder-txt-muted text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
               />
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5 text-red-400 text-sm">
+              <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-[10px] px-4 py-2.5 text-semantic-red text-ds-body">
                 {error}
               </div>
             )}
@@ -142,21 +142,21 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-medium rounded-lg py-3 text-sm transition-colors mt-2"
+              className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-50 text-white font-semibold rounded-[10px] py-3 text-ds-body transition-colors mt-2"
             >
               {loading ? 'Creating your account…' : 'Create account — free'}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-500">
+          <p className="mt-6 text-left text-ds-body text-txt-muted">
             Already have an account?{' '}
-            <Link href="/login" className="text-orange-400 hover:text-orange-300 transition-colors">
+            <Link href="/login" className="text-gunner-red hover:text-gunner-red-dark transition-colors">
               Sign in
             </Link>
           </p>
         </div>
 
-        <p className="mt-4 text-center text-xs text-gray-600">
+        <p className="mt-4 text-left text-ds-fine text-txt-muted">
           By signing up you agree to our Terms of Service and Privacy Policy
         </p>
       </div>
