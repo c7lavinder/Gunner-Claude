@@ -200,7 +200,8 @@ export class GHLClient {
   // ─── Users (location team members) ────────────────────────────────────────
 
   async getLocationUsers() {
-    return this.request<GHLUserList>('GET', `/users/search?companyId=${this.locationId}&locationId=${this.locationId}`)
+    // Try /users/ endpoint with locationId — /users/search needs companyId which we don't store
+    return this.request<GHLUserList>('GET', `/users/?locationId=${this.locationId}`)
   }
 
   // ─── Webhooks ──────────────────────────────────────────────────────────────

@@ -62,7 +62,7 @@ export default async function InboxPage({ params }: { params: { tenant: string }
         : typeof c.lastMessageDate === 'number'
           ? new Date(c.lastMessageDate).toISOString()
           : new Date().toISOString(),
-      toUserName: userMap.get(c.userId ?? c.assignedTo ?? '') ?? null,
+      toUserName: userMap.get(c.userId || c.assignedTo || '') ?? null,
       propertyAddress: propertyMap.get(c.contactId) ?? null,
     }))
   } catch (err) {
