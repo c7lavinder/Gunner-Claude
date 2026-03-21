@@ -140,10 +140,28 @@ export async function gradeCall(callId: string): Promise<void> {
       ghlContext = await fetchGHLCallContext(call.tenantId, call.ghlCallId)
     }
 
-    // Build and send the grading prompt (3 layers: rubric + industry + tenant materials)
+    // Fetch recent feedback corrections to include in grading context
+    const recentFeedback = await db.auditLog.findMany({
+      where: {
+        tenantId: call.tenantId,
+        action: 'call.feedback',
+        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, // last 30 days
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { payload: true },
+    })
+    const feedbackContext = recentFeedback.length > 0
+      ? recentFeedback.map(f => {
+          const p = f.payload as { type?: string; details?: string } | null
+          return p ? `- ${p.type}: ${p.details}` : null
+        }).filter(Boolean).join('\n')
+      : null
+
+    // Build and send the grading prompt (3 layers: rubric + industry + tenant materials + feedback)
     const systemPrompt = isSummaryOnly
       ? buildSummaryOnlySystemPrompt()
-      : buildGradingSystemPrompt(rubricCriteria, tenantMaterials)
+      : buildGradingSystemPrompt(rubricCriteria, tenantMaterials, feedbackContext)
     const callWithTranscript = { ...call, transcript }
     const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext)
 
@@ -159,7 +177,7 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const grading = parseGradingResponse(content.text)
 
-    // Update call with enriched data from GHL
+    // Update call with grading results + auto-classification
     await db.call.update({
       where: { id: callId },
       data: {
@@ -170,8 +188,19 @@ export async function gradeCall(callId: string): Promise<void> {
         aiFeedback: grading.feedback,
         aiCoachingTips: grading.coachingTips,
         gradedAt: new Date(),
+        // 3-tier call type: 1) manual (already set) → 2) AI detection → 3) role fallback
+        ...(!call.callType ? { callType: grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role) } : {}),
+        // Auto-classify outcome
+        ...(grading.callOutcome ? { callOutcome: grading.callOutcome } : {}),
+        // Follow-up scheduled (separate from outcome)
+        ...(grading.followUpScheduled !== undefined ? { callResult: grading.followUpScheduled ? 'follow_up_scheduled' : grading.callOutcome } : {}),
+        // Key moments / highlights
+        ...(grading.keyMoments?.length ? { keyMoments: grading.keyMoments } : {}),
+        // Sentiment & motivation
+        ...(grading.sentiment !== null && grading.sentiment !== undefined ? { sentiment: grading.sentiment } : {}),
+        ...(grading.sellerMotivation !== null && grading.sellerMotivation !== undefined ? { sellerMotivation: grading.sellerMotivation } : {}),
+        // Enrich from GHL
         ...(ghlContext?.duration && !call.durationSeconds && { durationSeconds: ghlContext.duration }),
-        ...(ghlContext?.callStatus && { callResult: ghlContext.callStatus }),
         ...(ghlContext?.contactId && { ghlContactId: ghlContext.contactId }),
       },
     })
@@ -335,11 +364,17 @@ Response format:
   "rubricScores": {},
   "summary": "<1-2 sentence summary of what likely happened>",
   "feedback": "<brief note on the call>",
-  "coachingTips": ["<one tip>"]
+  "coachingTips": ["<one tip>"],
+  "callType": "<cold_call|qualification_call|admin_call|follow_up_call|offer_call|purchase_agreement_call|dispo_call or null>",
+  "callOutcome": "<best guess from metadata: interested|not_interested|appointment_set|follow_up_scheduled|etc or null>",
+  "followUpScheduled": false,
+  "keyMoments": [],
+  "sentiment": null,
+  "sellerMotivation": null
 }`
 }
 
-function buildGradingSystemPrompt(criteria: RubricCriteria[], tenantMaterials?: string | null): string {
+function buildGradingSystemPrompt(criteria: RubricCriteria[], tenantMaterials?: string | null, feedbackCorrections?: string | null): string {
   const sections: string[] = []
 
   // Layer 1: Core grading instructions
@@ -376,6 +411,16 @@ The following are this company's own scripts, processes, and standards. Use thes
 ${tenantMaterials}`)
   }
 
+  // Layer 4: Recent feedback corrections from users
+  if (feedbackCorrections) {
+    sections.push(`RECENT GRADING CORRECTIONS FROM USERS:
+The following feedback was submitted by managers on previous grades. Adjust your grading behavior accordingly:
+
+${feedbackCorrections}
+
+Use these corrections to calibrate your scoring. If users said scores were too high, be stricter. If they said criteria were wrong, pay closer attention to those areas.`)
+  }
+
   // Rubric criteria
   sections.push(`GRADING RUBRIC (score each category):
 ${criteria.map((c) => `- ${c.category} (max ${c.maxPoints} pts): ${c.description}`).join('\n')}
@@ -392,8 +437,35 @@ Response format:
   },
   "summary": "<2-3 sentence call summary>",
   "feedback": "<specific, actionable feedback paragraph>",
-  "coachingTips": ["<tip 1>", "<tip 2>", "<tip 3>"]
-}`)
+  "coachingTips": ["<tip 1>", "<tip 2>", "<tip 3>"],
+  "callType": "<one of: cold_call, qualification_call, admin_call, follow_up_call, offer_call, purchase_agreement_call, dispo_call — or null if the call type was already set>",
+  "callOutcome": "<one of: not_interested, interested, appointment_set, follow_up_scheduled, not_qualified, solved, not_solved, accepted, rejected, signed, not_signed, showing_scheduled, offer_collected — pick the HIGHEST priority outcome that actually occurred>",
+  "followUpScheduled": <boolean — true if a specific follow-up was agreed to, regardless of outcome>,
+  "keyMoments": [
+    {
+      "timestamp": "<MM:SS format — estimate from conversation flow if no exact timestamp>",
+      "type": "<objection_handled|appointment_set|price_discussion|rapport_building|red_flag|closing_attempt|motivation_revealed>",
+      "description": "<what happened at this moment>",
+      "quote": "<direct quote from transcript if available>"
+    }
+  ],
+  "sentiment": <number -1.0 to 1.0 — overall seller sentiment. Negative = hostile/frustrated, 0 = neutral, positive = warm/cooperative>,
+  "sellerMotivation": <number 0.0 to 1.0 — how motivated is the seller to sell? 0 = not at all, 1 = desperate to sell immediately. null if not a seller call>
+}
+
+CALL TYPE CLASSIFICATION RULES:
+- If the call type is already set in the metadata, set callType to null (don't override manual classification)
+- If NOT set, determine the type from the conversation content:
+  - cold_call: first contact, outbound, seller doesn't know the caller
+  - qualification_call: inbound lead or first meaningful conversation, qualifying fit
+  - admin_call: scheduling, updates, logistics, problem solving
+  - follow_up_call: re-engaging someone previously contacted
+  - offer_call: presenting a price/offer to buy the property
+  - purchase_agreement_call: walking through contract signing
+  - dispo_call: talking to a buyer/investor about a deal
+
+CALL OUTCOME PRIORITY (pick the highest that applies):
+accepted > signed > offer_collected > appointment_set > showing_scheduled > interested > follow_up_scheduled > not_interested > rejected > not_qualified > not_signed > not_solved > solved`)
 
   return sections.join('\n\n')
 }
@@ -469,6 +541,18 @@ function parseGradingResponse(text: string): GradingResult {
   }
 }
 
+// ─── Role-based call type fallback (tier 3 of 3-tier classification) ────────
+
+function inferCallTypeFromRole(role?: string): string {
+  switch (role) {
+    case 'LEAD_MANAGER': return 'qualification_call'
+    case 'ACQUISITION_MANAGER': return 'offer_call'
+    case 'DISPOSITION_MANAGER': return 'dispo_call'
+    case 'TEAM_LEAD': return 'follow_up_call'
+    default: return 'cold_call'
+  }
+}
+
 // ─── Default rubric ─────────────────────────────────────────────────────────
 
 function getDefaultRubric(role?: string): RubricCriteria[] {
@@ -514,4 +598,13 @@ export interface GradingResult {
   summary: string
   feedback: string
   coachingTips: string[]
+  // Auto-classification
+  callType: string | null
+  callOutcome: string | null
+  followUpScheduled: boolean
+  // Highlights with timestamps
+  keyMoments: Array<{ timestamp: string; type: string; description: string; quote?: string }>
+  // Sentiment & motivation
+  sentiment: number | null        // -1.0 to 1.0
+  sellerMotivation: number | null  // 0.0 to 1.0
 }

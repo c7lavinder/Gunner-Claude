@@ -25,7 +25,7 @@ export async function POST(
   const call = await db.call.findFirst({
     where: { id: params.id, tenantId: session.tenantId },
     select: {
-      id: true, aiSummary: true, calledAt: true, ghlCallId: true,
+      id: true, aiSummary: true, calledAt: true, ghlCallId: true, ghlContactId: true,
       property: {
         select: {
           id: true, address: true, ghlContactId: true,
@@ -36,10 +36,10 @@ export async function POST(
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
-  // Resolve contact ID from property's GHL contact or seller
-  const contactId = call.property?.ghlContactId
+  // Resolve contact ID: call's ghlContactId first, then property's
+  const contactId = call.ghlContactId ?? call.property?.ghlContactId
   if (!contactId) {
-    return NextResponse.json({ success: false, message: 'No GHL contact linked to this call\'s property' }, { status: 400 })
+    return NextResponse.json({ success: false, message: 'No GHL contact linked to this call' }, { status: 400 })
   }
 
   try {

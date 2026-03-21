@@ -96,6 +96,9 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     altId?: string
   }
 
+  // Log all incoming message types for debugging
+  console.log(`[GHL Webhook] Message: type=${msgData.messageType}, direction=${msgData.direction}, contact=${msgData.contactId}, hasAttachments=${!!(msgData.attachments?.length)}, hasRecording=${!!(msgData.recordingUrl || msgData.recording_url)}`)
+
   // Only process call messages — skip SMS, email, etc.
   if (msgData.messageType !== 'TYPE_CALL') return
 
@@ -168,13 +171,13 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     data: {
       tenantId,
       ghlCallId: dedupeId ?? undefined,
+      ghlContactId: msgData.contactId ?? undefined,
       assignedToId: user?.id,
       propertyId: property?.id,
       recordingUrl: recordingUrl ?? undefined,
       direction: direction as 'INBOUND' | 'OUTBOUND',
       durationSeconds: duration,
       calledAt: msgData.dateAdded ? new Date(msgData.dateAdded) : new Date(),
-      // 30-60s → SUMMARY_ONLY, 60s+ → PENDING for full grading
       gradingStatus: 'PENDING',
     },
   })

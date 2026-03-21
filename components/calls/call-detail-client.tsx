@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
+import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -213,8 +214,8 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* Info pills */}
           <div className="flex flex-wrap gap-1.5">
-            {call.callType && <Pill>{call.callType.replace(/_/g, ' ')}</Pill>}
-            {outcome && <Pill>{outcome.replace(/_/g, ' ')}</Pill>}
+            {call.callType && <Pill>{CALL_TYPES.find(ct => ct.id === call.callType)?.name ?? call.callType.replace(/_/g, ' ')}</Pill>}
+            {outcome && <Pill>{RESULT_NAMES[outcome] ?? outcome.replace(/_/g, ' ')}</Pill>}
             <Pill>{call.direction.toLowerCase()}</Pill>
             <Pill>{fmtDuration(call.durationSeconds)}</Pill>
             {call.assignedTo && <Pill>{call.assignedTo.name}</Pill>}
@@ -280,11 +281,11 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                 <Tag size={10} /> Reclassify
               </button>
               {reclassifying && (
-                <div className="absolute top-full left-0 mt-1 bg-[#1a1d27] border border-white/10 rounded-lg p-1 z-10 min-w-32">
-                  {['qualification', 'offer', 'cold_call', 'follow_up', 'admin', 'dispo'].map(t => (
-                    <button key={t} onClick={() => reclassify(t)}
+                <div className="absolute top-full left-0 mt-1 bg-[#1a1d27] border border-white/10 rounded-lg p-1 z-10 min-w-40">
+                  {CALL_TYPES.map(ct => (
+                    <button key={ct.id} onClick={() => reclassify(ct.id)}
                       className="block w-full text-left text-xs text-gray-300 hover:text-white hover:bg-white/5 px-3 py-1.5 rounded">
-                      {t.replace(/_/g, ' ')}
+                      {ct.name}
                     </button>
                   ))}
                 </div>

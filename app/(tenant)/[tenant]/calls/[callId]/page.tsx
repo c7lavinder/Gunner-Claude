@@ -2,6 +2,7 @@
 // Call detail — full data query including transcript, recording, all AI fields
 import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
+import { getGHLClient } from '@/lib/ghl/client'
 import { redirect, notFound } from 'next/navigation'
 import { CallDetailClient } from '@/components/calls/call-detail-client'
 import type { UserRole } from '@/types/roles'
@@ -43,6 +44,18 @@ export default async function CallDetailPage({
   const keyMoments = (call.keyMoments as Array<{ timestamp: string; type: string; description: string }> | null) ?? []
   const objections = (call.objections as Array<{ objection: string; response: string; handled: boolean }> | null) ?? []
 
+  // Resolve contact name from GHL if not available from property
+  let contactName = call.property?.sellers[0]?.seller.name ?? null
+  let contactPhone = call.property?.sellers[0]?.seller.phone ?? null
+  if (!contactName && call.ghlContactId) {
+    try {
+      const ghl = await getGHLClient(tenantId)
+      const contact = await ghl.getContact(call.ghlContactId)
+      contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || contact.email || null
+      contactPhone = contact.phone || contactPhone
+    } catch { /* GHL not connected */ }
+  }
+
   return (
     <CallDetailClient
       call={{
@@ -66,8 +79,8 @@ export default async function CallDetailPage({
         objections,
         rubricScores,
         coachingTips,
-        contactName: call.property?.sellers[0]?.seller.name ?? null,
-        contactPhone: call.property?.sellers[0]?.seller.phone ?? null,
+        contactName,
+        contactPhone,
         assignedTo: call.assignedTo,
         property: call.property ? {
           id: call.property.id,
