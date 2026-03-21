@@ -6,6 +6,7 @@
 import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
 import { gradeCall } from '../lib/ai/grading'
+import { syncGHLUsers } from '../lib/ghl/sync-users'
 
 async function pollCalls() {
   console.log('[poll-calls] Starting call poll...')
@@ -28,6 +29,12 @@ async function pollCalls() {
 
     for (const tenant of tenants) {
       try {
+        // Sync GHL user data (phone numbers, names) on every poll cycle
+        const syncResult = await syncGHLUsers(tenant.id)
+        if (syncResult.synced > 0) {
+          console.log(`[poll-calls] Synced ${syncResult.synced} user(s) from GHL for tenant ${tenant.id}`)
+        }
+
         const ghl = await getGHLClient(tenant.id)
 
         // Fetch recent conversations — filter to TYPE_CALL

@@ -22,7 +22,7 @@ interface TenantInfo {
   propertyTriggerStage: string
 }
 interface TeamMember {
-  id: string; name: string; email: string; role: string
+  id: string; name: string; email: string; phone: string | null; role: string
   reportsTo: string | null; ghlUserId: string | null; createdAt: string
 }
 interface GHLUserOption {
@@ -252,7 +252,14 @@ export function SettingsClient({
                       <span className="text-xs text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">you</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500">{member.email}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500">{member.email}</p>
+                    {member.phone && (
+                      <span className="text-xs text-gray-500">
+                        · <Phone size={10} className="inline mb-0.5" /> {member.phone}
+                      </span>
+                    )}
+                  </div>
                   {/* GHL user mapping */}
                   {canManage && tenant.ghlConnected && (
                     <div className="flex items-center gap-1.5 mt-1.5">

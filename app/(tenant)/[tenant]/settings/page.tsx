@@ -25,7 +25,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
     }),
     db.user.findMany({
       where: { tenantId },
-      select: { id: true, name: true, email: true, role: true, reportsTo: true, ghlUserId: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, role: true, reportsTo: true, ghlUserId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     }),
     db.callRubric.findMany({
@@ -56,6 +56,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         id: u.id,
         name: u.name,
         email: u.email,
+        phone: u.phone,
         role: u.role,
         reportsTo: u.reportsTo,
         ghlUserId: u.ghlUserId,
