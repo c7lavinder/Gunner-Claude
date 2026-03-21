@@ -132,8 +132,8 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     return
   }
 
-  // Deduplicate — check by conversationId or altId
-  const dedupeId = msgData.conversationId || msgData.altId
+  // Deduplicate — use altId (Twilio Call SID) as primary key, fall back to message ID
+  const dedupeId = msgData.altId || msgData.conversationId
   if (dedupeId) {
     const existing = await db.call.findFirst({
       where: { tenantId, ghlCallId: dedupeId },
@@ -153,9 +153,9 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     }
   }
 
-  // Find user in our system
+  // Find user in our system by GHL userId mapping
   const user = msgData.userId
-    ? await db.user.findFirst({ where: { tenantId } })
+    ? await db.user.findFirst({ where: { tenantId, ghlUserId: msgData.userId } })
     : null
 
   // Find linked property

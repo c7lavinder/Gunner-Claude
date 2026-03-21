@@ -287,8 +287,10 @@ async function checkAndAwardBadges(tenantId: string, userId: string): Promise<vo
   for (const badge of BADGE_DEFINITIONS) {
     if (existingBadges.has(badge.type)) continue
     if (badge.check(ctx)) {
-      await db.userBadge.create({
-        data: { tenantId, userId, badgeType: badge.type },
+      await db.userBadge.upsert({
+        where: { tenantId_userId_badgeType: { tenantId, userId, badgeType: badge.type } },
+        create: { tenantId, userId, badgeType: badge.type },
+        update: {},
       })
     }
   }

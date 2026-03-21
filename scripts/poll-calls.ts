@@ -1,12 +1,29 @@
 // scripts/poll-calls.ts
 // Polling fallback for call grading — runs every 60s via Railway cron
-// GHL has no /calls list endpoint for Marketplace Apps
-// Instead: fetch recent conversations of TYPE_CALL and grade unprocessed ones
+// Iterates individual call MESSAGES within GHL conversations (not 1-per-conversation)
+// Recording URLs come via webhook, not polling — this captures metadata + triggers grading
 
 import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
 import { gradeCall } from '../lib/ai/grading'
 import { syncGHLUsers } from '../lib/ghl/sync-users'
+
+interface GHLMessage {
+  id: string
+  direction: string
+  status: string
+  type: number
+  contactId: string
+  conversationId: string
+  userId?: string
+  dateAdded: string
+  dateUpdated?: string
+  meta?: { call?: { duration?: number; status?: string } }
+  altId?: string
+  from?: string
+  to?: string
+  messageType: string
+}
 
 async function pollCalls() {
   console.log('[poll-calls] Starting call poll...')
@@ -17,7 +34,7 @@ async function pollCalls() {
         ghlAccessToken: { not: null },
         ghlLocationId: { not: null },
       },
-      select: { id: true, ghlLocationId: true },
+      select: { id: true, ghlLocationId: true, ghlAccessToken: true },
     })
 
     if (tenants.length === 0) {
@@ -37,77 +54,103 @@ async function pollCalls() {
 
         const ghl = await getGHLClient(tenant.id)
 
-        // Fetch recent conversations — filter to TYPE_CALL
-        const result = await ghl.getConversations({ limit: 50 })
-        const callConversations = (result.conversations ?? []).filter(
-          (c) => c.lastMessageType === 'TYPE_CALL'
-        )
-
-        if (callConversations.length === 0) {
-          console.log(`[poll-calls] No call conversations for tenant ${tenant.id}`)
-          continue
-        }
-
         // Pre-fetch all users with GHL mappings for this tenant
         const tenantUsers = await db.user.findMany({
-          where: { tenantId: tenant.id },
+          where: { tenantId: tenant.id, ghlUserId: { not: null } },
           select: { id: true, ghlUserId: true },
         })
 
-        for (const conv of callConversations) {
-          // Skip if we already have this conversation as a call
-          const existing = await db.call.findFirst({
-            where: {
-              tenantId: tenant.id,
-              ghlCallId: conv.id,
-            },
-            select: { id: true },
-          })
+        // Fetch recent conversations (all types — we'll filter messages inside)
+        const result = await ghl.getConversations({ limit: 50 })
+        const conversations = result.conversations ?? []
 
-          if (existing) continue
+        if (conversations.length === 0) {
+          console.log(`[poll-calls] No conversations for tenant ${tenant.id}`)
+          continue
+        }
 
-          // Match to user: try GHL userId from conversation, fall back to first user
-          const ghlUserId = conv.userId ?? conv.assignedTo
-          const user = (ghlUserId && tenantUsers.find(u => u.ghlUserId === ghlUserId))
-            || tenantUsers[0]
-            || null
+        // For each conversation, fetch messages and find call messages
+        for (const conv of conversations) {
+          try {
+            const headers = {
+              'Authorization': `Bearer ${tenant.ghlAccessToken}`,
+              'Content-Type': 'application/json',
+              'Version': '2021-07-28',
+            }
 
-          // Determine call direction from conversation
-          const direction = conv.lastMessageDirection === 'inbound' ? 'INBOUND' : 'OUTBOUND'
+            const msgRes = await fetch(
+              `https://services.leadconnectorhq.com/conversations/${conv.id}/messages`,
+              { headers }
+            )
+            if (!msgRes.ok) continue
 
-          // Extract duration if available
-          const convDuration =
-            (conv as unknown as { durationSeconds?: number; duration?: number }).durationSeconds
-            ?? (conv as unknown as { durationSeconds?: number; duration?: number }).duration
-            ?? null
+            const msgData = await msgRes.json() as { messages?: { messages?: GHLMessage[] } }
+            const messages = msgData.messages?.messages ?? []
 
-          // Skip no-answer/short calls before creating a record
-          if (convDuration !== null && convDuration < 45) {
-            console.log(`[poll-calls] Skipping short/no-answer call (${convDuration}s) for conv ${conv.id}`)
+            // Filter to call messages only
+            const callMessages = messages.filter(m => m.messageType === 'TYPE_CALL')
+
+            for (const msg of callMessages) {
+              const duration = msg.meta?.call?.duration ?? 0
+              const callStatus = msg.meta?.call?.status ?? ''
+
+              // Skip no-answer / very short calls
+              if (duration < 45) continue
+
+              // Use message ID as the unique identifier (not conversation ID)
+              const ghlCallId = msg.altId || msg.id
+
+              // Check if we already have this call
+              const existing = await db.call.findFirst({
+                where: {
+                  tenantId: tenant.id,
+                  OR: [
+                    { ghlCallId },
+                    // Also check by altId in case it was stored differently
+                    ...(msg.altId ? [{ ghlCallId: msg.altId }] : []),
+                    ...(msg.id !== ghlCallId ? [{ ghlCallId: msg.id }] : []),
+                  ],
+                },
+                select: { id: true },
+              })
+
+              if (existing) continue
+
+              // Match to user by GHL userId
+              const ghlUserId = msg.userId || conv.userId || conv.assignedTo
+              const user = ghlUserId
+                ? tenantUsers.find(u => u.ghlUserId === ghlUserId)
+                : null
+
+              const direction = msg.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND'
+              const contactName = conv.contactName || conv.fullName || null
+
+              // Create the call record
+              const newCall = await db.call.create({
+                data: {
+                  tenantId: tenant.id,
+                  ghlCallId,
+                  ghlContactId: msg.contactId ?? conv.contactId ?? null,
+                  assignedToId: user?.id ?? null,
+                  direction: direction as 'INBOUND' | 'OUTBOUND',
+                  durationSeconds: duration,
+                  calledAt: new Date(msg.dateAdded || Date.now()),
+                  gradingStatus: 'PENDING',
+                },
+              })
+
+              totalNewCalls++
+              console.log(`[poll-calls] New call: ${newCall.id} (msg: ${msg.id}, contact: ${contactName ?? conv.phone}, dur: ${duration}s) for tenant ${tenant.id}`)
+
+              // Trigger grading — fire and forget
+              gradeCall(newCall.id).catch((err) => {
+                console.error(`[poll-calls] Grading failed for call ${newCall.id}:`, err instanceof Error ? err.message : err)
+              })
+            }
+          } catch (err) {
+            // Skip conversations that error (e.g. deleted contacts)
             continue
           }
-
-          // Create the call record
-          const newCall = await db.call.create({
-            data: {
-              tenantId: tenant.id,
-              ghlCallId: conv.id,
-              ghlContactId: conv.contactId ?? null,
-              assignedToId: user?.id ?? null,
-              direction: direction as 'INBOUND' | 'OUTBOUND',
-              calledAt: new Date(conv.lastMessageDate || conv.dateUpdated || Date.now()),
-              durationSeconds: convDuration ?? undefined,
-              gradingStatus: 'PENDING',
-            },
-          })
-
-          totalNewCalls++
-          console.log(`[poll-calls] New call: ${newCall.id} (conv: ${conv.id}, contact: ${conv.contactName || conv.phone}) for tenant ${tenant.id}`)
-
-          // Trigger grading — fire and forget
-          gradeCall(newCall.id).catch((err) => {
-            console.error(`[poll-calls] Grading failed for call ${newCall.id}:`, err instanceof Error ? err.message : err)
-          })
         }
       } catch (err) {
         console.error(`[poll-calls] Error polling tenant ${tenant.id}:`, err instanceof Error ? err.message : err)
