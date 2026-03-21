@@ -109,35 +109,35 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
 
   if (!isCall) return // skip SMS, email, chat
 
-  // Extract call metadata — check multiple field locations
+  // Extract what we can from the webhook — duration/status may NOT be present
   const callDuration = msg.callDuration ?? msg.meta?.call?.duration ?? 0
   const callStatus = (msg.callStatus ?? msg.meta?.call?.status ?? '').toLowerCase()
   const direction = (msg.direction ?? '').toLowerCase() === 'inbound' ? 'INBOUND' : 'OUTBOUND'
   const messageId = msg.id ?? msg.messageId ?? msg.altId ?? ''
+  const recordingUrl = extractRecordingUrl(msg)
 
-  console.log(`[GHL Webhook] Call: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}`)
+  console.log(`[GHL Webhook] Call: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}, recording=${!!recordingUrl}`)
 
-  // Filter: must be completed and over 45 seconds
-  if (callStatus !== 'completed' || callDuration < 45) {
-    // Log dial attempts for AM/PM tracking
-    if (callDuration < 45) {
-      await db.auditLog.create({
-        data: {
-          tenantId,
-          action: 'call.dial_attempt',
-          resource: 'call',
-          source: 'GHL_WEBHOOK',
-          severity: 'INFO',
-          payload: {
-            messageId,
-            contactId: msg.contactId,
-            duration: callDuration,
-            status: callStatus,
-            direction: msg.direction,
-          } as unknown as Prisma.InputJsonValue,
-        },
-      })
-    }
+  // GHL webhooks often DON'T include duration/status — only attachments (recording URL).
+  // If we have a recording URL, this is a real call — process it regardless of duration field.
+  // If NO recording and duration < 45, it's a dial attempt.
+  if (!recordingUrl && callDuration < 45) {
+    await db.auditLog.create({
+      data: {
+        tenantId,
+        action: 'call.dial_attempt',
+        resource: 'call',
+        source: 'GHL_WEBHOOK',
+        severity: 'INFO',
+        payload: {
+          messageId,
+          contactId: msg.contactId,
+          duration: callDuration,
+          status: callStatus,
+          direction: msg.direction,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    })
     return
   }
 
@@ -170,26 +170,41 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     ? await db.property.findFirst({ where: { tenantId, ghlContactId: msg.contactId } })
     : null
 
-  // Check if recording URL was included in the webhook payload
-  const immediateRecordingUrl = extractRecordingUrl(msg)
+  // Resolve contact name
+  let contactName: string | null = null
+  if (msg.contactId) {
+    try {
+      const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { ghlAccessToken: true } })
+      if (tenant?.ghlAccessToken) {
+        const cRes = await fetch(`https://services.leadconnectorhq.com/contacts/${msg.contactId}`, {
+          headers: { 'Authorization': `Bearer ${tenant.ghlAccessToken}`, 'Version': '2021-04-15' },
+        })
+        if (cRes.ok) {
+          const cData = await cRes.json() as { contact?: { firstName?: string; lastName?: string } }
+          contactName = `${cData.contact?.firstName ?? ''} ${cData.contact?.lastName ?? ''}`.trim() || null
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
 
-  // Create call record
+  // Create call record — recording URL comes from attachments in webhook
   const call = await db.call.create({
     data: {
       tenantId,
       ghlCallId: dedupeId || messageId || undefined,
       ghlContactId: msg.contactId ?? undefined,
+      contactName,
       assignedToId: user?.id,
       propertyId: property?.id,
-      recordingUrl: immediateRecordingUrl ?? undefined,
+      recordingUrl: recordingUrl ?? undefined,
       direction: direction as 'INBOUND' | 'OUTBOUND',
-      durationSeconds: callDuration,
+      durationSeconds: callDuration || undefined, // may be 0 from webhook, real duration comes later
       calledAt: msg.dateAdded ? new Date(msg.dateAdded) : new Date(),
       gradingStatus: 'PENDING',
     },
   })
 
-  console.log(`[GHL Webhook] Created call ${call.id}: ${callDuration}s, recording=${!!immediateRecordingUrl}`)
+  console.log(`[GHL Webhook] Created call ${call.id}: recording=${!!recordingUrl}, contact=${contactName}`)
 
   await db.auditLog.create({
     data: {
@@ -203,15 +218,42 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
         ghlCallId: dedupeId,
         messageId,
         duration: callDuration,
-        hasImmediateRecording: !!immediateRecordingUrl,
+        hasRecording: !!recordingUrl,
         contactId: msg.contactId,
+        contactName,
       } as unknown as Prisma.InputJsonValue,
     },
   })
 
+  // If recording URL available (from attachments), transcribe immediately
+  // Twilio recording URLs are public — no auth needed for Deepgram
+  if (recordingUrl) {
+    // Transcribe and grade immediately (recording is already available)
+    import('../ai/transcribe').then(({ transcribeRecording }) =>
+      transcribeRecording(recordingUrl!).then(async trans => {
+        if (trans.status === 'success' && trans.transcript) {
+          await db.call.update({
+            where: { id: call.id },
+            data: {
+              transcript: trans.transcript,
+              ...(trans.duration ? { durationSeconds: trans.duration } : {}),
+            },
+          })
+          console.log(`[GHL Webhook] Transcribed call ${call.id}: ${trans.transcript.length} chars`)
+        }
+        // Grade with or without transcript
+        return gradeCall(call.id)
+      }).catch(err => {
+        console.error(`[GHL Webhook] Transcription/grading failed for ${call.id}:`, err instanceof Error ? err.message : err)
+        // Grade without transcript as fallback
+        gradeCall(call.id).catch(() => {})
+      })
+    ).catch(() => {})
+    return
+  }
+
   // If no recording URL in the payload, fetch it after 90 second delay
-  // GHL needs time to process the recording after the call ends
-  if (!immediateRecordingUrl && messageId) {
+  if (!recordingUrl && messageId) {
     console.log(`[GHL Webhook] Scheduling recording fetch in 90s for call ${call.id} (msg: ${messageId})`)
     setTimeout(() => {
       fetchAndStoreRecording(call.id, messageId)
