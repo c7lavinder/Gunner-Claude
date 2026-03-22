@@ -20,7 +20,7 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
   return (
     <div className="min-h-screen bg-surface-primary">
       <TopNav tenantSlug={params.tenant} />
-      <main className="px-8 py-6 max-w-[1400px] mx-auto">
+      <main className="px-4 md:px-8 py-4 md:py-6 max-w-[1400px] mx-auto">
         {children}
       </main>
     </div>

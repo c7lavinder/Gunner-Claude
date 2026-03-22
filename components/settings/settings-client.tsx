@@ -468,6 +468,8 @@ export function SettingsClient({
               existingRubrics={rubrics}
             />
           </div>
+
+          {canManage && <BulkRegradeButton tenantSlug={tenant.slug} />}
         </div>
       )}
 
@@ -956,6 +958,73 @@ function WorkflowsTab({ canManage }: { canManage: boolean }) {
               </span>
             </div>
           ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Bulk Re-grade Button ──────────────────────────────────────────────────
+
+function BulkRegradeButton({ tenantSlug }: { tenantSlug: string }) {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+  const [confirmed, setConfirmed] = useState(false)
+
+  const handleRegrade = useCallback(async () => {
+    if (!confirmed) {
+      setConfirmed(true)
+      return
+    }
+    setLoading(true)
+    setResult(null)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/bulk-regrade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json() as { message?: string; queued?: number }
+      setResult(data.message ?? `${data.queued ?? 0} calls queued`)
+    } catch {
+      setResult('Failed to start re-grade')
+    } finally {
+      setLoading(false)
+      setConfirmed(false)
+    }
+  }, [confirmed, tenantSlug])
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
+      <h2 className="text-ds-label font-medium text-txt-primary mb-1">Bulk re-grade</h2>
+      <p className="text-ds-fine text-txt-secondary mb-4">
+        Re-grade all transcribed calls with updated rubrics and grading materials. This runs in the background.
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleRegrade}
+          disabled={loading}
+          className={`text-ds-body font-semibold px-4 py-2 rounded-[10px] transition-colors ${
+            confirmed
+              ? 'bg-semantic-red text-white hover:bg-semantic-red/90'
+              : 'bg-gunner-red text-white hover:bg-gunner-red-dark'
+          } disabled:opacity-40`}
+        >
+          {loading ? (
+            <span className="flex items-center gap-1.5"><Loader2 size={14} className="animate-spin" /> Processing...</span>
+          ) : confirmed ? (
+            'Confirm re-grade all calls'
+          ) : (
+            'Re-grade all calls'
+          )}
+        </button>
+        {confirmed && !loading && (
+          <button onClick={() => setConfirmed(false)} className="text-ds-body text-txt-secondary hover:text-txt-primary">
+            Cancel
+          </button>
+        )}
+        {result && (
+          <span className="text-ds-body text-semantic-green font-medium">{result}</span>
         )}
       </div>
     </div>

@@ -3,6 +3,7 @@
 > You are a Production Systems Engineer, not a chatbot.
 > Read this ENTIRE file before touching any code.
 > Rules + orientation only. Status → PROGRESS.md. Architecture → docs/ARCHITECTURE.md. Agent standards → AGENTS.md.
+> See docs/GUNNER_DAYHUB_CALLS_PROMPT.md for Day Hub + Calls full spec.
 
 ---
 

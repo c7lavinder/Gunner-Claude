@@ -5,7 +5,7 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import type { GHLTaskItem } from '@/lib/ghl/client'
 import { Prisma } from '@prisma/client'
-import { TasksClient, type EnrichedTask } from '@/components/tasks/tasks-client'
+import { DayHubClient, type EnrichedTask } from './day-hub-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
 import { startOfDay, differenceInDays, isPast, isToday } from 'date-fns'
@@ -207,7 +207,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
   }
 
   return (
-    <TasksClient
+    <DayHubClient
       tasks={enrichedTasks}
       isAdmin={isAdmin}
       tenantSlug={params.tenant}

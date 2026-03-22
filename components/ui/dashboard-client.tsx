@@ -57,7 +57,7 @@ export function DashboardClient({ data, tenantSlug }: { data: DashboardData; ten
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   return (
-    <div className="space-y-8 max-w-7xl">
+    <div className="space-y-6 sm:space-y-8 max-w-7xl">
       {/* Header */}
       <div>
         <h1 className="text-ds-page font-semibold text-txt-primary">
@@ -329,13 +329,13 @@ function KpiCard({ icon, label, value, sub, semantic }: { icon: React.ReactNode;
   const cls = iconStyles[semantic] ?? iconStyles.red
 
   return (
-    <div className="bg-surface-primary border-[0.5px] border-[var(--border-light)] rounded-[14px] px-5 py-4 transition-all duration-150 hover:shadow-ds-float hover:border-[var(--border-medium)]">
+    <div className="bg-surface-primary border-[0.5px] border-[var(--border-light)] rounded-[14px] px-3 py-3 sm:px-5 sm:py-4 transition-all duration-150 hover:shadow-ds-float hover:border-[var(--border-medium)]">
       <div className={`w-8 h-8 rounded-[6px] flex items-center justify-center mb-3 ${cls}`}>
         {icon}
       </div>
       <p className="text-ds-hero font-semibold text-txt-primary">{value}</p>
       <p className="text-ds-fine text-txt-secondary mt-1">{label}</p>
-      {sub && <p className="text-ds-fine text-txt-muted mt-0.5">{sub}</p>}
+      {sub && <p className="text-ds-fine text-txt-muted mt-0.5 hidden sm:block">{sub}</p>}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 // components/calls/call-detail-client.tsx
-// Two-column call detail: grade + audio + highlights | 4 tabs
-// Redesigned to match docs/DESIGN.md — light theme, no gradients, no heavy shadows
+// Call detail — matches getgunner.ai design
+// Layout: [Header + pills] → [Grade+Strengths (33%) | 4 Tabs (67%)]
 
 import { useState, useRef, useTransition } from 'react'
 import Link from 'next/link'
@@ -10,12 +10,14 @@ import {
   ArrowLeft, Phone, Clock, Star, Lightbulb, FileText, Zap, Search, Mic,
   CheckCircle, Send, ChevronRight, ShieldCheck, CalendarCheck, DollarSign,
   Heart, AlertTriangle, Target, RotateCcw, Tag, MessageSquare, X, Loader2,
+  User, MapPin, Clipboard, PhoneOutgoing, PhoneIncoming, Plus, RefreshCw,
+  Play, Pause, SkipBack, SkipForward, Volume2, ChevronDown,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 interface RubricScore { score: number; maxScore: number; notes: string }
 interface KeyMoment { timestamp: string; type: string; description: string }
@@ -38,23 +40,20 @@ interface CallDetail {
 
 type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps'
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-function scoreColor(score: number | null): { text: string; bg: string; circle: string } {
-  if (score === null) return { text: 'text-txt-muted', bg: 'bg-surface-tertiary', circle: 'bg-[#9B9A94]' }
-  if (score >= 90) return { text: 'text-semantic-green', bg: 'bg-semantic-green-bg', circle: 'bg-semantic-green' }
-  if (score >= 80) return { text: 'text-semantic-amber', bg: 'bg-semantic-amber-bg', circle: 'bg-semantic-amber' }
-  if (score >= 70) return { text: 'text-semantic-blue', bg: 'bg-semantic-blue-bg', circle: 'bg-semantic-blue' }
-  return { text: 'text-semantic-red', bg: 'bg-semantic-red-bg', circle: 'bg-semantic-red' }
+interface NextStep {
+  type: string; label: string; reasoning: string
+  status: 'pending' | 'pushed' | 'skipped'
+  pushedAt?: string
 }
 
-function gradeLetter(score: number | null): string {
-  if (score === null) return '\u2014'
-  if (score >= 90) return 'A'
-  if (score >= 80) return 'B'
-  if (score >= 70) return 'C'
-  if (score >= 60) return 'D'
-  return 'F'
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function gradeInfo(score: number | null): { letter: string; color: string; glow: string; bg: string } {
+  if (score === null) return { letter: '\u2014', color: 'bg-[#9B9A94]', glow: '', bg: 'bg-surface-tertiary' }
+  if (score >= 90) return { letter: 'A', color: 'bg-[#22c55e]', glow: 'shadow-[0_0_20px_rgba(34,197,94,0.3)]', bg: 'bg-[#22c55e]/5' }
+  if (score >= 80) return { letter: 'B', color: 'bg-semantic-blue', glow: 'shadow-[0_0_20px_rgba(24,95,165,0.3)]', bg: 'bg-semantic-blue/5' }
+  if (score >= 70) return { letter: 'C', color: 'bg-semantic-amber', glow: 'shadow-[0_0_20px_rgba(186,117,23,0.3)]', bg: 'bg-semantic-amber/5' }
+  return { letter: score >= 60 ? 'D' : 'F', color: 'bg-semantic-red', glow: 'shadow-[0_0_20px_rgba(163,45,45,0.3)]', bg: 'bg-semantic-red/5' }
 }
 
 function fmtDuration(s: number | null): string {
@@ -78,7 +77,16 @@ const MOMENT_ICONS: Record<string, typeof Star> = {
   closing_attempt: Target, motivation_revealed: Lightbulb,
 }
 
-// ─── Main component ────────────────────────────────────────────────────────
+const STEP_ICONS: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
+  check_off_task: { icon: CheckCircle, color: 'text-semantic-green', bg: 'bg-semantic-green-bg' },
+  create_appointment: { icon: CalendarCheck, color: 'text-[#e11d48]', bg: 'bg-[#ffe4e6]' },
+  change_stage: { icon: RefreshCw, color: 'text-semantic-amber', bg: 'bg-semantic-amber-bg' },
+  add_note: { icon: FileText, color: 'text-semantic-blue', bg: 'bg-semantic-blue-bg' },
+  send_sms: { icon: Send, color: 'text-[#0d9488]', bg: 'bg-[#ccfbf1]' },
+  create_task: { icon: CheckCircle, color: 'text-semantic-purple', bg: 'bg-semantic-purple-bg' },
+}
+
+// ─── Main component ─────────────────────────────────────────────────────────
 
 export function CallDetailClient({ call, tenantSlug, isOwn }: {
   call: CallDetail; tenantSlug: string; isOwn: boolean
@@ -90,51 +98,61 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [tab, setTab] = useState<Tab>('coaching')
   const [searchQuery, setSearchQuery] = useState('')
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
   const [showFeedback, setShowFeedback] = useState(false)
   const [reclassifying, setReclassifying] = useState(false)
-  const [settingOutcome, setSettingOutcome] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [generatedSteps, setGeneratedSteps] = useState<Array<{ type: string; label: string; reasoning: string }>>([])
+  const [generatedSteps, setGeneratedSteps] = useState<NextStep[]>([])
   const [generatingSteps, setGeneratingSteps] = useState(false)
+  const [expandedReasons, setExpandedReasons] = useState<Set<number>>(new Set())
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  const { text: scoreTextColor, bg: scoreBgColor, circle: scoreCircleColor } = scoreColor(call.score)
-  const letter = gradeLetter(call.score)
+  const grade = gradeInfo(call.score)
   const outcome = call.callOutcome ?? call.property?.status ?? null
 
-  const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
+  // Extract strengths from AI feedback (first few positive points)
+  const strengths = (call.aiFeedback ?? '')
+    .split(/\n|\.(?=\s)/)
+    .filter(s => s.trim().length > 20)
+    .slice(0, 4)
+
+  const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: 'coaching', label: 'Coaching', icon: <Lightbulb size={14} /> },
-    { id: 'criteria', label: 'Criteria', icon: <Star size={14} /> },
+    { id: 'criteria', label: 'Criteria', icon: <Target size={14} /> },
     { id: 'transcript', label: 'Transcript', icon: <FileText size={14} /> },
-    { id: 'next-steps', label: 'Next Steps', icon: <Zap size={14} /> },
+    { id: 'next-steps', label: 'Next Steps', icon: <Zap size={14} />, badge: generatedSteps.filter(s => s.status === 'pending').length || undefined },
   ]
 
   function seekTo(timestamp: string) {
     if (audioRef.current) {
       audioRef.current.currentTime = parseTimestamp(timestamp)
       audioRef.current.play()
+      setIsPlaying(true)
     }
   }
 
-  function changeSpeed(rate: number) {
-    setPlaybackRate(rate)
-    if (audioRef.current) audioRef.current.playbackRate = rate
+  function togglePlay() {
+    if (!audioRef.current) return
+    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false) }
+    else { audioRef.current.play(); setIsPlaying(true) }
+  }
+
+  function changeSpeed() {
+    const speeds = [0.5, 1, 1.5, 2]
+    const next = speeds[(speeds.indexOf(playbackRate) + 1) % speeds.length]
+    setPlaybackRate(next)
+    if (audioRef.current) audioRef.current.playbackRate = next
   }
 
   async function reprocess() {
-    if (!window.confirm('Re-process this call? It will be re-graded from scratch.')) return
+    if (!window.confirm('Re-process this call? It will be re-graded.')) return
     setActionLoading('reprocess')
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/reprocess`, { method: 'POST' })
-      if (res.ok) {
-        toast('Call queued for re-grading', 'success')
-        startTransition(() => router.refresh())
-      } else {
-        toast('Failed to reprocess — please try again', 'error')
-      }
-    } catch {
-      toast('Failed to reprocess — please try again', 'error')
-    }
+      if (res.ok) { toast('Call queued for re-grading', 'success'); startTransition(() => router.refresh()) }
+      else toast('Failed to reprocess', 'error')
+    } catch { toast('Failed to reprocess', 'error') }
     setActionLoading(null)
   }
 
@@ -146,35 +164,9 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ callType }),
       })
-      if (res.ok) {
-        toast(`Reclassified as ${callType.replace(/_/g, ' ')}`, 'success')
-        startTransition(() => router.refresh())
-      } else {
-        toast('Failed to reclassify — please try again', 'error')
-      }
-    } catch {
-      toast('Failed to reclassify — please try again', 'error')
-    }
-    setActionLoading(null)
-  }
-
-  async function setOutcome(outcome: string) {
-    setSettingOutcome(false)
-    setActionLoading('outcome')
-    try {
-      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/reclassify`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callOutcome: outcome }),
-      })
-      if (res.ok) {
-        toast(`Outcome set to ${RESULT_NAMES[outcome] ?? outcome}`, 'success')
-        startTransition(() => router.refresh())
-      } else {
-        toast('Failed to set outcome', 'error')
-      }
-    } catch {
-      toast('Failed to set outcome', 'error')
-    }
+      if (res.ok) { toast(`Reclassified as ${callType.replace(/_/g, ' ')}`, 'success'); startTransition(() => router.refresh()) }
+      else toast('Failed to reclassify', 'error')
+    } catch { toast('Failed to reclassify', 'error') }
     setActionLoading(null)
   }
 
@@ -185,516 +177,527 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
       if (res.ok) {
         const data = await res.json()
         if (data.steps) {
-          setGeneratedSteps(data.steps)
+          setGeneratedSteps(data.steps.map((s: { type: string; label: string; reasoning: string }) => ({ ...s, status: 'pending' as const })))
           toast('Next steps generated', 'success')
         }
-      } else {
-        toast('Failed to generate next steps', 'error')
-      }
-    } catch {
-      toast('Failed to generate next steps', 'error')
-    }
+      } else toast('Failed to generate next steps', 'error')
+    } catch { toast('Failed to generate next steps', 'error') }
     setGeneratingSteps(false)
   }
 
-  const QUICK_ACTION_MESSAGES: Record<string, { success: string; error: string }> = {
-    add_note: { success: 'Note added to GHL', error: 'Failed to add note' },
-    create_task: { success: 'Follow-up task created', error: 'Failed to create task' },
-    send_sms: { success: 'SMS sent', error: 'SMS feature coming soon' },
-  }
-
-  async function quickAction(type: string) {
-    setActionLoading(type)
+  async function pushStep(index: number) {
+    const step = generatedSteps[index]
+    if (!step) return
+    setActionLoading(`step-${index}`)
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ type: step.type }),
       })
-      const data = await res.json()
-      if (res.ok && data.success) {
-        toast(QUICK_ACTION_MESSAGES[type]?.success ?? 'Action completed', 'success')
-      } else {
-        toast(data.message ?? QUICK_ACTION_MESSAGES[type]?.error ?? 'Action failed', 'error')
-      }
-    } catch {
-      toast(QUICK_ACTION_MESSAGES[type]?.error ?? 'Action failed', 'error')
-    }
+      if (res.ok) {
+        setGeneratedSteps(prev => prev.map((s, i) => i === index ? { ...s, status: 'pushed' as const, pushedAt: new Date().toISOString() } : s))
+        toast('Action pushed to CRM', 'success')
+      } else toast('Failed to push action', 'error')
+    } catch { toast('Failed to push action', 'error') }
     setActionLoading(null)
   }
 
+  function skipStep(index: number) {
+    setGeneratedSteps(prev => prev.map((s, i) => i === index ? { ...s, status: 'skipped' as const } : s))
+  }
+
+  function toggleReason(index: number) {
+    setExpandedReasons(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+
   return (
-    <div className="space-y-5">
-      {/* Back */}
-      <Link
-        href={`/${tenantSlug}/calls`}
-        className="inline-flex items-center gap-1.5 text-ds-body text-txt-secondary hover:text-txt-primary transition-colors"
-      >
-        <ArrowLeft size={14} /> Back to calls
-      </Link>
+    <div className="space-y-5 -mx-4 md:-mx-8 -my-4 md:-my-6 px-4 md:px-8 py-4 md:py-6">
+      {/* ── HEADER ────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <Link
+          href={`/${tenantSlug}/calls`}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary transition-all"
+          style={{ borderColor: 'var(--border-medium)' }}
+        >
+          <ArrowLeft size={14} /> Back
+        </Link>
 
-      {/* Two-column layout */}
-      <div className="grid md:grid-cols-5 gap-6">
-        {/* ── LEFT COLUMN (2/5) ─────────────────────────────────── */}
-        <div className="md:col-span-2 space-y-4">
-          {/* Grade display */}
-          <div
-            className={`${scoreBgColor} border rounded-[14px] p-6 text-center`}
-            style={{ borderColor: 'var(--border-light)' }}
+        <h1 className="text-[24px] font-semibold text-txt-primary">
+          {call.contactName ?? 'Unknown Contact'}
+        </h1>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowFeedback(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-txt-primary transition-all"
+            style={{ borderColor: 'var(--border-medium)' }}
           >
-            {/* Score circle — 40px round, colored by score */}
-            <div
-              className={`${scoreCircleColor} w-10 h-10 rounded-full flex items-center justify-center mx-auto`}
-            >
-              <span className="text-ds-body font-semibold text-white">{letter}</span>
-            </div>
-            <p className="text-ds-section font-semibold text-txt-primary mt-3">
-              {call.score !== null ? `${Math.round(call.score)}` : '\u2014'}
-              <span className="text-ds-body font-normal text-txt-muted"> / 100</span>
-            </p>
-            <p className="text-ds-fine text-txt-muted mt-1">
-              {call.score !== null ? 'Overall Score' : 'Not graded'}
-            </p>
-          </div>
-
-          {/* Info pills — 11px, font-weight 500, pill shape */}
-          <div className="flex flex-wrap gap-1.5">
-            {call.callType && (
-              <Pill>{CALL_TYPES.find(ct => ct.id === call.callType)?.name ?? call.callType.replace(/_/g, ' ')}</Pill>
-            )}
-            {outcome && <Pill>{RESULT_NAMES[outcome] ?? outcome.replace(/_/g, ' ')}</Pill>}
-            <Pill>{call.direction.toLowerCase()}</Pill>
-            <Pill>{fmtDuration(call.durationSeconds)}</Pill>
-            {call.assignedTo && <Pill>{call.assignedTo.name}</Pill>}
-            <Pill>{format(new Date(call.calledAt), 'MMM d, h:mm a')}</Pill>
-          </div>
-
-          {/* Property link */}
-          {call.property ? (
-            <Link
-              href={`/${tenantSlug}/inventory/${call.property.id}`}
-              className="block bg-surface-primary border rounded-[14px] px-4 py-3 transition-all hover:shadow-ds-float"
-              style={{ borderColor: 'var(--border-light)' }}
-            >
-              <p className="text-ds-fine text-txt-muted">Property</p>
-              <p className="text-ds-body text-txt-primary mt-0.5">
-                {call.property.address}, {call.property.city} {call.property.state}
-              </p>
-              {call.property.sellerName && (
-                <p className="text-ds-fine text-txt-muted mt-0.5">{call.property.sellerName}</p>
-              )}
-            </Link>
-          ) : (
-            <p className="text-ds-fine text-txt-muted px-1">No property linked</p>
-          )}
-
-          {/* Audio player */}
-          {call.recordingUrl && (
-            <div
-              className="bg-surface-primary border rounded-[14px] p-4 space-y-3"
-              style={{ borderColor: 'var(--border-light)' }}
-            >
-              <audio ref={audioRef} controls src={call.recordingUrl} className="w-full h-8" />
-              <div className="flex gap-1.5">
-                {[0.5, 1, 1.25, 1.5, 2].map(rate => (
-                  <button
-                    key={rate}
-                    onClick={() => changeSpeed(rate)}
-                    className={`text-ds-fine px-2 py-1 rounded-[10px] transition-colors ${
-                      playbackRate === rate
-                        ? 'bg-gunner-red text-white'
-                        : 'bg-surface-secondary text-txt-secondary hover:text-txt-primary'
-                    }`}
-                  >
-                    {rate}x
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Key moments / highlights */}
-          {call.keyMoments.length > 0 && (
-            <div
-              className="bg-surface-primary border rounded-[14px] p-4"
-              style={{ borderColor: 'var(--border-light)' }}
-            >
-              <p className="text-ds-fine text-txt-muted mb-2">Key Moments</p>
-              <div className="flex flex-wrap gap-1.5">
-                {call.keyMoments.map((m, i) => {
-                  const Icon = MOMENT_ICONS[m.type] ?? Zap
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => seekTo(m.timestamp)}
-                      className="flex items-center gap-1 text-ds-fine bg-surface-secondary border rounded-[6px] px-2 py-1.5 text-txt-secondary hover:text-txt-primary transition-colors"
-                      style={{ borderColor: 'var(--border-light)' }}
-                    >
-                      <Icon size={10} className="text-gunner-red shrink-0" />
-                      <span className="text-txt-muted">{m.timestamp}</span>
-                      <span className="truncate max-w-24">{m.description}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Actions — secondary button style */}
-          <div className="flex flex-wrap gap-2">
+            <MessageSquare size={13} /> Feedback
+          </button>
+          <div className="relative">
             <button
-              onClick={reprocess}
-              disabled={actionLoading === 'reprocess'}
-              className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
+              onClick={() => setReclassifying(!reclassifying)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-txt-primary transition-all"
               style={{ borderColor: 'var(--border-medium)' }}
             >
-              <RotateCcw size={10} /> Reprocess
+              Reclassify
             </button>
-            <div className="relative">
-              <button
-                onClick={() => setReclassifying(!reclassifying)}
-                className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
-                style={{ borderColor: 'var(--border-medium)' }}
-              >
-                <Tag size={10} /> Reclassify
-              </button>
-              {reclassifying && (
-                <div
-                  className="absolute top-full left-0 mt-1 bg-surface-primary border rounded-[10px] p-1 z-10 min-w-40 shadow-ds-float"
-                  style={{ borderColor: 'var(--border-medium)' }}
-                >
+            {reclassifying && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setReclassifying(false)} />
+                <div className="absolute top-full right-0 mt-1 bg-surface-primary border rounded-[10px] p-1 z-50 min-w-44 shadow-ds-float" style={{ borderColor: 'var(--border-medium)' }}>
                   {CALL_TYPES.map(ct => (
-                    <button
-                      key={ct.id}
-                      onClick={() => reclassify(ct.id)}
-                      className="block w-full text-left text-ds-body text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary px-3 py-1.5 rounded-[6px]"
-                    >
+                    <button key={ct.id} onClick={() => reclassify(ct.id)}
+                      className="block w-full text-left text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary px-3 py-2 rounded-[6px]">
                       {ct.name}
                     </button>
                   ))}
                 </div>
-              )}
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => setSettingOutcome(!settingOutcome)}
-                className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
-                style={{ borderColor: 'var(--border-medium)' }}
-              >
-                <CheckCircle size={10} /> Outcome
-              </button>
-              {settingOutcome && (
-                <div
-                  className="absolute top-full left-0 mt-1 bg-surface-primary border rounded-[10px] p-1 z-10 min-w-44 shadow-ds-float"
-                  style={{ borderColor: 'var(--border-medium)' }}
-                >
-                  {(call.callType ? CALL_TYPES.find(ct => ct.id === call.callType)?.results ?? [] : CALL_TYPES.flatMap(ct => ct.results).filter((r, i, a) => a.findIndex(x => x.id === r.id) === i)).map(r => (
-                    <button
-                      key={r.id}
-                      onClick={() => setOutcome(r.id)}
-                      className={`block w-full text-left text-ds-body px-3 py-1.5 rounded-[6px] ${
-                        call.callOutcome === r.id
-                          ? 'text-gunner-red bg-gunner-red-light'
-                          : 'text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary'
-                      }`}
-                    >
-                      {r.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => setShowFeedback(true)}
-              className="text-ds-body font-medium bg-surface-secondary border rounded-[10px] text-txt-secondary hover:text-txt-primary px-3 py-1.5 flex items-center gap-1 transition-colors"
-              style={{ borderColor: 'var(--border-medium)' }}
-            >
-              <MessageSquare size={10} /> Feedback
-            </button>
+              </>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* ── RIGHT COLUMN (3/5) ────────────────────────────────── */}
-        <div className="md:col-span-3 space-y-4">
-          {/* Tab bar — bg-tertiary container, white active tab with shadow */}
-          <div className="flex gap-1 bg-surface-tertiary rounded-[14px] p-1 w-fit">
+      {/* Tag row — metadata pills */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {call.assignedTo && (
+          <Pill icon={<User size={9} />}>{call.assignedTo.name}</Pill>
+        )}
+        <Pill icon={<Clock size={9} />}>{fmtDuration(call.durationSeconds)}</Pill>
+        <Pill icon={call.direction === 'OUTBOUND' ? <PhoneOutgoing size={9} /> : <PhoneIncoming size={9} />}
+          color={call.direction === 'OUTBOUND' ? 'border-semantic-green text-semantic-green' : 'border-semantic-blue text-semantic-blue'}>
+          {call.direction === 'OUTBOUND' ? 'Outbound' : 'Inbound'}
+        </Pill>
+        {call.callType && (
+          <Pill color="border-semantic-purple text-semantic-purple">
+            {CALL_TYPES.find(ct => ct.id === call.callType)?.name ?? call.callType.replace(/_/g, ' ')}
+          </Pill>
+        )}
+        {outcome && (
+          <Pill color="border-semantic-green text-semantic-green">
+            {RESULT_NAMES[outcome] ?? outcome.replace(/_/g, ' ')}
+          </Pill>
+        )}
+        {call.callOutcome === 'follow_up_scheduled' && (
+          <Pill icon={<Clock size={9} />} color="border-semantic-amber text-semantic-amber">
+            Follow-Up Scheduled
+          </Pill>
+        )}
+        {call.property && (
+          <Pill icon={<MapPin size={9} />}>
+            {call.property.address}, {call.property.city}, {call.property.state}
+          </Pill>
+        )}
+        {call.property && (
+          <Pill icon={<Clipboard size={9} />}>
+            {call.property.status === 'DEAD' ? 'Property no longer in inventory' : 'View Property'}
+          </Pill>
+        )}
+      </div>
+
+      {/* Date/time */}
+      <p className="text-[13px] text-txt-muted">
+        {format(new Date(call.calledAt), "EEEE, MMM d, yyyy 'at' h:mm a")}
+      </p>
+
+      {/* ── TWO-COLUMN BODY ───────────────────────────────────────── */}
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* LEFT COLUMN (1/3) */}
+        <div className="space-y-4">
+          {/* OVERALL GRADE card */}
+          <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-6 text-center" style={{ borderColor: 'var(--border-light)' }}>
+            <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-4">Overall Grade</p>
+
+            {/* Grade square with glow */}
+            <div className={`w-16 h-16 rounded-[14px] flex items-center justify-center mx-auto ${grade.color} ${grade.glow}`}>
+              <span className="text-[28px] font-semibold text-white">{grade.letter}</span>
+            </div>
+
+            <p className="text-[24px] font-semibold text-txt-primary mt-3">
+              {call.score !== null ? `${Math.round(call.score)}%` : '\u2014'}
+            </p>
+
+            <button className="text-[11px] text-semantic-red hover:underline mt-2">
+              Flag a scoring issue
+            </button>
+          </div>
+
+          {/* STRENGTHS card */}
+          {strengths.length > 0 && (
+            <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+              <h3 className="text-[14px] font-semibold text-semantic-green flex items-center gap-2 mb-3">
+                <CheckCircle size={14} /> STRENGTHS
+              </h3>
+              <ul className="space-y-3">
+                {strengths.map((s, i) => (
+                  <li key={i} className="text-[13px] text-txt-secondary leading-relaxed flex items-start gap-2">
+                    <span className="text-semantic-green mt-0.5 shrink-0">•</span>
+                    {s.trim()}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN (2/3) */}
+        <div className="md:col-span-2 space-y-4">
+          {/* Tab bar */}
+          <div className="flex gap-1 bg-surface-tertiary rounded-[14px] p-1 w-fit overflow-x-auto">
             {tabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-[10px] text-ds-body font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${
                   tab === t.id
                     ? 'bg-surface-primary text-txt-primary shadow-ds-float'
                     : 'text-txt-secondary hover:text-txt-primary'
                 }`}
               >
                 {t.icon} {t.label}
+                {t.badge !== undefined && t.badge > 0 && (
+                  <span className="bg-gunner-red text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{t.badge}</span>
+                )}
               </button>
             ))}
           </div>
 
-          {/* ── Coaching tab ──────────────────────────────────── */}
+          {/* ── COACHING TAB ─────────────────────────────────────── */}
           {tab === 'coaching' && (
             <div className="space-y-4">
+              {/* Summary */}
               {call.aiSummary && (
-                <Section title="Call Summary" ai>
-                  <p className="text-ds-body text-txt-secondary leading-relaxed">{call.aiSummary}</p>
-                </Section>
+                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase flex items-center gap-2 mb-3">
+                    <FileText size={12} /> Summary
+                  </h3>
+                  <p className="text-[13px] text-txt-secondary leading-relaxed">{call.aiSummary}</p>
+                </div>
               )}
-              {call.aiFeedback && (
-                <Section title="AI Feedback" ai>
-                  <p className="text-ds-body text-txt-secondary leading-relaxed">{call.aiFeedback}</p>
-                </Section>
-              )}
+
+              {/* Areas for Improvement */}
               {call.coachingTips.length > 0 && (
-                <div
-                  className="bg-semantic-purple-bg rounded-[14px] p-5"
-                  style={{ borderLeft: '2px solid var(--purple)' }}
-                >
-                  <h3 className="text-ds-label font-semibold text-semantic-purple flex items-center gap-2 mb-3">
-                    <Lightbulb size={14} /> What to Improve
-                    <AiBadge />
+                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-amber uppercase flex items-center gap-2 mb-3">
+                    <ArrowLeft size={12} className="rotate-[135deg]" /> Areas for Improvement
                   </h3>
                   <ul className="space-y-3">
                     {call.coachingTips.map((tip, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-ds-body text-txt-secondary">
-                        <span className="w-5 h-5 rounded-full bg-semantic-purple/10 flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="text-ds-fine text-semantic-purple font-semibold">{i + 1}</span>
-                        </span>
+                      <li key={i} className="text-[13px] text-txt-secondary leading-relaxed flex items-start gap-2">
+                        <span className="text-semantic-amber mt-0.5 shrink-0">•</span>
                         {tip}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-              {call.keyMoments.length > 0 && (
-                <Section title="Key Moments">
-                  <div className="space-y-2">
-                    {call.keyMoments.map((m, i) => {
-                      const Icon = MOMENT_ICONS[m.type] ?? Zap
-                      return (
-                        <div key={i} className="flex items-start gap-3 text-ds-body">
-                          <span className="text-ds-fine text-txt-muted bg-surface-secondary px-2 py-0.5 rounded-[6px] shrink-0">
-                            {m.timestamp}
-                          </span>
-                          <Icon size={12} className="text-gunner-red shrink-0 mt-0.5" />
-                          <span className="text-txt-secondary">{m.description}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </Section>
-              )}
-              {call.objections.length > 0 && (
-                <Section title="Objection Handling">
-                  <div className="space-y-3">
-                    {call.objections.map((obj, i) => (
-                      <div key={i} className="bg-surface-secondary rounded-[10px] p-3">
-                        <p className="text-ds-fine text-txt-muted mb-1">Objection:</p>
-                        <p className="text-ds-body text-txt-secondary italic">&ldquo;{obj.objection}&rdquo;</p>
-                        <p className="text-ds-fine text-txt-muted mt-2 mb-1">Response:</p>
-                        <p className="text-ds-body text-txt-secondary">{obj.response}</p>
-                        <span className={`text-ds-fine mt-1 inline-block ${obj.handled ? 'text-semantic-green' : 'text-semantic-red'}`}>
-                          {obj.handled ? '\u2713 Handled' : '\u2717 Not handled'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-              )}
-              {(call.sentiment !== null || call.sellerMotivation !== null) && (
-                <div className="grid grid-cols-2 gap-3">
-                  {call.sentiment !== null && (
-                    <div
-                      className="bg-surface-primary border rounded-[14px] p-4"
-                      style={{ borderColor: 'var(--border-light)' }}
-                    >
-                      <p className="text-ds-fine text-txt-muted mb-1">Sentiment</p>
-                      <p className={`text-ds-card font-semibold ${
-                        call.sentiment > 0.3 ? 'text-semantic-green'
-                        : call.sentiment > 0 ? 'text-semantic-amber'
-                        : 'text-semantic-red'
-                      }`}>
-                        {call.sentiment > 0.3 ? 'Positive' : call.sentiment > 0 ? 'Neutral' : 'Negative'}
-                      </p>
-                    </div>
-                  )}
-                  {call.sellerMotivation !== null && (
-                    <div
-                      className="bg-surface-primary border rounded-[14px] p-4"
-                      style={{ borderColor: 'var(--border-light)' }}
-                    >
-                      <p className="text-ds-fine text-txt-muted mb-1">Seller Motivation</p>
-                      <p className={`text-ds-card font-semibold ${
-                        call.sellerMotivation > 0.6 ? 'text-semantic-green'
-                        : call.sellerMotivation > 0.3 ? 'text-semantic-amber'
-                        : 'text-semantic-red'
-                      }`}>
-                        {call.sellerMotivation > 0.6 ? 'High' : call.sellerMotivation > 0.3 ? 'Medium' : 'Low'}
-                      </p>
-                    </div>
-                  )}
+
+              {/* Coaching Tips */}
+              {call.aiFeedback && (
+                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--blue)' }}>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-blue uppercase flex items-center gap-2 mb-3">
+                    <Lightbulb size={12} /> Coaching Tips
+                  </h3>
+                  <p className="text-[13px] text-txt-secondary leading-relaxed">{call.aiFeedback}</p>
                 </div>
               )}
+
               {!call.aiSummary && !call.aiFeedback && call.coachingTips.length === 0 && (
-                <EmptyTab icon={<Lightbulb size={24} />} message="No coaching data available yet" />
+                <EmptyState icon={<Lightbulb size={24} />} message="No coaching data available yet" />
               )}
             </div>
           )}
 
-          {/* ── Criteria tab (rubric) ─────────────────────────── */}
+          {/* ── CRITERIA TAB ─────────────────────────────────────── */}
           {tab === 'criteria' && (
-            <div className="space-y-4">
+            <div>
               {Object.keys(call.rubricScores).length > 0 ? (
-                <div
-                  className="bg-surface-primary border rounded-[14px] p-5 space-y-5"
-                  style={{ borderColor: 'var(--border-light)' }}
-                >
+                <div className="grid grid-cols-2 gap-3">
                   {Object.entries(call.rubricScores).map(([cat, data]) => {
                     const pct = data.maxScore > 0 ? Math.round((data.score / data.maxScore) * 100) : 0
-                    const barColor =
-                      pct >= 90 ? 'bg-semantic-green'
-                      : pct >= 80 ? 'bg-semantic-amber'
-                      : pct >= 70 ? 'bg-semantic-blue'
-                      : 'bg-semantic-red'
+                    const barColor = pct >= 80 ? 'bg-semantic-green' : pct >= 60 ? 'bg-semantic-blue' : 'bg-semantic-red'
                     return (
-                      <div key={cat}>
+                      <div key={cat} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-ds-body text-txt-primary font-medium">{cat}</span>
-                          <span className="text-ds-body font-semibold text-txt-primary">
-                            {data.score}
-                            <span className="text-txt-muted font-normal">/{data.maxScore}</span>
+                          <span className="text-[14px] font-medium text-txt-primary">{cat}</span>
+                          <span className={`text-[14px] font-semibold ${pct >= 80 ? 'text-semantic-green' : pct >= 60 ? 'text-semantic-blue' : 'text-semantic-red'}`}>
+                            {data.score}/{data.maxScore}
                           </span>
                         </div>
-                        <div className="h-2 bg-surface-tertiary rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${barColor} transition-all duration-700`}
-                            style={{ width: `${pct}%` }}
-                          />
+                        <div className="h-2 bg-surface-tertiary rounded-full overflow-hidden mb-3">
+                          <div className={`h-full rounded-full ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }} />
                         </div>
                         {data.notes && (
-                          <p className="text-ds-fine text-txt-muted mt-1.5">{data.notes}</p>
+                          <p className="text-[12px] text-txt-secondary leading-relaxed">{data.notes}</p>
                         )}
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <EmptyTab icon={<Star size={24} />} message="No criteria breakdown available" />
+                <EmptyState icon={<Star size={24} />} message="No criteria breakdown available" />
               )}
             </div>
           )}
 
-          {/* ── Transcript tab ────────────────────────────────── */}
+          {/* ── TRANSCRIPT TAB ───────────────────────────────────── */}
           {tab === 'transcript' && (
             <div className="space-y-4">
+              {/* Audio player */}
+              {call.recordingUrl && (
+                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase flex items-center gap-2 mb-4">
+                    <Play size={12} /> Call Recording
+                  </h3>
+
+                  {/* Waveform placeholder */}
+                  <div className="h-16 bg-surface-secondary rounded-[10px] flex items-center justify-center mb-3 overflow-hidden relative">
+                    <div className="flex items-end gap-[2px] h-12">
+                      {Array.from({ length: 60 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-[3px] rounded-full bg-gunner-red/30"
+                          style={{ height: `${Math.random() * 100}%` }}
+                        />
+                      ))}
+                    </div>
+                    {/* Playhead */}
+                    <div
+                      className="absolute top-0 bottom-0 w-[2px] bg-gunner-red"
+                      style={{ left: `${call.durationSeconds ? (currentTime / call.durationSeconds) * 100 : 0}%` }}
+                    />
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => { if (audioRef.current) { audioRef.current.currentTime = 0 } }} className="p-1 text-txt-muted hover:text-txt-primary">
+                      <SkipBack size={14} />
+                    </button>
+                    <button onClick={togglePlay} className="w-9 h-9 rounded-full bg-gunner-red text-white flex items-center justify-center hover:bg-gunner-red-dark">
+                      {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                    </button>
+                    <button onClick={() => { if (audioRef.current) { audioRef.current.currentTime = audioRef.current.duration } }} className="p-1 text-txt-muted hover:text-txt-primary">
+                      <SkipForward size={14} />
+                    </button>
+                    <span className="text-[11px] text-txt-muted">
+                      {fmtDuration(Math.round(currentTime))} / {fmtDuration(call.durationSeconds)}
+                    </span>
+                    <div className="ml-auto flex items-center gap-2">
+                      <button onClick={changeSpeed} className="text-[11px] font-medium text-txt-secondary bg-surface-secondary px-2 py-1 rounded-[6px] hover:text-txt-primary">
+                        {playbackRate}x
+                      </button>
+                      <button className="p-1 text-txt-muted hover:text-txt-primary">
+                        <Volume2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <audio
+                    ref={audioRef}
+                    src={call.recordingUrl}
+                    onTimeUpdate={e => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
+                    onEnded={() => setIsPlaying(false)}
+                    className="hidden"
+                  />
+                </div>
+              )}
+
+              {/* Key Moments */}
+              <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-purple uppercase flex items-center gap-2 mb-2">
+                  &#x2726; Key Moments
+                </h3>
+                <p className="text-[12px] text-txt-muted mb-3">AI-identified highlights from this call — objections, appointments, price discussions, and more.</p>
+                {call.keyMoments.length > 0 ? (
+                  <div className="space-y-2">
+                    {call.keyMoments.map((m, i) => {
+                      const Icon = MOMENT_ICONS[m.type] ?? Zap
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => seekTo(m.timestamp)}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-[10px] bg-surface-secondary text-left hover:bg-surface-tertiary transition-colors"
+                        >
+                          <Icon size={12} className="text-semantic-purple shrink-0" />
+                          <span className="text-[11px] text-semantic-purple font-medium shrink-0">{m.timestamp}</span>
+                          <span className="text-[13px] text-txt-secondary truncate">{m.description}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => toast('Highlight generation coming soon', 'info')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-semantic-purple hover:bg-semantic-purple-bg transition-all"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                  >
+                    &#x2726; Generate Highlights
+                  </button>
+                )}
+              </div>
+
+              {/* Transcript */}
               {call.transcript ? (
-                <>
-                  <div className="relative">
+                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase">Call Transcript</h3>
+                    <span className="text-[11px] text-txt-muted">Full transcription of the call</span>
+                  </div>
+                  <div className="relative mb-3">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       placeholder="Search transcript..."
-                      className="w-full bg-surface-secondary border rounded-[10px] pl-9 pr-4 py-2.5 text-ds-body text-txt-primary placeholder:text-txt-muted focus:outline-none focus:border-gunner-red"
+                      className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] pl-9 pr-4 py-2 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
                       style={{ borderColor: 'var(--border-medium)' }}
                     />
                   </div>
-                  <div
-                    className="bg-surface-primary border rounded-[14px] p-5 max-h-[500px] overflow-y-auto"
-                    style={{ borderColor: 'var(--border-light)' }}
-                  >
+                  <div className="max-h-[400px] overflow-y-auto">
                     <TranscriptView transcript={call.transcript} searchQuery={searchQuery} />
                   </div>
-                </>
+                </div>
               ) : call.recordingUrl ? (
-                <EmptyTab
-                  icon={<Mic size={24} />}
-                  message="A recording was found but hasn't been transcribed yet"
-                  sub="Use Reprocess to trigger transcription."
-                />
+                <EmptyState icon={<Mic size={24} />} message="Recording found but not transcribed yet" sub="Use Reprocess to trigger transcription." />
               ) : (
-                <EmptyTab
-                  icon={<Mic size={24} />}
-                  message="This call has no recording URL — graded from metadata only"
-                  sub="Transcripts require a recording captured via GHL webhook. Recording URLs are only available on real-time calls, not historical ones."
-                />
+                <EmptyState icon={<Mic size={24} />} message="No recording URL — graded from metadata only" />
               )}
             </div>
           )}
 
-          {/* ── Next Steps tab ────────────────────────────────── */}
+          {/* ── NEXT STEPS TAB ───────────────────────────────────── */}
           {tab === 'next-steps' && (
             <div className="space-y-4">
-              {call.nextBestAction && (
-                <div
-                  className="bg-semantic-purple-bg rounded-[14px] p-5"
-                  style={{ borderLeft: '2px solid var(--purple)' }}
-                >
-                  <h3 className="text-ds-label font-semibold text-semantic-purple flex items-center gap-2 mb-2">
-                    <Zap size={14} /> AI Recommended Action
-                    <AiBadge />
-                  </h3>
-                  <p className="text-ds-body text-txt-secondary">{call.nextBestAction}</p>
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[14px] font-medium text-txt-primary">
+                    {generatedSteps.filter(s => s.status === 'pending').length} pending step{generatedSteps.filter(s => s.status === 'pending').length !== 1 ? 's' : ''}
+                  </p>
+                  <p className="text-[12px] text-txt-muted">Review, edit, and push each action to CRM</p>
                 </div>
-              )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toast('Manual action creation coming soon', 'info')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-txt-primary"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                  >
+                    <Plus size={13} /> Add Action
+                  </button>
+                  {generatedSteps.length > 0 && (
+                    <button onClick={generateNextSteps} className="text-[13px] text-txt-secondary hover:text-txt-primary">
+                      Regenerate
+                    </button>
+                  )}
+                </div>
+              </div>
 
-              {/* Generate AI steps — AI Generate button style (purple) */}
+              {/* Generate button */}
               {generatedSteps.length === 0 && (
                 <button
                   onClick={generateNextSteps}
                   disabled={generatingSteps}
-                  className="w-full bg-semantic-purple hover:opacity-90 text-white text-ds-body font-semibold py-3 rounded-[10px] transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-semantic-purple hover:opacity-90 text-white text-[13px] font-semibold py-3 rounded-[10px] transition-colors flex items-center justify-center gap-2"
                 >
-                  {generatingSteps ? (
-                    <><Loader2 size={14} className="animate-spin" /> Generating...</>
-                  ) : (
-                    <>{'\u2726'} Generate AI Next Steps</>
-                  )}
+                  {generatingSteps ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : <>&#x2726; Generate AI Next Steps</>}
                 </button>
               )}
 
-              {generatedSteps.length > 0 && (
-                <div
-                  className="bg-surface-primary border rounded-[14px] p-5 space-y-3"
-                  style={{ borderColor: 'var(--border-light)' }}
-                >
-                  <h3 className="text-ds-card font-semibold text-txt-primary mb-2">AI-Generated Steps</h3>
-                  {generatedSteps.map((step, i) => (
-                    <div key={i} className="bg-surface-secondary rounded-[10px] p-3">
-                      <p className="text-ds-body text-txt-primary font-medium">{step.label}</p>
-                      <p className="text-ds-fine text-txt-muted italic mt-1">{step.reasoning}</p>
-                      <span className="text-ds-fine text-txt-muted mt-1 inline-block">
-                        {step.type.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                  ))}
+              {/* Pending actions */}
+              {generatedSteps.filter(s => s.status === 'pending').length > 0 && (
+                <div>
+                  <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2 flex items-center gap-1">
+                    <MessageSquare size={10} /> CRM Actions ({generatedSteps.filter(s => s.status === 'pending').length})
+                  </p>
+                  <div className="space-y-3">
+                    {generatedSteps.map((step, i) => {
+                      if (step.status !== 'pending') return null
+                      const stepDef = STEP_ICONS[step.type] ?? STEP_ICONS.add_note
+                      const StepIcon = stepDef.icon
+                      return (
+                        <div key={i} className="bg-semantic-green-bg/30 border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--green)' }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${stepDef.bg} ${stepDef.color}`}>
+                              <StepIcon size={10} className="inline mr-1" />
+                              {step.type.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-[11px] font-medium text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">&#x2726; AI</span>
+                          </div>
+                          <p className="text-[13px] text-txt-primary font-medium mb-1">{step.label}</p>
+                          <button onClick={() => toggleReason(i)} className="text-[11px] text-semantic-purple hover:underline mb-3 flex items-center gap-1">
+                            &#x2726; Why this action? <ChevronDown size={10} className={expandedReasons.has(i) ? 'rotate-180' : ''} />
+                          </button>
+                          {expandedReasons.has(i) && (
+                            <p className="text-[12px] text-txt-muted italic mb-3">{step.reasoning}</p>
+                          )}
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => pushStep(i)}
+                              disabled={actionLoading === `step-${i}`}
+                              className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-[12px] font-semibold px-3 py-1.5 rounded-[10px] transition-colors"
+                            >
+                              {actionLoading === `step-${i}` ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                              Push to CRM
+                            </button>
+                            <button className="text-[12px] text-txt-secondary hover:text-txt-primary">Edit</button>
+                            <button onClick={() => skipStep(i)} className="text-[12px] text-txt-secondary hover:text-txt-primary">Skip</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 
-              {/* Quick actions */}
-              <div
-                className="bg-surface-primary border rounded-[14px] p-5 space-y-2"
-                style={{ borderColor: 'var(--border-light)' }}
-              >
-                <h3 className="text-ds-card font-semibold text-txt-primary mb-3">Quick Actions</h3>
-                <QuickAction icon={<FileText size={14} />} label="Add call note to GHL" type="add_note" loading={actionLoading} onAction={quickAction} />
-                <QuickAction icon={<CheckCircle size={14} />} label="Create follow-up task" type="create_task" loading={actionLoading} onAction={quickAction} />
-                <QuickAction icon={<Send size={14} />} label="Send follow-up SMS" type="send_sms" loading={actionLoading} onAction={quickAction} />
-              </div>
-
-              {call.property && (
-                <Link
-                  href={`/${tenantSlug}/inventory/${call.property.id}`}
-                  className="flex items-center justify-between bg-surface-primary border rounded-[14px] px-5 py-4 transition-all hover:shadow-ds-float"
-                  style={{ borderColor: 'var(--border-light)' }}
-                >
-                  <div>
-                    <p className="text-ds-fine text-txt-muted mb-0.5">View Property</p>
-                    <p className="text-ds-body text-txt-primary">{call.property.address}, {call.property.city} {call.property.state}</p>
+              {/* Pushed actions */}
+              {generatedSteps.filter(s => s.status === 'pushed').length > 0 && (
+                <div>
+                  <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2 flex items-center gap-1">
+                    <Clock size={10} /> Actions Taken ({generatedSteps.filter(s => s.status === 'pushed').length} pushed)
+                  </p>
+                  <div className="space-y-3">
+                    {generatedSteps.map((step, i) => {
+                      if (step.status !== 'pushed') return null
+                      const stepDef = STEP_ICONS[step.type] ?? STEP_ICONS.add_note
+                      const StepIcon = stepDef.icon
+                      return (
+                        <div key={i} className="bg-semantic-amber-bg/30 border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--amber)' }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${stepDef.bg} ${stepDef.color}`}>
+                              <StepIcon size={10} className="inline mr-1" />
+                              {step.type.replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-[11px] font-medium text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">&#x2726; AI</span>
+                            <span className="text-[11px] font-medium text-semantic-green bg-semantic-green-bg px-2 py-0.5 rounded-full">&#x2713; Pushed</span>
+                          </div>
+                          <p className="text-[13px] text-txt-primary mb-2">{step.label}</p>
+                          <p className="text-[12px] text-semantic-green">&#x2713; Action completed successfully!</p>
+                          {step.pushedAt && (
+                            <p className="text-[11px] text-txt-muted mt-1">Pushed {format(new Date(step.pushedAt), "MMM d 'at' h:mm a")}</p>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
-                  <ChevronRight size={14} className="text-txt-muted" />
-                </Link>
+                </div>
+              )}
+
+              {/* AI recommended action (from grading) */}
+              {call.nextBestAction && generatedSteps.length === 0 && (
+                <div className="bg-semantic-purple-bg/30 border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--purple)' }}>
+                  <h3 className="text-[14px] font-semibold text-semantic-purple flex items-center gap-2 mb-2">
+                    <Zap size={14} /> AI Recommended Action
+                    <span className="text-[11px] font-medium bg-semantic-purple-bg px-2 py-0.5 rounded-full">&#x2726; AI</span>
+                  </h3>
+                  <p className="text-[13px] text-txt-secondary">{call.nextBestAction}</p>
+                </div>
               )}
             </div>
           )}
@@ -707,99 +710,25 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   )
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────────
+// ─── Sub-components ─────────────────────────────────────────────────────────
 
-/** AI badge — purple-bg, purple text, 11px, pill shape with ✦ prefix */
-function AiBadge() {
+function Pill({ children, icon, color }: { children: React.ReactNode; icon?: React.ReactNode; color?: string }) {
   return (
-    <span className="text-ds-fine font-medium bg-semantic-purple-bg text-semantic-purple px-2 py-0.5 rounded-full">
-      {'\u2726'} AI
+    <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border-[0.5px] ${
+      color ?? 'border-[rgba(0,0,0,0.14)] text-txt-secondary'
+    }`}>
+      {icon} {children}
     </span>
   )
 }
 
-/** Info pill — 11px, font-weight 500, pill shape, semantic colors */
-function Pill({ children }: { children: React.ReactNode }) {
+function EmptyState({ icon, message, sub }: { icon: React.ReactNode; message: string; sub?: string }) {
   return (
-    <span
-      className="text-ds-fine font-medium bg-surface-secondary border text-txt-secondary px-2.5 py-1 rounded-full"
-      style={{ borderColor: 'var(--border-light)' }}
-    >
-      {children}
-    </span>
-  )
-}
-
-/** Card section — 14px border-radius, 0.5px border. AI variant gets purple left border + purple header. */
-function Section({ title, children, ai }: { title: string; children: React.ReactNode; ai?: boolean }) {
-  return (
-    <div
-      className="bg-surface-primary border rounded-[14px] p-5"
-      style={{
-        borderColor: 'var(--border-light)',
-        borderLeft: ai ? '2px solid var(--purple)' : undefined,
-      }}
-    >
-      <h3 className={`text-ds-card font-semibold mb-3 flex items-center gap-2 ${ai ? 'text-semantic-purple' : 'text-txt-primary'}`}>
-        {title}
-        {ai && <AiBadge />}
-      </h3>
-      {children}
-    </div>
-  )
-}
-
-function EmptyTab({ icon, message, sub }: { icon: React.ReactNode; message: string; sub?: string }) {
-  return (
-    <div
-      className="bg-surface-primary border rounded-[14px] p-8 text-center"
-      style={{ borderColor: 'var(--border-light)' }}
-    >
+    <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-8 text-center" style={{ borderColor: 'var(--border-light)' }}>
       <div className="text-txt-muted mx-auto mb-3 flex justify-center">{icon}</div>
-      <p className="text-ds-body text-txt-secondary">{message}</p>
-      {sub && <p className="text-ds-fine text-txt-muted mt-1">{sub}</p>}
+      <p className="text-[13px] text-txt-secondary">{message}</p>
+      {sub && <p className="text-[11px] text-txt-muted mt-1">{sub}</p>}
     </div>
-  )
-}
-
-function QuickAction({ icon, label, type, loading, onAction }: {
-  icon: React.ReactNode; label: string; type: string
-  loading: string | null; onAction: (type: string) => void
-}) {
-  const [status, setStatus] = useState<'idle' | 'confirm' | 'done'>('idle')
-  const isLoading = loading === type
-
-  function handle() {
-    if (status === 'idle') { setStatus('confirm'); return }
-    if (status === 'confirm') {
-      onAction(type)
-      setStatus('done')
-      setTimeout(() => setStatus('idle'), 3000)
-    }
-  }
-
-  return (
-    <button
-      onClick={handle}
-      disabled={isLoading}
-      className="w-full flex items-center gap-3 px-4 py-3 rounded-[10px] hover:bg-surface-secondary transition-colors text-left"
-    >
-      <div className="w-8 h-8 rounded-[10px] bg-surface-secondary flex items-center justify-center shrink-0 text-txt-secondary">
-        {status === 'done' ? (
-          <CheckCircle size={14} className="text-semantic-green" />
-        ) : isLoading ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : (
-          icon
-        )}
-      </div>
-      <p className="text-ds-body text-txt-primary font-medium flex-1">
-        {status === 'confirm' ? `Confirm: ${label}?` : status === 'done' ? 'Done!' : label}
-      </p>
-      {status === 'confirm' && (
-        <span className="text-ds-fine text-gunner-red shrink-0">Click to confirm</span>
-      )}
-    </button>
   )
 }
 
@@ -821,62 +750,35 @@ function FeedbackModal({ callId, tenantSlug, onClose }: { callId: string; tenant
     setTimeout(onClose, 1500)
   }
 
-  const feedbackTypes = [
-    'score_too_high', 'score_too_low', 'wrong_criteria', 'missed_issue',
-    'incorrect_feedback', 'general_correction', 'praise',
-  ]
+  const feedbackTypes = ['score_too_high', 'score_too_low', 'wrong_criteria', 'missed_issue', 'incorrect_feedback', 'general_correction', 'praise']
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div
-        className="bg-surface-primary border rounded-[20px] p-6 w-full max-w-md shadow-ds-float"
-        style={{ borderColor: 'var(--border-light)' }}
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="bg-surface-primary border-[0.5px] rounded-[20px] p-6 w-full max-w-md shadow-ds-float" style={{ borderColor: 'var(--border-light)' }} onClick={e => e.stopPropagation()}>
         {submitted ? (
           <div className="text-center py-4">
             <CheckCircle size={24} className="text-semantic-green mx-auto mb-2" />
-            <p className="text-ds-body text-txt-primary">Thank you — feedback submitted</p>
+            <p className="text-[13px] text-txt-primary">Thank you — feedback submitted</p>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-ds-card font-semibold text-txt-primary">Submit Feedback</h3>
-              <button onClick={onClose} className="text-txt-muted hover:text-txt-primary transition-colors">
-                <X size={14} />
-              </button>
+              <h3 className="text-[15px] font-semibold text-txt-primary">Submit Feedback</h3>
+              <button onClick={onClose} className="text-txt-muted hover:text-txt-primary"><X size={14} /></button>
             </div>
-            <select
-              value={type}
-              onChange={e => setType(e.target.value)}
-              className="w-full bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary mb-3 focus:outline-none focus:border-gunner-red"
-              style={{ borderColor: 'var(--border-medium)' }}
-            >
-              {feedbackTypes.map(t => (
-                <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
-              ))}
+            <select value={type} onChange={e => setType(e.target.value)}
+              className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary mb-3 focus:outline-none"
+              style={{ borderColor: 'var(--border-medium)' }}>
+              {feedbackTypes.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
             </select>
-            <textarea
-              value={details}
-              onChange={e => setDetails(e.target.value)}
-              rows={4}
+            <textarea value={details} onChange={e => setDetails(e.target.value)} rows={4}
               placeholder="Describe the issue (min 10 characters)..."
-              className="w-full bg-surface-secondary border rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder:text-txt-muted mb-3 focus:outline-none focus:border-gunner-red resize-none"
-              style={{ borderColor: 'var(--border-medium)' }}
-            />
+              className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary placeholder:text-txt-muted mb-3 focus:outline-none resize-none"
+              style={{ borderColor: 'var(--border-medium)' }} />
             <div className="flex gap-2 justify-end">
-              <button
-                onClick={onClose}
-                className="text-ds-body font-medium text-txt-primary bg-surface-secondary border rounded-[10px] px-4 py-[9px] hover:border-[var(--border-medium)] transition-colors"
-                style={{ borderColor: 'var(--border-medium)' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submit}
-                disabled={details.length < 10 || submitting}
-                className="text-ds-body font-semibold bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white px-4 py-[9px] rounded-[10px] transition-colors"
-              >
+              <button onClick={onClose} className="text-[13px] font-medium text-txt-primary bg-surface-secondary border-[0.5px] rounded-[10px] px-4 py-[9px]" style={{ borderColor: 'var(--border-medium)' }}>Cancel</button>
+              <button onClick={submit} disabled={details.length < 10 || submitting}
+                className="text-[13px] font-semibold bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white px-4 py-[9px] rounded-[10px]">
                 {submitting ? 'Submitting...' : 'Submit Feedback'}
               </button>
             </div>
@@ -887,21 +789,17 @@ function FeedbackModal({ callId, tenantSlug, onClose }: { callId: string; tenant
   )
 }
 
-// ─── Transcript viewer ─────────────────────────────────────────────────────
-
 function TranscriptView({ transcript, searchQuery }: { transcript: string; searchQuery: string }) {
   const lines = transcript.split('\n').filter(l => l.trim())
-  const filtered = searchQuery
-    ? lines.filter(l => l.toLowerCase().includes(searchQuery.toLowerCase()))
-    : lines
+  const filtered = searchQuery ? lines.filter(l => l.toLowerCase().includes(searchQuery.toLowerCase())) : lines
 
   if (searchQuery && filtered.length === 0) {
-    return <p className="text-ds-body text-txt-muted">No matches for &ldquo;{searchQuery}&rdquo;</p>
+    return <p className="text-[13px] text-txt-muted">No matches for &ldquo;{searchQuery}&rdquo;</p>
   }
 
   return (
     <div className="space-y-2">
-      {searchQuery && <p className="text-ds-fine text-txt-muted mb-2">{filtered.length} matches</p>}
+      {searchQuery && <p className="text-[11px] text-txt-muted mb-2">{filtered.length} matches</p>}
       {filtered.map((line, i) => {
         const match = line.match(/^(Speaker \d+|Rep|Seller|Agent|Customer|Unknown):\s*/i)
         const speaker = match?.[1] ?? null
@@ -909,9 +807,9 @@ function TranscriptView({ transcript, searchQuery }: { transcript: string; searc
         const isRep = speaker?.toLowerCase().includes('rep') || speaker?.toLowerCase().includes('agent') || speaker === 'Speaker 0'
 
         return (
-          <div key={i} className={`text-ds-body leading-relaxed ${speaker ? 'flex gap-2' : ''}`}>
+          <div key={i} className={`text-[13px] leading-relaxed ${speaker ? 'flex gap-2' : ''}`}>
             {speaker && (
-              <span className={`text-ds-fine font-medium shrink-0 mt-0.5 ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
+              <span className={`text-[11px] font-medium shrink-0 mt-0.5 ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
                 {speaker}:
               </span>
             )}

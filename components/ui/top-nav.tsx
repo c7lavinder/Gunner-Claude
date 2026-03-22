@@ -2,13 +2,13 @@
 // components/ui/top-nav.tsx
 // Design system: 52px sticky top nav, white bg, 0.5px bottom border
 // Active link: gunner-red text + 2px red bottom border
-// Font: 14px weight 500
+// Mobile: hamburger menu → slide-down drawer
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
-import { useState } from 'react'
-import { Bell, Settings, ChevronDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Bell, Settings, ChevronDown, Menu, X } from 'lucide-react'
 import { hasPermission, type UserRole } from '@/types/roles'
 
 export function TopNav({ tenantSlug }: { tenantSlug: string }) {
@@ -16,6 +16,10 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
   const { data: session } = useSession()
   const role = ((session?.user as { role?: string })?.role ?? 'LEAD_MANAGER') as UserRole
   const [showMenu, setShowMenu] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Close mobile menu on route change
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const base = `/${tenantSlug}`
 
@@ -23,7 +27,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     { href: `${base}/dashboard`, label: 'Dashboard', always: true },
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as const },
     { href: `${base}/inbox`, label: 'Inbox', always: true },
-    { href: `${base}/tasks`, label: 'Tasks', always: true },
+    { href: `${base}/tasks`, label: 'Day Hub', always: true },
     { href: `${base}/appointments`, label: 'Appointments', always: true },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as const },
     { href: `${base}/kpis`, label: 'KPIs', permission: 'kpis.view.own' as const },
@@ -35,8 +39,16 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
   )
 
   return (
-    <header className="h-[52px] sticky top-0 z-[100] bg-surface-primary border-b" style={{ borderColor: 'var(--border-light)' }}>
-      <div className="h-full px-8 max-w-[1400px] mx-auto flex items-center gap-8">
+    <header className="sticky top-0 z-[100] bg-surface-primary border-b" style={{ borderColor: 'var(--border-light)' }}>
+      <div className="h-[52px] px-4 md:px-8 max-w-[1400px] mx-auto flex items-center gap-4 md:gap-8">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={() => setMobileOpen(v => !v)}
+          className="md:hidden p-2 -ml-2 rounded-[10px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary transition-colors"
+        >
+          {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+        </button>
+
         {/* Logo */}
         <Link href={`${base}/dashboard`} className="flex items-center gap-2 shrink-0">
           <div className="w-6 h-6 rounded-md bg-gunner-red flex items-center justify-center">
@@ -45,8 +57,8 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
           <span className="text-ds-label font-semibold text-txt-primary">Gunner</span>
         </Link>
 
-        {/* Nav links */}
-        <nav className="flex items-center gap-1 h-full">
+        {/* Nav links — desktop */}
+        <nav className="hidden md:flex items-center gap-1 h-[52px]">
           {visibleItems.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
@@ -69,7 +81,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
         </nav>
 
         {/* Right side */}
-        <div className="flex items-center gap-3 ml-auto">
+        <div className="flex items-center gap-2 md:gap-3 ml-auto">
           <Link
             href={`${base}/settings`}
             className={`p-2 rounded-[10px] transition-colors ${
@@ -97,7 +109,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
                   {session?.user?.name?.[0]?.toUpperCase() ?? '?'}
                 </span>
               </div>
-              <ChevronDown size={12} className="text-txt-muted" />
+              <ChevronDown size={12} className="text-txt-muted hidden sm:block" />
             </button>
 
             {showMenu && (
@@ -120,6 +132,31 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
           </div>
         </div>
       </div>
+
+      {/* Mobile nav drawer */}
+      {mobileOpen && (
+        <>
+          <div className="fixed inset-0 top-[52px] bg-black/20 z-[90] md:hidden" onClick={() => setMobileOpen(false)} />
+          <nav className="md:hidden bg-surface-primary border-b py-2 z-[95] relative" style={{ borderColor: 'var(--border-light)' }}>
+            {visibleItems.map(item => {
+              const active = pathname === item.href || pathname.startsWith(item.href + '/')
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`block px-6 py-3 text-ds-label font-medium transition-colors ${
+                    active
+                      ? 'text-gunner-red bg-gunner-red-light'
+                      : 'text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              )
+            })}
+          </nav>
+        </>
+      )}
     </header>
   )
 }
