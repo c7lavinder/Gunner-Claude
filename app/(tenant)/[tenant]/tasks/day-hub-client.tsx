@@ -4,13 +4,13 @@
 // Two-column layout: main (65%) + AI Coach sidebar (35%)
 // Sections: role tabs, KPI cards, inbox/appointments, tasks list
 
-import { useState, useEffect, useCallback, useRef, useTransition } from 'react'
+import { useState, useEffect, useCallback, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Phone, MessageSquare, Calendar, Star, Target, FileText,
   Settings, RefreshCw, ChevronDown, ChevronLeft, ExternalLink,
-  MapPin, User, Clock, Loader2, Bot, Send, Sparkles, Circle, CheckCircle,
+  MapPin, User, Clock, Loader2, Send, Circle, CheckCircle,
   PhoneOff, MessageCircle,
 } from 'lucide-react'
 import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
@@ -64,11 +64,6 @@ interface AppointmentItem {
   status: string
 }
 
-interface CoachMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
-
 type RoleTab = 'ADMIN' | 'LM' | 'AM' | 'DISPO'
 type InboxTab = 'inbox' | 'appointments'
 type InboxFilter = 'all' | 'missed' | 'msgs'
@@ -119,11 +114,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
 
-  // AI Coach
-  const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([])
-  const [coachInput, setCoachInput] = useState('')
-  const [coachLoading, setCoachLoading] = useState(false)
-  const coachBottomRef = useRef<HTMLDivElement>(null)
 
   // Fetch KPIs
   useEffect(() => {
@@ -154,10 +144,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       .catch(() => setLoadingAppts(false))
   }, [tenantSlug])
 
-  // Scroll coach
-  useEffect(() => {
-    coachBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [coachMessages])
 
   // Filter tasks (exclude optimistically completed)
   const assignedNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
@@ -171,31 +157,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   // Inbox counts
   const missedCount = inbox.filter(i => i.type === 'missed_call').length
   const msgsCount = inbox.filter(i => i.type === 'message').length
-
-  // Coach send
-  async function sendCoachMessage(text?: string) {
-    const content = (text ?? coachInput).trim()
-    if (!content || coachLoading) return
-    const userMsg: CoachMessage = { role: 'user', content }
-    const newMessages = [...coachMessages, userMsg]
-    setCoachMessages(newMessages)
-    setCoachInput('')
-    setCoachLoading(true)
-    try {
-      const res = await fetch('/api/ai/coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
-      })
-      const data = await res.json()
-      if (data.reply) {
-        setCoachMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
-      }
-    } catch {
-      setCoachMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I had trouble connecting. Try again.' }])
-    }
-    setCoachLoading(false)
-  }
 
   async function completeTask(taskId: string, contactId: string) {
     setCompletingTask(taskId)
@@ -255,9 +216,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   }
 
   return (
-    <div className="flex gap-6 -mx-4 md:-mx-8 -my-4 md:-my-6 min-h-[calc(100vh-52px)]">
-      {/* ── LEFT COLUMN (main) ─────────────────────────────────────── */}
-      <div className="flex-1 px-4 md:px-8 py-4 md:py-6 overflow-y-auto space-y-6">
+    <div className="space-y-6">
 
         {/* PAGE HEADER */}
         <div className="flex items-center gap-4 flex-wrap">
@@ -585,97 +544,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             </button>
           )}
         </div>
-      </div>
-
-      {/* ── RIGHT COLUMN — AI COACH ───────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[320px] shrink-0 bg-surface-primary border-l sticky top-[52px] h-[calc(100vh-52px)]" style={{ borderColor: 'var(--border-light)' }}>
-        {/* Coach header */}
-        <div className="flex items-center gap-3 px-4 py-4 border-b" style={{ borderColor: 'var(--border-light)' }}>
-          <div className="w-8 h-8 rounded-[10px] bg-semantic-purple-bg flex items-center justify-center">
-            <Bot size={16} className="text-semantic-purple" />
-          </div>
-          <span className="text-[14px] font-medium text-txt-primary">AI Coach</span>
-          <span className="text-[11px] font-medium text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">&#x2726;</span>
-          <button className="ml-auto p-1 text-txt-muted hover:text-txt-primary">
-            <Sparkles size={14} />
-          </button>
-        </div>
-
-        {/* Coach body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {coachMessages.length === 0 ? (
-            <div className="text-center mt-8">
-              <div className="w-14 h-14 rounded-full bg-gunner-red-light flex items-center justify-center mx-auto mb-4">
-                <Bot size={24} className="text-gunner-red" />
-              </div>
-              <p className="text-[13px] text-txt-secondary">
-                Ask questions or give commands —<br />
-                send SMS, add notes, create tasks, and more.
-              </p>
-              <div className="space-y-2 mt-6">
-                {[
-                  { icon: <Target size={13} />, text: 'What should I focus on?' },
-                  { icon: <MessageSquare size={13} />, text: 'Send an SMS to...' },
-                  { icon: <FileText size={13} />, text: 'Add a note for...' },
-                ].map(chip => (
-                  <button
-                    key={chip.text}
-                    onClick={() => sendCoachMessage(chip.text)}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2.5 rounded-[10px] border-[0.5px] text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary transition-all"
-                    style={{ borderColor: 'var(--border-light)' }}
-                  >
-                    {chip.icon} {chip.text}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {coachMessages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-gunner-red text-white rounded-br-md'
-                      : 'bg-surface-secondary text-txt-primary rounded-bl-md'
-                  }`}>
-                    {msg.content}
-                  </div>
-                </div>
-              ))}
-              {coachLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-surface-secondary px-3 py-2 rounded-2xl rounded-bl-md">
-                    <Loader2 size={14} className="animate-spin text-txt-muted" />
-                  </div>
-                </div>
-              )}
-              <div ref={coachBottomRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Coach input */}
-        <div className="px-4 pb-4 pt-2 border-t" style={{ borderColor: 'var(--border-light)' }}>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={coachInput}
-              onChange={e => setCoachInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendCoachMessage() } }}
-              placeholder="Ask AI Coach..."
-              className="flex-1 bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-semantic-purple"
-              style={{ borderColor: 'var(--border-medium)' }}
-            />
-            <button
-              onClick={() => sendCoachMessage()}
-              disabled={coachLoading || !coachInput.trim()}
-              className="p-2 rounded-[10px] bg-semantic-purple text-white hover:opacity-90 disabled:opacity-40 transition-all"
-            >
-              <Send size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

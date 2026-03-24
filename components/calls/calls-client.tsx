@@ -1,16 +1,15 @@
 'use client'
 // components/calls/calls-client.tsx
 // Calls list page — matches getgunner.ai design
-// Layout: [Header] [Tabs] [Filters] [Call list (65%) | AI Coach (35%)]
 
-import { useState, useRef, useEffect, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Phone, RotateCcw, Loader2, AlertTriangle, Search, X, Download,
-  Settings, RefreshCw, MoreVertical, Bot, Send, Sparkles, Zap,
+  Settings, RefreshCw, MoreVertical,
   Calendar, User, PhoneOutgoing, PhoneIncoming, MapPin, Clock,
-  Archive, FileText, MessageSquare, ChevronDown,
+  Archive, FileText, MessageSquare,
 } from 'lucide-react'
 import { format, subDays, subMonths, formatDistanceToNow } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -29,11 +28,6 @@ interface Call {
 }
 
 type Tab = 'all' | 'review' | 'skipped' | 'archived'
-
-interface CoachMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -115,16 +109,6 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const [syncing, setSyncing] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
-  // AI Coach state
-  const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([])
-  const [coachInput, setCoachInput] = useState('')
-  const [coachLoading, setCoachLoading] = useState(false)
-  const coachBottomRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    coachBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [coachMessages])
-
   // Tab filtering
   const allCalls = calls.filter(c => c.gradingStatus === 'COMPLETED')
   const reviewCalls = calls.filter(c =>
@@ -172,27 +156,6 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
     setActionLoading(null)
   }
 
-  async function sendCoachMessage(text?: string) {
-    const content = (text ?? coachInput).trim()
-    if (!content || coachLoading) return
-    const userMsg: CoachMessage = { role: 'user', content }
-    const newMessages = [...coachMessages, userMsg]
-    setCoachMessages(newMessages)
-    setCoachInput('')
-    setCoachLoading(true)
-    try {
-      const res = await fetch('/api/ai/coach', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
-      })
-      const data = await res.json()
-      if (data.reply) setCoachMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
-    } catch {
-      setCoachMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I had trouble connecting.' }])
-    }
-    setCoachLoading(false)
-  }
-
   const tabs: Array<{ id: Tab; label: string; count: number; icon: React.ReactNode }> = [
     { id: 'all', label: 'All Calls', count: allCalls.length, icon: <Phone size={13} /> },
     { id: 'review', label: 'Needs Review', count: reviewCalls.length, icon: <AlertTriangle size={13} /> },
@@ -201,9 +164,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   ]
 
   return (
-    <div className="flex gap-0 -mx-4 md:-mx-8 -my-4 md:-my-6 min-h-[calc(100vh-52px)]">
-      {/* ── LEFT COLUMN — Call list ───────────────────────────────── */}
-      <div className="flex-1 px-4 md:px-8 py-4 md:py-6 overflow-y-auto space-y-5">
+    <div className="space-y-5">
 
         {/* PAGE HEADER */}
         <div className="flex items-start justify-between">
@@ -394,120 +355,6 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
             No archived calls
           </div>
         )}
-      </div>
-
-      {/* ── RIGHT COLUMN — AI COACH ───────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[320px] shrink-0 bg-surface-primary border-l sticky top-[52px] h-[calc(100vh-52px)]" style={{ borderColor: 'var(--border-light)' }}>
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-4 border-b" style={{ borderColor: 'var(--border-light)' }}>
-          <div className="w-8 h-8 rounded-[10px] bg-semantic-purple-bg flex items-center justify-center">
-            <Bot size={16} className="text-semantic-purple" />
-          </div>
-          <span className="text-[14px] font-medium text-txt-primary">AI Coach</span>
-          <ChevronDown size={12} className="text-txt-muted" />
-          <button className="ml-auto p-1 text-txt-muted hover:text-txt-primary">
-            <span className="text-[14px]">—</span>
-          </button>
-        </div>
-
-        {/* Coach body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {coachMessages.length === 0 ? (
-            <div className="text-center mt-6">
-              <div className="w-12 h-12 rounded-full bg-semantic-purple-bg flex items-center justify-center mx-auto mb-3">
-                <Sparkles size={20} className="text-semantic-purple" />
-              </div>
-              <p className="text-[13px] text-txt-secondary mb-1">Ask questions or take actions</p>
-
-              {/* COACHING section */}
-              <div className="mt-6 text-left">
-                <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2">Coaching</p>
-                <div className="space-y-2">
-                  {[
-                    'How do I handle price objections?',
-                    'Tips for building rapport quickly',
-                  ].map(q => (
-                    <button
-                      key={q}
-                      onClick={() => sendCoachMessage(q)}
-                      className="w-full text-left px-3 py-2.5 rounded-[10px] border-[0.5px] text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary transition-all"
-                      style={{ borderColor: 'var(--border-light)' }}
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ACTIONS section */}
-              <div className="mt-5 text-left">
-                <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2">Actions</p>
-                <div className="space-y-2">
-                  {[
-                    { icon: <Zap size={12} />, text: 'Add note to recent contact: "Called back, interested"' },
-                    { icon: <Zap size={12} />, text: 'Create task: Follow up with seller tomorrow' },
-                    { icon: <Zap size={12} />, text: 'Send SMS to recent contact: "Are you still interested?"' },
-                  ].map(a => (
-                    <button
-                      key={a.text}
-                      onClick={() => sendCoachMessage(a.text)}
-                      className="w-full text-left flex items-start gap-2 px-3 py-2.5 rounded-[10px] border-[0.5px] text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary transition-all"
-                      style={{ borderColor: 'var(--border-light)' }}
-                    >
-                      <span className="text-semantic-purple shrink-0 mt-0.5">{a.icon}</span>
-                      {a.text}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {coachMessages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-gunner-red text-white rounded-br-md'
-                      : 'bg-surface-secondary text-txt-primary rounded-bl-md'
-                  }`}>
-                    {msg.content}
-                  </div>
-                </div>
-              ))}
-              {coachLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-surface-secondary px-3 py-2 rounded-2xl rounded-bl-md">
-                    <Loader2 size={14} className="animate-spin text-txt-muted" />
-                  </div>
-                </div>
-              )}
-              <div ref={coachBottomRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Coach input */}
-        <div className="px-4 pb-4 pt-2 border-t" style={{ borderColor: 'var(--border-light)' }}>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={coachInput}
-              onChange={e => setCoachInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendCoachMessage() } }}
-              placeholder="Ask AI Coach..."
-              className="flex-1 bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-semantic-purple"
-              style={{ borderColor: 'var(--border-medium)' }}
-            />
-            <button
-              onClick={() => sendCoachMessage()}
-              disabled={coachLoading || !coachInput.trim()}
-              className="p-2 rounded-[10px] bg-semantic-purple text-white hover:opacity-90 disabled:opacity-40 transition-all"
-            >
-              <Send size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

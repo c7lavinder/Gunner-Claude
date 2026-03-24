@@ -1,10 +1,11 @@
-import { requireSession } from '@/lib/auth/session'
 // app/(tenant)/[tenant]/layout.tsx
-// Main app shell — top nav bar (52px sticky) + content area
+// Main app shell — top nav bar (52px sticky) + content area + global AI Coach
 // Design system: docs/DESIGN.md
 
+import { requireSession } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { TopNav } from '@/components/ui/top-nav'
+import { CoachSidebar } from '@/components/ui/coach-sidebar'
 
 interface TenantLayoutProps {
   children: React.ReactNode
@@ -23,6 +24,7 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
       <main className="px-4 md:px-8 py-4 md:py-6 max-w-[1400px] mx-auto">
         {children}
       </main>
+      <CoachSidebar />
     </div>
   )
 }
