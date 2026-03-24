@@ -293,9 +293,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         </div>
 
         {/* INBOX + APPOINTMENTS — side by side, fixed height */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* ── INBOX PANEL ─────────────────────────────────────── */}
-          <div className="bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[420px]" style={{ borderColor: 'var(--border-light)' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* ── INBOX PANEL (2/3) ──────────────────────────────── */}
+          <div className="lg:col-span-2 bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[420px]" style={{ borderColor: 'var(--border-light)' }}>
             {/* Inbox header */}
             <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
               <MessageSquare size={13} className="text-gunner-red" />
