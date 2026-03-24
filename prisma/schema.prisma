@@ -320,8 +320,9 @@ model Call {
   // GHL data
   ghlCallId    String? @unique @map("ghl_call_id")
   ghlContactId String? @map("ghl_contact_id") // GHL contact ID for AM/PM tracking
-  contactName  String? @map("contact_name")    // cached from GHL contact
-  recordingUrl String? @map("recording_url")
+  contactName    String? @map("contact_name")    // cached from GHL contact
+  contactAddress String? @map("contact_address") // cached from GHL contact address1+city+state
+  recordingUrl   String? @map("recording_url")
   transcript   String? @db.Text
 
   // Call metadata

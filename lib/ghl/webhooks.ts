@@ -171,14 +171,16 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     ? await db.property.findFirst({ where: { tenantId, ghlContactId: msg.contactId } })
     : null
 
-  // Resolve contact name
+  // Resolve contact name + address from GHL
   let contactName: string | null = null
+  let contactAddress: string | null = null
   if (msg.contactId) {
     try {
       const { getGHLClient } = await import('@/lib/ghl/client')
       const ghl = await getGHLClient(tenantId)
       const contact = await ghl.getContact(msg.contactId)
       contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || null
+      contactAddress = [contact.address1, contact.city, contact.state].filter(Boolean).join(', ') || null
     } catch { /* non-fatal */ }
   }
 
@@ -189,6 +191,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       ghlCallId: dedupeId || messageId || undefined,
       ghlContactId: msg.contactId ?? undefined,
       contactName,
+      contactAddress,
       assignedToId: user?.id,
       propertyId: property?.id,
       recordingUrl: recordingUrl ?? undefined,

@@ -22,7 +22,7 @@ interface Call {
   callType: string | null; callOutcome: string | null; callResult: string | null
   direction: string; durationSeconds: number | null; calledAt: string
   recordingUrl: string | null; aiSummary: string | null; aiFeedback: string | null
-  contactName: string | null
+  contactName: string | null; contactAddress: string | null
   assignedTo: { id: string; name: string; role: string } | null
   property: { id: string; address: string; city: string; state: string } | null
 }
@@ -418,10 +418,10 @@ function CallCard({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
           </div>
 
           {/* Row 3: Address */}
-          {call.property && (
+          {(call.property || call.contactAddress) && (
             <div className="mt-1.5">
               <span className="inline-flex items-center gap-1 text-[11px] text-txt-muted bg-surface-secondary border-[0.5px] px-2 py-0.5 rounded-full" style={{ borderColor: 'var(--border-light)' }}>
-                <MapPin size={9} /> {call.property.address}, {call.property.city}, {call.property.state}
+                <MapPin size={9} /> {call.property ? `${call.property.address}, ${call.property.city}, ${call.property.state}` : call.contactAddress}
               </span>
             </div>
           )}

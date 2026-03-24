@@ -142,15 +142,19 @@ async function pollCalls() {
                 const ghlUserId = String(msg.userId || conv.userId || conv.assignedTo || '')
                 const user = ghlUserId ? tenantUsers.find(u => u.ghlUserId === ghlUserId) : null
 
-                // Resolve contact name from GHL if not on conversation
+                // Resolve contact name + address from GHL
                 let resolvedName = contactName
+                let contactAddress: string | null = null
                 const contactId = String(msg.contactId ?? conv.contactId ?? '')
-                if (!resolvedName && contactId) {
+                if (contactId) {
                   try {
                     const cRes = await fetch(`${GHL_BASE_URL}/contacts/${contactId}`, { headers })
                     if (cRes.ok) {
-                      const cData = await cRes.json() as { contact?: { firstName?: string; lastName?: string } }
-                      resolvedName = `${cData.contact?.firstName ?? ''} ${cData.contact?.lastName ?? ''}`.trim() || null
+                      const cData = await cRes.json() as { contact?: { firstName?: string; lastName?: string; address1?: string; city?: string; state?: string } }
+                      if (!resolvedName) {
+                        resolvedName = `${cData.contact?.firstName ?? ''} ${cData.contact?.lastName ?? ''}`.trim() || null
+                      }
+                      contactAddress = [cData.contact?.address1, cData.contact?.city, cData.contact?.state].filter(Boolean).join(', ') || null
                     }
                   } catch { /* skip */ }
                 }
@@ -162,6 +166,7 @@ async function pollCalls() {
                     ghlCallId: dedupeId,
                     ghlContactId: contactId || undefined,
                     contactName: resolvedName,
+                    contactAddress,
                     assignedToId: user?.id ?? undefined,
                     direction: String(msg.direction) === 'inbound' ? 'INBOUND' : 'OUTBOUND',
                     durationSeconds: realDuration,
