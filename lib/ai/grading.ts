@@ -8,7 +8,7 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
 import { calculateTCP } from '@/lib/ai/scoring'
-import { getCallTypeAIContext, getRubricForCallType } from '@/lib/call-types'
+import { getCallTypeAIContext, getRubricForCallType, getResultsForCallType, CALL_TYPES } from '@/lib/call-types'
 import { INDUSTRY_KNOWLEDGE } from '@/lib/ai/industry-knowledge'
 import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
@@ -191,8 +191,11 @@ export async function gradeCall(callId: string): Promise<void> {
         gradedAt: new Date(),
         // 3-tier call type: 1) manual (already set) → 2) AI detection → 3) role fallback
         ...(!call.callType ? { callType: grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role) } : {}),
-        // Auto-classify outcome — always set, use default if AI didn't pick one
-        callOutcome: grading.callOutcome ?? inferDefaultOutcome(grading.callType ?? call.callType ?? inferCallTypeFromRole(call.assignedTo?.role)),
+        // Auto-classify outcome — validate against call type's valid results
+        callOutcome: validateOutcomeForType(
+          grading.callOutcome,
+          call.callType ?? grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role),
+        ),
         // Follow-up scheduled (separate from outcome)
         ...(grading.followUpScheduled !== undefined ? { callResult: grading.followUpScheduled ? 'follow_up_scheduled' : grading.callOutcome } : {}),
         // Key moments / highlights
@@ -440,7 +443,7 @@ Response format:
   "feedback": "<specific, actionable feedback paragraph>",
   "coachingTips": ["<tip 1>", "<tip 2>", "<tip 3>"],
   "callType": "<one of: cold_call, qualification_call, admin_call, follow_up_call, offer_call, purchase_agreement_call, dispo_call — or null if the call type was already set>",
-  "callOutcome": "<one of: not_interested, interested, appointment_set, follow_up_scheduled, not_qualified, solved, not_solved, accepted, rejected, signed, not_signed, showing_scheduled, offer_collected — pick the HIGHEST priority outcome that actually occurred>",
+  "callOutcome": "<MUST be one of the valid outcomes for the call type — see VALID OUTCOMES below>",
   "followUpScheduled": <boolean — true if a specific follow-up was agreed to, regardless of outcome>,
   "keyMoments": [
     {
@@ -465,8 +468,11 @@ CALL TYPE CLASSIFICATION RULES:
   - purchase_agreement_call: walking through contract signing
   - dispo_call: talking to a buyer/investor about a deal
 
-CALL OUTCOME PRIORITY (pick the highest that applies):
-accepted > signed > offer_collected > appointment_set > showing_scheduled > interested > follow_up_scheduled > not_interested > rejected > not_qualified > not_signed > not_solved > solved`)
+VALID OUTCOMES PER CALL TYPE — you MUST pick from the correct list:
+${CALL_TYPES.map(ct => `- ${ct.id}: ${ct.results.map(r => r.id).join(', ')}`).join('\n')}
+
+If you don't know the call type yet, determine it first from the content, THEN pick an outcome from that type's list.
+Pick the HIGHEST priority outcome that actually occurred.`)
 
   return sections.join('\n\n')
 }
@@ -555,6 +561,22 @@ function inferCallTypeFromRole(role?: string): string {
 }
 
 // ─── Default outcome fallback (when AI returns null) ────────────────────────
+
+/**
+ * Validates that an AI-returned outcome is valid for the given call type.
+ * If invalid, falls back to the first valid result for that type (the default).
+ */
+function validateOutcomeForType(outcome: string | null, callType: string): string {
+  const validResults = getResultsForCallType(callType)
+  if (validResults.length === 0) {
+    // Unknown call type — accept whatever the AI returned or use generic fallback
+    return outcome ?? inferDefaultOutcome(callType)
+  }
+  const validIds = validResults.map(r => r.id)
+  if (outcome && validIds.includes(outcome)) return outcome
+  // Outcome is null or not in the valid list — use the default for this type
+  return inferDefaultOutcome(callType)
+}
 
 function inferDefaultOutcome(callType: string): string {
   switch (callType) {
