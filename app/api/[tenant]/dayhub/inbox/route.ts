@@ -46,28 +46,35 @@ export async function GET(
       }
     }
 
-    const items = rawConversations.map(conv => ({
-      id: conv.id,
-      contactId: conv.contactId,
-      contactName: conv.contactName ?? conv.fullName ?? 'Unknown',
-      phone: conv.phone ?? null,
-      lastMessageBody: conv.lastMessageBody ?? '',
-      lastMessageType: conv.lastMessageType ?? 'message',
-      dateUpdated: conv.dateUpdated ?? Date.now(),
-      type: (conv.lastMessageType === 'TYPE_CALL') ? 'missed_call' as const : 'message' as const,
-      unreadCount: conv.unreadCount ?? 0,
-      assignedTo: userMap.get(conv.userId || conv.assignedTo || '') ?? null,
-      propertyAddress: propertyMap.get(conv.contactId) ?? null,
-    }))
+    const items = rawConversations.map(conv => {
+      const lastDirection = (conv.lastMessageDirection ?? '').toLowerCase()
+      const unread = conv.unreadCount ?? 0
+      const isInbound = lastDirection === 'inbound'
 
-    // Apply filter
-    const filtered = filter === 'missed'
-      ? items.filter(i => i.type === 'missed_call')
-      : filter === 'msgs'
-      ? items.filter(i => i.type === 'message')
-      : items
+      return {
+        id: conv.id,
+        contactId: conv.contactId,
+        contactName: conv.contactName ?? conv.fullName ?? 'Unknown',
+        phone: conv.phone ?? null,
+        lastMessageBody: conv.lastMessageBody ?? '',
+        lastMessageType: conv.lastMessageType ?? 'message',
+        lastMessageDirection: lastDirection,
+        dateUpdated: conv.dateUpdated ?? Date.now(),
+        type: (conv.lastMessageType === 'TYPE_CALL') ? 'missed_call' as const : 'message' as const,
+        unreadCount: unread,
+        assignedTo: userMap.get(conv.userId || conv.assignedTo || '') ?? null,
+        propertyAddress: propertyMap.get(conv.contactId) ?? null,
+        // Categorization
+        isUnread: unread > 0,
+        isNoResponse: unread === 0 && isInbound, // read but last msg was from contact — no reply sent
+      }
+    })
 
-    return NextResponse.json({ items: filtered, total: items.length })
+    // Split into categories
+    const unread = items.filter(i => i.isUnread)
+    const noResponse = items.filter(i => i.isNoResponse)
+
+    return NextResponse.json({ unread, noResponse, total: items.length })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch inbox'
     return NextResponse.json({ items: [], total: 0, error: message })

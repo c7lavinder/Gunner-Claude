@@ -67,7 +67,6 @@ interface AppointmentItem {
 }
 
 type RoleTab = 'ADMIN' | 'LM' | 'AM' | 'DISPO'
-type InboxFilter = 'all' | 'missed' | 'msgs'
 
 const CATEGORY_BADGE: Record<string, { label: string; color: string }> = {
   'New Lead': { label: 'NEW LEAD', color: 'border-semantic-green text-semantic-green' },
@@ -91,15 +90,14 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
   // State
   const [roleTab, setRoleTab] = useState<RoleTab>('ADMIN')
-  const [inboxFilter, setInboxFilter] = useState<InboxFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
 
   // Data state
   const [kpis, setKpis] = useState<KPIData | null>(null)
-  const [inbox, setInbox] = useState<InboxItem[]>([])
-  const [inboxTotal, setInboxTotal] = useState(0)
+  const [unreadInbox, setUnreadInbox] = useState<InboxItem[]>([])
+  const [noResponseInbox, setNoResponseInbox] = useState<InboxItem[]>([])
   const [appointments, setAppointments] = useState<AppointmentItem[]>([])
   const [loadingKpis, setLoadingKpis] = useState(true)
   const [loadingInbox, setLoadingInbox] = useState(true)
@@ -125,15 +123,19 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   }, [tenantSlug])
 
   // Fetch inbox
-  const fetchInbox = useCallback((filter: InboxFilter) => {
+  const fetchInbox = useCallback(() => {
     setLoadingInbox(true)
-    fetch(`/api/${tenantSlug}/dayhub/inbox?filter=${filter}`)
+    fetch(`/api/${tenantSlug}/dayhub/inbox`)
       .then(r => r.json())
-      .then(d => { setInbox(d.items ?? []); setInboxTotal(d.total ?? 0); setLoadingInbox(false) })
+      .then(d => {
+        setUnreadInbox(d.unread ?? [])
+        setNoResponseInbox(d.noResponse ?? [])
+        setLoadingInbox(false)
+      })
       .catch(() => setLoadingInbox(false))
   }, [tenantSlug])
 
-  useEffect(() => { fetchInbox(inboxFilter) }, [fetchInbox, inboxFilter])
+  useEffect(() => { fetchInbox() }, [fetchInbox])
 
   // Fetch appointments
   useEffect(() => {
@@ -155,8 +157,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const remaining = filteredTasks.length - visibleTaskCount
 
   // Inbox counts
-  const missedCount = inbox.filter(i => i.type === 'missed_call').length
-  const msgsCount = inbox.filter(i => i.type === 'message').length
 
   async function completeTask(taskId: string, contactId: string) {
     setCompletingTask(taskId)
@@ -194,7 +194,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         toast(`SMS sent to ${contactName}`, 'success')
         setReplyText('')
         setSelectedContact(null)
-        fetchInbox(inboxFilter)
+        fetchInbox()
       } else {
         const data = await res.json()
         toast(data.error || 'Failed to send SMS', 'error')
@@ -207,7 +207,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
   function refresh() {
     startTransition(() => router.refresh())
-    fetchInbox(inboxFilter)
+    fetchInbox()
     setLoadingKpis(true)
     fetch(`/api/${tenantSlug}/dayhub/kpis`)
       .then(r => r.json())
@@ -294,148 +294,124 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
         {/* INBOX + APPOINTMENTS — side by side, fixed height */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* ── INBOX PANEL (2/3) ──────────────────────────────── */}
-          <div className="lg:col-span-2 bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[420px]" style={{ borderColor: 'var(--border-light)' }}>
-            {/* Inbox header */}
-            <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
-              <MessageSquare size={13} className="text-gunner-red" />
-              <span className="text-[13px] font-semibold text-txt-primary uppercase tracking-wide">Inbox</span>
-              <span className="bg-gunner-red text-white text-[11px] font-medium px-2 py-0.5 rounded-full">{inboxTotal}</span>
-              <div className="flex gap-1 ml-auto">
-                {[
-                  { id: 'all' as InboxFilter, label: `All` },
-                  { id: 'missed' as InboxFilter, label: `Missed` },
-                  { id: 'msgs' as InboxFilter, label: `Msgs` },
-                ].map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => setInboxFilter(f.id)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
-                      inboxFilter === f.id ? 'bg-gunner-red text-white' : 'text-txt-secondary hover:text-txt-primary'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-                <button onClick={() => fetchInbox(inboxFilter)} className="p-1 text-txt-muted hover:text-txt-primary">
+          {/* ── INBOX PANELS (2/3) — two stacked boxes ────────── */}
+          <div className="lg:col-span-2 flex flex-col gap-4">
+            {/* UNREAD BOX */}
+            <div className="bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[200px]" style={{ borderColor: 'var(--border-light)' }}>
+              <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+                <MessageSquare size={13} className="text-semantic-red" />
+                <span className="text-[13px] font-semibold text-txt-primary uppercase tracking-wide">Unread</span>
+                {!loadingInbox && unreadInbox.length > 0 && (
+                  <span className="bg-gunner-red text-white text-[11px] font-medium px-2 py-0.5 rounded-full">{unreadInbox.length}</span>
+                )}
+                <button onClick={() => fetchInbox()} className="ml-auto p-1 text-txt-muted hover:text-txt-primary">
                   <RefreshCw size={12} />
                 </button>
               </div>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {loadingInbox ? (
+                  <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+                ) : unreadInbox.length === 0 ? (
+                  <div className="py-6 text-center text-[13px] text-txt-muted">All caught up</div>
+                ) : (
+                  unreadInbox.map(item => (
+                    <InboxRow key={item.id} item={item} onSelect={setSelectedContact} />
+                  ))
+                )}
+              </div>
             </div>
 
-            {/* Inbox body — scrollable */}
-            <div className="flex-1 overflow-y-auto min-h-0">
-              {!selectedContact ? (
-                <>
-                  {loadingInbox ? (
-                    <div className="py-8 text-center">
-                      <Loader2 size={16} className="animate-spin text-txt-muted mx-auto" />
-                    </div>
-                  ) : inbox.length === 0 ? (
-                    <div className="py-8 text-center text-[13px] text-txt-muted">No conversations</div>
-                  ) : (
-                    inbox.map(item => (
-                      <button
-                        key={item.id}
-                        onClick={() => setSelectedContact(item)}
-                        className="w-full text-left flex items-start gap-3 px-5 py-3 hover:bg-surface-secondary transition-colors border-b last:border-b-0"
-                        style={{ borderColor: 'var(--border-light)' }}
-                      >
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                          item.type === 'missed_call' ? 'bg-semantic-red-bg' : 'bg-semantic-blue-bg'
-                        }`}>
-                          {item.type === 'missed_call'
-                            ? <PhoneOff size={14} className="text-semantic-red" />
-                            : <MessageCircle size={14} className="text-semantic-blue" />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-[14px] font-medium text-txt-primary truncate">{item.contactName}</p>
-                            {item.assignedTo && (
-                              <span className="text-[11px] text-semantic-blue shrink-0">→ {item.assignedTo}</span>
-                            )}
-                          </div>
-                          {item.propertyAddress && (
-                            <p className="text-[11px] text-semantic-purple truncate mt-0.5">{item.propertyAddress}</p>
-                          )}
-                          <p className="text-[11px] text-txt-muted truncate mt-0.5">
-                            {item.type === 'missed_call' ? 'Missed call.' : item.lastMessageBody}
-                          </p>
-                        </div>
-                        <span className="text-[11px] text-txt-muted shrink-0">
-                          {format(new Date(item.dateUpdated), 'h:mm a')}
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </>
-              ) : (
-                <div className="p-5 flex flex-col h-full">
-                  <div className="flex items-center gap-3 mb-4 shrink-0">
-                    <button onClick={() => setSelectedContact(null)} className="p-1.5 rounded-[10px] hover:bg-surface-secondary text-txt-secondary">
-                      <ChevronLeft size={16} />
-                    </button>
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                      selectedContact.type === 'missed_call' ? 'bg-semantic-red-bg' : 'bg-semantic-blue-bg'
-                    }`}>
-                      {selectedContact.type === 'missed_call'
-                        ? <PhoneOff size={14} className="text-semantic-red" />
-                        : <MessageCircle size={14} className="text-semantic-blue" />
-                      }
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[14px] font-medium text-txt-primary">{selectedContact.contactName}</p>
-                      {selectedContact.phone && <p className="text-[11px] text-txt-muted">{selectedContact.phone}</p>}
-                    </div>
-                    <button className="p-1.5 rounded-[10px] hover:bg-surface-secondary text-txt-muted">
-                      <ExternalLink size={14} />
-                    </button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto space-y-3 py-2">
-                    <div className="text-center text-[11px] text-txt-muted">Today</div>
-                    {selectedContact.type === 'missed_call' ? (
-                      <div className="flex justify-center">
-                        <span className="border border-gunner-red text-gunner-red text-[12px] font-medium px-4 py-2 rounded-full flex items-center gap-2">
-                          <PhoneOff size={12} /> Missed Call
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex justify-end">
-                        <div className="bg-gunner-red text-white text-[13px] px-4 py-2 rounded-2xl rounded-br-md max-w-[80%]">
-                          {selectedContact.lastMessageBody}
-                        </div>
-                      </div>
-                    )}
-                    <div className="text-center text-[11px] text-txt-muted">
-                      {format(new Date(selectedContact.dateUpdated), 'h:mm a')}
-                    </div>
-                  </div>
-
-                  <div className="mt-2 flex gap-2 shrink-0">
-                    <input
-                      type="text"
-                      value={replyText}
-                      onChange={e => setReplyText(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(selectedContact.contactId, selectedContact.contactName) } }}
-                      placeholder={`Reply to ${selectedContact.contactName}...`}
-                      className="flex-1 bg-surface-secondary border rounded-[10px] px-4 py-2.5 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
-                      style={{ borderColor: 'var(--border-medium)' }}
-                      disabled={sendingReply}
-                    />
-                    <button
-                      onClick={() => sendReply(selectedContact.contactId, selectedContact.contactName)}
-                      disabled={!replyText.trim() || sendingReply}
-                      className="p-2.5 rounded-[10px] bg-gunner-red text-white hover:bg-gunner-red-dark disabled:opacity-40 transition-colors shrink-0"
-                    >
-                      {sendingReply ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    </button>
-                  </div>
-                </div>
-              )}
+            {/* NO RESPONSE BOX */}
+            <div className="bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[200px]" style={{ borderColor: 'var(--border-light)' }}>
+              <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+                <MessageSquare size={13} className="text-semantic-amber" />
+                <span className="text-[13px] font-semibold text-txt-primary uppercase tracking-wide">Needs Reply</span>
+                {!loadingInbox && noResponseInbox.length > 0 && (
+                  <span className="bg-semantic-amber text-white text-[11px] font-medium px-2 py-0.5 rounded-full">{noResponseInbox.length}</span>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {loadingInbox ? (
+                  <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+                ) : noResponseInbox.length === 0 ? (
+                  <div className="py-6 text-center text-[13px] text-txt-muted">All responded</div>
+                ) : (
+                  noResponseInbox.map(item => (
+                    <InboxRow key={item.id} item={item} onSelect={setSelectedContact} />
+                  ))
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Reply modal overlay — shows when a contact is selected */}
+          {selectedContact && (
+            <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setSelectedContact(null)}>
+              <div className="bg-surface-primary rounded-[14px] border-[0.5px] w-full max-w-md mx-4 flex flex-col h-[400px]" style={{ borderColor: 'var(--border-light)' }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-3 px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+                  <button onClick={() => setSelectedContact(null)} className="p-1.5 rounded-[10px] hover:bg-surface-secondary text-txt-secondary">
+                    <ChevronLeft size={16} />
+                  </button>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                    selectedContact.type === 'missed_call' ? 'bg-semantic-red-bg' : 'bg-semantic-blue-bg'
+                  }`}>
+                    {selectedContact.type === 'missed_call'
+                      ? <PhoneOff size={14} className="text-semantic-red" />
+                      : <MessageCircle size={14} className="text-semantic-blue" />
+                    }
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[14px] font-medium text-txt-primary">{selectedContact.contactName}</p>
+                    {selectedContact.phone && <p className="text-[11px] text-txt-muted">{selectedContact.phone}</p>}
+                  </div>
+                  <button className="p-1.5 rounded-[10px] hover:bg-surface-secondary text-txt-muted">
+                    <ExternalLink size={14} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                  <div className="text-center text-[11px] text-txt-muted">Today</div>
+                  {selectedContact.type === 'missed_call' ? (
+                    <div className="flex justify-center">
+                      <span className="border border-gunner-red text-gunner-red text-[12px] font-medium px-4 py-2 rounded-full flex items-center gap-2">
+                        <PhoneOff size={12} /> Missed Call
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-end">
+                      <div className="bg-gunner-red text-white text-[13px] px-4 py-2 rounded-2xl rounded-br-md max-w-[80%]">
+                        {selectedContact.lastMessageBody}
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-center text-[11px] text-txt-muted">
+                    {format(new Date(selectedContact.dateUpdated), 'h:mm a')}
+                  </div>
+                </div>
+
+                <div className="px-5 pb-4 pt-2 flex gap-2 shrink-0 border-t" style={{ borderColor: 'var(--border-light)' }}>
+                  <input
+                    type="text"
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(selectedContact.contactId, selectedContact.contactName) } }}
+                    placeholder={`Reply to ${selectedContact.contactName}...`}
+                    className="flex-1 bg-surface-secondary border rounded-[10px] px-4 py-2.5 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                    disabled={sendingReply}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => sendReply(selectedContact.contactId, selectedContact.contactName)}
+                    disabled={!replyText.trim() || sendingReply}
+                    className="p-2.5 rounded-[10px] bg-gunner-red text-white hover:bg-gunner-red-dark disabled:opacity-40 transition-colors shrink-0"
+                  >
+                    {sendingReply ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── APPOINTMENTS PANEL ──────────────────────────────── */}
           <div className="bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[420px]" style={{ borderColor: 'var(--border-light)' }}>
@@ -539,6 +515,44 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
           )}
         </div>
     </div>
+  )
+}
+
+// ─── Inbox Row ──────────────────────────────────────────────────────────────
+
+function InboxRow({ item, onSelect }: { item: InboxItem; onSelect: (item: InboxItem) => void }) {
+  return (
+    <button
+      onClick={() => onSelect(item)}
+      className="w-full text-left flex items-start gap-3 px-5 py-2.5 hover:bg-surface-secondary transition-colors border-b last:border-b-0"
+      style={{ borderColor: 'var(--border-light)' }}
+    >
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+        item.type === 'missed_call' ? 'bg-semantic-red-bg' : 'bg-semantic-blue-bg'
+      }`}>
+        {item.type === 'missed_call'
+          ? <PhoneOff size={12} className="text-semantic-red" />
+          : <MessageCircle size={12} className="text-semantic-blue" />
+        }
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-[13px] font-medium text-txt-primary truncate">{item.contactName}</p>
+          {item.assignedTo && (
+            <span className="text-[10px] text-semantic-blue shrink-0">→ {item.assignedTo}</span>
+          )}
+        </div>
+        {item.propertyAddress && (
+          <p className="text-[10px] text-semantic-purple truncate">{item.propertyAddress}</p>
+        )}
+        <p className="text-[10px] text-txt-muted truncate">
+          {item.type === 'missed_call' ? 'Missed call' : item.lastMessageBody}
+        </p>
+      </div>
+      <span className="text-[10px] text-txt-muted shrink-0 mt-0.5">
+        {format(new Date(item.dateUpdated), 'h:mm a')}
+      </span>
+    </button>
   )
 }
 
