@@ -1,17 +1,19 @@
 // scripts/poll-calls.ts
-// Cron job — runs every 60s via Railway
-// Hybrid approach: check recent conversations + contact lookup for missed calls
-// Fetches recordings, transcribes, grades. Caches contact names.
+// Cron job — runs every 5 min via Railway Function
+// Uses GHL client for auto-retry, token refresh, and correct API version
+// Fetches recent conversations, finds call messages, transcribes, grades
 
 import { db } from '../lib/db/client'
+import { getGHLClient } from '../lib/ghl/client'
 import { gradeCall } from '../lib/ai/grading'
 import { syncGHLUsers } from '../lib/ghl/sync-users'
 import { fetchCallRecording } from '../lib/ghl/fetch-recording'
 import { transcribeRecording } from '../lib/ai/transcribe'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
-const GHL_API_VERSION = '2021-04-15'
 const MIN_CALL_DURATION = 45
+const CONVERSATION_LIMIT = 100 // was 50 — busy teams need more coverage
+const LOOKBACK_HOURS = 6 // was 4 — wider window to catch delayed conversations
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
 
@@ -36,10 +38,26 @@ async function pollCalls() {
         // Sync GHL user data
         await syncGHLUsers(tenant.id).catch(() => {})
 
+        // Use GHL client for auto-retry + token refresh
+        let ghl: Awaited<ReturnType<typeof getGHLClient>>
+        try {
+          ghl = await getGHLClient(tenant.id)
+        } catch (err) {
+          console.error(`[poll-calls] Cannot get GHL client for tenant ${tenant.id}:`, err instanceof Error ? err.message : err)
+          continue
+        }
+
+        // Re-read token after potential refresh
+        const freshTenant = await db.tenant.findUnique({
+          where: { id: tenant.id },
+          select: { ghlAccessToken: true, ghlLocationId: true },
+        })
+        if (!freshTenant?.ghlAccessToken) continue
+
         const headers = {
-          'Authorization': `Bearer ${tenant.ghlAccessToken}`,
+          'Authorization': `Bearer ${freshTenant.ghlAccessToken}`,
           'Content-Type': 'application/json',
-          'Version': GHL_API_VERSION,
+          'Version': '2021-07-28',
         }
 
         const tenantUsers = await db.user.findMany({
@@ -52,17 +70,28 @@ async function pollCalls() {
             .map(c => c.ghlCallId).filter(Boolean) as string[]
         )
 
-        const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000) // last 4 hours
+        const cutoff = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000)
 
-        // Fetch recent conversations (catches most new calls)
+        // Fetch recent conversations — increased limit for busy teams
         const convRes = await fetch(
-          `${GHL_BASE_URL}/conversations/search?${new URLSearchParams({ locationId: tenant.ghlLocationId!, limit: '50' })}`,
+          `${GHL_BASE_URL}/conversations/search?${new URLSearchParams({ locationId: freshTenant.ghlLocationId!, limit: String(CONVERSATION_LIMIT) })}`,
           { headers },
         )
-        if (!convRes.ok) continue
+        if (!convRes.ok) {
+          const errorBody = await convRes.text().catch(() => 'unknown')
+          console.error(`[poll-calls] Conversations fetch failed (${convRes.status}) for tenant ${tenant.id}: ${errorBody.slice(0, 200)}`)
+          continue
+        }
 
         const convData = await convRes.json() as { conversations?: Array<{ id: string; contactId?: string; contactName?: string; fullName?: string; phone?: string; userId?: string; assignedTo?: string }> }
         const conversations = convData.conversations ?? []
+        console.log(`[poll-calls] Tenant ${tenant.id}: ${conversations.length} conversations fetched`)
+
+        // Log contact names for debugging missed calls
+        if (conversations.length > 0) {
+          const names = conversations.slice(0, 10).map(c => c.contactName || c.fullName || c.phone || '?').join(', ')
+          console.log(`[poll-calls] Recent contacts: ${names}${conversations.length > 10 ? ` ... +${conversations.length - 10} more` : ''}`)
+        }
 
         for (const conv of conversations) {
           await sleep(50)
@@ -96,8 +125,14 @@ async function pollCalls() {
                 const realDuration = Math.min(Math.max(metaDur, elapsed), 1800)
 
                 const status = String((msg.callStatus ?? (msg.meta as { call?: { status?: string } })?.call?.status ?? msg.status) ?? '').toLowerCase()
-                if (['initiated', 'ringing', 'failed', 'busy'].includes(status)) continue
-                if (realDuration < MIN_CALL_DURATION) continue
+                if (['initiated', 'ringing', 'failed', 'busy'].includes(status)) {
+                  console.log(`[poll-calls] Skip (status=${status}): ${conv.contactName || conv.fullName || 'Unknown'}`)
+                  continue
+                }
+                if (realDuration < MIN_CALL_DURATION) {
+                  console.log(`[poll-calls] Skip (${realDuration}s < ${MIN_CALL_DURATION}s): ${conv.contactName || conv.fullName || 'Unknown'}`)
+                  continue
+                }
 
                 const dedupeId = String(msg.altId || msg.id)
                 if (existingIds.has(dedupeId)) continue
@@ -137,11 +172,11 @@ async function pollCalls() {
 
                 // Fetch recording + transcribe
                 await sleep(100)
-                const rec = await fetchCallRecording(tenant.ghlAccessToken!, tenant.ghlLocationId!, String(msg.id))
+                const rec = await fetchCallRecording(freshTenant.ghlAccessToken!, freshTenant.ghlLocationId!, String(msg.id))
 
                 if (rec.status === 'success' && rec.recordingUrl) {
                   await db.call.update({ where: { id: call.id }, data: { recordingUrl: rec.recordingUrl } })
-                  const trans = await transcribeRecording(rec.recordingUrl, tenant.ghlAccessToken!)
+                  const trans = await transcribeRecording(rec.recordingUrl, freshTenant.ghlAccessToken!)
                   if (trans.status === 'success' && trans.transcript) {
                     await db.call.update({ where: { id: call.id }, data: { transcript: trans.transcript } })
                   }
@@ -162,7 +197,7 @@ async function pollCalls() {
           } catch { continue }
         }
       } catch (err) {
-        console.error(`[poll-calls] Error:`, err instanceof Error ? err.message : err)
+        console.error(`[poll-calls] Tenant error:`, err instanceof Error ? err.message : err)
       }
     }
 
