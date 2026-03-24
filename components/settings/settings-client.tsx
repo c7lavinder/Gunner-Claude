@@ -185,7 +185,7 @@ export function SettingsClient({
   ]
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-5xl space-y-6">
       {/* Page header */}
       <div>
         <h1 className="text-ds-page font-semibold text-txt-primary">Settings</h1>

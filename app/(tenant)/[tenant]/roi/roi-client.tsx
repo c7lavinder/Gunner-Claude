@@ -1,8 +1,10 @@
 'use client'
 // ROI page — lead source cost tracking and ROI analysis
 
-import { useState } from 'react'
-import { DollarSign, TrendingUp, Plus, Loader2 } from 'lucide-react'
+import { useState, useTransition } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
+import { DollarSign, TrendingUp, Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useToast } from '@/components/ui/toaster'
 
 interface SourceSummary {
   source: string; totalSpend: number; currentMonthCost: number
@@ -17,6 +19,10 @@ export function RoiClient({
   tenantSlug: string; sources: SourceSummary[]
   currentMonth: number; currentYear: number
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const [, startTransition] = useTransition()
+  const { toast } = useToast()
   const [showAdd, setShowAdd] = useState(false)
   const [addSource, setAddSource] = useState(DEFAULT_SOURCES[0])
   const [addCost, setAddCost] = useState('')
@@ -29,18 +35,37 @@ export function RoiClient({
   async function saveCost() {
     if (!addCost) return
     setSaving(true)
-    await fetch('/api/lead-sources', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: addSource, cost: parseFloat(addCost), month: currentMonth, year: currentYear }),
-    })
+    try {
+      const res = await fetch('/api/lead-sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: addSource, cost: parseFloat(addCost), month: currentMonth, year: currentYear }),
+      })
+      if (res.ok) {
+        toast('Spend logged', 'success')
+        setShowAdd(false)
+        setAddCost('')
+        startTransition(() => router.refresh())
+      } else {
+        toast('Failed to save spend', 'error')
+      }
+    } catch {
+      toast('Failed to save spend', 'error')
+    }
     setSaving(false)
-    setShowAdd(false)
-    setAddCost('')
-    window.location.reload()
   }
 
   const monthLabel = new Date(currentYear, currentMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const now = new Date()
+  const isCurrentMonth = currentMonth === now.getMonth() + 1 && currentYear === now.getFullYear()
+
+  function navigateMonth(delta: number) {
+    let m = currentMonth + delta
+    let y = currentYear
+    if (m < 1) { m = 12; y-- }
+    if (m > 12) { m = 1; y++ }
+    startTransition(() => router.push(`${pathname}?month=${m}&year=${y}`))
+  }
 
   const inputCls = 'bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none focus:border-gunner-red/60 transition-colors'
 
@@ -53,6 +78,17 @@ export function RoiClient({
         </div>
         <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-body font-semibold px-4 py-2.5 rounded-[10px] transition-colors">
           <Plus size={14} /> Log spend
+        </button>
+      </div>
+
+      {/* Month selector */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigateMonth(-1)} className="p-1.5 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors">
+          <ChevronLeft size={16} />
+        </button>
+        <span className="text-ds-label font-medium text-txt-primary min-w-[160px] text-center">{monthLabel}</span>
+        <button onClick={() => navigateMonth(1)} disabled={isCurrentMonth} className="p-1.5 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary disabled:opacity-30 transition-colors">
+          <ChevronRight size={16} />
         </button>
       </div>
 

@@ -28,26 +28,36 @@ export default function OnboardingClient() {
   const [invites, setInvites] = useState<InviteEntry[]>([])
   const [saving, setSaving] = useState(false)
   const [ghlConnected, setGhlConnected] = useState(false)
+  const [loadingPipelines, setLoadingPipelines] = useState(false)
 
   const tenantSlug = (session?.user as { tenantSlug?: string })?.tenantSlug
 
   // Pick up step from query param (e.g. after GHL OAuth redirect)
+  // Only allow skipping to step 2 if GHL was just connected, otherwise clamp to current progress
   useEffect(() => {
     const urlStep = params.get('step')
     const success = params.get('success')
-    if (urlStep) setStep(Number(urlStep))
-    if (success === 'ghl_connected') setGhlConnected(true)
+    if (success === 'ghl_connected') {
+      setGhlConnected(true)
+      setStep(2) // GHL connected — advance to pipeline selection
+    } else if (urlStep) {
+      const requested = Number(urlStep)
+      // Only allow going back or to step 1-2 via URL; higher steps require completing prior ones
+      if (requested <= 2) setStep(requested)
+    }
   }, [params])
 
   // Load pipelines once GHL is connected
   useEffect(() => {
-    if (step === 2 && ghlConnected) {
+    if (step === 2 && ghlConnected && pipelines.length === 0) {
+      setLoadingPipelines(true)
       fetch('/api/ghl/pipelines')
         .then((r) => r.json())
         .then((d) => setPipelines(d.pipelines ?? []))
         .catch(console.error)
+        .finally(() => setLoadingPipelines(false))
     }
-  }, [step, ghlConnected])
+  }, [step, ghlConnected, pipelines.length])
 
   function buildGHLOAuthUrl() {
     const base = 'https://marketplace.gohighlevel.com/oauth/chooselocation'
@@ -216,6 +226,11 @@ export default function OnboardingClient() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Pipeline</label>
+                  {loadingPipelines ? (
+                    <div className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-muted text-ds-body animate-pulse">
+                      Loading pipelines from GHL…
+                    </div>
+                  ) : (
                   <select
                     value={selectedPipeline}
                     onChange={(e) => { setSelectedPipeline(e.target.value); setSelectedStage('') }}
@@ -226,6 +241,7 @@ export default function OnboardingClient() {
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
+                  )}
                 </div>
 
                 {selectedPipeline && selectedPipelineObj && (

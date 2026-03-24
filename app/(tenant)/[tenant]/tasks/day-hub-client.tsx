@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import {
   Phone, MessageSquare, Calendar, Star, Target, FileText,
   Settings, RefreshCw, ChevronDown, ChevronLeft, ExternalLink,
-  MapPin, User, Clock, Loader2, Bot, Send, Sparkles, Circle,
+  MapPin, User, Clock, Loader2, Bot, Send, Sparkles, Circle, CheckCircle,
   PhoneOff, MessageCircle,
 } from 'lucide-react'
 import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
@@ -110,8 +110,14 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [loadingInbox, setLoadingInbox] = useState(true)
   const [loadingAppts, setLoadingAppts] = useState(true)
 
+  // Task completion
+  const [completingTask, setCompletingTask] = useState<string | null>(null)
+  const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set())
+
   // Inbox thread
   const [selectedContact, setSelectedContact] = useState<InboxItem | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
 
   // AI Coach
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([])
@@ -153,9 +159,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
     coachBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [coachMessages])
 
-  // Filter tasks
+  // Filter tasks (exclude optimistically completed)
   const assignedNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
-  let filteredTasks = tasks
+  let filteredTasks = tasks.filter(t => !completedTaskIds.has(t.id))
   if (categoryFilter) filteredTasks = filteredTasks.filter(t => t.category === categoryFilter)
   if (teamFilter) filteredTasks = filteredTasks.filter(t => t.assignedToName === teamFilter)
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length
@@ -189,6 +195,53 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       setCoachMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I had trouble connecting. Try again.' }])
     }
     setCoachLoading(false)
+  }
+
+  async function completeTask(taskId: string, contactId: string) {
+    setCompletingTask(taskId)
+    setCompletedTaskIds(prev => new Set(prev).add(taskId))
+    try {
+      const res = await fetch(`/api/${tenantSlug}/dayhub/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete', taskId, contactId }),
+      })
+      if (res.ok) {
+        toast('Task completed!', 'success')
+        startTransition(() => router.refresh())
+      } else {
+        setCompletedTaskIds(prev => { const next = new Set(prev); next.delete(taskId); return next })
+        toast('Failed to complete task', 'error')
+      }
+    } catch {
+      setCompletedTaskIds(prev => { const next = new Set(prev); next.delete(taskId); return next })
+      toast('Failed to complete task', 'error')
+    }
+    setCompletingTask(null)
+  }
+
+  async function sendReply(contactId: string, contactName: string) {
+    if (!replyText.trim() || sendingReply) return
+    setSendingReply(true)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/dayhub/inbox`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactId, message: replyText.trim() }),
+      })
+      if (res.ok) {
+        toast(`SMS sent to ${contactName}`, 'success')
+        setReplyText('')
+        setSelectedContact(null)
+        fetchInbox(inboxFilter)
+      } else {
+        const data = await res.json()
+        toast(data.error || 'Failed to send SMS', 'error')
+      }
+    } catch {
+      toast('Failed to send SMS', 'error')
+    }
+    setSendingReply(false)
   }
 
   function refresh() {
@@ -418,13 +471,24 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
               </div>
 
               {/* Reply input */}
-              <div className="mt-4">
+              <div className="mt-4 flex gap-2">
                 <input
                   type="text"
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(selectedContact.contactId, selectedContact.contactName) } }}
                   placeholder={`Reply to ${selectedContact.contactName}...`}
-                  className="w-full bg-surface-secondary border rounded-[10px] px-4 py-2.5 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
+                  className="flex-1 bg-surface-secondary border rounded-[10px] px-4 py-2.5 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
                   style={{ borderColor: 'var(--border-medium)' }}
+                  disabled={sendingReply}
                 />
+                <button
+                  onClick={() => sendReply(selectedContact.contactId, selectedContact.contactName)}
+                  disabled={!replyText.trim() || sendingReply}
+                  className="p-2.5 rounded-[10px] bg-gunner-red text-white hover:bg-gunner-red-dark disabled:opacity-40 transition-colors shrink-0"
+                >
+                  {sendingReply ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                </button>
               </div>
             </div>
           )}
@@ -506,7 +570,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
               <div className="py-12 text-center text-[13px] text-txt-muted">No tasks to show</div>
             ) : (
               visibleTasks.map((task, i) => (
-                <TaskRow key={task.id} task={task} index={i + 1} tenantSlug={tenantSlug} />
+                <TaskRow key={task.id} task={task} index={i + 1} tenantSlug={tenantSlug} onComplete={completeTask} completing={completingTask} />
               ))
             )}
           </div>
@@ -618,16 +682,19 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
 // ─── Task Row ───────────────────────────────────────────────────────────────
 
-function TaskRow({ task, index, tenantSlug }: {
+function TaskRow({ task, index, tenantSlug, onComplete, completing }: {
   task: EnrichedTask
   index: number
   tenantSlug: string
+  onComplete: (taskId: string, contactId: string) => void
+  completing: string | null
 }) {
   const daysOverdue = task.dueDate && task.isOverdue
     ? differenceInDays(new Date(), new Date(task.dueDate))
     : 0
 
   const catBadge = CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']
+  const isCompleting = completing === task.id
 
   return (
     <div className={`flex items-center gap-3 px-5 py-3 hover:bg-surface-secondary transition-colors ${
@@ -637,8 +704,15 @@ function TaskRow({ task, index, tenantSlug }: {
       <span className="text-[11px] text-txt-muted w-5 text-right shrink-0">{index}</span>
 
       {/* Checkbox circle */}
-      <button className="shrink-0 text-txt-muted hover:text-gunner-red transition-colors">
-        <Circle size={16} />
+      <button
+        onClick={() => onComplete(task.id, task.contactId)}
+        disabled={isCompleting}
+        className="shrink-0 text-txt-muted hover:text-gunner-red transition-colors"
+      >
+        {isCompleting
+          ? <CheckCircle size={16} className="text-semantic-green animate-pulse" />
+          : <Circle size={16} />
+        }
       </button>
 
       {/* Category badge */}

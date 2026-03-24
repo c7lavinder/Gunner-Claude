@@ -237,9 +237,8 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
                   <div className="absolute right-0 top-10 w-48 bg-surface-primary border rounded-[14px] py-1 shadow-ds-float z-50" style={{ borderColor: 'var(--border-medium)' }}>
-                    <button className="w-full text-left px-4 py-2.5 text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary">Sync BatchDialer</button>
-                    <button className="w-full text-left px-4 py-2.5 text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary">Upload Call</button>
-                    <button className="w-full text-left px-4 py-2.5 text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary">Coach Log</button>
+                    <a href={`/${tenantSlug}/ai-coach`} className="w-full text-left px-4 py-2.5 text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary block">AI Coach</a>
+                    <a href={`/${tenantSlug}/training`} className="w-full text-left px-4 py-2.5 text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary block">Training Hub</a>
                   </div>
                 </>
               )}

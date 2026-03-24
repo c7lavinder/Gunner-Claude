@@ -111,10 +111,11 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const grade = gradeInfo(call.score)
   const outcome = call.callOutcome ?? call.property?.status ?? null
 
-  // Extract strengths from AI feedback (first few positive points)
+  // Extract strengths from AI feedback — split on newlines (not periods) for cleaner sentences
   const strengths = (call.aiFeedback ?? '')
-    .split(/\n|\.(?=\s)/)
-    .filter(s => s.trim().length > 20)
+    .split(/\n+/)
+    .map(s => s.replace(/^[-•*]\s*/, '').trim())
+    .filter(s => s.length > 15 && !s.toLowerCase().startsWith('area') && !s.toLowerCase().startsWith('improve'))
     .slice(0, 4)
 
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode; badge?: number }> = [
@@ -459,13 +460,17 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                   {/* Waveform placeholder */}
                   <div className="h-16 bg-surface-secondary rounded-[10px] flex items-center justify-center mb-3 overflow-hidden relative">
                     <div className="flex items-end gap-[2px] h-12">
-                      {Array.from({ length: 60 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="w-[3px] rounded-full bg-gunner-red/30"
-                          style={{ height: `${Math.random() * 100}%` }}
-                        />
-                      ))}
+                      {Array.from({ length: 60 }).map((_, i) => {
+                        // Deterministic wave pattern: sine + harmonic for natural-looking audio bars
+                        const h = 20 + Math.abs(Math.sin(i * 0.4) * 40) + Math.abs(Math.sin(i * 0.9) * 30) + (i % 3 === 0 ? 10 : 0)
+                        return (
+                          <div
+                            key={i}
+                            className="w-[3px] rounded-full bg-gunner-red/30"
+                            style={{ height: `${Math.min(h, 100)}%` }}
+                          />
+                        )
+                      })}
                     </div>
                     {/* Playhead */}
                     <div

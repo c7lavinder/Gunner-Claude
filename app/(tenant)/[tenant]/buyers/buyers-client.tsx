@@ -37,7 +37,7 @@ export function BuyersClient({
   const [blastChannel, setBlastChannel] = useState<'sms' | 'email'>('sms')
   const [blastMessage, setBlastMessage] = useState('')
   const [selectedBuyers, setSelectedBuyers] = useState<Set<string>>(new Set())
-  const [blastStatus, setBlastStatus] = useState<{ type: 'success' | 'pending' | 'error'; message: string } | null>(null)
+  const [blastStatus, setBlastStatus] = useState<{ type: 'success' | 'pending' | 'error'; message: string; blastId?: string } | null>(null)
   const [sending, setSending] = useState(false)
 
   async function addBuyer() {
@@ -92,7 +92,7 @@ export function BuyersClient({
       })
       const data = await res.json()
       if (data.blast?.requiresApproval) {
-        setBlastStatus({ type: 'pending', message: `Blast to ${data.blast.recipientCount} buyers requires approval: ${data.blast.gateReason}` })
+        setBlastStatus({ type: 'pending', message: `Blast to ${data.blast.recipientCount} buyers requires approval: ${data.blast.gateReason}`, blastId: data.blast.id })
       } else if (data.blast) {
         setBlastStatus({ type: 'success', message: `Blast created for ${data.blast.recipientCount} buyers` })
         setShowBlast(false)
@@ -151,7 +151,7 @@ export function BuyersClient({
               {blastStatus.message}
             </p>
             {blastStatus.type === 'pending' && (
-              <button onClick={() => approveBlast('')} className="mt-2 text-ds-fine bg-semantic-amber text-white font-semibold px-3 py-1 rounded-[10px] hover:opacity-90 transition-opacity">
+              <button onClick={() => approveBlast(blastStatus.blastId ?? '')} className="mt-2 text-ds-fine bg-semantic-amber text-white font-semibold px-3 py-1 rounded-[10px] hover:opacity-90 transition-opacity">
                 Approve and send
               </button>
             )}

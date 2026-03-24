@@ -1,8 +1,10 @@
-// GET /api/[tenant]/dayhub/tasks
-// Returns tasks from DB sorted by overdue → today → upcoming
+// GET/POST /api/[tenant]/dayhub/tasks
+// GET: Returns tasks from DB sorted by overdue → today → upcoming
+// POST: Completes a GHL task
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
+import { getGHLClient } from '@/lib/ghl/client'
 import { startOfDay, endOfDay, addDays, differenceInDays } from 'date-fns'
 
 export async function GET(
@@ -88,5 +90,42 @@ export async function GET(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch tasks'
     return NextResponse.json({ tasks: [], total: 0, overdue: 0, error: message }, { status: 500 })
+  }
+}
+
+export async function POST(
+  req: Request,
+  { params }: { params: { tenant: string } }
+) {
+  try {
+    const session = await getSession()
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const tenantId = session.tenantId
+    const body = await req.json()
+    const { action, taskId, contactId } = body
+
+    if (action === 'complete' && taskId && contactId) {
+      const ghl = await getGHLClient(tenantId)
+      await ghl.completeTask(contactId, taskId)
+
+      await db.auditLog.create({
+        data: {
+          tenantId,
+          userId: session.userId,
+          action: 'task.completed_ghl',
+          source: 'USER',
+          severity: 'INFO',
+          payload: { taskId, contactId },
+        },
+      })
+
+      return NextResponse.json({ status: 'success' })
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to complete task'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

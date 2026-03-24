@@ -27,14 +27,15 @@ const SUGGESTED_PROMPTS = [
 ]
 
 export function AiCoachClient({
-  tenantSlug, userName, userRole, insights = [],
+  tenantSlug, userName, userRole, insights = [], history = [],
 }: {
   tenantSlug: string
   userName: string
   userRole: string
   insights?: CoachInsight[]
+  history?: Message[]
 }) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(history)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)

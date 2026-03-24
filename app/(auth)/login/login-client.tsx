@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { AuthLogo, AuthCard, AuthFooterLink, AUTH_INPUT_CLS, AUTH_BTN_CLS, AUTH_ERROR_CLS, AUTH_LABEL_CLS } from '@/components/auth/auth-ui'
 
 export default function LoginClient() {
   const router = useRouter()
@@ -38,30 +38,13 @@ export default function LoginClient() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-left mb-8">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-[10px] bg-gunner-red flex items-center justify-center">
-              <span className="text-white font-semibold text-ds-body">G</span>
-            </div>
-            <span className="text-txt-primary font-semibold text-ds-section">Gunner AI</span>
-          </div>
-          <p className="text-txt-secondary text-ds-body">Sign in to your command center</p>
-        </div>
+        <AuthLogo tagline="Sign in to your command center" />
 
-        {/* Card */}
-        <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[14px] p-8">
+        <AuthCard>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-ds-label text-txt-primary font-medium mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@company.com"
-                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary placeholder-txt-muted text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
-              />
+              <label className={AUTH_LABEL_CLS}>Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@company.com" className={AUTH_INPUT_CLS} />
             </div>
 
             <div>
@@ -69,38 +52,18 @@ export default function LoginClient() {
                 <label className="text-ds-label text-txt-primary font-medium">Password</label>
                 <a href="/reset-password" className="text-ds-fine text-gunner-red hover:text-gunner-red-dark transition-colors">Forgot password?</a>
               </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full bg-surface-secondary border border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary placeholder-txt-muted text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)] transition-colors"
-              />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" className={AUTH_INPUT_CLS} />
             </div>
 
-            {error && (
-              <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-[10px] px-4 py-2.5 text-semantic-red text-ds-body">
-                {error}
-              </div>
-            )}
+            {error && <div className={AUTH_ERROR_CLS}>{error}</div>}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-50 text-white font-semibold rounded-[10px] py-2.5 text-ds-body transition-colors"
-            >
+            <button type="submit" disabled={loading} className={AUTH_BTN_CLS}>
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          <p className="mt-6 text-left text-ds-body text-txt-muted">
-            No account?{' '}
-            <Link href="/register" className="text-gunner-red hover:text-gunner-red-dark transition-colors">
-              Create one free
-            </Link>
-          </p>
-        </div>
+          <AuthFooterLink text="No account?" linkText="Create one free" href="/register" />
+        </AuthCard>
       </div>
     </div>
   )

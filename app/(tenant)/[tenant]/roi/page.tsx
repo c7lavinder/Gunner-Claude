@@ -4,12 +4,12 @@ import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { RoiClient } from './roi-client'
 
-export default async function RoiPage({ params }: { params: { tenant: string } }) {
+export default async function RoiPage({ params, searchParams }: { params: { tenant: string }; searchParams: { month?: string; year?: string } }) {
   const session = await requireSession()
   const tenantId = session.tenantId
   const now = new Date()
-  const currentMonth = now.getMonth() + 1
-  const currentYear = now.getFullYear()
+  const currentMonth = searchParams.month ? parseInt(searchParams.month) : now.getMonth() + 1
+  const currentYear = searchParams.year ? parseInt(searchParams.year) : now.getFullYear()
 
   const [costs, propertiesBySource, soldBySource] = await Promise.all([
     db.leadSourceCost.findMany({

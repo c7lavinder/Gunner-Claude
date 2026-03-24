@@ -2,7 +2,7 @@
 // components/appointments/appointments-client.tsx
 
 import { format, isToday, isTomorrow, parseISO } from 'date-fns'
-import { Calendar, Clock, User, AlertCircle } from 'lucide-react'
+import { Calendar, Clock, User, AlertCircle, ExternalLink } from 'lucide-react'
 
 interface AppointmentItem {
   id: string
@@ -110,6 +110,15 @@ export function AppointmentsClient({ appointments, fetchError, tenantSlug }: {
                   <span className={`text-ds-fine font-medium px-2 py-[3px] rounded-[9999px] shrink-0 ${statusColor}`}>
                     {appt.status}
                   </span>
+                  <a
+                    href={`https://app.gohighlevel.com/calendars/view/event/${appt.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-tertiary transition-colors shrink-0"
+                    title="Open in GHL"
+                  >
+                    <ExternalLink size={13} />
+                  </a>
                 </div>
               )
             })}
