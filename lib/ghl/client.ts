@@ -1,11 +1,16 @@
 // lib/ghl/client.ts
 // Central GHL API client — ALL GHL calls go through this file
-// Handles: OAuth token refresh, error handling, rate limiting, logging
+// Handles: OAuth token refresh, error handling, rate limiting, retry on 401/429
+// See: /memory/reference_ghl_masterclass.md for GHL API patterns
 
 import { db } from '@/lib/db/client'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
 const GHL_API_VERSION = '2021-07-28'
+const MAX_RETRIES = 2
+
+// Simple in-memory lock to prevent concurrent token refreshes per tenant
+const refreshLocks = new Map<string, Promise<string>>()
 
 export class GHLClient {
   private tenantId: string
@@ -18,12 +23,18 @@ export class GHLClient {
     this.locationId = locationId
   }
 
-  // ─── Core request method ───────────────────────────────────────────────────
+  /** Update token after a refresh (called by getGHLClient on retry) */
+  setAccessToken(token: string) {
+    this.accessToken = token
+  }
+
+  // ─── Core request method with auto-retry on 401 and 429 ──────────────────
 
   private async request<T>(
     method: string,
     path: string,
     body?: Record<string, unknown>,
+    retryCount = 0,
   ): Promise<T> {
     const url = `${GHL_BASE_URL}${path}`
 
@@ -36,6 +47,24 @@ export class GHLClient {
       },
       body: body ? JSON.stringify(body) : undefined,
     })
+
+    // Auto-retry on 401 (expired token) — refresh and retry once
+    if (response.status === 401 && retryCount < 1) {
+      try {
+        const newToken = await refreshGHLTokenWithLock(this.tenantId)
+        this.accessToken = newToken
+        return this.request<T>(method, path, body, retryCount + 1)
+      } catch {
+        throw new GHLError(401, 'Token refresh failed', path)
+      }
+    }
+
+    // Auto-retry on 429 (rate limited) — respect Retry-After header
+    if (response.status === 429 && retryCount < MAX_RETRIES) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') ?? '2')
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000))
+      return this.request<T>(method, path, body, retryCount + 1)
+    }
 
     if (!response.ok) {
       const error = await response.text()
@@ -176,10 +205,16 @@ export class GHLClient {
 
   async getAppointments(params: { startDate: string; endDate: string; userId?: string }) {
     // GHL /calendars/events expects Unix timestamps in milliseconds
+    // startDate/endDate may already be Unix ms strings or ISO strings — normalize both
+    const toMs = (v: string) => {
+      const n = Number(v)
+      if (!isNaN(n) && n > 1e12) return String(n) // already Unix ms
+      return String(new Date(v).getTime())
+    }
     const baseParams: Record<string, string> = {
       locationId: this.locationId,
-      startTime: String(new Date(params.startDate).getTime()),
-      endTime: String(new Date(params.endDate).getTime()),
+      startTime: toMs(params.startDate),
+      endTime: toMs(params.endDate),
     }
     if (params.userId) baseParams.userId = params.userId
 
@@ -273,7 +308,7 @@ export async function getGHLClient(tenantId: string): Promise<GHLClient> {
   let accessToken = tenant.ghlAccessToken
 
   if (needsRefresh && tenant.ghlRefreshToken) {
-    accessToken = await refreshGHLToken(tenantId, tenant.ghlRefreshToken)
+    accessToken = await refreshGHLTokenWithLock(tenantId)
   }
 
   return new GHLClient(tenantId, accessToken, tenant.ghlLocationId)
@@ -329,6 +364,31 @@ async function refreshGHLToken(tenantId: string, refreshToken: string): Promise<
   })
 
   return tokens.access_token
+}
+
+/**
+ * Mutex-protected token refresh — prevents multiple concurrent requests
+ * from triggering parallel refreshes for the same tenant.
+ * Pattern from ghl-masterclass: token race condition fix.
+ */
+async function refreshGHLTokenWithLock(tenantId: string): Promise<string> {
+  const existing = refreshLocks.get(tenantId)
+  if (existing) return existing // another request is already refreshing — wait for it
+
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { ghlRefreshToken: true },
+  })
+
+  if (!tenant?.ghlRefreshToken) {
+    throw new Error(`No refresh token for tenant ${tenantId}`)
+  }
+
+  const promise = refreshGHLToken(tenantId, tenant.ghlRefreshToken)
+    .finally(() => refreshLocks.delete(tenantId))
+
+  refreshLocks.set(tenantId, promise)
+  return promise
 }
 
 // ─── Error class ────────────────────────────────────────────────────────────

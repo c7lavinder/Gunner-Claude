@@ -24,18 +24,6 @@ const PUBLIC_PATHS = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // ── TEMP: DEV BYPASS ──────────────────────────────────────────────────────
-  // Skips all auth checks. Remove DEV_BYPASS_AUTH from .env.local to restore.
-  // Revert target: delete this block and the env var to go live.
-  // ─────────────────────────────────────────────────────────────────────────
-  if (process.env.DEV_BYPASS_AUTH === 'true') {
-    // Root path → send straight to dev tenant dashboard
-    if (pathname === '/') {
-      return NextResponse.redirect(new URL('/apex-dev/dashboard', request.url))
-    }
-    return NextResponse.next()
-  }
-  // ── END TEMP: DEV BYPASS ──────────────────────────────────────────────────
 
   // Allow public paths through
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
