@@ -174,16 +174,10 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
   let contactName: string | null = null
   if (msg.contactId) {
     try {
-      const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { ghlAccessToken: true } })
-      if (tenant?.ghlAccessToken) {
-        const cRes = await fetch(`https://services.leadconnectorhq.com/contacts/${msg.contactId}`, {
-          headers: { 'Authorization': `Bearer ${tenant.ghlAccessToken}`, 'Version': '2021-04-15' },
-        })
-        if (cRes.ok) {
-          const cData = await cRes.json() as { contact?: { firstName?: string; lastName?: string } }
-          contactName = `${cData.contact?.firstName ?? ''} ${cData.contact?.lastName ?? ''}`.trim() || null
-        }
-      }
+      const { getGHLClient } = await import('@/lib/ghl/client')
+      const ghl = await getGHLClient(tenantId)
+      const contact = await ghl.getContact(msg.contactId)
+      contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || null
     } catch { /* non-fatal */ }
   }
 
