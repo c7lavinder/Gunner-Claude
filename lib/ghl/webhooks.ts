@@ -118,14 +118,15 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
 
   console.log(`[GHL Webhook] Call: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}, recording=${!!recordingUrl}`)
 
-  // GHL webhooks often DON'T include duration/status — only attachments (recording URL).
-  // If we have a recording URL, this is a real call — process it regardless of duration field.
-  // If NO recording and duration < 45, it's a dial attempt.
-  if (!recordingUrl && callDuration < 45) {
+  // GHL sends callDuration=0 or null even for long calls — duration isn't known at webhook time.
+  // Only skip if the call explicitly FAILED (status=failed/busy/no-answer).
+  // Completed calls with no recording will get recording fetched after a delay.
+  const skipStatuses = ['failed', 'busy', 'no-answer', 'canceled']
+  if (skipStatuses.includes(callStatus)) {
     await db.auditLog.create({
       data: {
         tenantId,
-        action: 'call.dial_attempt',
+        action: 'call.skipped',
         resource: 'call',
         source: 'GHL_WEBHOOK',
         severity: 'INFO',
