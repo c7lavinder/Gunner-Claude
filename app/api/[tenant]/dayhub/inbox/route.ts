@@ -19,8 +19,34 @@ export async function GET(
 
     const ghl = await getGHLClient(tenantId)
     const conversations = await ghl.getConversations({ limit: 30 })
+    const rawConversations = conversations.conversations ?? []
 
-    const items = (conversations.conversations ?? []).map(conv => ({
+    // Resolve GHL user IDs → team member names
+    let userMap = new Map<string, string>()
+    try {
+      const usersResult = await ghl.getLocationUsers()
+      for (const u of (usersResult?.users ?? [])) {
+        const name = u.name || `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim()
+        if (u.id && name) userMap.set(u.id, name)
+      }
+    } catch { /* non-fatal */ }
+
+    // Cross-reference contactIds → property addresses
+    const contactIds = rawConversations.map(c => c.contactId).filter(Boolean)
+    const properties = contactIds.length > 0
+      ? await db.property.findMany({
+          where: { tenantId, ghlContactId: { in: contactIds } },
+          select: { ghlContactId: true, address: true, city: true, state: true },
+        })
+      : []
+    const propertyMap = new Map<string, string>()
+    for (const p of properties) {
+      if (p.ghlContactId) {
+        propertyMap.set(p.ghlContactId, `${p.address}, ${p.city} ${p.state}`)
+      }
+    }
+
+    const items = rawConversations.map(conv => ({
       id: conv.id,
       contactId: conv.contactId,
       contactName: conv.contactName ?? conv.fullName ?? 'Unknown',
@@ -30,6 +56,8 @@ export async function GET(
       dateUpdated: conv.dateUpdated ?? Date.now(),
       type: (conv.lastMessageType === 'TYPE_CALL') ? 'missed_call' as const : 'message' as const,
       unreadCount: conv.unreadCount ?? 0,
+      assignedTo: userMap.get(conv.userId || conv.assignedTo || '') ?? null,
+      propertyAddress: propertyMap.get(conv.contactId) ?? null,
     }))
 
     // Apply filter

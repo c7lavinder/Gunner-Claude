@@ -53,6 +53,8 @@ interface InboxItem {
   dateUpdated: number
   type: 'missed_call' | 'message'
   unreadCount: number
+  assignedTo: string | null
+  propertyAddress: string | null
 }
 
 interface AppointmentItem {
@@ -348,13 +350,21 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                           }
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[14px] font-medium text-txt-primary truncate">{item.contactName}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[14px] font-medium text-txt-primary truncate">{item.contactName}</p>
+                            {item.assignedTo && (
+                              <span className="text-[11px] text-semantic-blue shrink-0">→ {item.assignedTo}</span>
+                            )}
+                          </div>
+                          {item.propertyAddress && (
+                            <p className="text-[11px] text-semantic-purple truncate mt-0.5">{item.propertyAddress}</p>
+                          )}
                           <p className="text-[11px] text-txt-muted truncate mt-0.5">
                             {item.type === 'missed_call' ? 'Missed call.' : item.lastMessageBody}
                           </p>
                         </div>
                         <span className="text-[11px] text-txt-muted shrink-0">
-                          {formatDistanceToNow(new Date(item.dateUpdated), { addSuffix: false })}
+                          {format(new Date(item.dateUpdated), 'h:mm a')}
                         </span>
                       </button>
                     ))
