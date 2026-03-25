@@ -48,24 +48,10 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound()
 
-  // Fetch milestones for deal progress bar
-  const milestones = await db.propertyMilestone.findMany({
-    where: { tenantId, propertyId: params.propertyId },
-    orderBy: { createdAt: 'asc' },
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { ghlLocationId: true },
   })
-
-  const milestoneHit = {
-    LEAD: milestones.some(m => m.type === 'LEAD'),
-    APPOINTMENT_SET: milestones.some(m => m.type === 'APPOINTMENT_SET'),
-    OFFER_MADE: milestones.some(m => m.type === 'OFFER_MADE'),
-    UNDER_CONTRACT: milestones.some(m => m.type === 'UNDER_CONTRACT'),
-    CLOSED: milestones.some(m => m.type === 'CLOSED'),
-  }
-
-  const milestoneCounts = {
-    APPOINTMENT_SET: milestones.filter(m => m.type === 'APPOINTMENT_SET').length,
-    OFFER_MADE: milestones.filter(m => m.type === 'OFFER_MADE').length,
-  }
 
   return (
     <PropertyDetailClient
@@ -115,6 +101,7 @@ export default async function PropertyDetailPage({
       canEdit={hasPermission(role, 'properties.edit')}
       canManage={hasPermission(role, 'inventory.manage')}
       ghlContactId={property.ghlContactId}
+      ghlLocationId={tenant?.ghlLocationId ?? undefined}
     />
   )
 }
