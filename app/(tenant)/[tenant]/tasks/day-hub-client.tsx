@@ -13,7 +13,7 @@ import {
   MapPin, User, Clock, Loader2, Send, Circle, CheckCircle,
   PhoneOff, MessageCircle,
 } from 'lucide-react'
-import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
+import { format, formatDistanceToNow, differenceInDays, addDays, isToday } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -75,8 +75,12 @@ interface AppointmentItem {
   id: string
   title: string
   contactName: string
+  contactPhone: string
+  contactAddress: string
+  contactId: string
   startTime: string
   endTime: string
+  durationMin: number
   status: string
   calendarName?: string
   assignedUserName?: string | null
@@ -116,6 +120,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [noResponseInbox, setNoResponseInbox] = useState<InboxItem[]>([])
   const [ghlLocationId, setGhlLocationId] = useState('')
   const [appointments, setAppointments] = useState<AppointmentItem[]>([])
+  const [apptDate, setApptDate] = useState(new Date())
+  const [expandedAppt, setExpandedAppt] = useState<string | null>(null)
+  const [apptLocationId, setApptLocationId] = useState('')
   const [loadingKpis, setLoadingKpis] = useState(true)
   const [loadingInbox, setLoadingInbox] = useState(true)
   const [loadingAppts, setLoadingAppts] = useState(true)
@@ -176,14 +183,21 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       .catch(() => {})
   }, [tenantSlug])
 
-  // Fetch appointments
-  useEffect(() => {
+  // Fetch appointments for selected date
+  const fetchAppts = useCallback((date: Date) => {
     setLoadingAppts(true)
-    fetch(`/api/${tenantSlug}/dayhub/appointments`)
+    const dateStr = date.toISOString().slice(0, 10)
+    fetch(`/api/${tenantSlug}/dayhub/appointments?date=${dateStr}`)
       .then(r => r.json())
-      .then(d => { setAppointments(d.appointments ?? []); setLoadingAppts(false) })
+      .then(d => {
+        setAppointments(d.appointments ?? [])
+        if (d.locationId) setApptLocationId(d.locationId)
+        setLoadingAppts(false)
+      })
       .catch(() => setLoadingAppts(false))
   }, [tenantSlug])
+
+  useEffect(() => { fetchAppts(apptDate) }, [fetchAppts, apptDate])
 
 
   // Filter tasks (exclude optimistically completed)
@@ -542,62 +556,121 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
           {/* ── APPOINTMENTS PANEL ──────────────────────────────── */}
           <div className="bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[420px]" style={{ borderColor: 'var(--border-light)' }}>
-            {/* Appointments header */}
-            <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
-              <Calendar size={13} className="text-gunner-red" />
-              <span className="text-[13px] font-semibold text-txt-primary uppercase tracking-wide">Appointments</span>
+            {/* Header with day nav */}
+            <div className="flex items-center gap-2 px-3 py-2.5 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+              <Calendar size={12} className="text-gunner-red" />
+              <button onClick={() => setApptDate(d => addDays(d, -1))} className="p-0.5 text-txt-muted hover:text-txt-primary"><ChevronLeft size={12} /></button>
+              <span className="text-[10px] font-semibold text-txt-primary flex-1 text-center">
+                {isToday(apptDate) ? 'Today' : format(apptDate, 'EEE, MMM d')}
+              </span>
+              <button onClick={() => setApptDate(d => addDays(d, 1))} className="p-0.5 text-txt-muted hover:text-txt-primary"><ChevronDown size={12} className="rotate-[-90deg]" /></button>
               {!loadingAppts && appointments.length > 0 && (
-                <span className="bg-gunner-red text-white text-[11px] font-medium px-2 py-0.5 rounded-full">{appointments.length}</span>
+                <span className="bg-gunner-red text-white text-[9px] font-medium px-1.5 py-0.5 rounded-full">{appointments.length}</span>
               )}
             </div>
 
-            {/* Appointments body — scrollable */}
-            <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2">
+            {/* Appointments body */}
+            <div className="flex-1 overflow-y-auto min-h-0">
               {loadingAppts ? (
-                <div className="py-6 text-center">
-                  <Loader2 size={12} className="animate-spin text-txt-muted mx-auto" />
-                </div>
+                <div className="py-6 text-center"><Loader2 size={12} className="animate-spin text-txt-muted mx-auto" /></div>
               ) : appointments.length === 0 ? (
                 <div className="py-6 text-center">
-                  <Calendar size={20} className="text-txt-muted mx-auto mb-2" />
-                  <p className="text-[10px] text-txt-muted">No upcoming appointments</p>
+                  <Calendar size={16} className="text-txt-muted mx-auto mb-1" />
+                  <p className="text-[9px] text-txt-muted">No appointments this day</p>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {appointments.map((appt, i) => {
-                    // Date separator
-                    let dateSep: string | null = null
-                    if (appt.startTime) {
-                      const d = new Date(appt.startTime)
-                      const prev = i > 0 ? new Date(appointments[i - 1].startTime) : null
-                      if (!prev || d.toDateString() !== prev.toDateString()) {
-                        const today = new Date()
-                        dateSep = d.toDateString() === today.toDateString() ? 'Today' : format(d, 'EEE, MMM d')
-                      }
-                    }
-                    return (
-                      <div key={appt.id}>
-                        {dateSep && (
-                          <p className="text-[9px] font-medium text-txt-muted uppercase tracking-wide px-2 pt-2 pb-0.5">{dateSep}</p>
-                        )}
-                        <div className="flex items-start gap-2 px-2 py-1.5 rounded-[8px] hover:bg-surface-secondary transition-colors">
-                          <div className="text-[10px] text-txt-muted w-[50px] shrink-0 pt-0.5 text-right">
-                            {appt.startTime ? format(new Date(appt.startTime), 'h:mm a') : ''}
+                appointments.map(appt => {
+                  const isExpanded = expandedAppt === appt.id
+                  const statusColors: Record<string, string> = {
+                    confirmed: 'bg-semantic-green-bg text-semantic-green',
+                    showed: 'bg-semantic-green-bg text-semantic-green',
+                    'no-show': 'bg-semantic-red-bg text-semantic-red',
+                    noshow: 'bg-semantic-red-bg text-semantic-red',
+                    completed: 'bg-semantic-blue-bg text-semantic-blue',
+                    cancelled: 'bg-surface-tertiary text-txt-muted',
+                  }
+                  return (
+                    <div key={appt.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--border-light)' }}>
+                      {/* Row */}
+                      <button
+                        onClick={() => setExpandedAppt(isExpanded ? null : appt.id)}
+                        className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-surface-secondary transition-colors"
+                      >
+                        <span className="text-[9px] text-txt-muted w-[45px] shrink-0 text-right">{appt.startTime ? format(new Date(appt.startTime), 'h:mm a') : ''}</span>
+                        <div className="w-px h-6 bg-gunner-red/30 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[9px] font-medium text-txt-primary truncate">{appt.contactName || appt.title}</p>
+                          <p className="text-[8px] text-semantic-purple truncate">{appt.calendarName}</p>
+                        </div>
+                        <span className={`text-[8px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${statusColors[appt.status] ?? 'bg-surface-tertiary text-txt-muted'}`}>{appt.status}</span>
+                      </button>
+
+                      {/* Expanded detail */}
+                      {isExpanded && (
+                        <div className="px-3 pb-2 space-y-1.5">
+                          <div className="bg-surface-secondary rounded-[8px] p-2 space-y-1">
+                            {appt.contactPhone && <p className="text-[9px] text-txt-secondary"><span className="text-txt-muted">Phone:</span> {formatPhone(appt.contactPhone)}</p>}
+                            {appt.contactAddress && <p className="text-[9px] text-txt-secondary"><span className="text-txt-muted">Address:</span> {appt.contactAddress}</p>}
+                            <p className="text-[9px] text-txt-secondary"><span className="text-txt-muted">Duration:</span> {appt.durationMin} min</p>
+                            <p className="text-[9px] text-txt-secondary"><span className="text-txt-muted">Type:</span> {appt.calendarName}</p>
+                            {appt.assignedUserName && <p className="text-[9px] text-txt-secondary"><span className="text-txt-muted">Assigned:</span> {appt.assignedUserName}</p>}
+                            <p className="text-[9px] text-txt-secondary"><span className="text-txt-muted">Time:</span> {appt.startTime ? format(new Date(appt.startTime), 'h:mm a') : ''} – {appt.endTime ? format(new Date(appt.endTime), 'h:mm a') : ''}</p>
                           </div>
-                          <div className="w-px h-8 bg-gunner-red/30 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-medium text-txt-primary truncate">{appt.title}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              {appt.calendarName && <span className="text-[8px] text-semantic-purple truncate">{appt.calendarName}</span>}
-                              {appt.assignedUserName && <span className="text-[8px] text-semantic-blue">• {appt.assignedUserName}</span>}
-                              <span className={`text-[8px] font-medium ${appt.status === 'confirmed' ? 'text-semantic-green' : 'text-txt-muted'}`}>{appt.status}</span>
-                            </div>
+                          {/* Actions */}
+                          <div className="flex gap-1 flex-wrap">
+                            {['confirmed', 'showed', 'no-show', 'completed', 'cancelled'].map(s => (
+                              <button
+                                key={s}
+                                onClick={() => {
+                                  fetch(`/api/${tenantSlug}/dayhub/appointments`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ appointmentId: appt.id, status: s }),
+                                  }).then(() => { fetchAppts(apptDate); toast(`Marked ${s}`, 'success') })
+                                    .catch(() => toast('Failed to update', 'error'))
+                                }}
+                                className={`text-[8px] font-medium px-1.5 py-0.5 rounded-full border transition-colors ${
+                                  appt.status === s
+                                    ? (statusColors[s] ?? 'bg-surface-tertiary text-txt-muted') + ' border-transparent'
+                                    : 'border-[rgba(0,0,0,0.08)] text-txt-secondary hover:text-txt-primary'
+                                }`}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-1.5">
+                            {appt.contactPhone && (
+                              <button
+                                onClick={() => {
+                                  setSelectedContact({
+                                    id: '', contactId: appt.contactId, contactName: appt.contactName,
+                                    phone: appt.contactPhone, lastMessageBody: '', dateUpdated: Date.now(),
+                                    type: 'message', unreadCount: 0, assignedTo: appt.assignedUserName ?? null,
+                                    propertyAddress: appt.contactAddress,
+                                  } as InboxItem)
+                                  setShowSendConfirm(false)
+                                  setReplyText('')
+                                }}
+                                className="text-[8px] text-gunner-red hover:text-gunner-red-dark font-medium flex items-center gap-0.5"
+                              >
+                                <Send size={8} /> SMS
+                              </button>
+                            )}
+                            <a
+                              href={`https://app.gohighlevel.com/v2/location/${apptLocationId}/contacts/detail/${appt.contactId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[8px] text-txt-muted hover:text-txt-primary font-medium flex items-center gap-0.5"
+                            >
+                              <ExternalLink size={8} /> GHL
+                            </a>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )}
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>
