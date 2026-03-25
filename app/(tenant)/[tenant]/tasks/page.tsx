@@ -118,6 +118,22 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       }
     })
 
+    // Cross-reference contactIds → property addresses from inventory
+    // GHL contacts often lack address fields; our Property table is the source of truth
+    const properties = contactIds.length > 0
+      ? await db.property.findMany({
+          where: { tenantId, ghlContactId: { in: contactIds } },
+          select: { ghlContactId: true, address: true, city: true, state: true },
+        })
+      : []
+    const propertyMap = new Map<string, string>()
+    for (const p of properties) {
+      if (p.ghlContactId) {
+        const addr = [p.address, p.city, p.state].filter(Boolean).join(', ')
+        if (addr) propertyMap.set(p.ghlContactId, addr)
+      }
+    }
+
     // AM/PM call tracking via ghlContactId + Central timezone
     // Use Central time for "today" boundaries so AM/PM pills align with user's actual day
     const contactIdList = [...new Set(tasks.map(t => t.contactId).filter(Boolean))]
@@ -194,7 +210,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         contactId: t.contactId,
         contactName,
         contactPhone: contact?.phone ?? null,
-        contactAddress: contact?.address ?? null,
+        contactAddress: propertyMap.get(t.contactId) || contact?.address || null,
         assignedToName,
         amDone: callStatus.am,
         pmDone: callStatus.pm,

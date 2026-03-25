@@ -1058,6 +1058,18 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
       {/* Expanded detail */}
       {isExpanded && (
         <div className="border-t px-4 pb-3 pt-2" style={{ borderColor: 'var(--border-light)' }}>
+          {/* Task summary */}
+          <div className="bg-surface-secondary rounded-[8px] p-3 mb-3 space-y-1">
+            <p className="text-[12px] font-semibold text-txt-primary">{task.title}</p>
+            {task.body && <p className="text-[11px] text-txt-secondary">{task.body}</p>}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-txt-muted pt-1">
+              {task.contactPhone && <span><Phone size={9} className="inline -mt-0.5" /> {formatPhone(task.contactPhone)}</span>}
+              {task.contactAddress && <span><MapPin size={9} className="inline -mt-0.5" /> {task.contactAddress}</span>}
+              {task.assignedToName && <span><User size={9} className="inline -mt-0.5" /> {titleCase(task.assignedToName)}</span>}
+              {task.dueDate && <span><Clock size={9} className="inline -mt-0.5" /> Due {format(new Date(task.dueDate), 'MMM d, yyyy')}</span>}
+            </div>
+          </div>
+
           {/* Quick action bar */}
           <div className="flex gap-1.5 flex-wrap mb-3">
             {task.contactPhone && (
