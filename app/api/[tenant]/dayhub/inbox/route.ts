@@ -46,7 +46,13 @@ export async function GET(
       }
     }
 
-    const items = rawConversations.map(conv => {
+    // Filter to SMS conversations only
+    const smsConversations = rawConversations.filter(conv => {
+      const msgType = (conv.lastMessageType ?? '').toUpperCase()
+      return msgType === 'TYPE_SMS' || msgType === 'SMS' || msgType === ''
+    })
+
+    const items = smsConversations.map(conv => {
       const lastDirection = (conv.lastMessageDirection ?? '').toLowerCase()
       const unread = conv.unreadCount ?? 0
       const isInbound = lastDirection === 'inbound'

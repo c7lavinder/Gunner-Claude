@@ -52,14 +52,18 @@ export async function GET(
     const rawMessages = data.messages?.messages ?? []
 
     // Map and return last N messages (newest first from GHL, we reverse for chronological)
+    // SMS only — filter out calls, emails, system messages
     const messages = rawMessages
-      .filter(m => m.body || m.messageType === 'TYPE_CALL')
+      .filter(m => {
+        const type = (m.messageType ?? '').toUpperCase()
+        return m.body && (type === 'TYPE_SMS' || type === 'SMS' || type === '')
+      })
       .slice(0, 20)
       .map(m => ({
         id: m.id,
-        body: m.body ?? (m.messageType === 'TYPE_CALL' ? '📞 Call' : ''),
+        body: m.body ?? '',
         direction: (m.direction ?? '').toLowerCase(),
-        type: m.messageType ?? 'SMS',
+        type: 'SMS',
         time: m.dateAdded ?? '',
       }))
       .reverse() // chronological order (oldest first)
