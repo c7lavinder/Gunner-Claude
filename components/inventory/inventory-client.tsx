@@ -5,8 +5,9 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus, ChevronRight,
-  UserPlus, PhoneCall, CalendarCheck, FileText, Handshake,
-  Package, DollarSign, XCircle, Clock,
+  UserPlus, CalendarCheck, FileText, Handshake,
+  Package, DollarSign, XCircle, Clock, ArrowRightLeft,
+  Megaphone, PauseCircle, Receipt, BadgeCheck,
 } from 'lucide-react'
 
 interface Property {
@@ -21,19 +22,25 @@ interface Property {
 // ─── Pipeline stages (active deal flow) ──────────────────────────────────────
 
 const PIPELINE_STAGES = [
-  { key: 'NEW_LEAD',              label: 'New Lead',     icon: UserPlus,      step: 1 },
-  { key: 'CONTACTED',             label: 'Contacted',    icon: PhoneCall,     step: 2 },
-  { key: 'APPOINTMENT_SET',       label: 'Appt Set',     icon: CalendarCheck, step: 3 },
-  { key: 'APPOINTMENT_COMPLETED', label: 'Appt Done',    icon: FileText,      step: 4 },
-  { key: 'OFFER_MADE',            label: 'Offer Made',   icon: DollarSign,    step: 5 },
-  { key: 'UNDER_CONTRACT',        label: 'Contract',     icon: Handshake,     step: 6 },
-  { key: 'IN_DISPOSITION',        label: 'Disposition',  icon: Package,       step: 7 },
+  { key: 'NEW_LEAD',        label: 'New Lead',   icon: UserPlus,      step: 1 },
+  { key: 'APPOINTMENT_SET', label: 'Appt Set',   icon: CalendarCheck, step: 2 },
+  { key: 'OFFER_MADE',      label: 'Offer Made', icon: DollarSign,    step: 3 },
+  { key: 'UNDER_CONTRACT',  label: 'Contract',   icon: Handshake,     step: 4 },
+  { key: 'SOLD',            label: 'Closed',     icon: BadgeCheck,    step: 5 },
+]
+
+// ─── Disposition pipeline ────────────────────────────────────────────────────
+
+const DISPO_STAGES = [
+  { key: 'IN_DISPOSITION',  label: 'New Deal',          icon: Package,     step: 1 },
+  { key: 'DISPO_PUSHED',    label: 'Pushed Out',        icon: Megaphone,   step: 2 },
+  { key: 'DISPO_OFFERS',    label: 'Offers Received',   icon: Receipt,     step: 3 },
+  { key: 'DISPO_CONTRACTED', label: 'Contracted',       icon: Handshake,   step: 4 },
 ]
 
 // ─── Long-term / terminal buckets ────────────────────────────────────────────
 
 const LONG_TERM_BUCKETS = [
-  { key: 'SOLD', label: 'Sold', icon: DollarSign },
   { key: 'DEAD', label: 'Dead', icon: XCircle },
 ]
 
@@ -41,21 +48,29 @@ const LONG_TERM_BUCKETS = [
 
 const STAGE_COLORS: Record<string, { ring: string; bg: string; text: string; iconBg: string }> = {
   NEW_LEAD:              { ring: 'ring-semantic-blue',   bg: 'bg-semantic-blue',   text: 'text-semantic-blue',   iconBg: 'bg-semantic-blue-bg' },
-  CONTACTED:             { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
   APPOINTMENT_SET:       { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
-  APPOINTMENT_COMPLETED: { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
-  OFFER_MADE:            { ring: 'ring-semantic-blue',   bg: 'bg-semantic-blue',   text: 'text-semantic-blue',   iconBg: 'bg-semantic-blue-bg' },
+  OFFER_MADE:            { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
   UNDER_CONTRACT:        { ring: 'ring-semantic-green',  bg: 'bg-semantic-green',  text: 'text-semantic-green',  iconBg: 'bg-semantic-green-bg' },
-  IN_DISPOSITION:        { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
   SOLD:                  { ring: 'ring-semantic-green',  bg: 'bg-semantic-green',  text: 'text-semantic-green',  iconBg: 'bg-semantic-green-bg' },
+  // Disposition stages
+  IN_DISPOSITION:        { ring: 'ring-semantic-blue',   bg: 'bg-semantic-blue',   text: 'text-semantic-blue',   iconBg: 'bg-semantic-blue-bg' },
+  DISPO_PUSHED:          { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
+  DISPO_OFFERS:          { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
+  DISPO_CONTRACTED:      { ring: 'ring-semantic-green',  bg: 'bg-semantic-green',  text: 'text-semantic-green',  iconBg: 'bg-semantic-green-bg' },
+  // Terminal
+  CONTACTED:             { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
+  APPOINTMENT_COMPLETED: { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
   DEAD:                  { ring: 'ring-txt-muted',       bg: 'bg-txt-muted',       text: 'text-txt-muted',       iconBg: 'bg-surface-tertiary' },
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  NEW_LEAD: 'New lead', CONTACTED: 'Contacted', APPOINTMENT_SET: 'Appt set',
-  APPOINTMENT_COMPLETED: 'Appt done', OFFER_MADE: 'Offer made',
-  UNDER_CONTRACT: 'Under contract', IN_DISPOSITION: 'In disposition',
-  SOLD: 'Sold', DEAD: 'Dead',
+  NEW_LEAD: 'New Lead', APPOINTMENT_SET: 'Appt Set',
+  OFFER_MADE: 'Offer Made', UNDER_CONTRACT: 'Contract',
+  SOLD: 'Closed', IN_DISPOSITION: 'New Deal',
+  DISPO_PUSHED: 'Pushed Out', DISPO_OFFERS: 'Offers Received',
+  DISPO_CONTRACTED: 'Contracted',
+  CONTACTED: 'Contacted', APPOINTMENT_COMPLETED: 'Appt Done',
+  DEAD: 'Dead',
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -151,6 +166,56 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
               </div>
             )
           })}
+        </div>
+
+        {/* Disposition pipeline */}
+        <div className="mt-5 pt-4 border-t border-[rgba(0,0,0,0.06)]">
+          <div className="flex items-center gap-2 mb-3">
+            <ArrowRightLeft size={12} className="text-txt-muted" />
+            <span className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider">Disposition</span>
+          </div>
+          <div className="flex items-start justify-start gap-0 overflow-x-auto pb-2">
+            {DISPO_STAGES.map((stage, i) => {
+              const count = statusCounts[stage.key] ?? 0
+              const isActive = activeStatus === stage.key
+              const colors = STAGE_COLORS[stage.key]
+              const Icon = stage.icon
+              return (
+                <div key={stage.key} className="flex items-start" style={{ minWidth: 0 }}>
+                  <button
+                    onClick={() => setActiveStatus(isActive ? null : stage.key)}
+                    className="flex flex-col items-center gap-1.5 group relative"
+                  >
+                    <div className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                      isActive
+                        ? `ring-2 ${colors.ring} ${colors.iconBg} shadow-md`
+                        : count > 0
+                          ? `${colors.iconBg} hover:ring-2 ${colors.ring}`
+                          : 'bg-surface-tertiary'
+                    }`}>
+                      <Icon size={16} className={count > 0 || isActive ? colors.text : 'text-txt-muted'} />
+                      {count > 0 && (
+                        <span className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] flex items-center justify-center text-[9px] font-bold text-white rounded-full px-0.5 ${colors.bg}`}>
+                          {count}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <p className={`text-[9px] font-semibold leading-tight ${isActive ? colors.text : 'text-txt-secondary'}`}>
+                        {stage.label}
+                      </p>
+                      <p className="text-[8px] text-txt-muted">Step {stage.step}</p>
+                    </div>
+                  </button>
+                  {i < DISPO_STAGES.length - 1 && (
+                    <div className="flex items-center pt-4 px-2 min-w-[20px]">
+                      <div className="h-[2px] w-6 bg-[rgba(0,0,0,0.08)] rounded-full" />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {/* Long-term buckets */}
