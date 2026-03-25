@@ -17,6 +17,12 @@ export async function GET(
     const url = new URL(req.url)
     const filter = url.searchParams.get('filter') ?? 'all'
 
+    const tenantRecord = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { ghlLocationId: true },
+    })
+    const locationId = tenantRecord?.ghlLocationId ?? ''
+
     const ghl = await getGHLClient(tenantId)
     const conversations = await ghl.getConversations({ limit: 30 })
     const rawConversations = conversations.conversations ?? []
@@ -80,7 +86,7 @@ export async function GET(
     const unread = items.filter(i => i.isUnread)
     const noResponse = items.filter(i => i.isNoResponse)
 
-    return NextResponse.json({ unread, noResponse, total: items.length })
+    return NextResponse.json({ unread, noResponse, total: items.length, locationId })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch inbox'
     return NextResponse.json({ items: [], total: 0, error: message })

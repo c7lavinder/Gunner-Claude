@@ -112,6 +112,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [kpis, setKpis] = useState<KPIData | null>(null)
   const [unreadInbox, setUnreadInbox] = useState<InboxItem[]>([])
   const [noResponseInbox, setNoResponseInbox] = useState<InboxItem[]>([])
+  const [ghlLocationId, setGhlLocationId] = useState('')
   const [appointments, setAppointments] = useState<AppointmentItem[]>([])
   const [loadingKpis, setLoadingKpis] = useState(true)
   const [loadingInbox, setLoadingInbox] = useState(true)
@@ -153,6 +154,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       .then(d => {
         setUnreadInbox(d.unread ?? [])
         setNoResponseInbox(d.noResponse ?? [])
+        if (d.locationId) setGhlLocationId(d.locationId)
         setLoadingInbox(false)
       })
       .catch(() => setLoadingInbox(false))
@@ -443,7 +445,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                         </div>
                       </div>
                       <a
-                        href={`https://app.gohighlevel.com/conversations/${selectedContact.id}`}
+                        href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/conversations/${selectedContact.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1 rounded-[6px] hover:bg-surface-secondary text-txt-muted hover:text-txt-primary transition-colors"
