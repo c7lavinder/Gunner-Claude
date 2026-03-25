@@ -3,7 +3,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Building2, Phone, CheckSquare, Search, Plus, ChevronRight } from 'lucide-react'
+import {
+  Building2, Phone, CheckSquare, Search, Plus, ChevronRight,
+  UserPlus, PhoneCall, CalendarCheck, FileText, Handshake,
+  Package, DollarSign, XCircle, Clock,
+} from 'lucide-react'
 
 interface Property {
   id: string; address: string; city: string; state: string; zip: string
@@ -14,10 +18,38 @@ interface Property {
   callCount: number; taskCount: number
 }
 
-const STATUS_ORDER = [
-  'NEW_LEAD', 'CONTACTED', 'APPOINTMENT_SET', 'APPOINTMENT_COMPLETED',
-  'OFFER_MADE', 'UNDER_CONTRACT', 'IN_DISPOSITION', 'SOLD', 'DEAD',
+// ─── Pipeline stages (active deal flow) ──────────────────────────────────────
+
+const PIPELINE_STAGES = [
+  { key: 'NEW_LEAD',              label: 'New Lead',     icon: UserPlus,      step: 1 },
+  { key: 'CONTACTED',             label: 'Contacted',    icon: PhoneCall,     step: 2 },
+  { key: 'APPOINTMENT_SET',       label: 'Appt Set',     icon: CalendarCheck, step: 3 },
+  { key: 'APPOINTMENT_COMPLETED', label: 'Appt Done',    icon: FileText,      step: 4 },
+  { key: 'OFFER_MADE',            label: 'Offer Made',   icon: DollarSign,    step: 5 },
+  { key: 'UNDER_CONTRACT',        label: 'Contract',     icon: Handshake,     step: 6 },
+  { key: 'IN_DISPOSITION',        label: 'Disposition',  icon: Package,       step: 7 },
 ]
+
+// ─── Long-term / terminal buckets ────────────────────────────────────────────
+
+const LONG_TERM_BUCKETS = [
+  { key: 'SOLD', label: 'Sold', icon: DollarSign },
+  { key: 'DEAD', label: 'Dead', icon: XCircle },
+]
+
+// ─── Stage colors ────────────────────────────────────────────────────────────
+
+const STAGE_COLORS: Record<string, { ring: string; bg: string; text: string; iconBg: string }> = {
+  NEW_LEAD:              { ring: 'ring-semantic-blue',   bg: 'bg-semantic-blue',   text: 'text-semantic-blue',   iconBg: 'bg-semantic-blue-bg' },
+  CONTACTED:             { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
+  APPOINTMENT_SET:       { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
+  APPOINTMENT_COMPLETED: { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
+  OFFER_MADE:            { ring: 'ring-semantic-blue',   bg: 'bg-semantic-blue',   text: 'text-semantic-blue',   iconBg: 'bg-semantic-blue-bg' },
+  UNDER_CONTRACT:        { ring: 'ring-semantic-green',  bg: 'bg-semantic-green',  text: 'text-semantic-green',  iconBg: 'bg-semantic-green-bg' },
+  IN_DISPOSITION:        { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
+  SOLD:                  { ring: 'ring-semantic-green',  bg: 'bg-semantic-green',  text: 'text-semantic-green',  iconBg: 'bg-semantic-green-bg' },
+  DEAD:                  { ring: 'ring-txt-muted',       bg: 'bg-txt-muted',       text: 'text-txt-muted',       iconBg: 'bg-surface-tertiary' },
+}
 
 const STATUS_LABELS: Record<string, string> = {
   NEW_LEAD: 'New lead', CONTACTED: 'Contacted', APPOINTMENT_SET: 'Appt set',
@@ -26,17 +58,7 @@ const STATUS_LABELS: Record<string, string> = {
   SOLD: 'Sold', DEAD: 'Dead',
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  NEW_LEAD: 'text-semantic-blue bg-semantic-blue-bg',
-  CONTACTED: 'text-semantic-amber bg-semantic-amber-bg',
-  APPOINTMENT_SET: 'text-semantic-purple bg-semantic-purple-bg',
-  APPOINTMENT_COMPLETED: 'text-semantic-purple bg-semantic-purple-bg',
-  OFFER_MADE: 'text-semantic-blue bg-semantic-blue-bg',
-  UNDER_CONTRACT: 'text-semantic-green bg-semantic-green-bg',
-  IN_DISPOSITION: 'text-semantic-amber bg-semantic-amber-bg',
-  SOLD: 'text-semantic-green bg-semantic-green-bg',
-  DEAD: 'text-txt-secondary bg-surface-tertiary',
-}
+// ─── Main component ──────────────────────────────────────────────────────────
 
 export function InventoryClient({ properties, statusCounts, tenantSlug, canManage }: {
   properties: Property[]
@@ -80,6 +102,93 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
         )}
       </div>
 
+      {/* Pipeline visualization */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-6">
+        {/* Stage nodes */}
+        <div className="flex items-start justify-between overflow-x-auto pb-2">
+          {PIPELINE_STAGES.map((stage, i) => {
+            const count = statusCounts[stage.key] ?? 0
+            const isActive = activeStatus === stage.key
+            const colors = STAGE_COLORS[stage.key]
+            const Icon = stage.icon
+            return (
+              <div key={stage.key} className="flex items-start flex-1 min-w-0">
+                {/* Node */}
+                <button
+                  onClick={() => setActiveStatus(isActive ? null : stage.key)}
+                  className="flex flex-col items-center gap-1.5 group relative"
+                >
+                  {/* Circle with icon */}
+                  <div className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                    isActive
+                      ? `ring-2 ${colors.ring} ${colors.iconBg} shadow-md`
+                      : count > 0
+                        ? `${colors.iconBg} hover:ring-2 ${colors.ring}`
+                        : 'bg-surface-tertiary'
+                  }`}>
+                    <Icon size={18} className={count > 0 || isActive ? colors.text : 'text-txt-muted'} />
+                    {/* Count badge */}
+                    {count > 0 && (
+                      <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold text-white rounded-full px-1 ${colors.bg}`}>
+                        {count}
+                      </span>
+                    )}
+                  </div>
+                  {/* Label */}
+                  <div className="text-center">
+                    <p className={`text-[10px] font-semibold leading-tight ${isActive ? colors.text : 'text-txt-secondary'}`}>
+                      {stage.label}
+                    </p>
+                    <p className="text-[9px] text-txt-muted">Step {stage.step}</p>
+                  </div>
+                </button>
+                {/* Connecting line */}
+                {i < PIPELINE_STAGES.length - 1 && (
+                  <div className="flex-1 flex items-center pt-5 px-1 min-w-[12px]">
+                    <div className="h-[2px] w-full bg-[rgba(0,0,0,0.08)] rounded-full" />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Long-term buckets */}
+        <div className="mt-5 pt-4 border-t border-[rgba(0,0,0,0.06)]">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={12} className="text-txt-muted" />
+            <span className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider">Long-Term</span>
+          </div>
+          <div className="flex gap-3">
+            {LONG_TERM_BUCKETS.map(bucket => {
+              const count = statusCounts[bucket.key] ?? 0
+              const isActive = activeStatus === bucket.key
+              const colors = STAGE_COLORS[bucket.key]
+              const Icon = bucket.icon
+              return (
+                <button
+                  key={bucket.key}
+                  onClick={() => setActiveStatus(isActive ? null : bucket.key)}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-[10px] border-[0.5px] transition-all ${
+                    isActive
+                      ? `${colors.iconBg} border-transparent shadow-ds-float`
+                      : 'bg-surface-secondary border-[rgba(0,0,0,0.06)] hover:border-[rgba(0,0,0,0.12)]'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${colors.iconBg}`}>
+                    <Icon size={14} className={colors.text} />
+                  </div>
+                  <div className="text-left">
+                    <p className={`text-ds-body font-semibold ${isActive ? colors.text : 'text-txt-primary'}`}>{bucket.label}</p>
+                    <p className="text-[11px] text-txt-muted">{count} {count === 1 ? 'property' : 'properties'}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Search */}
       <div className="flex items-center gap-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-4 py-[9px] max-w-md">
         <Search size={14} className="text-txt-muted shrink-0" />
@@ -91,32 +200,20 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
         />
       </div>
 
-      {/* Status filter tabs */}
-      <div className="bg-surface-tertiary rounded-[14px] p-1 flex flex-wrap gap-1">
-        <button
-          onClick={() => setActiveStatus(null)}
-          className={`text-ds-body font-medium px-4 py-1.5 rounded-[10px] transition-all ${
-            !activeStatus
-              ? 'bg-white shadow-ds-float text-txt-primary'
-              : 'text-txt-secondary hover:text-txt-primary'
-          }`}
-        >
-          All ({properties.length})
-        </button>
-        {STATUS_ORDER.filter(s => statusCounts[s] > 0).map((status) => (
+      {/* Active filter label */}
+      {activeStatus && (
+        <div className="flex items-center gap-2">
+          <span className={`text-ds-body font-semibold ${STAGE_COLORS[activeStatus]?.text ?? 'text-txt-primary'}`}>
+            {STATUS_LABELS[activeStatus]} ({statusCounts[activeStatus] ?? 0})
+          </span>
           <button
-            key={status}
-            onClick={() => setActiveStatus(activeStatus === status ? null : status)}
-            className={`text-ds-body font-medium px-4 py-1.5 rounded-[10px] transition-all ${
-              activeStatus === status
-                ? 'bg-white shadow-ds-float text-txt-primary'
-                : 'text-txt-secondary hover:text-txt-primary'
-            }`}
+            onClick={() => setActiveStatus(null)}
+            className="text-ds-fine text-txt-muted hover:text-txt-secondary underline"
           >
-            {STATUS_LABELS[status]} ({statusCounts[status]})
+            Clear filter
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Property grid */}
       {filtered.length === 0 ? (
@@ -137,11 +234,11 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   )
 }
 
-function PropertyCard({ property: p, tenantSlug }: { property: Property; tenantSlug: string }) {
-  const statusColor = STATUS_COLORS[p.status] ?? 'text-txt-secondary bg-surface-tertiary'
+// ─── Property Card ───────────────────────────────────────────────────────────
 
-  const fmt = (v: string | null) =>
-    v ? `$${Number(v).toLocaleString()}` : null
+function PropertyCard({ property: p, tenantSlug }: { property: Property; tenantSlug: string }) {
+  const colors = STAGE_COLORS[p.status] ?? STAGE_COLORS.DEAD
+  const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : null
 
   return (
     <Link
@@ -154,7 +251,7 @@ function PropertyCard({ property: p, tenantSlug }: { property: Property; tenantS
           <p className="text-ds-card font-medium text-txt-primary truncate">{p.address}</p>
           <p className="text-ds-fine text-txt-muted">{p.city}, {p.state} {p.zip}</p>
         </div>
-        <span className={`text-ds-fine font-medium px-2 py-[3px] rounded-[9999px] shrink-0 ${statusColor}`}>
+        <span className={`text-ds-fine font-medium px-2 py-[3px] rounded-[9999px] shrink-0 ${colors.text} ${colors.iconBg}`}>
           {STATUS_LABELS[p.status]}
         </span>
       </div>
