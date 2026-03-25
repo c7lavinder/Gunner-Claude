@@ -273,8 +273,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set())
   const [expandedTask, setExpandedTask] = useState<string | null>(null)
 
-  // AM/PM status from GHL (loaded on mount for all contacts)
-  const [amPmMap, setAmPmMap] = useState<Map<string, { am: boolean; pm: boolean }>>(new Map())
 
   // Inbox thread
   const [selectedContact, setSelectedContact] = useState<InboxItem | null>(null)
@@ -343,37 +341,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   }, [tenantSlug])
 
   useEffect(() => { fetchAppts(apptDate) }, [fetchAppts, apptDate])
-
-  // Batch fetch AM/PM status from GHL for all task contacts on mount
-  // This ensures labels glow immediately without needing to click each task
-  useEffect(() => {
-    if (tasks.length === 0) return
-    const uniqueContactIds = [...new Set(tasks.map(t => t.contactId).filter(Boolean))].slice(0, 30)
-    // Fetch in parallel, 5 at a time to avoid overwhelming the API
-    let cancelled = false
-    async function fetchAmPm() {
-      const results = new Map<string, { am: boolean; pm: boolean }>()
-      for (let i = 0; i < uniqueContactIds.length; i += 5) {
-        if (cancelled) return
-        const batch = uniqueContactIds.slice(i, i + 5)
-        const responses = await Promise.allSettled(
-          batch.map(cid =>
-            fetch(`/api/${tenantSlug}/dayhub/contact-activity?contactId=${cid}`)
-              .then(r => r.json())
-              .then(d => ({ contactId: cid, hasAm: d.hasAm ?? false, hasPm: d.hasPm ?? false }))
-          )
-        )
-        for (const res of responses) {
-          if (res.status === 'fulfilled') {
-            results.set(res.value.contactId, { am: res.value.hasAm, pm: res.value.hasPm })
-          }
-        }
-        if (!cancelled) setAmPmMap(new Map(results))
-      }
-    }
-    fetchAmPm()
-    return () => { cancelled = true }
-  }, [tasks, tenantSlug])
 
   // Filter tasks (exclude optimistically completed)
   const assignedNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
@@ -902,7 +869,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                   isExpanded={expandedTask === task.id}
                   onToggle={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
                   ghlLocationId={ghlLocationId}
-                  ghlAmPm={amPmMap.get(task.contactId)}
                   onSMS={(t) => {
                     setSelectedContact({
                       id: '', contactId: t.contactId, contactName: t.contactName ?? t.title,
@@ -982,7 +948,7 @@ interface ContactActivity {
   hasPm: boolean
 }
 
-function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, ghlAmPm, onSMS }: {
+function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, onSMS }: {
   task: EnrichedTask
   tenantSlug: string
   onComplete: (taskId: string, contactId: string) => void
@@ -990,7 +956,6 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
   isExpanded: boolean
   onToggle: () => void
   ghlLocationId: string
-  ghlAmPm?: { am: boolean; pm: boolean }
   onSMS: (task: EnrichedTask) => void
 }) {
   const [activityTab, setActivityTab] = useState<'activity' | 'notes'>('activity')
@@ -1004,16 +969,15 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
   const catBadge = CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']
   const isCompleting = completing === task.id
 
-  // Fetch activity when expanded
+  // Fetch activity on mount for AM/PM labels — data also used when expanded
   useEffect(() => {
-    if (isExpanded && !activity && task.contactId) {
-      setLoadingActivity(true)
-      fetch(`/api/${tenantSlug}/dayhub/contact-activity?contactId=${task.contactId}`)
-        .then(r => r.json())
-        .then(d => { setActivity(d); setLoadingActivity(false) })
-        .catch(() => setLoadingActivity(false))
-    }
-  }, [isExpanded, activity, task.contactId, tenantSlug])
+    if (!task.contactId) return
+    fetch(`/api/${tenantSlug}/dayhub/contact-activity?contactId=${task.contactId}`)
+      .then(r => r.json())
+      .then(d => setActivity(d))
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.contactId, tenantSlug])
 
   return (
     <div className={`bg-surface-primary border-[0.5px] rounded-[14px] overflow-hidden transition-shadow ${
@@ -1061,15 +1025,15 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
           </div>
         </div>
 
-        {/* AM/PM glow pills — priority: GHL batch → expanded activity → server DB */}
+        {/* AM/PM glow pills — from GHL activity (fetched on mount) */}
         <div className="flex gap-1 shrink-0">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
-            (ghlAmPm?.am ?? activity?.hasAm ?? task.amDone)
+            (activity?.hasAm || task.amDone)
               ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
               : 'bg-surface-tertiary text-txt-muted'
           }`}>AM</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
-            (ghlAmPm?.pm ?? activity?.hasPm ?? task.pmDone)
+            (activity?.hasPm || task.pmDone)
               ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
               : 'bg-surface-tertiary text-txt-muted'
           }`}>PM</span>
