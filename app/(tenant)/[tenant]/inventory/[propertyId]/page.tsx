@@ -115,8 +115,6 @@ export default async function PropertyDetailPage({
       canEdit={hasPermission(role, 'properties.edit')}
       canManage={hasPermission(role, 'inventory.manage')}
       ghlContactId={property.ghlContactId}
-      milestoneHit={milestoneHit}
-      milestoneCounts={milestoneCounts}
     />
   )
 }

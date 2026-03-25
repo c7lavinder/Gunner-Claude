@@ -44,15 +44,13 @@ interface PropertyDetail {
 }
 
 export function PropertyDetailClient({
-  property, tenantSlug, canEdit, canManage, ghlContactId, milestoneHit, milestoneCounts,
+  property, tenantSlug, canEdit, canManage, ghlContactId,
 }: {
   property: PropertyDetail
   tenantSlug: string
   canEdit: boolean
   canManage: boolean
   ghlContactId: string | null
-  milestoneHit?: Record<string, boolean>
-  milestoneCounts?: Record<string, number>
 }) {
   const [showSmsPanel, setShowSmsPanel] = useState(false)
   const [showNotePanel, setShowNotePanel] = useState(false)
@@ -118,8 +116,8 @@ export function PropertyDetailClient({
           </div>
         </div>
 
-        {/* Deal progress bar */}
-        {milestoneHit && <DealProgressBar milestoneHit={milestoneHit} milestoneCounts={milestoneCounts ?? {}} />}
+        {/* Deal progress — acquisition + disposition */}
+        <DealProgressBar currentStatus={property.status} />
 
         {/* Financials */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-[rgba(0,0,0,0.08)]">
@@ -295,53 +293,86 @@ export function PropertyDetailClient({
   )
 }
 
-// ─── Deal Progress Bar ─────────────────────────────────────────────────────
+// ─── Deal Progress — Acquisition + Disposition (matches inventory pipeline) ──
 
-const PROGRESS_STEPS = [
-  { key: 'LEAD', label: 'Lead' },
+const ACQ_STEPS = [
+  { key: 'NEW_LEAD',        label: 'New Lead' },
   { key: 'APPOINTMENT_SET', label: 'Appt Set' },
-  { key: 'OFFER_MADE', label: 'Offer Made' },
-  { key: 'UNDER_CONTRACT', label: 'Contract' },
-  { key: 'CLOSED', label: 'Closed' },
+  { key: 'OFFER_MADE',      label: 'Offer' },
+  { key: 'UNDER_CONTRACT',  label: 'Contract' },
+  { key: 'SOLD',            label: 'Closed' },
 ]
 
-function DealProgressBar({ milestoneHit, milestoneCounts }: {
-  milestoneHit: Record<string, boolean>
-  milestoneCounts: Record<string, number>
-}) {
-  return (
-    <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] px-6 py-5 mt-6">
-      <p className="text-ds-fine text-txt-muted uppercase tracking-wider mb-4">Deal Progress</p>
-      <div className="flex items-center">
-        {PROGRESS_STEPS.map((step, i) => {
-          const hit = milestoneHit[step.key] ?? false
-          const nextHit = i < PROGRESS_STEPS.length - 1 ? (milestoneHit[PROGRESS_STEPS[i + 1].key] ?? false) : false
-          const count = milestoneCounts[step.key]
+const DISPO_STEPS = [
+  { key: 'IN_DISPOSITION',   label: 'New Deal' },
+  { key: 'DISPO_PUSHED',     label: 'Pushed Out' },
+  { key: 'DISPO_OFFERS',     label: 'Offers' },
+  { key: 'DISPO_CONTRACTED', label: 'Contracted' },
+  { key: 'DISPO_CLOSED',     label: 'Closed' },
+]
 
-          return (
-            <div key={step.key} className="flex items-center flex-1 last:flex-none">
-              {/* Step circle + label */}
-              <div className="flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                  hit ? 'bg-gunner-red text-white' : 'border-2 border-[rgba(0,0,0,0.08)] text-txt-muted'
-                }`}>
-                  {hit ? <Check size={14} /> : <span className="text-ds-fine">{i + 1}</span>}
+function DealProgressBar({ currentStatus }: { currentStatus: string }) {
+  // Determine which stage is active in each pipeline
+  const acqKeys = ACQ_STEPS.map(s => s.key)
+  const dispoKeys = DISPO_STEPS.map(s => s.key)
+  const acqIndex = acqKeys.indexOf(currentStatus)
+  const dispoIndex = dispoKeys.indexOf(currentStatus)
+
+  return (
+    <div className="bg-surface-secondary rounded-[10px] px-4 py-3 mt-4 space-y-2.5">
+      {/* Acquisition */}
+      <div>
+        <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Acquisition</p>
+        <div className="flex items-center">
+          {ACQ_STEPS.map((step, i) => {
+            const isHit = acqIndex >= 0 && i <= acqIndex
+            const isCurrent = step.key === currentStatus
+            return (
+              <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                <div className="flex flex-col items-center">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                    isCurrent ? 'bg-gunner-red text-white' : isHit ? 'bg-gunner-red/20 text-gunner-red' : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
+                  }`}>
+                    {isHit ? <Check size={10} /> : i + 1}
+                  </div>
+                  <span className={`text-[8px] mt-0.5 ${isCurrent ? 'text-gunner-red font-semibold' : isHit ? 'text-txt-primary' : 'text-txt-muted'}`}>{step.label}</span>
                 </div>
-                <span className={`text-ds-fine mt-1.5 ${hit ? 'text-txt-primary' : 'text-txt-muted'}`}>{step.label}</span>
-                {count && count > 1 && (
-                  <span className="text-ds-fine text-txt-muted">(×{count})</span>
+                {i < ACQ_STEPS.length - 1 && (
+                  <div className={`flex-1 h-[1.5px] mx-1 rounded ${
+                    acqIndex >= 0 && i < acqIndex ? 'bg-gunner-red/30' : 'bg-[rgba(0,0,0,0.06)]'
+                  }`} />
                 )}
               </div>
-
-              {/* Connecting line */}
-              {i < PROGRESS_STEPS.length - 1 && (
-                <div className={`flex-1 h-0.5 mx-2 rounded ${
-                  hit && nextHit ? 'bg-gunner-red/60' : 'bg-[rgba(0,0,0,0.08)]'
-                }`} />
-              )}
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
+      </div>
+      {/* Disposition */}
+      <div>
+        <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Disposition</p>
+        <div className="flex items-center">
+          {DISPO_STEPS.map((step, i) => {
+            const isHit = dispoIndex >= 0 && i <= dispoIndex
+            const isCurrent = step.key === currentStatus
+            return (
+              <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                <div className="flex flex-col items-center">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                    isCurrent ? 'bg-semantic-blue text-white' : isHit ? 'bg-semantic-blue/20 text-semantic-blue' : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
+                  }`}>
+                    {isHit ? <Check size={10} /> : i + 1}
+                  </div>
+                  <span className={`text-[8px] mt-0.5 ${isCurrent ? 'text-semantic-blue font-semibold' : isHit ? 'text-txt-primary' : 'text-txt-muted'}`}>{step.label}</span>
+                </div>
+                {i < DISPO_STEPS.length - 1 && (
+                  <div className={`flex-1 h-[1.5px] mx-1 rounded ${
+                    dispoIndex >= 0 && i < dispoIndex ? 'bg-semantic-blue/30' : 'bg-[rgba(0,0,0,0.06)]'
+                  }`} />
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
