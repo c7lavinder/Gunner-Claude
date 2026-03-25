@@ -137,13 +137,14 @@ export async function GET(
               const dir = String(m.direction ?? '').toLowerCase()
               const body = String(m.body ?? '')
 
-              // Calls: TYPE_VOICE_CALL or type 25 (outbound) / 26 (inbound)
-              if (msgType === 'TYPE_VOICE_CALL' || typeInt === 25 || typeInt === 26) {
+              // Calls: TYPE_CALL or messageTypeId/type === 1 (matches webhook + poll-calls)
+              if (msgType === 'TYPE_CALL' || msgType === 'CALL' || typeInt === 1) {
                 const meta = (m.meta && typeof m.meta === 'object') ? m.meta as Record<string, unknown> : null
+                const callMeta = (meta?.call && typeof meta.call === 'object') ? meta.call as Record<string, unknown> : null
                 allCalls.push({
                   id: String(m.id ?? ''),
-                  direction: typeInt === 25 ? 'outbound' : typeInt === 26 ? 'inbound' : dir || 'outbound',
-                  duration: meta?.duration ? Number(meta.duration) : null,
+                  direction: dir || 'outbound',
+                  duration: callMeta?.duration ? Number(callMeta.duration) : meta?.duration ? Number(meta.duration) : null,
                   time: dateAdded,
                 })
               }
