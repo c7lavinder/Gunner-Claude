@@ -43,6 +43,12 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
     return acc
   }, {})
 
+  // Get GHL location ID for CRM links
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { ghlLocationId: true },
+  })
+
   return (
     <InventoryClient
       properties={properties.map((p) => ({
@@ -55,6 +61,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         arv: p.arv?.toString() ?? null,
         askingPrice: p.askingPrice?.toString() ?? null,
         mao: p.mao?.toString() ?? null,
+        contractPrice: p.contractPrice?.toString() ?? null,
         assignmentFee: p.assignmentFee?.toString() ?? null,
         createdAt: p.createdAt.toISOString(),
         sellerName: p.sellers[0]?.seller.name ?? null,
@@ -62,10 +69,12 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         assignedTo: p.assignedTo,
         callCount: p._count.calls,
         taskCount: p._count.tasks,
+        ghlContactId: p.ghlContactId,
       }))}
       statusCounts={statusCounts}
       tenantSlug={params.tenant}
       canManage={hasPermission(role, 'inventory.manage')}
+      ghlLocationId={tenant?.ghlLocationId ?? undefined}
     />
   )
 }
