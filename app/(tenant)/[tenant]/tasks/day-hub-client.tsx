@@ -132,6 +132,10 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
   // SMS confirm modal
   const [showSendConfirm, setShowSendConfirm] = useState(false)
+  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; id: string }>>([])
+  const [selectedFromUser, setSelectedFromUser] = useState('')
+  const [fromSearch, setFromSearch] = useState('')
+  const [fromDropdownOpen, setFromDropdownOpen] = useState(false)
 
 
   // Fetch KPIs
@@ -158,6 +162,17 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   }, [tenantSlug])
 
   useEffect(() => { fetchInbox() }, [fetchInbox])
+
+  // Fetch team members for "send as" dropdown
+  useEffect(() => {
+    fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
+      .then(r => r.json())
+      .then(d => {
+        const members = (d.numbers ?? []).map((n: { name: string; phone: string }) => ({ name: n.name, id: n.phone }))
+        setTeamMembers(members)
+      })
+      .catch(() => {})
+  }, [tenantSlug])
 
   // Fetch appointments
   useEffect(() => {
@@ -224,6 +239,12 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
   function promptSendReply() {
     if (!replyText.trim() || !selectedContact) return
+    // Default "from" to the assigned team member
+    const assigned = selectedContact.assignedTo ?? ''
+    const match = teamMembers.find(m => m.name === assigned)
+    setSelectedFromUser(match?.name ?? teamMembers[0]?.name ?? '')
+    setFromSearch('')
+    setFromDropdownOpen(false)
     setShowSendConfirm(true)
   }
 
@@ -562,12 +583,41 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             <div className="bg-surface-primary rounded-[14px] border-[0.5px] w-full max-w-sm mx-4 p-5" style={{ borderColor: 'var(--border-light)' }} onClick={e => e.stopPropagation()}>
               <h3 className="text-[13px] font-semibold text-txt-primary mb-4">Confirm SMS</h3>
 
-              {/* FROM */}
+              {/* FROM — searchable team member dropdown */}
               <div className="mb-3">
-                <label className="text-[10px] font-medium text-txt-muted uppercase tracking-wide block mb-1">From</label>
-                <p className="text-[11px] text-txt-primary">
-                  {selectedContact.assignedTo ?? 'Team'} <span className="text-txt-muted">— GHL auto-routes to the number used in this conversation</span>
-                </p>
+                <label className="text-[10px] font-medium text-txt-muted uppercase tracking-wide block mb-1">Send as</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={fromDropdownOpen ? fromSearch : selectedFromUser}
+                    onChange={e => { setFromSearch(e.target.value); setFromDropdownOpen(true) }}
+                    onFocus={() => { setFromDropdownOpen(true); setFromSearch('') }}
+                    onBlur={() => setTimeout(() => setFromDropdownOpen(false), 150)}
+                    placeholder="Search team member..."
+                    className="w-full bg-surface-secondary border rounded-[8px] px-2.5 py-1.5 text-[11px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                  />
+                  {fromDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-surface-primary border rounded-[8px] shadow-ds-float max-h-[120px] overflow-y-auto z-10" style={{ borderColor: 'var(--border-medium)' }}>
+                      {teamMembers
+                        .filter(m => !fromSearch || m.name.toLowerCase().includes(fromSearch.toLowerCase()))
+                        .map(m => (
+                          <button
+                            key={m.id}
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => { setSelectedFromUser(m.name); setFromSearch(''); setFromDropdownOpen(false) }}
+                            className={`w-full text-left px-2.5 py-1.5 text-[10px] hover:bg-surface-secondary ${selectedFromUser === m.name ? 'text-gunner-red font-medium' : 'text-txt-primary'}`}
+                          >
+                            {m.name}
+                          </button>
+                        ))}
+                      {teamMembers.filter(m => !fromSearch || m.name.toLowerCase().includes(fromSearch.toLowerCase())).length === 0 && (
+                        <p className="px-2.5 py-1.5 text-[10px] text-txt-muted">No matches</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <p className="text-[9px] text-txt-muted mt-0.5">GHL routes to the number used in this conversation</p>
               </div>
 
               {/* TO */}
