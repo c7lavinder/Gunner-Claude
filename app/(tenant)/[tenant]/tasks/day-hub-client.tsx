@@ -194,6 +194,11 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       .then(d => {
         setThreadMessages(d.messages ?? [])
         setLoadingThread(false)
+        // Auto-scroll to bottom after messages render
+        requestAnimationFrame(() => {
+          const el = document.getElementById('inbox-thread-scroll')
+          if (el) el.scrollTop = el.scrollHeight
+        })
       })
       .catch(() => setLoadingThread(false))
   }
@@ -406,7 +411,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                     </div>
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
+                    <div id="inbox-thread-scroll" className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
                       {loadingThread ? (
                         <div className="py-6 text-center"><Loader2 size={12} className="animate-spin text-txt-muted mx-auto" /></div>
                       ) : threadMessages.length === 0 ? (
