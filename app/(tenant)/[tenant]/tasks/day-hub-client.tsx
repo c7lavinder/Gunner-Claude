@@ -194,7 +194,10 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       .then(d => {
         setThreadMessages(d.messages ?? [])
         setLoadingThread(false)
-        setTimeout(() => threadBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+        setTimeout(() => {
+          const container = threadBottomRef.current?.parentElement
+          if (container) container.scrollTop = container.scrollHeight
+        }, 100)
       })
       .catch(() => setLoadingThread(false))
   }
