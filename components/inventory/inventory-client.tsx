@@ -90,9 +90,9 @@ function PipelineRow({ label, icon, stages, statusCounts, activeStatus, onSelect
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-1.5 mb-3">
         <span className="text-txt-muted">{icon}</span>
-        <span className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider">{label}</span>
+        <span className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">{label}</span>
       </div>
       <div className="flex items-start justify-between">
         {stages.map((stage, i) => {
@@ -104,35 +104,35 @@ function PipelineRow({ label, icon, stages, statusCounts, activeStatus, onSelect
             <div key={stage.key} className="flex items-start flex-1 min-w-0">
               <button
                 onClick={() => onSelect(stage.key)}
-                className="flex flex-col items-center gap-2 w-full"
+                className="flex flex-col items-center gap-1 w-full"
               >
                 {/* Circle */}
-                <div className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                <div className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                   isActive
-                    ? `${colors.bg} shadow-lg ring-4 ring-white`
+                    ? `${colors.bg} shadow-md ring-2 ring-white`
                     : count > 0
-                      ? `${colors.iconBg} hover:shadow-md hover:scale-105`
+                      ? `${colors.iconBg} hover:shadow-sm hover:scale-105`
                       : 'bg-surface-tertiary'
                 }`}>
-                  <Icon size={20} className={isActive ? 'text-white' : count > 0 ? colors.text : 'text-txt-muted'} />
+                  <Icon size={15} className={isActive ? 'text-white' : count > 0 ? colors.text : 'text-txt-muted'} />
                   {count > 0 && (
-                    <span className={`absolute -top-1 -right-1 min-w-[20px] h-[20px] flex items-center justify-center text-[10px] font-bold text-white rounded-full px-1 ${colors.bg} ring-2 ring-white`}>
+                    <span className={`absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center text-[9px] font-bold text-white rounded-full px-0.5 ${colors.bg} ring-[1.5px] ring-white`}>
                       {count}
                     </span>
                   )}
                 </div>
                 {/* Label */}
                 <div className="text-center">
-                  <p className={`text-[11px] font-semibold leading-tight ${isActive ? colors.text : count > 0 ? 'text-txt-primary' : 'text-txt-muted'}`}>
+                  <p className={`text-[9px] font-semibold leading-tight ${isActive ? colors.text : count > 0 ? 'text-txt-primary' : 'text-txt-muted'}`}>
                     {stage.label}
                   </p>
-                  <p className="text-[9px] text-txt-muted mt-0.5">Step {stage.step}</p>
+                  <p className="text-[8px] text-txt-muted">Step {stage.step}</p>
                 </div>
               </button>
               {/* Connecting line */}
               {i < stages.length - 1 && (
-                <div className="flex-1 flex items-center pt-6 px-1 min-w-[16px]">
-                  <div className={`h-[2px] w-full rounded-full ${
+                <div className="flex-1 flex items-center pt-[18px] px-0.5 min-w-[10px]">
+                  <div className={`h-[1.5px] w-full rounded-full ${
                     (statusCounts[stages[i + 1].key] ?? 0) > 0
                       ? 'bg-[rgba(0,0,0,0.12)]'
                       : 'bg-[rgba(0,0,0,0.06)]'
@@ -192,7 +192,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
       </div>
 
       {/* Pipeline visualization */}
-      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] px-6 pt-8 pb-6 space-y-6">
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] px-5 pt-6 pb-5 space-y-4">
         {/* Acquisition pipeline */}
         <PipelineRow
           label="Acquisition"
@@ -204,7 +204,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
         />
 
         {/* Disposition pipeline */}
-        <div className="border-t border-[rgba(0,0,0,0.06)] pt-6">
+        <div className="border-t border-[rgba(0,0,0,0.06)] pt-4">
           <PipelineRow
             label="Disposition"
             icon={<ArrowRightLeft size={12} />}
@@ -216,12 +216,12 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
         </div>
 
         {/* Long-term buckets */}
-        <div className="border-t border-[rgba(0,0,0,0.06)] pt-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Clock size={12} className="text-txt-muted" />
-            <span className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider">Long-Term</span>
+        <div className="border-t border-[rgba(0,0,0,0.06)] pt-4">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Clock size={10} className="text-txt-muted" />
+            <span className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Long-Term</span>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             {LONG_TERM_BUCKETS.map(bucket => {
               const count = statusCounts[bucket.key] ?? 0
               const isActive = activeStatus === bucket.key
@@ -231,18 +231,18 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
                 <button
                   key={bucket.key}
                   onClick={() => setActiveStatus(isActive ? null : bucket.key)}
-                  className={`flex items-center gap-3 px-5 py-3 rounded-[12px] border-[0.5px] transition-all ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-[10px] border-[0.5px] transition-all ${
                     isActive
-                      ? `${colors.iconBg} border-transparent shadow-md ring-2 ${colors.ring}`
+                      ? `${colors.iconBg} border-transparent shadow-sm ring-2 ${colors.ring}`
                       : 'bg-surface-secondary border-[rgba(0,0,0,0.06)] hover:border-[rgba(0,0,0,0.14)] hover:shadow-ds-float'
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${colors.iconBg}`}>
-                    <Icon size={16} className={colors.text} />
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center ${colors.iconBg}`}>
+                    <Icon size={13} className={colors.text} />
                   </div>
                   <div className="text-left">
-                    <p className={`text-ds-body font-semibold ${isActive ? colors.text : 'text-txt-primary'}`}>{bucket.label}</p>
-                    <p className="text-[11px] text-txt-muted">{count} {count === 1 ? 'property' : 'properties'}</p>
+                    <p className={`text-[11px] font-semibold ${isActive ? colors.text : 'text-txt-primary'}`}>{bucket.label}</p>
+                    <p className="text-[9px] text-txt-muted">{count}</p>
                   </div>
                 </button>
               )
