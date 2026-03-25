@@ -2,7 +2,7 @@
 // components/inventory/property-detail-client.tsx
 // Full property detail page with 7 tabs
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink,
@@ -168,7 +168,7 @@ export function PropertyDetailClient({
           )}
           {activeTab === 'research' && <ResearchTab property={property} />}
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
-          {activeTab === 'outreach' && <OutreachTab />}
+          {activeTab === 'outreach' && <OutreachTab property={property} />}
           {activeTab === 'activity' && <ActivityTab property={property} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} ghlContactId={ghlContactId} />}
           {activeTab === 'ai' && <AITab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'blast' && <DealBlastTab property={property} tenantSlug={tenantSlug} />}
@@ -532,30 +532,99 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
 
 // ─── Outreach Tab ────────────────────────────────────────────────────────────
 
-function OutreachTab() {
-  const [subTab, setSubTab] = useState<'sends' | 'offers' | 'showings'>('sends')
+function OutreachTab({ property }: { property: PropertyDetail }) {
+  const [subTab, setSubTab] = useState<'send' | 'offer' | 'showing'>('send')
+  const [logs, setLogs] = useState<Array<{ id: string; type: string; channel: string; recipientName: string; recipientContact: string; notes: string | null; loggedAt: string; loggedByName: string }>>([])
+  const [loaded, setLoaded] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [formData, setFormData] = useState({ channel: 'sms', recipientName: '', recipientContact: '', notes: '' })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/properties/${property.id}/outreach`).then(r => r.json()).then(d => { setLogs(d.logs ?? []); setLoaded(true) }).catch(() => setLoaded(true))
+  }, [property.id])
+
+  const filtered = logs.filter(l => l.type === subTab)
+  const counts = { send: logs.filter(l => l.type === 'send').length, offer: logs.filter(l => l.type === 'offer').length, showing: logs.filter(l => l.type === 'showing').length }
+
+  async function saveLog() {
+    setSaving(true)
+    try {
+      await fetch(`/api/properties/${property.id}/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: subTab, ...formData }),
+      })
+      // Refresh
+      const res = await fetch(`/api/properties/${property.id}/outreach`)
+      const d = await res.json()
+      setLogs(d.logs ?? [])
+      setShowForm(false)
+      setFormData({ channel: 'sms', recipientName: '', recipientContact: '', notes: '' })
+    } catch {}
+    setSaving(false)
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex gap-0 border-b border-[rgba(0,0,0,0.06)]">
-          {(['sends', 'offers', 'showings'] as const).map(t => (
+          {(['send', 'offer', 'showing'] as const).map(t => (
             <button key={t} onClick={() => setSubTab(t)}
               className={`px-3 py-1.5 text-ds-fine font-medium border-b-2 capitalize transition-colors ${
                 subTab === t ? 'border-gunner-red text-gunner-red' : 'border-transparent text-txt-muted hover:text-txt-secondary'
               }`}
-            >{t} (0)</button>
+            >{t}s ({counts[t]})</button>
           ))}
         </div>
-        <button className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors">
-          <Plus size={11} /> Log {subTab === 'sends' ? 'Send' : subTab === 'offers' ? 'Offer' : 'Showing'}
+        <button onClick={() => setShowForm(!showForm)} className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors">
+          <Plus size={11} /> Log {subTab}
         </button>
       </div>
 
-      <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
-        <Send size={20} className="text-txt-muted mx-auto mb-2" />
-        <p className="text-ds-body text-txt-muted">No {subTab} logged yet</p>
-      </div>
+      {/* Log form */}
+      {showForm && (
+        <div className="bg-surface-secondary rounded-[10px] p-4 space-y-2">
+          <select value={formData.channel} onChange={e => setFormData(p => ({ ...p, channel: e.target.value }))}
+            className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine">
+            <option value="sms">SMS</option><option value="email">Email</option>
+            <option value="call">Call</option><option value="in_person">In Person</option>
+          </select>
+          <input value={formData.recipientName} onChange={e => setFormData(p => ({ ...p, recipientName: e.target.value }))}
+            placeholder="Recipient name" className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine" />
+          <input value={formData.recipientContact} onChange={e => setFormData(p => ({ ...p, recipientContact: e.target.value }))}
+            placeholder="Phone or email" className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine" />
+          <textarea value={formData.notes} onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+            placeholder="Notes (optional)" rows={2} className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine resize-none" />
+          <button onClick={saveLog} disabled={!formData.recipientName || saving}
+            className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      )}
+
+      {/* List */}
+      {!loaded ? (
+        <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
+          <Send size={20} className="text-txt-muted mx-auto mb-2" />
+          <p className="text-ds-body text-txt-muted">No {subTab}s logged yet</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {filtered.map(l => (
+            <div key={l.id} className="flex items-center gap-3 bg-surface-secondary rounded-[8px] px-3 py-2">
+              <span className="text-[9px] font-semibold text-txt-muted uppercase w-12">{l.channel}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-ds-fine text-txt-primary font-medium">{l.recipientName}</p>
+                {l.notes && <p className="text-ds-fine text-txt-muted truncate">{l.notes}</p>}
+              </div>
+              <span className="text-ds-fine text-txt-muted shrink-0">{format(new Date(l.loggedAt), 'MMM d')}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -758,7 +827,16 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
           <h3 className="text-ds-label font-semibold text-txt-primary">Deal Blast Generator</h3>
           <p className="text-ds-fine text-txt-muted">Send property details to matched buyers via SMS and email</p>
         </div>
-        <button className="text-ds-fine font-medium text-txt-secondary hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[8px] border-[0.5px] border-[rgba(0,0,0,0.08)] flex items-center gap-1 transition-colors">
+        <button
+          onClick={() => {
+            import('./PropertyFlyer').then(m => m.downloadPropertyPDF({
+              address: property.address, city: property.city, state: property.state, zip: property.zip,
+              askingPrice: property.askingPrice, arv: property.arv, contractPrice: property.contractPrice,
+              assignmentFee: property.assignmentFee, mao: property.mao,
+            }))
+          }}
+          className="text-ds-fine font-medium text-txt-secondary hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[8px] border-[0.5px] border-[rgba(0,0,0,0.08)] flex items-center gap-1 transition-colors"
+        >
           <FileText size={11} /> PDF Flyer
         </button>
       </div>

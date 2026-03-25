@@ -78,6 +78,8 @@ model Tenant {
   workflowDefinitions WorkflowDefinition[]
   workflowExecutions  WorkflowExecution[]
   buyers              Buyer[]
+  markets             Market[]
+  outreachLogs        OutreachLog[]
   dealBlasts          DealBlast[]
   milestones          PropertyMilestone[]
 
@@ -136,6 +138,7 @@ model User {
   coachLogs          CoachLog[]
   dealBlasts         DealBlast[] @relation("BlastCreatedBy")
   loggedMilestones   PropertyMilestone[] @relation("MilestoneLoggedBy")
+  outreachLogs       OutreachLog[] @relation("OutreachLogUser")
 
   @@map("users")
 }
@@ -212,6 +215,7 @@ model Property {
   tasks      Task[]
   dealBlasts DealBlast[]
   milestones PropertyMilestone[]
+  outreachLogs OutreachLog[]
 
   @@map("properties")
 }
@@ -757,4 +761,46 @@ model DealBlastRecipient {
 
   @@unique([blastId, buyerId])
   @@map("deal_blast_recipients")
+}
+
+// ─────────────────────────────────────────
+// MARKETS — zip code to market mapping
+// ─────────────────────────────────────────
+
+model Market {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name     String           // e.g. "Nashville, TN"
+  zipCodes String[] @default([]) @map("zip_codes") // ["37201", "37202", ...]
+
+  @@map("markets")
+}
+
+// ─────────────────────────────────────────
+// OUTREACH LOGS — sends, offers, showings
+// ─────────────────────────────────────────
+
+model OutreachLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId   String   @map("tenant_id")
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  propertyId String   @map("property_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String   @map("user_id")
+  user       User     @relation("OutreachLogUser", fields: [userId], references: [id])
+
+  type           String   // send, offer, showing
+  channel        String   // sms, email, call, in_person
+  recipientName  String   @map("recipient_name")
+  recipientContact String @map("recipient_contact")
+  notes          String?  @db.Text
+  loggedAt       DateTime @default(now()) @map("logged_at")
+
+  @@map("outreach_logs")
 }
