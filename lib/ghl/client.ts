@@ -114,11 +114,12 @@ export class GHLClient {
 
   // ─── SMS ───────────────────────────────────────────────────────────────────
 
-  async sendSMS(contactId: string, message: string) {
+  async sendSMS(contactId: string, message: string, fromNumber?: string) {
     return this.request('POST', `/conversations/messages`, {
       type: 'SMS',
       contactId,
       message,
+      ...(fromNumber ? { fromNumber } : {}),
     })
   }
 

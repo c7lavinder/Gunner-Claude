@@ -96,14 +96,14 @@ export async function POST(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const tenantId = session.tenantId
-    const { contactId, message } = await req.json()
+    const { contactId, message, fromNumber } = await req.json()
 
     if (!contactId || !message) {
       return NextResponse.json({ error: 'contactId and message required' }, { status: 400 })
     }
 
     const ghl = await getGHLClient(tenantId)
-    await ghl.sendSMS(contactId, message)
+    await ghl.sendSMS(contactId, message, fromNumber || undefined)
 
     await db.auditLog.create({
       data: {

@@ -16,6 +16,20 @@ import {
 import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function formatPhone(phone: string | null): string {
+  if (!phone) return ''
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  }
+  return phone
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface EnrichedTask {
@@ -115,6 +129,12 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [loadingThread, setLoadingThread] = useState(false)
   const threadBottomRef = useRef<HTMLDivElement>(null)
 
+  // SMS confirm modal
+  const [showSendConfirm, setShowSendConfirm] = useState(false)
+  const [teamNumbers, setTeamNumbers] = useState<Array<{ name: string; phone: string }>>([])
+  const [selectedFromNumber, setSelectedFromNumber] = useState('')
+  const [fromSearch, setFromSearch] = useState('')
+
 
   // Fetch KPIs
   useEffect(() => {
@@ -139,6 +159,18 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   }, [tenantSlug])
 
   useEffect(() => { fetchInbox() }, [fetchInbox])
+
+  // Fetch team phone numbers for SMS "from" dropdown
+  useEffect(() => {
+    fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
+      .then(r => r.json())
+      .then(d => {
+        const nums = d.numbers ?? []
+        setTeamNumbers(nums)
+        if (nums.length > 0) setSelectedFromNumber(nums[0].phone)
+      })
+      .catch(() => {})
+  }, [tenantSlug])
 
   // Fetch appointments
   useEffect(() => {
@@ -203,19 +235,30 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       .catch(() => setLoadingThread(false))
   }
 
-  async function sendReply(contactId: string, contactName: string) {
-    if (!replyText.trim() || sendingReply) return
+  function promptSendReply() {
+    if (!replyText.trim() || !selectedContact) return
+    setShowSendConfirm(true)
+  }
+
+  async function confirmSendReply() {
+    if (!selectedContact || !replyText.trim() || sendingReply) return
     setSendingReply(true)
+    setShowSendConfirm(false)
     try {
       const res = await fetch(`/api/${tenantSlug}/dayhub/inbox`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactId, message: replyText.trim() }),
+        body: JSON.stringify({
+          contactId: selectedContact.contactId,
+          message: replyText.trim(),
+          ...(selectedFromNumber ? { fromNumber: selectedFromNumber } : {}),
+        }),
       })
       if (res.ok) {
-        toast(`SMS sent to ${contactName}`, 'success')
+        toast(`SMS sent to ${selectedContact.contactName}`, 'success')
         setReplyText('')
-        setSelectedContact(null)
+        // Refresh thread
+        selectContact(selectedContact)
         fetchInbox()
       } else {
         const data = await res.json()
@@ -395,7 +438,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-medium text-txt-primary truncate">{selectedContact.contactName}</p>
                         <div className="flex items-center gap-2">
-                          {selectedContact.phone && <span className="text-[9px] text-txt-muted">{selectedContact.phone}</span>}
+                          {selectedContact.phone && <span className="text-[9px] text-txt-muted">{formatPhone(selectedContact.phone)}</span>}
                           {selectedContact.assignedTo && <span className="text-[9px] text-semantic-blue">→ {selectedContact.assignedTo}</span>}
                         </div>
                       </div>
@@ -441,14 +484,14 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                         type="text"
                         value={replyText}
                         onChange={e => setReplyText(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(selectedContact.contactId, selectedContact.contactName) } }}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); promptSendReply() } }}
                         placeholder="Reply..."
                         className="flex-1 bg-surface-secondary border rounded-[8px] px-2.5 py-1.5 text-[10px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
                         style={{ borderColor: 'var(--border-medium)' }}
                         disabled={sendingReply}
                       />
                       <button
-                        onClick={() => sendReply(selectedContact.contactId, selectedContact.contactName)}
+                        onClick={() => promptSendReply()}
                         disabled={!replyText.trim() || sendingReply}
                         className="p-1.5 rounded-[8px] bg-gunner-red text-white hover:bg-gunner-red-dark disabled:opacity-40 transition-colors shrink-0"
                       >
@@ -499,6 +542,86 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             </div>
           </div>
         </div>
+
+        {/* SMS SEND CONFIRMATION MODAL */}
+        {showSendConfirm && selectedContact && (
+          <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowSendConfirm(false)}>
+            <div className="bg-surface-primary rounded-[14px] border-[0.5px] w-full max-w-sm mx-4 p-5" style={{ borderColor: 'var(--border-light)' }} onClick={e => e.stopPropagation()}>
+              <h3 className="text-[13px] font-semibold text-txt-primary mb-4">Confirm SMS</h3>
+
+              {/* FROM */}
+              <div className="mb-3">
+                <label className="text-[10px] font-medium text-txt-muted uppercase tracking-wide block mb-1">From</label>
+                {teamNumbers.length > 0 ? (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={fromSearch}
+                      onChange={e => { setFromSearch(e.target.value) }}
+                      onFocus={() => setFromSearch('')}
+                      placeholder={teamNumbers.find(t => t.phone === selectedFromNumber)?.name ?? 'Select number...'}
+                      className="w-full bg-surface-secondary border rounded-[8px] px-2.5 py-1.5 text-[11px] text-txt-primary placeholder:text-txt-secondary focus:outline-none focus:ring-1 focus:ring-gunner-red"
+                      style={{ borderColor: 'var(--border-medium)' }}
+                    />
+                    {fromSearch !== '' && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-surface-primary border rounded-[8px] shadow-ds-float max-h-[120px] overflow-y-auto z-10" style={{ borderColor: 'var(--border-medium)' }}>
+                        {teamNumbers
+                          .filter(t => t.name.toLowerCase().includes(fromSearch.toLowerCase()) || t.phone.includes(fromSearch))
+                          .map(t => (
+                            <button
+                              key={t.phone}
+                              onClick={() => { setSelectedFromNumber(t.phone); setFromSearch(t.name + ' — ' + formatPhone(t.phone)) }}
+                              className="w-full text-left px-2.5 py-1.5 text-[10px] text-txt-primary hover:bg-surface-secondary"
+                            >
+                              {t.name} <span className="text-txt-muted">— {formatPhone(t.phone)}</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    {fromSearch === '' && selectedFromNumber && (
+                      <p className="text-[10px] text-txt-muted mt-0.5">
+                        {teamNumbers.find(t => t.phone === selectedFromNumber)?.name} — {formatPhone(selectedFromNumber)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-txt-muted">Default location number</p>
+                )}
+              </div>
+
+              {/* TO */}
+              <div className="mb-3">
+                <label className="text-[10px] font-medium text-txt-muted uppercase tracking-wide block mb-1">To</label>
+                <p className="text-[11px] text-txt-primary">{selectedContact.contactName} <span className="text-txt-muted">— {formatPhone(selectedContact.phone)}</span></p>
+              </div>
+
+              {/* MESSAGE */}
+              <div className="mb-4">
+                <label className="text-[10px] font-medium text-txt-muted uppercase tracking-wide block mb-1">Message</label>
+                <div className="bg-surface-secondary rounded-[8px] px-2.5 py-2 text-[11px] text-txt-primary leading-relaxed">
+                  {replyText}
+                </div>
+              </div>
+
+              {/* ACTIONS */}
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmSendReply}
+                  disabled={sendingReply}
+                  className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-[11px] font-semibold py-2 rounded-[8px] transition-colors"
+                >
+                  {sendingReply ? 'Sending...' : 'Send SMS'}
+                </button>
+                <button
+                  onClick={() => setShowSendConfirm(false)}
+                  className="px-4 py-2 text-[11px] text-txt-secondary hover:text-txt-primary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* TASKS SECTION */}
         <div>
