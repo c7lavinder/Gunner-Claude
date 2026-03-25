@@ -4,7 +4,7 @@
 // Two-column layout: main (65%) + AI Coach sidebar (35%)
 // Sections: role tabs, KPI cards, inbox/appointments, tasks list
 
-import { useState, useEffect, useCallback, useTransition } from 'react'
+import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -111,6 +111,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [selectedContact, setSelectedContact] = useState<InboxItem | null>(null)
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [threadMessages, setThreadMessages] = useState<Array<{ id: string; body: string; direction: string; type: string; time: string }>>([])
+  const [loadingThread, setLoadingThread] = useState(false)
+  const threadBottomRef = useRef<HTMLDivElement>(null)
 
 
   // Fetch KPIs
@@ -179,6 +182,21 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
       toast('Failed to complete task', 'error')
     }
     setCompletingTask(null)
+  }
+
+  function selectContact(item: InboxItem) {
+    setSelectedContact(item)
+    setReplyText('')
+    setThreadMessages([])
+    setLoadingThread(true)
+    fetch(`/api/${tenantSlug}/dayhub/messages?conversationId=${item.id}`)
+      .then(r => r.json())
+      .then(d => {
+        setThreadMessages(d.messages ?? [])
+        setLoadingThread(false)
+        setTimeout(() => threadBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+      })
+      .catch(() => setLoadingThread(false))
   }
 
   async function sendReply(contactId: string, contactName: string) {
@@ -294,111 +312,148 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
         {/* INBOX + APPOINTMENTS — side by side, fixed height */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* ── INBOX PANEL (2/3) ──────────────────────────────── */}
+          {/* ── INBOX PANEL (2/3) — split view: contacts left, thread right ── */}
           <div className="lg:col-span-2 bg-surface-primary border-[0.5px] rounded-[14px] flex flex-col h-[420px]" style={{ borderColor: 'var(--border-light)' }}>
             {/* Inbox header */}
-            <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
-              <MessageSquare size={13} className="text-gunner-red" />
-              <span className="text-[13px] font-semibold text-txt-primary uppercase tracking-wide">Inbox</span>
+            <div className="flex items-center gap-3 px-4 py-2.5 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+              <MessageSquare size={12} className="text-gunner-red" />
+              <span className="text-[11px] font-semibold text-txt-primary uppercase tracking-wide">Inbox</span>
               {!loadingInbox && (unreadInbox.length + noResponseInbox.length) > 0 && (
-                <span className="bg-gunner-red text-white text-[11px] font-medium px-2 py-0.5 rounded-full">{unreadInbox.length + noResponseInbox.length}</span>
+                <span className="bg-gunner-red text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full">{unreadInbox.length + noResponseInbox.length}</span>
               )}
               <button onClick={() => fetchInbox()} className="ml-auto p-1 text-txt-muted hover:text-txt-primary">
-                <RefreshCw size={12} />
+                <RefreshCw size={11} />
               </button>
             </div>
 
-            {/* Inbox body — scrollable */}
-            <div className="flex-1 overflow-y-auto min-h-0">
-              {!selectedContact ? (
-                loadingInbox ? (
-                  <div className="py-8 text-center"><Loader2 size={16} className="animate-spin text-txt-muted mx-auto" /></div>
+            {/* Split view body */}
+            <div className="flex-1 flex min-h-0">
+              {/* LEFT: Contact list — always visible */}
+              <div className="w-[220px] shrink-0 border-r overflow-y-auto" style={{ borderColor: 'var(--border-light)' }}>
+                {loadingInbox ? (
+                  <div className="py-6 text-center"><Loader2 size={12} className="animate-spin text-txt-muted mx-auto" /></div>
                 ) : (unreadInbox.length + noResponseInbox.length) === 0 ? (
-                  <div className="py-8 text-center text-[13px] text-txt-muted">All caught up</div>
+                  <div className="py-6 text-center text-[10px] text-txt-muted">All caught up</div>
                 ) : (
                   <>
                     {unreadInbox.length > 0 && (
                       <>
-                        <div className="px-5 pt-3 pb-1">
-                          <span className="text-[10px] font-medium tracking-[0.08em] text-semantic-red uppercase">Unread ({unreadInbox.length})</span>
+                        <div className="px-3 pt-2 pb-0.5">
+                          <span className="text-[9px] font-medium tracking-[0.08em] text-semantic-red uppercase">Unread ({unreadInbox.length})</span>
                         </div>
-                        {unreadInbox.map(item => <InboxRow key={item.id} item={item} onSelect={setSelectedContact} />)}
+                        {unreadInbox.map(item => (
+                          <button
+                            key={item.id}
+                            onClick={() => selectContact(item)}
+                            className={`w-full text-left px-3 py-2 hover:bg-surface-secondary transition-colors border-b last:border-b-0 ${selectedContact?.id === item.id ? 'bg-surface-secondary' : ''}`}
+                            style={{ borderColor: 'var(--border-light)' }}
+                          >
+                            <p className="text-[11px] font-medium text-txt-primary truncate">{item.contactName}</p>
+                            {item.propertyAddress && <p className="text-[9px] text-semantic-purple truncate">{item.propertyAddress}</p>}
+                            <p className="text-[9px] text-txt-muted truncate">{item.type === 'missed_call' ? 'Missed call' : item.lastMessageBody}</p>
+                          </button>
+                        ))}
                       </>
                     )}
                     {noResponseInbox.length > 0 && (
                       <>
-                        <div className="px-5 pt-3 pb-1">
-                          <span className="text-[10px] font-medium tracking-[0.08em] text-semantic-amber uppercase">Needs Reply ({noResponseInbox.length})</span>
+                        <div className="px-3 pt-2 pb-0.5">
+                          <span className="text-[9px] font-medium tracking-[0.08em] text-semantic-amber uppercase">Needs Reply ({noResponseInbox.length})</span>
                         </div>
-                        {noResponseInbox.map(item => <InboxRow key={item.id} item={item} onSelect={setSelectedContact} />)}
+                        {noResponseInbox.map(item => (
+                          <button
+                            key={item.id}
+                            onClick={() => selectContact(item)}
+                            className={`w-full text-left px-3 py-2 hover:bg-surface-secondary transition-colors border-b last:border-b-0 ${selectedContact?.id === item.id ? 'bg-surface-secondary' : ''}`}
+                            style={{ borderColor: 'var(--border-light)' }}
+                          >
+                            <p className="text-[11px] font-medium text-txt-primary truncate">{item.contactName}</p>
+                            {item.propertyAddress && <p className="text-[9px] text-semantic-purple truncate">{item.propertyAddress}</p>}
+                            <p className="text-[9px] text-txt-muted truncate">{item.type === 'missed_call' ? 'Missed call' : item.lastMessageBody}</p>
+                          </button>
+                        ))}
                       </>
                     )}
                   </>
-                )
-              ) : (
-                <div className="p-5 flex flex-col h-full">
-                  <div className="flex items-center gap-3 mb-4 shrink-0">
-                    <button onClick={() => setSelectedContact(null)} className="p-1.5 rounded-[10px] hover:bg-surface-secondary text-txt-secondary">
-                      <ChevronLeft size={16} />
-                    </button>
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                      selectedContact.type === 'missed_call' ? 'bg-semantic-red-bg' : 'bg-semantic-blue-bg'
-                    }`}>
-                      {selectedContact.type === 'missed_call'
-                        ? <PhoneOff size={14} className="text-semantic-red" />
-                        : <MessageCircle size={14} className="text-semantic-blue" />
-                      }
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[14px] font-medium text-txt-primary">{selectedContact.contactName}</p>
-                      {selectedContact.phone && <p className="text-[11px] text-txt-muted">{selectedContact.phone}</p>}
-                    </div>
-                    <button className="p-1.5 rounded-[10px] hover:bg-surface-secondary text-txt-muted">
-                      <ExternalLink size={14} />
-                    </button>
-                  </div>
+                )}
+              </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-3 py-2">
-                    <div className="text-center text-[11px] text-txt-muted">Today</div>
-                    {selectedContact.type === 'missed_call' ? (
-                      <div className="flex justify-center">
-                        <span className="border border-gunner-red text-gunner-red text-[12px] font-medium px-4 py-2 rounded-full flex items-center gap-2">
-                          <PhoneOff size={12} /> Missed Call
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex justify-end">
-                        <div className="bg-gunner-red text-white text-[13px] px-4 py-2 rounded-2xl rounded-br-md max-w-[80%]">
-                          {selectedContact.lastMessageBody}
+              {/* RIGHT: Conversation thread */}
+              <div className="flex-1 flex flex-col min-w-0">
+                {!selectedContact ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-[10px] text-txt-muted">Select a conversation</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Thread header */}
+                    <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-medium text-txt-primary truncate">{selectedContact.contactName}</p>
+                        <div className="flex items-center gap-2">
+                          {selectedContact.phone && <span className="text-[9px] text-txt-muted">{selectedContact.phone}</span>}
+                          {selectedContact.assignedTo && <span className="text-[9px] text-semantic-blue">→ {selectedContact.assignedTo}</span>}
                         </div>
                       </div>
-                    )}
-                    <div className="text-center text-[11px] text-txt-muted">
-                      {format(new Date(selectedContact.dateUpdated), 'h:mm a')}
+                      <a
+                        href={`https://app.gohighlevel.com/conversations/${selectedContact.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 rounded-[6px] hover:bg-surface-secondary text-txt-muted hover:text-txt-primary transition-colors"
+                        title="Open in GHL"
+                      >
+                        <ExternalLink size={11} />
+                      </a>
                     </div>
-                  </div>
 
-                  <div className="mt-2 flex gap-2 shrink-0">
-                    <input
-                      type="text"
-                      value={replyText}
-                      onChange={e => setReplyText(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(selectedContact.contactId, selectedContact.contactName) } }}
-                      placeholder={`Reply to ${selectedContact.contactName}...`}
-                      className="flex-1 bg-surface-secondary border rounded-[10px] px-4 py-2.5 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
-                      style={{ borderColor: 'var(--border-medium)' }}
-                      disabled={sendingReply}
-                    />
-                    <button
-                      onClick={() => sendReply(selectedContact.contactId, selectedContact.contactName)}
-                      disabled={!replyText.trim() || sendingReply}
-                      className="p-2.5 rounded-[10px] bg-gunner-red text-white hover:bg-gunner-red-dark disabled:opacity-40 transition-colors shrink-0"
-                    >
-                      {sendingReply ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    </button>
-                  </div>
-                </div>
-              )}
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
+                      {loadingThread ? (
+                        <div className="py-6 text-center"><Loader2 size={12} className="animate-spin text-txt-muted mx-auto" /></div>
+                      ) : threadMessages.length === 0 ? (
+                        <div className="py-6 text-center text-[10px] text-txt-muted">No messages</div>
+                      ) : (
+                        threadMessages.map(msg => (
+                          <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[75%] px-2.5 py-1.5 rounded-xl text-[10px] leading-relaxed ${
+                              msg.direction === 'outbound'
+                                ? 'bg-gunner-red text-white rounded-br-sm'
+                                : 'bg-surface-tertiary text-txt-primary rounded-bl-sm'
+                            }`}>
+                              {msg.body}
+                              <div className={`text-[8px] mt-0.5 ${msg.direction === 'outbound' ? 'text-white/60' : 'text-txt-muted'}`}>
+                                {msg.time ? format(new Date(msg.time), 'MMM d, h:mm a') : ''}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      <div ref={threadBottomRef} />
+                    </div>
+
+                    {/* Reply input */}
+                    <div className="px-3 pb-2 pt-1 flex gap-1.5 shrink-0 border-t" style={{ borderColor: 'var(--border-light)' }}>
+                      <input
+                        type="text"
+                        value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(selectedContact.contactId, selectedContact.contactName) } }}
+                        placeholder="Reply..."
+                        className="flex-1 bg-surface-secondary border rounded-[8px] px-2.5 py-1.5 text-[10px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
+                        style={{ borderColor: 'var(--border-medium)' }}
+                        disabled={sendingReply}
+                      />
+                      <button
+                        onClick={() => sendReply(selectedContact.contactId, selectedContact.contactName)}
+                        disabled={!replyText.trim() || sendingReply}
+                        className="p-1.5 rounded-[8px] bg-gunner-red text-white hover:bg-gunner-red-dark disabled:opacity-40 transition-colors shrink-0"
+                      >
+                        {sendingReply ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
