@@ -32,15 +32,17 @@ const PIPELINE_STAGES = [
 // ─── Disposition pipeline ────────────────────────────────────────────────────
 
 const DISPO_STAGES = [
-  { key: 'IN_DISPOSITION',  label: 'New Deal',          icon: Package,     step: 1 },
-  { key: 'DISPO_PUSHED',    label: 'Pushed Out',        icon: Megaphone,   step: 2 },
-  { key: 'DISPO_OFFERS',    label: 'Offers Received',   icon: Receipt,     step: 3 },
-  { key: 'DISPO_CONTRACTED', label: 'Contracted',       icon: Handshake,   step: 4 },
+  { key: 'IN_DISPOSITION',   label: 'New Deal',        icon: Package,     step: 1 },
+  { key: 'DISPO_PUSHED',     label: 'Pushed Out',      icon: Megaphone,   step: 2 },
+  { key: 'DISPO_OFFERS',     label: 'Offers Received', icon: Receipt,     step: 3 },
+  { key: 'DISPO_CONTRACTED', label: 'Contracted',      icon: Handshake,   step: 4 },
+  { key: 'DISPO_CLOSED',     label: 'Closed',          icon: BadgeCheck,  step: 5 },
 ]
 
 // ─── Long-term / terminal buckets ────────────────────────────────────────────
 
 const LONG_TERM_BUCKETS = [
+  { key: 'FOLLOW_UP', label: 'Follow Up', icon: Clock },
   { key: 'DEAD', label: 'Dead', icon: XCircle },
 ]
 
@@ -57,6 +59,8 @@ const STAGE_COLORS: Record<string, { ring: string; bg: string; text: string; ico
   DISPO_PUSHED:          { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
   DISPO_OFFERS:          { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
   DISPO_CONTRACTED:      { ring: 'ring-semantic-green',  bg: 'bg-semantic-green',  text: 'text-semantic-green',  iconBg: 'bg-semantic-green-bg' },
+  DISPO_CLOSED:          { ring: 'ring-semantic-green',  bg: 'bg-semantic-green',  text: 'text-semantic-green',  iconBg: 'bg-semantic-green-bg' },
+  FOLLOW_UP:             { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
   // Terminal
   CONTACTED:             { ring: 'ring-semantic-amber',  bg: 'bg-semantic-amber',  text: 'text-semantic-amber',  iconBg: 'bg-semantic-amber-bg' },
   APPOINTMENT_COMPLETED: { ring: 'ring-semantic-purple', bg: 'bg-semantic-purple', text: 'text-semantic-purple', iconBg: 'bg-semantic-purple-bg' },
@@ -68,7 +72,8 @@ const STATUS_LABELS: Record<string, string> = {
   OFFER_MADE: 'Offer Made', UNDER_CONTRACT: 'Contract',
   SOLD: 'Closed', IN_DISPOSITION: 'New Deal',
   DISPO_PUSHED: 'Pushed Out', DISPO_OFFERS: 'Offers Received',
-  DISPO_CONTRACTED: 'Contracted',
+  DISPO_CONTRACTED: 'Contracted', DISPO_CLOSED: 'Closed',
+  FOLLOW_UP: 'Follow Up',
   CONTACTED: 'Contacted', APPOINTMENT_COMPLETED: 'Appt Done',
   DEAD: 'Dead',
 }
