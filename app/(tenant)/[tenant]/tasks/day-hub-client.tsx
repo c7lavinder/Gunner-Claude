@@ -78,6 +78,8 @@ interface AppointmentItem {
   startTime: string
   endTime: string
   status: string
+  calendarName?: string
+  assignedUserName?: string | null
 }
 
 type RoleTab = 'ADMIN' | 'LM' | 'AM' | 'DISPO'
@@ -550,27 +552,51 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             </div>
 
             {/* Appointments body — scrollable */}
-            <div className="flex-1 overflow-y-auto min-h-0 p-5">
+            <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2">
               {loadingAppts ? (
-                <div className="py-8 text-center">
-                  <Loader2 size={16} className="animate-spin text-txt-muted mx-auto" />
+                <div className="py-6 text-center">
+                  <Loader2 size={12} className="animate-spin text-txt-muted mx-auto" />
                 </div>
               ) : appointments.length === 0 ? (
-                <div className="py-8 text-center">
-                  <Calendar size={24} className="text-txt-muted mx-auto mb-2" />
-                  <p className="text-[13px] text-txt-muted">No appointments today</p>
-                  <p className="text-[11px] text-txt-muted mt-1">Appointments from your CRM calendar will appear here.</p>
+                <div className="py-6 text-center">
+                  <Calendar size={20} className="text-txt-muted mx-auto mb-2" />
+                  <p className="text-[10px] text-txt-muted">No upcoming appointments</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {appointments.map(appt => (
-                    <div key={appt.id} className="bg-surface-secondary rounded-[10px] px-4 py-3">
-                      <p className="text-[14px] font-medium text-txt-primary">{appt.contactName || appt.title}</p>
-                      <p className="text-[11px] text-txt-muted mt-0.5">
-                        {appt.startTime ? format(new Date(appt.startTime), 'h:mm a') : ''} — {appt.status}
-                      </p>
-                    </div>
-                  ))}
+                <div className="space-y-1">
+                  {appointments.map((appt, i) => {
+                    // Date separator
+                    let dateSep: string | null = null
+                    if (appt.startTime) {
+                      const d = new Date(appt.startTime)
+                      const prev = i > 0 ? new Date(appointments[i - 1].startTime) : null
+                      if (!prev || d.toDateString() !== prev.toDateString()) {
+                        const today = new Date()
+                        dateSep = d.toDateString() === today.toDateString() ? 'Today' : format(d, 'EEE, MMM d')
+                      }
+                    }
+                    return (
+                      <div key={appt.id}>
+                        {dateSep && (
+                          <p className="text-[9px] font-medium text-txt-muted uppercase tracking-wide px-2 pt-2 pb-0.5">{dateSep}</p>
+                        )}
+                        <div className="flex items-start gap-2 px-2 py-1.5 rounded-[8px] hover:bg-surface-secondary transition-colors">
+                          <div className="text-[10px] text-txt-muted w-[50px] shrink-0 pt-0.5 text-right">
+                            {appt.startTime ? format(new Date(appt.startTime), 'h:mm a') : ''}
+                          </div>
+                          <div className="w-px h-8 bg-gunner-red/30 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-medium text-txt-primary truncate">{appt.title}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {appt.calendarName && <span className="text-[8px] text-semantic-purple truncate">{appt.calendarName}</span>}
+                              {appt.assignedUserName && <span className="text-[8px] text-semantic-blue">• {appt.assignedUserName}</span>}
+                              <span className={`text-[8px] font-medium ${appt.status === 'confirmed' ? 'text-semantic-green' : 'text-txt-muted'}`}>{appt.status}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
