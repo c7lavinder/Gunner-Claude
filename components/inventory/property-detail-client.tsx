@@ -54,6 +54,7 @@ export function PropertyDetailClient({
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [sending, setSending] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
+  const [showOfferModal, setShowOfferModal] = useState(false)
 
   const appStage = STATUS_TO_APP_STAGE[property.status] ?? 'acquisition.new_lead'
   const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
@@ -125,7 +126,7 @@ export function PropertyDetailClient({
         {/* Quick actions */}
         <div className="flex gap-2 mt-3">
           <button
-            onClick={() => setActiveTab('blast')}
+            onClick={() => setShowOfferModal(true)}
             className="flex items-center gap-1.5 text-ds-fine font-semibold bg-gunner-red hover:bg-gunner-red-dark text-white px-3 py-1.5 rounded-[10px] transition-colors"
           >
             <DollarSign size={11} /> Record Offer
@@ -174,6 +175,83 @@ export function PropertyDetailClient({
           {activeTab === 'blast' && <DealBlastTab property={property} tenantSlug={tenantSlug} />}
         </div>
       </div>
+
+      {/* Record Offer Modal */}
+      {showOfferModal && (
+        <RecordOfferModal
+          propertyId={property.id}
+          tenantSlug={tenantSlug}
+          onClose={() => setShowOfferModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Record Offer Modal ──────────────────────────────────────────────────────
+
+function RecordOfferModal({ propertyId, tenantSlug, onClose }: { propertyId: string; tenantSlug: string; onClose: () => void }) {
+  const [offerAmount, setOfferAmount] = useState('')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [success, setSuccess] = useState(false)
+
+  async function submit() {
+    if (!offerAmount) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          askingPrice: offerAmount,
+          status: 'OFFER_MADE',
+        }),
+      })
+      if (res.ok) {
+        setSuccess(true)
+        setTimeout(() => { onClose(); window.location.reload() }, 1000)
+      }
+    } catch {}
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-white rounded-[14px] border-[0.5px] border-[rgba(0,0,0,0.08)] w-full max-w-sm mx-4 p-5" onClick={e => e.stopPropagation()}>
+        <h3 className="text-ds-label font-semibold text-txt-primary mb-4">Record Offer</h3>
+        {success ? (
+          <p className="text-ds-body text-semantic-green font-medium py-4 text-center">Offer recorded!</p>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-ds-fine text-txt-muted block mb-1">Offer Amount *</label>
+              <input
+                type="number" value={offerAmount} onChange={e => setOfferAmount(e.target.value)}
+                placeholder="150000"
+                className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-ds-fine text-txt-muted block mb-1">Notes</label>
+              <textarea
+                value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Offer details..." rows={3}
+                className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine text-txt-primary focus:outline-none resize-none"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={onClose} className="flex-1 text-ds-fine font-medium text-txt-secondary bg-surface-secondary rounded-[8px] py-2 hover:bg-surface-tertiary transition-colors">
+                Cancel
+              </button>
+              <button onClick={submit} disabled={!offerAmount || saving}
+                className="flex-1 text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 rounded-[8px] py-2 transition-colors">
+                {saving ? 'Saving...' : 'Record Offer'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -205,7 +283,7 @@ function DealProgress({ currentStatus }: { currentStatus: string }) {
           const isCurrent = i === activeIdx
           return (
             <div key={step.key} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center cursor-default select-none" title="Stage changes are synced from GHL">
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold ${
                   isCurrent ? `${color} text-white` : isHit ? `${color}/20 ${color.replace('bg-', 'text-')}` : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
                 }`}>
@@ -394,15 +472,33 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
 // ─── Research Tab ────────────────────────────────────────────────────────────
 
 function ResearchTab({ property }: { property: PropertyDetail }) {
+  const [researching, setResearching] = useState(false)
+  const [researchMsg, setResearchMsg] = useState('')
+
+  async function handleReResearch() {
+    setResearching(true)
+    setResearchMsg('')
+    // Placeholder — research integration not yet built
+    await new Promise(r => setTimeout(r, 1500))
+    setResearchMsg('Research data sync coming soon — public records integration in progress.')
+    setResearching(false)
+    setTimeout(() => setResearchMsg(''), 5000)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-ds-label font-semibold text-txt-primary">Property Research</h3>
-          <p className="text-ds-fine text-txt-muted">Data not yet synced</p>
+          <p className="text-ds-fine text-txt-muted">{researchMsg || 'Data not yet synced'}</p>
         </div>
-        <button className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark transition-colors">
-          Re-Research
+        <button
+          onClick={handleReResearch}
+          disabled={researching}
+          className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark transition-colors disabled:opacity-50 flex items-center gap-1"
+        >
+          {researching && <Loader2 size={11} className="animate-spin" />}
+          {researching ? 'Researching...' : 'Re-Research'}
         </button>
       </div>
 
@@ -709,16 +805,15 @@ function AITab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug:
     setInput('')
     setLoading(true)
     try {
-      const res = await fetch(`/api/${tenantSlug}/ai-coach`, {
+      const res = await fetch('/api/ai/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: text,
-          context: `Property: ${property.address}, ${property.city}, ${property.state}. Status: ${property.status}. Asking: ${property.askingPrice ?? 'N/A'}. ARV: ${property.arv ?? 'N/A'}. MAO: ${property.mao ?? 'N/A'}. Contract: ${property.contractPrice ?? 'N/A'}. Assignment Fee: ${property.assignmentFee ?? 'N/A'}.`,
+          message: `[Property context: ${property.address}, ${property.city}, ${property.state}. Status: ${property.status}. Asking: ${property.askingPrice ?? 'N/A'}. ARV: ${property.arv ?? 'N/A'}. MAO: ${property.mao ?? 'N/A'}. Contract: ${property.contractPrice ?? 'N/A'}. Assignment Fee: ${property.assignmentFee ?? 'N/A'}.]\n\n${text}`,
         }),
       })
       const data = await res.json()
-      setMessages(prev => [...prev, { role: 'ai', text: data.reply ?? data.message ?? 'No response' }])
+      setMessages(prev => [...prev, { role: 'ai', text: data.reply ?? data.response ?? data.message ?? 'No response' }])
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'Failed to get response' }])
     }
