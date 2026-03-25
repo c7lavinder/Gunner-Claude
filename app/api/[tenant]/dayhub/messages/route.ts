@@ -1,8 +1,8 @@
 // GET /api/[tenant]/dayhub/messages?conversationId=xxx
-// Returns messages for a GHL conversation thread
+// Returns SMS messages for a GHL conversation thread
+// Paginates through call/email noise to find actual SMS messages
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
-import { getGHLClient } from '@/lib/ghl/client'
 
 interface GHLMessage {
   id: string
@@ -12,6 +12,17 @@ interface GHLMessage {
   dateAdded?: string
   contentType?: string
   attachments?: string[]
+}
+
+interface GHLMessagePage {
+  messages?: GHLMessage[]
+  lastMessageId?: string
+  nextPage?: boolean
+}
+
+function isSMS(m: GHLMessage): boolean {
+  const type = (m.messageType ?? '').toUpperCase()
+  return !!m.body && (type === 'TYPE_SMS' || type === 'SMS' || type === '')
 }
 
 export async function GET(
@@ -33,32 +44,38 @@ export async function GET(
     })
     if (!tenant?.ghlAccessToken) return NextResponse.json({ error: 'No GHL connection' }, { status: 400 })
 
-    // Fetch messages from GHL conversation
-    const res = await fetch(
-      `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`,
-      {
-        headers: {
-          'Authorization': `Bearer ${tenant.ghlAccessToken}`,
-          'Version': '2021-07-28',
-        },
-      }
-    )
-
-    if (!res.ok) {
-      return NextResponse.json({ messages: [], error: 'Failed to fetch messages' })
+    const headers = {
+      'Authorization': `Bearer ${tenant.ghlAccessToken}`,
+      'Version': '2021-07-28',
     }
 
-    const data = await res.json() as { messages?: { messages?: GHLMessage[] } }
-    const rawMessages = data.messages?.messages ?? []
+    // Paginate through messages until we find enough SMS (up to 5 pages)
+    const smsMessages: GHLMessage[] = []
+    let lastMessageId: string | undefined
+    const TARGET_SMS = 15
 
-    // Map and return last N messages (newest first from GHL, we reverse for chronological)
-    // SMS only — filter out calls, emails, system messages
-    const messages = rawMessages
-      .filter(m => {
-        const type = (m.messageType ?? '').toUpperCase()
-        return m.body && (type === 'TYPE_SMS' || type === 'SMS' || type === '')
-      })
-      .slice(0, 20)
+    for (let page = 0; page < 5; page++) {
+      const fetchUrl = `https://services.leadconnectorhq.com/conversations/${conversationId}/messages${lastMessageId ? `?lastMessageId=${lastMessageId}` : ''}`
+      const res = await fetch(fetchUrl, { headers })
+      if (!res.ok) break
+
+      const data = await res.json() as { messages?: GHLMessagePage }
+      const pageData = data.messages
+      const msgs = pageData?.messages ?? []
+      if (msgs.length === 0) break
+
+      for (const m of msgs) {
+        if (isSMS(m)) smsMessages.push(m)
+      }
+
+      if (smsMessages.length >= TARGET_SMS) break
+      if (!pageData?.nextPage) break
+      lastMessageId = pageData.lastMessageId
+    }
+
+    // Take last 15 SMS, reverse for chronological order
+    const messages = smsMessages
+      .slice(0, TARGET_SMS)
       .map(m => ({
         id: m.id,
         body: m.body ?? '',
@@ -66,7 +83,7 @@ export async function GET(
         type: 'SMS',
         time: m.dateAdded ?? '',
       }))
-      .reverse() // chronological order (oldest first)
+      .reverse()
 
     return NextResponse.json({ messages })
   } catch (err) {
