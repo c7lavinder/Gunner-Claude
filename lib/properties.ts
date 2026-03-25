@@ -76,7 +76,7 @@ export async function createPropertyFromContact(
         ghlPipelineId: context.ghlPipelineId,
         ghlPipelineStage: context.ghlPipelineStage,
         leadSource,
-        address: address || 'Address pending',
+        address: address || '',
         city: city || '',
         state: state || '',
         zip: zip || '',
@@ -168,7 +168,7 @@ export async function createPropertyFromContact(
 // "1799 Mellow Rd." → "1799 mellow rd"
 // "123 N. Main Street" → "123 n main st"
 function normalizeStreetAddress(address: string): string {
-  if (!address || address === 'Address pending') return ''
+  if (!address) return ''
 
   return address
     .toLowerCase()
