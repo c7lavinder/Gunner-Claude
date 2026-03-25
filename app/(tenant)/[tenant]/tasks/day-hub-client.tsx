@@ -132,9 +132,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
   // SMS confirm modal
   const [showSendConfirm, setShowSendConfirm] = useState(false)
-  const [teamNumbers, setTeamNumbers] = useState<Array<{ name: string; phone: string }>>([])
-  const [selectedFromNumber, setSelectedFromNumber] = useState('')
-  const [fromSearch, setFromSearch] = useState('')
 
 
   // Fetch KPIs
@@ -161,18 +158,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   }, [tenantSlug])
 
   useEffect(() => { fetchInbox() }, [fetchInbox])
-
-  // Fetch team phone numbers for SMS "from" dropdown
-  useEffect(() => {
-    fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
-      .then(r => r.json())
-      .then(d => {
-        const nums = d.numbers ?? []
-        setTeamNumbers(nums)
-        if (nums.length > 0) setSelectedFromNumber(nums[0].phone)
-      })
-      .catch(() => {})
-  }, [tenantSlug])
 
   // Fetch appointments
   useEffect(() => {
@@ -253,7 +238,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         body: JSON.stringify({
           contactId: selectedContact.contactId,
           message: replyText.trim(),
-          ...(selectedFromNumber ? { fromNumber: selectedFromNumber } : {}),
         }),
       })
       if (res.ok) {
@@ -581,41 +565,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
               {/* FROM */}
               <div className="mb-3">
                 <label className="text-[10px] font-medium text-txt-muted uppercase tracking-wide block mb-1">From</label>
-                {teamNumbers.length > 0 ? (
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={fromSearch}
-                      onChange={e => { setFromSearch(e.target.value) }}
-                      onFocus={() => setFromSearch('')}
-                      placeholder={teamNumbers.find(t => t.phone === selectedFromNumber)?.name ?? 'Select number...'}
-                      className="w-full bg-surface-secondary border rounded-[8px] px-2.5 py-1.5 text-[11px] text-txt-primary placeholder:text-txt-secondary focus:outline-none focus:ring-1 focus:ring-gunner-red"
-                      style={{ borderColor: 'var(--border-medium)' }}
-                    />
-                    {fromSearch !== '' && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-surface-primary border rounded-[8px] shadow-ds-float max-h-[120px] overflow-y-auto z-10" style={{ borderColor: 'var(--border-medium)' }}>
-                        {teamNumbers
-                          .filter(t => t.name.toLowerCase().includes(fromSearch.toLowerCase()) || t.phone.includes(fromSearch))
-                          .map(t => (
-                            <button
-                              key={t.phone}
-                              onClick={() => { setSelectedFromNumber(t.phone); setFromSearch(t.name + ' — ' + formatPhone(t.phone)) }}
-                              className="w-full text-left px-2.5 py-1.5 text-[10px] text-txt-primary hover:bg-surface-secondary"
-                            >
-                              {t.name} <span className="text-txt-muted">— {formatPhone(t.phone)}</span>
-                            </button>
-                          ))}
-                      </div>
-                    )}
-                    {fromSearch === '' && selectedFromNumber && (
-                      <p className="text-[10px] text-txt-muted mt-0.5">
-                        {teamNumbers.find(t => t.phone === selectedFromNumber)?.name} — {formatPhone(selectedFromNumber)}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-txt-muted">Default location number</p>
-                )}
+                <p className="text-[11px] text-txt-primary">
+                  {selectedContact.assignedTo ?? 'Team'} <span className="text-txt-muted">— GHL auto-routes to the number used in this conversation</span>
+                </p>
               </div>
 
               {/* TO */}
