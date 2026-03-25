@@ -26,9 +26,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
   const navItems = [
     { href: `${base}/dashboard`, label: 'Dashboard', always: true },
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as const },
-    { href: `${base}/inbox`, label: 'Inbox', always: true },
     { href: `${base}/tasks`, label: 'Day Hub', always: true },
-    { href: `${base}/appointments`, label: 'Appointments', always: true },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as const },
     { href: `${base}/kpis`, label: 'KPIs', permission: 'kpis.view.own' as const },
     { href: `${base}/training`, label: 'Training', permission: 'calls.view.own' as const },
