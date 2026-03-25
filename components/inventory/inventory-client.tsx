@@ -20,6 +20,7 @@ interface Property {
   assignedTo: { id: string; name: string } | null
   callCount: number; taskCount: number
   ghlContactId: string | null
+  leadSource: string | null
 }
 
 type ViewMode = 'cards' | 'table'
@@ -52,6 +53,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
       if (propStage !== selectedStage) return false
     }
     if (search) {
+      if (search === '__missing_source__') return !p.leadSource
       const q = search.toLowerCase()
       return (
         p.address.toLowerCase().includes(q) ||
@@ -65,6 +67,8 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   })
 
   const activeCount = properties.filter(p => !['SOLD', 'DEAD'].includes(p.status)).length
+  const missingSourceCount = properties.filter(p => !p.leadSource).length
+  const leadSources = [...new Set(properties.map(p => p.leadSource).filter(Boolean))] as string[]
   const selectedProperty = selectedPropertyId ? properties.find(p => p.id === selectedPropertyId) : null
 
   return (
@@ -119,6 +123,16 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
             <LayoutGrid size={14} />
           </button>
         </div>
+
+        {/* Missing source alert */}
+        {missingSourceCount > 0 && (
+          <button
+            onClick={() => setSearch('__missing_source__')}
+            className="flex items-center gap-1.5 text-ds-fine font-medium bg-amber-50 text-amber-700 border-[0.5px] border-amber-200 px-3 py-[7px] rounded-[10px] hover:bg-amber-100 transition-colors"
+          >
+            ⚠️ {missingSourceCount} Missing Source
+          </button>
+        )}
 
         {selectedStage && (
           <div className="flex items-center gap-2">

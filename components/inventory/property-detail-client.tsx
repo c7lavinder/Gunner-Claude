@@ -445,25 +445,87 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
 // ─── Buyers Tab ──────────────────────────────────────────────────────────────
 
 function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug: string }) {
+  const [buyers, setBuyers] = useState<Array<{
+    id: string; name: string; phone: string | null; email: string | null
+    company: string | null; tier: string; markets: string[]; tags: string[]
+    notes: string | null; matchScore: number
+  }>>([])
+  const [loading, setLoading] = useState(false)
+  const [fetched, setFetched] = useState(false)
+
+  const tierColors: Record<string, string> = {
+    priority: 'bg-amber-100 text-amber-700',
+    qualified: 'bg-green-100 text-green-700',
+    jv: 'bg-blue-100 text-blue-700',
+    unqualified: 'bg-gray-100 text-gray-500',
+  }
+  const tierEmoji: Record<string, string> = { priority: '👑', qualified: '⭐', jv: '🤝', unqualified: '👤' }
+
+  async function matchBuyers() {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/properties/${property.id}/buyers`)
+      const data = await res.json()
+      setBuyers(data.buyers ?? [])
+      setFetched(true)
+    } catch { setBuyers([]) }
+    setLoading(false)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-ds-label font-semibold text-txt-primary">Matched Buyers</h3>
+        <h3 className="text-ds-label font-semibold text-txt-primary">Matched Buyers{fetched ? ` (${buyers.length})` : ''}</h3>
         <div className="flex gap-2">
-          <button className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors">
-            <Users size={11} /> Match from CRM
-          </button>
-          <button className="text-ds-fine font-medium text-txt-secondary hover:text-txt-primary flex items-center gap-1 transition-colors">
-            <Plus size={11} /> Add Buyer
+          <button onClick={matchBuyers} disabled={loading}
+            className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
+            {loading ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
+            {loading ? 'Matching...' : fetched ? 'Rematch' : 'Match from CRM'}
           </button>
         </div>
       </div>
 
-      <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
-        <Users size={20} className="text-txt-muted mx-auto mb-2" />
-        <p className="text-ds-body text-txt-muted">No buyers matched yet</p>
-        <p className="text-ds-fine text-txt-muted mt-1">Click &ldquo;Match from CRM&rdquo; to find buyers from your GHL contacts</p>
-      </div>
+      {!fetched && !loading ? (
+        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
+          <Users size={20} className="text-txt-muted mx-auto mb-2" />
+          <p className="text-ds-body text-txt-muted">No buyers matched yet</p>
+          <p className="text-ds-fine text-txt-muted mt-1">Click &ldquo;Match from CRM&rdquo; to find buyers</p>
+        </div>
+      ) : loading ? (
+        <div className="py-8 text-center"><Loader2 size={16} className="animate-spin text-txt-muted mx-auto" /></div>
+      ) : buyers.length === 0 ? (
+        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
+          <p className="text-ds-body text-txt-muted">No matching buyers found for this market</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {buyers.map(b => (
+            <div key={b.id} className="bg-surface-secondary rounded-[10px] p-3 flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${tierColors[b.tier] ?? tierColors.unqualified}`}>
+                    {tierEmoji[b.tier]} {b.tier}
+                  </span>
+                  <span className="text-ds-body font-medium text-txt-primary">{b.name}</span>
+                </div>
+                <div className="flex gap-3 text-ds-fine text-txt-secondary">
+                  {b.phone && <span>{b.phone}</span>}
+                  {b.email && <span>{b.email}</span>}
+                </div>
+                {b.markets.length > 0 && (
+                  <p className="text-ds-fine text-txt-muted mt-0.5">Markets: {b.markets.join(', ')}</p>
+                )}
+              </div>
+              <div className="text-right shrink-0">
+                <span className={`text-ds-label font-bold ${b.matchScore >= 60 ? 'text-semantic-green' : b.matchScore >= 30 ? 'text-semantic-amber' : 'text-txt-muted'}`}>
+                  {b.matchScore}
+                </span>
+                <p className="text-[8px] text-txt-muted">match</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -652,6 +714,43 @@ function AITab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug:
 // ─── Deal Blast Tab ──────────────────────────────────────────────────────────
 
 function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug: string }) {
+  const tierDefs = [
+    { tier: 'priority', label: 'Priority Buyer', emoji: '👑', desc: 'Top-tier, first access' },
+    { tier: 'qualified', label: 'Qualified Buyer', emoji: '⭐', desc: 'Verified proof of funds' },
+    { tier: 'jv', label: 'JV Partner', emoji: '🤝', desc: 'Co-investment partners' },
+    { tier: 'unqualified', label: 'Unqualified', emoji: '👤', desc: 'Not yet verified' },
+  ]
+
+  const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set(['priority', 'qualified']))
+  const [generating, setGenerating] = useState(false)
+  const [blasts, setBlasts] = useState<Record<string, { emailSubject: string; emailBody: string; smsBody: string }>>({})
+  const [expandedTier, setExpandedTier] = useState<string | null>(null)
+
+  function toggleTier(tier: string) {
+    setSelectedTiers(prev => {
+      const next = new Set(prev)
+      if (next.has(tier)) next.delete(tier)
+      else next.add(tier)
+      return next
+    })
+  }
+
+  async function generate() {
+    if (selectedTiers.size === 0) return
+    setGenerating(true)
+    try {
+      const res = await fetch(`/api/properties/${property.id}/blast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate', tiers: [...selectedTiers] }),
+      })
+      const data = await res.json()
+      setBlasts(data.blasts ?? {})
+      setExpandedTier([...selectedTiers][0])
+    } catch {}
+    setGenerating(false)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -668,14 +767,11 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       <div>
         <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Select Buyer Tiers</p>
         <div className="grid grid-cols-2 gap-2">
-          {[
-            { tier: 'priority', label: 'Priority Buyer', emoji: '👑', desc: 'Top-tier, first access' },
-            { tier: 'qualified', label: 'Qualified Buyer', emoji: '⭐', desc: 'Verified proof of funds' },
-            { tier: 'jv', label: 'JV Partner', emoji: '🤝', desc: 'Co-investment partners' },
-            { tier: 'unqualified', label: 'Unqualified', emoji: '👤', desc: 'Not yet verified' },
-          ].map(t => (
-            <label key={t.tier} className="flex items-start gap-2.5 bg-surface-secondary rounded-[10px] p-3 cursor-pointer hover:bg-surface-tertiary transition-colors">
-              <input type="checkbox" className="mt-0.5 accent-gunner-red" />
+          {tierDefs.map(t => (
+            <label key={t.tier} className={`flex items-start gap-2.5 rounded-[10px] p-3 cursor-pointer transition-colors border-[0.5px] ${
+              selectedTiers.has(t.tier) ? 'bg-gunner-red-light border-gunner-red/20' : 'bg-surface-secondary border-[rgba(0,0,0,0.06)] hover:bg-surface-tertiary'
+            }`}>
+              <input type="checkbox" checked={selectedTiers.has(t.tier)} onChange={() => toggleTier(t.tier)} className="mt-0.5 accent-gunner-red" />
               <div>
                 <p className="text-ds-fine font-semibold text-txt-primary">{t.emoji} {t.label}</p>
                 <p className="text-[9px] text-txt-muted">{t.desc}</p>
@@ -685,9 +781,53 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         </div>
       </div>
 
-      <button className="w-full bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-body font-semibold py-2.5 rounded-[10px] transition-colors">
-        Generate Blast for Selected Tiers
+      <button
+        onClick={generate}
+        disabled={selectedTiers.size === 0 || generating}
+        className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold py-2.5 rounded-[10px] transition-colors flex items-center justify-center gap-2"
+      >
+        {generating ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : `Generate Blast for ${selectedTiers.size} Tier${selectedTiers.size !== 1 ? 's' : ''}`}
       </button>
+
+      {/* Generated blasts per tier (accordion) */}
+      {Object.keys(blasts).length > 0 && (
+        <div className="space-y-2">
+          {Object.entries(blasts).map(([tier, content]) => {
+            const def = tierDefs.find(t => t.tier === tier)
+            const isOpen = expandedTier === tier
+            return (
+              <div key={tier} className="border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] overflow-hidden">
+                <button onClick={() => setExpandedTier(isOpen ? null : tier)}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 bg-surface-secondary hover:bg-surface-tertiary transition-colors text-left">
+                  <ChevronRight size={10} className={`text-txt-muted transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                  <span className="text-ds-fine font-semibold text-txt-primary">{def?.emoji} {def?.label ?? tier}</span>
+                </button>
+                {isOpen && (
+                  <div className="px-4 py-3 space-y-3">
+                    {/* Email */}
+                    <div>
+                      <p className="text-[9px] font-semibold text-txt-muted uppercase mb-1">Email</p>
+                      <input value={content.emailSubject} readOnly className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary mb-1.5 border-[0.5px] border-[rgba(0,0,0,0.06)]" />
+                      <textarea value={content.emailBody} readOnly rows={6} className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)]" />
+                      <button className="mt-1.5 w-full bg-semantic-blue hover:bg-semantic-blue/90 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
+                        Send Email to Tier
+                      </button>
+                    </div>
+                    {/* SMS */}
+                    <div>
+                      <p className="text-[9px] font-semibold text-txt-muted uppercase mb-1">SMS <span className="text-txt-muted font-normal">({content.smsBody.length}/160)</span></p>
+                      <textarea value={content.smsBody} readOnly rows={2} className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)]" />
+                      <button className="mt-1.5 w-full bg-semantic-green hover:bg-semantic-green/90 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
+                        Send SMS to Tier
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <p className="text-[9px] text-txt-muted text-center">System learns from your edits to improve future blasts</p>
     </div>

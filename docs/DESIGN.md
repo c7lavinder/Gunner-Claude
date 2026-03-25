@@ -242,3 +242,45 @@ Every screen should feel like Apple's enterprise design team built it
 for a high-performance real estate operation.
 Clean. Fast. Trustworthy. Zero decoration.
 When in doubt — remove one more thing.
+
+---
+
+## Inventory Pipeline — Status Badge Colors
+
+```
+acquisition.new_lead:        bg-blue-100    text-blue-700
+acquisition.appt_set:        bg-orange-100  text-orange-700
+acquisition.offer_made:      bg-purple-100  text-purple-700
+acquisition.contract:        bg-green-100   text-green-700
+acquisition.closed:          bg-gray-100    text-gray-700
+disposition.new_deal:        bg-blue-100    text-blue-700
+disposition.pushed_out:      bg-indigo-100  text-indigo-700
+disposition.offers_received: bg-teal-100    text-teal-700
+disposition.contracted:      bg-emerald-100 text-emerald-700
+disposition.closed:          bg-gray-100    text-gray-700
+longterm.follow_up:          bg-amber-100   text-amber-700
+longterm.dead:               bg-gray-100    text-gray-500
+```
+
+## DOM (Days on Market) Colors
+```
+0-7 days:  text-green-600
+8-30 days: text-amber-500
+30+ days:  text-red-600
+```
+
+## Pipeline Stage Node States
+```
+Empty (count=0):    bg-gray-100  icon/text-gray-400
+Has properties:     bg-red-50    icon/text-red-600  badge-red
+Selected/Active:    bg-red-600   icon-white         badge-white-on-red
+```
+
+## Brand Updates
+```
+Primary:            #C0392B (dark red)
+Primary Hover:      #A93226
+Primary Light:      #FADBD8 (tint for backgrounds)
+Primary Foreground: #FFFFFF
+Light mode only — no dark mode needed.
+```

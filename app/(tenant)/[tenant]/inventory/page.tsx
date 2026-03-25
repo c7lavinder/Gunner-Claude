@@ -70,6 +70,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         callCount: p._count.calls,
         taskCount: p._count.tasks,
         ghlContactId: p.ghlContactId,
+        leadSource: p.leadSource,
       }))}
       statusCounts={statusCounts}
       tenantSlug={params.tenant}
