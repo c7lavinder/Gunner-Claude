@@ -24,10 +24,10 @@ function stripHtml(html: string): string {
 
 // Check if a date string falls on "today" in Central time
 function isTodayCentral(dateStr: string): boolean {
-  const nowCentral = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })
-  const todayStr = new Date(nowCentral).toISOString().slice(0, 10)
-  const msgCentral = new Date(dateStr).toLocaleString('en-US', { timeZone: 'America/Chicago' })
-  const msgStr = new Date(msgCentral).toISOString().slice(0, 10)
+  // Use toLocaleDateString to get just the date portion in Central time
+  // Do NOT round-trip through new Date() — that re-interprets in server timezone (UTC)
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }) // en-CA gives YYYY-MM-DD
+  const msgStr = new Date(dateStr).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
   return msgStr === todayStr
 }
 
