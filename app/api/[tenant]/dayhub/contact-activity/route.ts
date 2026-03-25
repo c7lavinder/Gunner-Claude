@@ -134,7 +134,10 @@ export async function GET(
 
               const msgType = String(m.messageType ?? '').toUpperCase()
               const typeInt = typeof m.type === 'number' ? m.type : 0
-              const dir = String(m.direction ?? '').toLowerCase()
+              // direction field can be unreliable for emails — if userId is set, it was sent by our team
+              const hasUserId = !!m.userId
+              const rawDir = String(m.direction ?? '').toLowerCase()
+              const dir = hasUserId ? 'outbound' : (rawDir || 'inbound')
               const body = String(m.body ?? '')
 
               // Calls: TYPE_CALL or messageTypeId/type === 1 (matches webhook + poll-calls)
