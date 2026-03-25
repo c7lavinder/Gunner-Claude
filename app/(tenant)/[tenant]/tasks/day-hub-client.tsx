@@ -125,7 +125,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [selectedContact, setSelectedContact] = useState<InboxItem | null>(null)
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
-  const [threadMessages, setThreadMessages] = useState<Array<{ id: string; body: string; direction: string; type: string; time: string }>>([])
+  const [threadMessages, setThreadMessages] = useState<Array<{ id: string; body: string; direction: string; type: string; time: string; senderName?: string | null }>>([])
   const [loadingThread, setLoadingThread] = useState(false)
   const threadBottomRef = useRef<HTMLDivElement>(null)
 
@@ -460,20 +460,47 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                       ) : threadMessages.length === 0 ? (
                         <div className="py-6 text-center text-[10px] text-txt-muted">No messages</div>
                       ) : (
-                        threadMessages.map(msg => (
-                          <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[75%] px-2.5 py-1.5 rounded-xl text-[10px] leading-relaxed ${
-                              msg.direction === 'outbound'
-                                ? 'bg-gunner-red text-white rounded-br-sm'
-                                : 'bg-surface-tertiary text-txt-primary rounded-bl-sm'
-                            }`}>
-                              {msg.body}
-                              <div className={`text-[8px] mt-0.5 ${msg.direction === 'outbound' ? 'text-white/60' : 'text-txt-muted'}`}>
-                                {msg.time ? format(new Date(msg.time), 'MMM d, h:mm a') : ''}
+                        threadMessages.map((msg, i) => {
+                          // Date separator: show when day changes between messages
+                          let dateSep: string | null = null
+                          if (msg.time) {
+                            const msgDate = new Date(msg.time)
+                            const prevTime = i > 0 ? threadMessages[i - 1].time : null
+                            const prevDate = prevTime ? new Date(prevTime) : null
+                            if (!prevDate || msgDate.toDateString() !== prevDate.toDateString()) {
+                              const today = new Date()
+                              dateSep = msgDate.toDateString() === today.toDateString()
+                                ? 'Today'
+                                : format(msgDate, 'MMM d, yyyy')
+                            }
+                          }
+
+                          return (
+                            <div key={msg.id}>
+                              {dateSep && (
+                                <div className="text-center my-2">
+                                  <span className="text-[8px] text-txt-muted bg-surface-secondary px-2 py-0.5 rounded-full">{dateSep}</span>
+                                </div>
+                              )}
+                              {/* Sender label for outbound */}
+                              {msg.direction === 'outbound' && msg.senderName && (
+                                <p className="text-[8px] text-txt-muted text-right mr-1 mb-0.5">{msg.senderName}</p>
+                              )}
+                              <div className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[75%] px-2.5 py-1.5 rounded-xl text-[10px] leading-relaxed ${
+                                  msg.direction === 'outbound'
+                                    ? 'bg-gunner-red text-white rounded-br-sm'
+                                    : 'bg-surface-tertiary text-txt-primary rounded-bl-sm'
+                                }`}>
+                                  {msg.body}
+                                  <div className={`text-[8px] mt-0.5 ${msg.direction === 'outbound' ? 'text-white/60' : 'text-txt-muted'}`}>
+                                    {msg.time ? format(new Date(msg.time), 'h:mm a') : ''}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          )
+                        })
                       )}
                       <div ref={threadBottomRef} />
                     </div>
