@@ -939,10 +939,13 @@ function InboxRow({ item, onSelect }: { item: InboxItem; onSelect: (item: InboxI
 // ─── Task Row ───────────────────────────────────────────────────────────────
 
 interface ContactActivity {
-  todayCalls: Array<{ id: string; direction: string; durationSeconds: number | null; calledAt: string | null; callType: string | null; callOutcome: string | null; assignedToName: string | null }>
+  todayCalls: Array<{ id: string; direction: string; duration: number | null; time: string }>
   todayTexts: Array<{ id: string; body: string; direction: string; time: string }>
+  todayEmails?: Array<{ id: string; body: string; direction: string; time: string }>
   gradedCalls: Array<{ id: string; calledAt: string | null; callType: string | null; callOutcome: string | null; score: number | null; aiSummary: string | null; durationSeconds: number | null; assignedToName: string | null }>
   notes: Array<{ id: string; body: string; dateAdded: string }>
+  hasAm: boolean
+  hasPm: boolean
 }
 
 function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, onSMS }: {
@@ -1023,15 +1026,15 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
           </div>
         </div>
 
-        {/* AM/PM glow pills */}
+        {/* AM/PM glow pills — use GHL activity when loaded, fall back to server-side DB */}
         <div className="flex gap-1 shrink-0">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
-            task.amDone
+            (activity ? activity.hasAm : task.amDone)
               ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
               : 'bg-surface-tertiary text-txt-muted'
           }`}>AM</span>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
-            task.pmDone
+            (activity ? activity.hasPm : task.pmDone)
               ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
               : 'bg-surface-tertiary text-txt-muted'
           }`}>PM</span>
@@ -1148,32 +1151,40 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
             <div className="py-4 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
           ) : activityTab === 'activity' ? (
             <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-              {(!activity?.todayCalls?.length && !activity?.todayTexts?.length) ? (
+              {(!activity?.todayCalls?.length && !activity?.todayTexts?.length && !activity?.todayEmails?.length) ? (
                 <p className="text-[11px] text-txt-muted py-3 text-center">No activity today</p>
               ) : (
                 <>
                   {activity?.todayCalls?.map(c => (
                     <div key={c.id} className="flex items-center gap-2 bg-surface-secondary rounded-[8px] px-3 py-2">
-                      <Phone size={11} className={c.direction === 'OUTBOUND' ? 'text-semantic-green' : 'text-semantic-blue'} />
+                      <Phone size={11} className={c.direction === 'outbound' ? 'text-semantic-green' : 'text-semantic-blue'} />
                       <div className="flex-1 min-w-0">
                         <span className="text-[11px] font-medium text-txt-primary">
-                          {c.direction === 'OUTBOUND' ? 'Outbound' : 'Inbound'} Call
+                          {c.direction === 'outbound' ? 'Outbound' : 'Inbound'} Call
                         </span>
-                        {c.callType && <span className="text-[10px] text-txt-muted ml-1.5">{c.callType}</span>}
-                        {c.assignedToName && <span className="text-[10px] text-semantic-blue ml-1.5">{titleCase(c.assignedToName)}</span>}
                       </div>
-                      <span className="text-[10px] text-txt-muted">{c.durationSeconds ? `${Math.round(c.durationSeconds / 60)}m` : ''}</span>
-                      <span className="text-[10px] text-txt-muted">{c.calledAt ? format(new Date(c.calledAt), 'h:mm a') : ''}</span>
+                      <span className="text-[10px] text-txt-muted">{c.duration ? `${Math.round(c.duration / 60)}m` : ''}</span>
+                      <span className="text-[10px] text-txt-muted">{c.time ? format(new Date(c.time), 'h:mm a') : ''}</span>
                     </div>
                   ))}
                   {activity?.todayTexts?.map(t => (
                     <div key={t.id} className="flex items-start gap-2 bg-surface-secondary rounded-[8px] px-3 py-2">
                       <MessageSquare size={11} className={t.direction === 'outbound' ? 'text-semantic-green mt-0.5' : 'text-semantic-blue mt-0.5'} />
                       <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-medium text-txt-primary">{t.direction === 'outbound' ? 'Sent' : 'Received'}</span>
+                        <span className="text-[10px] font-medium text-txt-primary">{t.direction === 'outbound' ? 'Sent SMS' : 'Received SMS'}</span>
                         <p className="text-[10px] text-txt-secondary truncate">{t.body}</p>
                       </div>
                       <span className="text-[10px] text-txt-muted shrink-0">{t.time ? format(new Date(t.time), 'h:mm a') : ''}</span>
+                    </div>
+                  ))}
+                  {activity?.todayEmails?.map(e => (
+                    <div key={e.id} className="flex items-start gap-2 bg-surface-secondary rounded-[8px] px-3 py-2">
+                      <FileText size={11} className={e.direction === 'outbound' ? 'text-semantic-purple mt-0.5' : 'text-semantic-amber mt-0.5'} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] font-medium text-txt-primary">{e.direction === 'outbound' ? 'Sent Email' : 'Received Email'}</span>
+                        <p className="text-[10px] text-txt-secondary truncate">{e.body}</p>
+                      </div>
+                      <span className="text-[10px] text-txt-muted shrink-0">{e.time ? format(new Date(e.time), 'h:mm a') : ''}</span>
                     </div>
                   ))}
                 </>

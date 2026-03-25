@@ -1,5 +1,6 @@
 // GET /api/[tenant]/dayhub/contact-activity?contactId=xxx
-// Returns today's activity (calls, texts) + graded calls + GHL notes for a contact
+// Returns today's activity (calls, texts, emails from GHL) + graded calls + notes
+// GHL conversations are the source of truth for activity — not our local DB
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
@@ -20,6 +21,32 @@ function stripHtml(html: string): string {
     .trim()
 }
 
+// Check if a date string falls on "today" in Central time
+function isTodayCentral(dateStr: string): boolean {
+  const nowCentral = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })
+  const todayStr = new Date(nowCentral).toISOString().slice(0, 10)
+  const msgCentral = new Date(dateStr).toLocaleString('en-US', { timeZone: 'America/Chicago' })
+  const msgStr = new Date(msgCentral).toISOString().slice(0, 10)
+  return msgStr === todayStr
+}
+
+// Get Central hour from a date string
+function getCentralHour(dateStr: string): number {
+  const central = new Date(dateStr).toLocaleString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hour12: false })
+  return parseInt(central, 10)
+}
+
+interface GHLMessage {
+  id: string
+  body?: string
+  direction?: string
+  messageType?: string
+  type?: number
+  dateAdded?: string
+  meta?: { duration?: number }
+  userId?: string
+}
+
 export async function GET(
   req: Request,
   { params }: { params: { tenant: string } }
@@ -33,38 +60,93 @@ export async function GET(
     const contactId = url.searchParams.get('contactId')
     if (!contactId) return NextResponse.json({ error: 'contactId required' }, { status: 400 })
 
-    // Use raw SQL for timezone-correct "today" in Central time
-    // This matches the AM/PM query pattern in the tasks page
-    const [todayCalls, gradedCalls, ghlNotes] = await Promise.all([
-      // Today's calls for this contact (Central time)
-      // called_at is timestamp WITHOUT tz — must cast to UTC first, then convert to Central
-      db.$queryRaw<Array<{
-        id: string
-        direction: string
-        duration_seconds: number | null
-        called_at: Date | null
-        call_type: string | null
-        call_outcome: string | null
-        assigned_name: string | null
-      }>>`
-        SELECT
-          c.id,
-          c.direction,
-          c.duration_seconds,
-          c.called_at,
-          c.call_type,
-          c.call_outcome,
-          u.name AS assigned_name
-        FROM calls c
-        LEFT JOIN users u ON u.id = c.assigned_to_id
-        WHERE c.tenant_id = ${tenantId}
-          AND c.ghl_contact_id = ${contactId}
-          AND c.called_at IS NOT NULL
-          AND (c.called_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')::date = (NOW() AT TIME ZONE 'America/Chicago')::date
-        ORDER BY c.called_at DESC
-      `,
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { ghlAccessToken: true, ghlLocationId: true },
+    })
+    if (!tenant?.ghlAccessToken || !tenant.ghlLocationId) {
+      return NextResponse.json({ todayCalls: [], todayTexts: [], gradedCalls: [], notes: [], hasAm: false, hasPm: false })
+    }
 
-      // All graded calls for this contact (last 10)
+    const headers = {
+      'Authorization': `Bearer ${tenant.ghlAccessToken}`,
+      'Version': '2021-07-28',
+    }
+
+    // Fetch GHL conversations + messages, graded calls from DB, and notes — all in parallel
+    const [ghlActivity, gradedCalls, ghlNotes] = await Promise.all([
+      // GHL conversations → messages (source of truth for calls, texts, emails)
+      (async () => {
+        try {
+          // Step 1: Get conversations for this contact (per GHL masterclass)
+          const convRes = await fetch(
+            `https://services.leadconnectorhq.com/conversations/search?locationId=${tenant.ghlLocationId}&contactId=${contactId}&limit=5`,
+            { headers }
+          )
+          if (!convRes.ok) return { calls: [], texts: [], emails: [] }
+          const convData = await convRes.json() as { conversations?: Array<{ id: string }> }
+          const conversations = convData.conversations ?? []
+
+          const allCalls: Array<{ id: string; direction: string; duration: number | null; time: string }> = []
+          const allTexts: Array<{ id: string; body: string; direction: string; time: string }> = []
+          const allEmails: Array<{ id: string; body: string; direction: string; time: string }> = []
+
+          // Step 2: Get messages from each conversation
+          for (const conv of conversations.slice(0, 3)) {
+            const msgRes = await fetch(
+              `https://services.leadconnectorhq.com/conversations/${conv.id}/messages?limit=50`,
+              { headers }
+            )
+            if (!msgRes.ok) continue
+            const msgData = await msgRes.json() as { messages?: { messages?: GHLMessage[] } }
+            const msgs = msgData.messages?.messages ?? []
+
+            for (const m of msgs) {
+              if (!m.dateAdded || !isTodayCentral(m.dateAdded)) continue
+
+              const msgType = (m.messageType ?? '').toUpperCase()
+              const typeInt = m.type ?? 0
+              const dir = (m.direction ?? '').toLowerCase()
+
+              // Calls: TYPE_VOICE_CALL or type 25 (outbound) / 26 (inbound) per masterclass
+              if (msgType === 'TYPE_VOICE_CALL' || typeInt === 25 || typeInt === 26) {
+                allCalls.push({
+                  id: m.id,
+                  direction: typeInt === 25 ? 'outbound' : typeInt === 26 ? 'inbound' : dir,
+                  duration: m.meta?.duration ?? null,
+                  time: m.dateAdded,
+                })
+              }
+              // SMS
+              else if (m.body && (msgType === 'TYPE_SMS' || msgType === 'SMS' || msgType === '')) {
+                allTexts.push({
+                  id: m.id,
+                  body: m.body,
+                  direction: dir,
+                  time: m.dateAdded,
+                })
+              }
+              // Email
+              else if (msgType === 'TYPE_EMAIL' || msgType === 'EMAIL') {
+                allEmails.push({
+                  id: m.id,
+                  body: stripHtml(m.body ?? '').slice(0, 200),
+                  direction: dir,
+                  time: m.dateAdded,
+                })
+              }
+            }
+          }
+
+          return {
+            calls: allCalls.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
+            texts: allTexts.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()),
+            emails: allEmails.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
+          }
+        } catch { return { calls: [], texts: [], emails: [] } }
+      })(),
+
+      // Graded calls from our DB (last 10)
       db.call.findMany({
         where: {
           tenantId,
@@ -85,25 +167,15 @@ export async function GET(
         take: 10,
       }),
 
-      // Fetch notes from GHL
+      // Notes from GHL
       (async () => {
         try {
-          const tenant = await db.tenant.findUnique({
-            where: { id: tenantId },
-            select: { ghlAccessToken: true },
-          })
-          if (!tenant?.ghlAccessToken) return []
           const res = await fetch(
             `https://services.leadconnectorhq.com/contacts/${contactId}/notes`,
-            {
-              headers: {
-                'Authorization': `Bearer ${tenant.ghlAccessToken}`,
-                'Version': '2021-07-28',
-              },
-            }
+            { headers }
           )
           if (!res.ok) return []
-          const data = await res.json() as { notes?: Array<{ id: string; body: string; dateAdded: string; userId?: string }> }
+          const data = await res.json() as { notes?: Array<{ id: string; body: string; dateAdded: string }> }
           return (data.notes ?? []).slice(0, 10).map(n => ({
             id: n.id,
             body: stripHtml(n.body ?? ''),
@@ -113,77 +185,19 @@ export async function GET(
       })(),
     ])
 
-    // Fetch today's SMS from GHL conversation
-    let todayTexts: Array<{ id: string; body: string; direction: string; time: string }> = []
-    try {
-      const tenant = await db.tenant.findUnique({
-        where: { id: tenantId },
-        select: { ghlAccessToken: true, ghlLocationId: true },
-      })
-      if (tenant?.ghlAccessToken && tenant.ghlLocationId) {
-        // Search for conversation by contactId (locationId required per GHL masterclass)
-        const convRes = await fetch(
-          `https://services.leadconnectorhq.com/conversations/search?locationId=${tenant.ghlLocationId}&contactId=${contactId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${tenant.ghlAccessToken}`,
-              'Version': '2021-07-28',
-            },
-          }
-        )
-        if (convRes.ok) {
-          const convData = await convRes.json() as { conversations?: Array<{ id: string }> }
-          const conv = convData.conversations?.[0]
-          if (conv) {
-            const msgRes = await fetch(
-              `https://services.leadconnectorhq.com/conversations/${conv.id}/messages`,
-              {
-                headers: {
-                  'Authorization': `Bearer ${tenant.ghlAccessToken}`,
-                  'Version': '2021-07-28',
-                },
-              }
-            )
-            if (msgRes.ok) {
-              const msgData = await msgRes.json() as { messages?: { messages?: Array<{ id: string; body?: string; direction?: string; messageType?: string; dateAdded?: string }> } }
-              const msgs = msgData.messages?.messages ?? []
-              // Filter to today's SMS only — use Central time comparison
-              const nowCentral = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })
-              const todayCentralStr = new Date(nowCentral).toISOString().slice(0, 10)
-              todayTexts = msgs
-                .filter(m => {
-                  const type = (m.messageType ?? '').toUpperCase()
-                  const isSMS = !!m.body && (type === 'TYPE_SMS' || type === 'SMS' || type === '')
-                  if (!isSMS || !m.dateAdded) return false
-                  // Compare date portion in Central time
-                  const msgCentral = new Date(m.dateAdded).toLocaleString('en-US', { timeZone: 'America/Chicago' })
-                  const msgDateStr = new Date(msgCentral).toISOString().slice(0, 10)
-                  return msgDateStr === todayCentralStr
-                })
-                .map(m => ({
-                  id: m.id,
-                  body: m.body ?? '',
-                  direction: (m.direction ?? '').toLowerCase(),
-                  time: m.dateAdded ?? '',
-                }))
-                .reverse()
-            }
-          }
-        }
-      }
-    } catch { /* non-fatal */ }
+    // Compute AM/PM from GHL calls (source of truth)
+    let hasAm = false
+    let hasPm = false
+    for (const call of ghlActivity.calls) {
+      const hour = getCentralHour(call.time)
+      if (hour < 12) hasAm = true
+      else hasPm = true
+    }
 
     return NextResponse.json({
-      todayCalls: todayCalls.map(c => ({
-        id: c.id,
-        direction: c.direction,
-        durationSeconds: c.duration_seconds,
-        calledAt: c.called_at?.toISOString() ?? null,
-        callType: c.call_type,
-        callOutcome: c.call_outcome,
-        assignedToName: c.assigned_name,
-      })),
-      todayTexts,
+      todayCalls: ghlActivity.calls,
+      todayTexts: ghlActivity.texts,
+      todayEmails: ghlActivity.emails,
       gradedCalls: gradedCalls.map(c => ({
         id: c.id,
         calledAt: c.calledAt?.toISOString() ?? null,
@@ -195,6 +209,8 @@ export async function GET(
         assignedToName: c.assignedTo?.name ?? null,
       })),
       notes: ghlNotes,
+      hasAm,
+      hasPm,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch contact activity'
