@@ -1,9 +1,10 @@
 // GET /api/[tenant]/dayhub/contact-activity?contactId=xxx
 // Returns today's activity (calls, texts, emails from GHL) + graded calls + notes
-// GHL conversations are the source of truth for activity — not our local DB
+// GHL conversations are the source of truth — uses GHL client for auto token refresh
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
+import { getGHLClient } from '@/lib/ghl/client'
 
 // Strip HTML tags and decode common entities from GHL note bodies
 function stripHtml(html: string): string {
@@ -36,17 +37,6 @@ function getCentralHour(dateStr: string): number {
   return parseInt(central, 10)
 }
 
-interface GHLMessage {
-  id: string
-  body?: string
-  direction?: string
-  messageType?: string
-  type?: number
-  dateAdded?: string
-  meta?: { duration?: number }
-  userId?: string
-}
-
 export async function GET(
   req: Request,
   { params }: { params: { tenant: string } }
@@ -65,85 +55,127 @@ export async function GET(
       select: { ghlAccessToken: true, ghlLocationId: true },
     })
     if (!tenant?.ghlAccessToken || !tenant.ghlLocationId) {
-      return NextResponse.json({ todayCalls: [], todayTexts: [], gradedCalls: [], notes: [], hasAm: false, hasPm: false })
+      return NextResponse.json({ todayCalls: [], todayTexts: [], todayEmails: [], gradedCalls: [], notes: [], hasAm: false, hasPm: false })
     }
 
+    // Use GHL client for auto token refresh + retry on 401/429
+    const ghl = await getGHLClient(tenantId)
+
+    // Re-read token after potential refresh (getGHLClient may have refreshed it)
+    const freshTenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { ghlAccessToken: true },
+    })
+    const token = freshTenant?.ghlAccessToken ?? tenant.ghlAccessToken
+    const locationId = tenant.ghlLocationId
+
     const headers = {
-      'Authorization': `Bearer ${tenant.ghlAccessToken}`,
+      'Authorization': `Bearer ${token}`,
       'Version': '2021-07-28',
     }
 
-    // Fetch GHL conversations + messages, graded calls from DB, and notes — all in parallel
+    // Fetch everything in parallel
     const [ghlActivity, gradedCalls, ghlNotes] = await Promise.all([
-      // GHL conversations → messages (source of truth for calls, texts, emails)
+      // GHL conversations → messages (calls, texts, emails)
       (async () => {
+        const allCalls: Array<{ id: string; direction: string; duration: number | null; time: string }> = []
+        const allTexts: Array<{ id: string; body: string; direction: string; time: string }> = []
+        const allEmails: Array<{ id: string; body: string; direction: string; time: string }> = []
+
         try {
-          // Step 1: Get conversations for this contact (per GHL masterclass)
+          // Step 1: Search conversations for this contact
+          // Per masterclass: GET /conversations/search?locationId=xxx&contactId=xxx
           const convRes = await fetch(
-            `https://services.leadconnectorhq.com/conversations/search?locationId=${tenant.ghlLocationId}&contactId=${contactId}&limit=5`,
+            `https://services.leadconnectorhq.com/conversations/search?locationId=${locationId}&contactId=${contactId}&limit=5`,
             { headers }
           )
-          if (!convRes.ok) return { calls: [], texts: [], emails: [] }
-          const convData = await convRes.json() as { conversations?: Array<{ id: string }> }
+
+          if (!convRes.ok) {
+            console.error('[contact-activity] conversations/search failed:', convRes.status, await convRes.text().catch(() => ''))
+            return { calls: allCalls, texts: allTexts, emails: allEmails }
+          }
+
+          const convData = await convRes.json()
           const conversations = convData.conversations ?? []
 
-          const allCalls: Array<{ id: string; direction: string; duration: number | null; time: string }> = []
-          const allTexts: Array<{ id: string; body: string; direction: string; time: string }> = []
-          const allEmails: Array<{ id: string; body: string; direction: string; time: string }> = []
+          if (conversations.length === 0) {
+            return { calls: allCalls, texts: allTexts, emails: allEmails }
+          }
 
           // Step 2: Get messages from each conversation
+          // Per masterclass: GET /conversations/{conversationId}/messages?limit=50
           for (const conv of conversations.slice(0, 3)) {
             const msgRes = await fetch(
               `https://services.leadconnectorhq.com/conversations/${conv.id}/messages?limit=50`,
               { headers }
             )
-            if (!msgRes.ok) continue
-            const msgData = await msgRes.json() as { messages?: { messages?: GHLMessage[] } }
-            const msgs = msgData.messages?.messages ?? []
+
+            if (!msgRes.ok) {
+              console.error('[contact-activity] messages fetch failed for conv', conv.id, ':', msgRes.status)
+              continue
+            }
+
+            const msgData = await msgRes.json()
+
+            // GHL returns: { messages: { messages: [...], nextPage, lastMessageId } }
+            // OR sometimes: { messages: [...] } depending on endpoint version
+            let msgs: Array<Record<string, unknown>> = []
+            if (msgData.messages) {
+              if (Array.isArray(msgData.messages)) {
+                msgs = msgData.messages
+              } else if (msgData.messages.messages && Array.isArray(msgData.messages.messages)) {
+                msgs = msgData.messages.messages
+              }
+            }
 
             for (const m of msgs) {
-              if (!m.dateAdded || !isTodayCentral(m.dateAdded)) continue
+              const dateAdded = String(m.dateAdded ?? '')
+              if (!dateAdded || !isTodayCentral(dateAdded)) continue
 
-              const msgType = (m.messageType ?? '').toUpperCase()
-              const typeInt = m.type ?? 0
-              const dir = (m.direction ?? '').toLowerCase()
+              const msgType = String(m.messageType ?? '').toUpperCase()
+              const typeInt = typeof m.type === 'number' ? m.type : 0
+              const dir = String(m.direction ?? '').toLowerCase()
+              const body = String(m.body ?? '')
 
-              // Calls: TYPE_VOICE_CALL or type 25 (outbound) / 26 (inbound) per masterclass
+              // Calls: TYPE_VOICE_CALL or type 25 (outbound) / 26 (inbound)
               if (msgType === 'TYPE_VOICE_CALL' || typeInt === 25 || typeInt === 26) {
+                const meta = (m.meta && typeof m.meta === 'object') ? m.meta as Record<string, unknown> : null
                 allCalls.push({
-                  id: m.id,
-                  direction: typeInt === 25 ? 'outbound' : typeInt === 26 ? 'inbound' : dir,
-                  duration: m.meta?.duration ?? null,
-                  time: m.dateAdded,
+                  id: String(m.id ?? ''),
+                  direction: typeInt === 25 ? 'outbound' : typeInt === 26 ? 'inbound' : dir || 'outbound',
+                  duration: meta?.duration ? Number(meta.duration) : null,
+                  time: dateAdded,
                 })
               }
-              // SMS
-              else if (m.body && (msgType === 'TYPE_SMS' || msgType === 'SMS' || msgType === '')) {
+              // SMS: TYPE_SMS or empty type with body
+              else if (body && (msgType === 'TYPE_SMS' || msgType === 'SMS' || msgType === '')) {
                 allTexts.push({
-                  id: m.id,
-                  body: m.body,
+                  id: String(m.id ?? ''),
+                  body,
                   direction: dir,
-                  time: m.dateAdded,
+                  time: dateAdded,
                 })
               }
               // Email
               else if (msgType === 'TYPE_EMAIL' || msgType === 'EMAIL') {
                 allEmails.push({
-                  id: m.id,
-                  body: stripHtml(m.body ?? '').slice(0, 200),
+                  id: String(m.id ?? ''),
+                  body: stripHtml(body).slice(0, 200),
                   direction: dir,
-                  time: m.dateAdded,
+                  time: dateAdded,
                 })
               }
             }
           }
+        } catch (err) {
+          console.error('[contact-activity] GHL fetch error:', err instanceof Error ? err.message : err)
+        }
 
-          return {
-            calls: allCalls.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
-            texts: allTexts.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()),
-            emails: allEmails.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
-          }
-        } catch { return { calls: [], texts: [], emails: [] } }
+        return {
+          calls: allCalls.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
+          texts: allTexts.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()),
+          emails: allEmails.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
+        }
       })(),
 
       // Graded calls from our DB (last 10)
@@ -167,25 +199,29 @@ export async function GET(
         take: 10,
       }),
 
-      // Notes from GHL
+      // Notes from GHL: GET /contacts/{contactId}/notes
       (async () => {
         try {
           const res = await fetch(
             `https://services.leadconnectorhq.com/contacts/${contactId}/notes`,
             { headers }
           )
-          if (!res.ok) return []
-          const data = await res.json() as { notes?: Array<{ id: string; body: string; dateAdded: string }> }
-          return (data.notes ?? []).slice(0, 10).map(n => ({
-            id: n.id,
-            body: stripHtml(n.body ?? ''),
-            dateAdded: n.dateAdded,
+          if (!res.ok) {
+            console.error('[contact-activity] notes fetch failed:', res.status)
+            return []
+          }
+          const data = await res.json()
+          const notes = data.notes ?? []
+          return notes.slice(0, 10).map((n: Record<string, unknown>) => ({
+            id: String(n.id ?? ''),
+            body: stripHtml(String(n.body ?? '')),
+            dateAdded: String(n.dateAdded ?? ''),
           }))
         } catch { return [] }
       })(),
     ])
 
-    // Compute AM/PM from GHL calls (source of truth)
+    // Compute AM/PM from GHL calls (source of truth for labels)
     let hasAm = false
     let hasPm = false
     for (const call of ghlActivity.calls) {
@@ -214,6 +250,7 @@ export async function GET(
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch contact activity'
+    console.error('[contact-activity] top-level error:', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
