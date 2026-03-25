@@ -9,9 +9,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Phone, MessageSquare, Calendar, Star, Target, FileText,
-  Settings, RefreshCw, ChevronDown, ChevronLeft, ExternalLink,
+  Settings, RefreshCw, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
   MapPin, User, Clock, Loader2, Send, Circle, CheckCircle,
-  PhoneOff, MessageCircle,
+  PhoneOff, MessageCircle, Pencil, Plus, Play, ClipboardList,
 } from 'lucide-react'
 import { format, formatDistanceToNow, differenceInDays, addDays, isToday } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -28,6 +28,11 @@ function formatPhone(phone: string | null): string {
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
   }
   return phone
+}
+
+function titleCase(name: string | null): string {
+  if (!name) return ''
+  return name.replace(/\b\w/g, c => c.toUpperCase())
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -263,9 +268,10 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [loadingInbox, setLoadingInbox] = useState(true)
   const [loadingAppts, setLoadingAppts] = useState(true)
 
-  // Task completion
+  // Task completion + expansion
   const [completingTask, setCompletingTask] = useState<string | null>(null)
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set())
+  const [expandedTask, setExpandedTask] = useState<string | null>(null)
 
   // Inbox thread
   const [selectedContact, setSelectedContact] = useState<InboxItem | null>(null)
@@ -849,12 +855,31 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
           )}
 
           {/* Task rows */}
-          <div className="bg-surface-primary border-[0.5px] rounded-[14px] divide-y divide-[rgba(0,0,0,0.08)]" style={{ borderColor: 'var(--border-light)' }}>
+          <div className="space-y-2">
             {visibleTasks.length === 0 ? (
-              <div className="py-12 text-center text-[13px] text-txt-muted">No tasks to show</div>
+              <div className="bg-surface-primary border-[0.5px] rounded-[14px] py-12 text-center text-[13px] text-txt-muted" style={{ borderColor: 'var(--border-light)' }}>No tasks to show</div>
             ) : (
-              visibleTasks.map((task, i) => (
-                <TaskRow key={task.id} task={task} index={i + 1} tenantSlug={tenantSlug} onComplete={completeTask} completing={completingTask} />
+              visibleTasks.map(task => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  tenantSlug={tenantSlug}
+                  onComplete={completeTask}
+                  completing={completingTask}
+                  isExpanded={expandedTask === task.id}
+                  onToggle={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                  ghlLocationId={ghlLocationId}
+                  onSMS={(t) => {
+                    setSelectedContact({
+                      id: '', contactId: t.contactId, contactName: t.contactName ?? t.title,
+                      phone: t.contactPhone, lastMessageBody: '', dateUpdated: Date.now(),
+                      type: 'message', unreadCount: 0, assignedTo: t.assignedToName,
+                      propertyAddress: t.contactAddress,
+                    } as InboxItem)
+                    setShowSendConfirm(false)
+                    setReplyText('')
+                  }}
+                />
               ))
             )}
           </div>
@@ -913,13 +938,27 @@ function InboxRow({ item, onSelect }: { item: InboxItem; onSelect: (item: InboxI
 
 // ─── Task Row ───────────────────────────────────────────────────────────────
 
-function TaskRow({ task, index, tenantSlug, onComplete, completing }: {
+interface ContactActivity {
+  todayCalls: Array<{ id: string; direction: string; durationSeconds: number | null; calledAt: string | null; callType: string | null; callOutcome: string | null; assignedToName: string | null }>
+  todayTexts: Array<{ id: string; body: string; direction: string; time: string }>
+  gradedCalls: Array<{ id: string; calledAt: string | null; callType: string | null; callOutcome: string | null; score: number | null; aiSummary: string | null; durationSeconds: number | null; assignedToName: string | null }>
+  notes: Array<{ id: string; body: string; dateAdded: string }>
+}
+
+function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, onSMS }: {
   task: EnrichedTask
-  index: number
   tenantSlug: string
   onComplete: (taskId: string, contactId: string) => void
   completing: string | null
+  isExpanded: boolean
+  onToggle: () => void
+  ghlLocationId: string
+  onSMS: (task: EnrichedTask) => void
 }) {
+  const [activityTab, setActivityTab] = useState<'activity' | 'notes'>('activity')
+  const [activity, setActivity] = useState<ContactActivity | null>(null)
+  const [loadingActivity, setLoadingActivity] = useState(false)
+
   const daysOverdue = task.dueDate && task.isOverdue
     ? differenceInDays(new Date(), new Date(task.dueDate))
     : 0
@@ -927,74 +966,247 @@ function TaskRow({ task, index, tenantSlug, onComplete, completing }: {
   const catBadge = CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']
   const isCompleting = completing === task.id
 
-  return (
-    <div className={`flex items-center gap-3 px-5 py-3 hover:bg-surface-secondary transition-colors ${
-      task.isOverdue ? 'bg-semantic-red-bg/30' : ''
-    }`}>
-      {/* Row number */}
-      <span className="text-[11px] text-txt-muted w-5 text-right shrink-0">{index}</span>
+  // Fetch activity when expanded
+  useEffect(() => {
+    if (isExpanded && !activity && task.contactId) {
+      setLoadingActivity(true)
+      fetch(`/api/${tenantSlug}/dayhub/contact-activity?contactId=${task.contactId}`)
+        .then(r => r.json())
+        .then(d => { setActivity(d); setLoadingActivity(false) })
+        .catch(() => setLoadingActivity(false))
+    }
+  }, [isExpanded, activity, task.contactId, tenantSlug])
 
-      {/* Checkbox circle */}
+  return (
+    <div className={`bg-surface-primary border-[0.5px] rounded-[14px] overflow-hidden transition-shadow ${
+      isExpanded ? 'shadow-md ring-1 ring-gunner-red/10' : ''
+    } ${task.isOverdue ? 'border-semantic-red/30' : ''}`} style={{ borderColor: task.isOverdue ? undefined : 'var(--border-light)' }}>
+      {/* Card header — clickable */}
       <button
-        onClick={() => onComplete(task.id, task.contactId)}
-        disabled={isCompleting}
-        className="shrink-0 text-txt-muted hover:text-gunner-red transition-colors"
+        onClick={onToggle}
+        className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-surface-secondary transition-colors"
       >
-        {isCompleting
-          ? <CheckCircle size={16} className="text-semantic-green animate-pulse" />
-          : <Circle size={16} />
-        }
+        {/* Checkbox */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onComplete(task.id, task.contactId) }}
+          disabled={isCompleting}
+          className="shrink-0 text-txt-muted hover:text-gunner-red transition-colors"
+        >
+          {isCompleting
+            ? <CheckCircle size={18} className="text-semantic-green animate-pulse" />
+            : <Circle size={18} />
+          }
+        </button>
+
+        {/* Category badge */}
+        <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border shrink-0 ${catBadge.color}`}>
+          {task.category === 'New Lead' ? '⭐ ' : ''}{catBadge.label}
+        </span>
+
+        {/* Name + details */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold text-txt-primary truncate">{titleCase(task.contactName) || task.title}</span>
+            {task.assignedToName && (
+              <span className="text-[10px] text-semantic-blue shrink-0">
+                <User size={9} className="inline -mt-0.5" /> {titleCase(task.assignedToName)}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[11px] text-txt-secondary truncate">{task.title}</span>
+            {task.contactAddress && (
+              <span className="text-[10px] text-semantic-purple truncate hidden md:inline">
+                <MapPin size={8} className="inline -mt-0.5" /> {task.contactAddress}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* AM/PM glow pills */}
+        <div className="flex gap-1 shrink-0">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
+            task.amDone
+              ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
+              : 'bg-surface-tertiary text-txt-muted'
+          }`}>AM</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
+            task.pmDone
+              ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
+              : 'bg-surface-tertiary text-txt-muted'
+          }`}>PM</span>
+        </div>
+
+        {/* Due status */}
+        <span className={`text-[11px] font-semibold shrink-0 w-20 text-right ${
+          task.isOverdue ? 'text-semantic-red'
+          : task.isDueToday ? 'text-semantic-amber'
+          : 'text-txt-muted'
+        }`}>
+          {task.isOverdue
+            ? `${daysOverdue}d overdue`
+            : task.isDueToday
+            ? 'Due Today'
+            : task.dueDate
+            ? format(new Date(task.dueDate), 'MMM d')
+            : 'Upcoming'}
+        </span>
+
+        <ChevronRight size={14} className={`text-txt-muted shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
       </button>
 
-      {/* Category badge */}
-      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${catBadge.color}`}>
-        {task.category === 'New Lead' ? '⭐ ' : ''}{catBadge.label}
-      </span>
+      {/* Expanded detail */}
+      {isExpanded && (
+        <div className="border-t px-4 pb-3 pt-2" style={{ borderColor: 'var(--border-light)' }}>
+          {/* Quick action bar */}
+          <div className="flex gap-1.5 flex-wrap mb-3">
+            {task.contactPhone && (
+              <a href={`tel:${task.contactPhone}`} className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-semantic-green-bg text-semantic-green hover:bg-semantic-green/10 transition-colors">
+                <Phone size={10} /> Call
+              </a>
+            )}
+            {task.contactPhone && (
+              <button onClick={() => onSMS(task)} className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-semantic-blue-bg text-semantic-blue hover:bg-semantic-blue/10 transition-colors">
+                <Send size={10} /> Text
+              </button>
+            )}
+            <a
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
+            >
+              <ExternalLink size={10} /> View in CRM
+            </a>
+            <a
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=appointments`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
+            >
+              <Calendar size={10} /> Create Apt
+            </a>
+            <a
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=notes`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
+            >
+              <Pencil size={10} /> Add Note
+            </a>
+            <a
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=workflow`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
+            >
+              <Play size={10} /> Workflow
+            </a>
+            <a
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=tasks`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
+            >
+              <ClipboardList size={10} /> Update Task
+            </a>
+          </div>
 
-      {/* Task name + contact */}
-      <div className="flex-1 min-w-0 flex items-center gap-3">
-        <span className="text-[13px] font-medium text-txt-primary truncate">{task.title}</span>
-        {task.contactName && (
-          <span className="text-[13px] text-txt-secondary truncate hidden sm:inline">{task.contactName}</span>
-        )}
-      </div>
+          {/* Tab bar */}
+          <div className="flex gap-0 border-b mb-2" style={{ borderColor: 'var(--border-light)' }}>
+            <button
+              onClick={() => setActivityTab('activity')}
+              className={`text-[11px] font-semibold px-3 py-1.5 border-b-2 transition-colors ${
+                activityTab === 'activity'
+                  ? 'border-gunner-red text-gunner-red'
+                  : 'border-transparent text-txt-muted hover:text-txt-secondary'
+              }`}
+            >
+              Activity Today
+            </button>
+            <button
+              onClick={() => setActivityTab('notes')}
+              className={`text-[11px] font-semibold px-3 py-1.5 border-b-2 transition-colors ${
+                activityTab === 'notes'
+                  ? 'border-gunner-red text-gunner-red'
+                  : 'border-transparent text-txt-muted hover:text-txt-secondary'
+              }`}
+            >
+              Notes & Grades
+            </button>
+          </div>
 
-      {/* Address + rep */}
-      <div className="hidden md:flex items-center gap-2 text-[11px] text-txt-muted shrink-0">
-        {task.contactAddress && (
-          <span className="truncate max-w-[180px]">{task.contactAddress}</span>
-        )}
-        {task.assignedToName && (
-          <span className="flex items-center gap-1">
-            <User size={9} /> {task.assignedToName}
-          </span>
-        )}
-      </div>
-
-      {/* AM/PM pills */}
-      <div className="flex gap-1 shrink-0">
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-[4px] ${
-          task.amDone ? 'bg-semantic-green-bg text-semantic-green' : 'bg-surface-tertiary text-txt-muted'
-        }`}>AM</span>
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-[4px] ${
-          task.pmDone ? 'bg-semantic-green-bg text-semantic-green' : 'bg-surface-tertiary text-txt-muted'
-        }`}>PM</span>
-      </div>
-
-      {/* Due status */}
-      <span className={`text-[11px] font-medium shrink-0 w-20 text-right ${
-        task.isOverdue ? 'text-semantic-red'
-        : task.isDueToday ? 'text-semantic-amber'
-        : 'text-txt-muted'
-      }`}>
-        {task.isOverdue
-          ? `${daysOverdue}d overdue`
-          : task.isDueToday
-          ? 'Due Today'
-          : task.dueDate
-          ? format(new Date(task.dueDate), 'MMM d')
-          : 'Upcoming'}
-      </span>
+          {/* Tab content */}
+          {loadingActivity ? (
+            <div className="py-4 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+          ) : activityTab === 'activity' ? (
+            <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+              {(!activity?.todayCalls?.length && !activity?.todayTexts?.length) ? (
+                <p className="text-[11px] text-txt-muted py-3 text-center">No activity today</p>
+              ) : (
+                <>
+                  {activity?.todayCalls?.map(c => (
+                    <div key={c.id} className="flex items-center gap-2 bg-surface-secondary rounded-[8px] px-3 py-2">
+                      <Phone size={11} className={c.direction === 'OUTBOUND' ? 'text-semantic-green' : 'text-semantic-blue'} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] font-medium text-txt-primary">
+                          {c.direction === 'OUTBOUND' ? 'Outbound' : 'Inbound'} Call
+                        </span>
+                        {c.callType && <span className="text-[10px] text-txt-muted ml-1.5">{c.callType}</span>}
+                        {c.assignedToName && <span className="text-[10px] text-semantic-blue ml-1.5">{titleCase(c.assignedToName)}</span>}
+                      </div>
+                      <span className="text-[10px] text-txt-muted">{c.durationSeconds ? `${Math.round(c.durationSeconds / 60)}m` : ''}</span>
+                      <span className="text-[10px] text-txt-muted">{c.calledAt ? format(new Date(c.calledAt), 'h:mm a') : ''}</span>
+                    </div>
+                  ))}
+                  {activity?.todayTexts?.map(t => (
+                    <div key={t.id} className="flex items-start gap-2 bg-surface-secondary rounded-[8px] px-3 py-2">
+                      <MessageSquare size={11} className={t.direction === 'outbound' ? 'text-semantic-green mt-0.5' : 'text-semantic-blue mt-0.5'} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] font-medium text-txt-primary">{t.direction === 'outbound' ? 'Sent' : 'Received'}</span>
+                        <p className="text-[10px] text-txt-secondary truncate">{t.body}</p>
+                      </div>
+                      <span className="text-[10px] text-txt-muted shrink-0">{t.time ? format(new Date(t.time), 'h:mm a') : ''}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+              {(!activity?.gradedCalls?.length && !activity?.notes?.length) ? (
+                <p className="text-[11px] text-txt-muted py-3 text-center">No notes or graded calls</p>
+              ) : (
+                <>
+                  {activity?.gradedCalls?.map(c => (
+                    <a key={c.id} href={`/${tenantSlug}/calls/${c.id}`} className="flex items-center gap-2 bg-surface-secondary rounded-[8px] px-3 py-2 hover:bg-surface-tertiary transition-colors">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                        (c.score ?? 0) >= 80 ? 'bg-semantic-green-bg text-semantic-green'
+                        : (c.score ?? 0) >= 60 ? 'bg-semantic-amber-bg text-semantic-amber'
+                        : 'bg-semantic-red-bg text-semantic-red'
+                      }`}>
+                        {c.score != null ? Math.round(c.score) : '—'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-txt-primary">{c.callType ?? 'Call'}</span>
+                          {c.callOutcome && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-tertiary text-txt-muted">{c.callOutcome}</span>}
+                        </div>
+                        {c.aiSummary && <p className="text-[10px] text-txt-secondary truncate mt-0.5">{c.aiSummary}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-txt-muted block">{c.calledAt ? format(new Date(c.calledAt), 'MMM d') : ''}</span>
+                        {c.assignedToName && <span className="text-[9px] text-semantic-blue">{titleCase(c.assignedToName)}</span>}
+                      </div>
+                    </a>
+                  ))}
+                  {activity?.notes?.map(n => (
+                    <div key={n.id} className="bg-surface-secondary rounded-[8px] px-3 py-2">
+                      <p className="text-[10px] text-txt-secondary">{n.body}</p>
+                      <span className="text-[9px] text-txt-muted">{n.dateAdded ? format(new Date(n.dateAdded), 'MMM d, h:mm a') : ''}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

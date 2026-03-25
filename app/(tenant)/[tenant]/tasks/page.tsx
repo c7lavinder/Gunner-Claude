@@ -37,24 +37,29 @@ const CATEGORY_SCORES: Record<TaskCategory, { overdue: number; dueToday: number;
   'Follow-Up':  { overdue: 400,  dueToday: 300, future: 150 },
 }
 
-function scoreTask(category: TaskCategory, dueDate: string | null): number {
+function scoreTask(category: TaskCategory, dueDate: string | null, amDone: boolean, pmDone: boolean): number {
   const scores = CATEGORY_SCORES[category]
-  if (!dueDate) return scores.future
+
+  // Uncalled contacts get a major boost — they need attention first
+  const callBoost = (!amDone && !pmDone) ? 200 : (!amDone || !pmDone) ? 100 : 0
+
+  if (!dueDate) return scores.future + callBoost
 
   const due = new Date(dueDate)
   const todayStart = startOfDay(new Date())
 
-  if (isToday(due)) return scores.dueToday
+  if (isToday(due)) return scores.dueToday + callBoost
 
   if (isPast(due)) {
     const daysOverdue = differenceInDays(todayStart, startOfDay(due))
-    const decay = Math.min(daysOverdue * 5, 50)
-    return scores.overdue - decay
+    // More overdue = higher priority (boost by 10 per day, cap at 200)
+    const urgency = Math.min(daysOverdue * 10, 200)
+    return scores.overdue + urgency + callBoost
   }
 
   // Future: subtract 10 per day until due
   const daysUntilDue = differenceInDays(startOfDay(due), todayStart)
-  return Math.max(scores.future - (daysUntilDue * 10), 0)
+  return Math.max(scores.future - (daysUntilDue * 10), 0) + callBoost
 }
 
 // ─── Page component ────────────────────────────────────────────────────────
@@ -114,13 +119,11 @@ export default async function TasksPage({ params }: { params: { tenant: string }
     })
 
     // AM/PM call tracking via ghlContactId + Central timezone
+    // Use Central time for "today" boundaries so AM/PM pills align with user's actual day
     const contactIdList = [...new Set(tasks.map(t => t.contactId).filter(Boolean))]
     const amPmMap = new Map<string, { am: boolean; pm: boolean }>()
 
     if (contactIdList.length > 0) {
-      const todayStartUTC = new Date()
-      todayStartUTC.setUTCHours(0, 0, 0, 0)
-
       type AmPmRow = { ghl_contact_id: string; is_am: boolean }
       const callRows = await db.$queryRaw<AmPmRow[]>`
         SELECT
@@ -131,7 +134,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
           tenant_id = ${tenantId}
           AND direction = 'OUTBOUND'
           AND ghl_contact_id = ANY(ARRAY[${Prisma.join(contactIdList)}])
-          AND called_at >= ${todayStartUTC}
+          AND (called_at AT TIME ZONE 'America/Chicago')::date = (NOW() AT TIME ZONE 'America/Chicago')::date
           AND called_at IS NOT NULL
       `
 
@@ -173,12 +176,11 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       const assignedToName = inlineAssigned || (assignedUserId ? ghlUserMap.get(assignedUserId) ?? null : null)
 
       const category = classifyTask(t.title || '', t.body || '')
-      const score = scoreTask(category, t.dueDate)
+      const callStatus = amPmMap.get(t.contactId) ?? { am: false, pm: false }
+      const score = scoreTask(category, t.dueDate, callStatus.am, callStatus.pm)
       const dueDate = t.dueDate ? new Date(t.dueDate) : null
       const taskIsOverdue = dueDate ? isPast(dueDate) && !isToday(dueDate) : false
       const taskIsDueToday = dueDate ? isToday(dueDate) : false
-
-      const callStatus = amPmMap.get(t.contactId) ?? { am: false, pm: false }
 
       return {
         id: t.id || t._id || '',
