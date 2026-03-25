@@ -141,16 +141,18 @@ export default async function TasksPage({ params }: { params: { tenant: string }
 
     if (contactIdList.length > 0) {
       type AmPmRow = { ghl_contact_id: string; is_am: boolean }
+      // called_at is stored as timestamp WITHOUT timezone (Prisma DateTime default)
+      // so we must first cast to UTC, then convert to Central for correct hour extraction
       const callRows = await db.$queryRaw<AmPmRow[]>`
         SELECT
           ghl_contact_id,
-          EXTRACT(HOUR FROM (called_at AT TIME ZONE 'America/Chicago')) < 12 AS is_am
+          EXTRACT(HOUR FROM (called_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')) < 12 AS is_am
         FROM calls
         WHERE
           tenant_id = ${tenantId}
           AND direction = 'OUTBOUND'
           AND ghl_contact_id = ANY(ARRAY[${Prisma.join(contactIdList)}])
-          AND (called_at AT TIME ZONE 'America/Chicago')::date = (NOW() AT TIME ZONE 'America/Chicago')::date
+          AND (called_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')::date = (NOW() AT TIME ZONE 'America/Chicago')::date
           AND called_at IS NOT NULL
       `
 

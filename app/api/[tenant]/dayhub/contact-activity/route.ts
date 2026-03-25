@@ -37,6 +37,7 @@ export async function GET(
     // This matches the AM/PM query pattern in the tasks page
     const [todayCalls, gradedCalls, ghlNotes] = await Promise.all([
       // Today's calls for this contact (Central time)
+      // called_at is timestamp WITHOUT tz — must cast to UTC first, then convert to Central
       db.$queryRaw<Array<{
         id: string
         direction: string
@@ -59,7 +60,7 @@ export async function GET(
         WHERE c.tenant_id = ${tenantId}
           AND c.ghl_contact_id = ${contactId}
           AND c.called_at IS NOT NULL
-          AND (c.called_at AT TIME ZONE 'America/Chicago')::date = (NOW() AT TIME ZONE 'America/Chicago')::date
+          AND (c.called_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')::date = (NOW() AT TIME ZONE 'America/Chicago')::date
         ORDER BY c.called_at DESC
       `,
 
