@@ -194,9 +194,9 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocati
   ghlLocationId?: string
 }) {
   return (
-    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-x-auto">
       {/* Header */}
-      <div className="grid grid-cols-[2fr_1fr_1fr_1fr_80px_80px_80px_40px] gap-2 px-4 py-2.5 bg-surface-secondary border-b border-[rgba(0,0,0,0.06)] text-[10px] font-semibold text-txt-muted uppercase tracking-wider">
+      <div className="grid grid-cols-[minmax(200px,2fr)_100px_100px_100px_80px_80px_60px_40px] gap-2 px-4 py-2.5 bg-surface-secondary border-b border-[rgba(0,0,0,0.06)] text-[10px] font-semibold text-txt-muted uppercase tracking-wider min-w-[800px]">
         <span>Address</span>
         <span>Status</span>
         <span>Asking</span>
@@ -219,7 +219,7 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocati
           <button
             key={p.id}
             onClick={() => onSelect(isSelected ? null : p.id)}
-            className={`grid grid-cols-[2fr_1fr_1fr_1fr_80px_80px_80px_40px] gap-2 px-4 py-2.5 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors ${
+            className={`grid grid-cols-[minmax(200px,2fr)_100px_100px_100px_80px_80px_60px_40px] gap-2 px-4 py-2.5 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors min-w-[800px] ${
               isSelected ? 'bg-gunner-red-light border-l-2 border-l-gunner-red' : ''
             }`}
           >

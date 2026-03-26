@@ -130,27 +130,31 @@ export function SettingsClient({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Transform pipeline response to extract stages for the selected pipeline
-  const handlePipelineChange = useCallback((pipelineId: string) => {
-    setSelectedPipeline(pipelineId)
-    setSelectedStage('')
-    setPipelineStages([])
-
-    if (!pipelineId) return
-
-    // Fetch stages for the selected pipeline
+  // Fetch stages for a given pipeline
+  const fetchStagesForPipeline = useCallback((pipelineId: string) => {
+    if (!pipelineId) { setPipelineStages([]); return }
     fetch('/api/ghl/pipelines')
       .then((r) => r.json())
       .then((data) => {
         const pipeline = (data.pipelines ?? []).find(
           (p: { id: string }) => p.id === pipelineId
         )
-        if (pipeline?.stages) {
-          setPipelineStages(pipeline.stages)
-        }
+        if (pipeline?.stages) setPipelineStages(pipeline.stages)
       })
       .catch(() => setPipelineStages([]))
   }, [])
+
+  // Load stages on mount if pipeline already selected
+  useEffect(() => {
+    if (selectedPipeline) fetchStagesForPipeline(selectedPipeline)
+  }, [selectedPipeline, fetchStagesForPipeline])
+
+  const handlePipelineChange = useCallback((pipelineId: string) => {
+    setSelectedPipeline(pipelineId)
+    setSelectedStage('')
+    setPipelineStages([])
+    fetchStagesForPipeline(pipelineId)
+  }, [fetchStagesForPipeline])
 
   async function savePipelineSettings() {
     setSavingPipeline(true)

@@ -79,9 +79,9 @@ export function PropertyDetailClient({
 
   return (
     <div className="max-w-5xl space-y-4">
-      {/* Back */}
-      <Link href={`/${tenantSlug}/inventory`} className="inline-flex items-center gap-1.5 text-ds-body text-txt-secondary hover:text-txt-primary transition-colors">
-        <ArrowLeft size={14} /> Inventory
+      {/* Back to inventory */}
+      <Link href={`/${tenantSlug}/inventory`} className="inline-flex items-center gap-1.5 text-ds-body font-medium text-gunner-red hover:text-gunner-red-dark transition-colors">
+        <ArrowLeft size={14} /> Back to Inventory
       </Link>
 
       {/* Header card */}
@@ -120,8 +120,8 @@ export function PropertyDetailClient({
           </div>
         </div>
 
-        {/* Deal progress */}
-        <DealProgress currentStatus={property.status} />
+        {/* Deal progress — click to change stage */}
+        <DealProgress currentStatus={property.status} propertyId={property.id} canEdit={canEdit} />
 
         {/* Quick actions */}
         <div className="flex gap-2 mt-3">
@@ -269,11 +269,26 @@ const DISPO_STEPS = [
   { key: 'DISPO_CLOSED', label: 'Closed' },
 ]
 
-function DealProgress({ currentStatus }: { currentStatus: string }) {
+function DealProgress({ currentStatus, propertyId, canEdit }: { currentStatus: string; propertyId: string; canEdit: boolean }) {
+  const [updating, setUpdating] = useState(false)
   const acqKeys = ACQ_STEPS.map(s => s.key)
   const dispoKeys = DISPO_STEPS.map(s => s.key)
   const acqIdx = acqKeys.indexOf(currentStatus)
   const dispoIdx = dispoKeys.indexOf(currentStatus)
+
+  async function changeStage(statusKey: string) {
+    if (!canEdit || updating || statusKey === currentStatus) return
+    setUpdating(true)
+    try {
+      await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: statusKey }),
+      })
+      window.location.reload()
+    } catch {}
+    setUpdating(false)
+  }
 
   function ProgressRow({ steps, activeIdx, color }: { steps: typeof ACQ_STEPS; activeIdx: number; color: string }) {
     return (
@@ -283,14 +298,19 @@ function DealProgress({ currentStatus }: { currentStatus: string }) {
           const isCurrent = i === activeIdx
           return (
             <div key={step.key} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center cursor-default select-none" title="Stage changes are synced from GHL">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold ${
+              <button
+                onClick={() => changeStage(step.key)}
+                disabled={!canEdit || updating}
+                className={`flex flex-col items-center ${canEdit ? 'cursor-pointer hover:scale-110' : 'cursor-default'} transition-transform`}
+                title={canEdit ? `Move to ${step.label}` : step.label}
+              >
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-colors ${
                   isCurrent ? `${color} text-white` : isHit ? `${color}/20 ${color.replace('bg-', 'text-')}` : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
                 }`}>
                   {isHit ? <Check size={8} /> : i + 1}
                 </div>
                 <span className={`text-[7px] mt-0.5 ${isCurrent ? `${color.replace('bg-', 'text-')} font-semibold` : isHit ? 'text-txt-primary' : 'text-txt-muted'}`}>{step.label}</span>
-              </div>
+              </button>
               {i < steps.length - 1 && (
                 <div className={`flex-1 h-px mx-0.5 ${activeIdx >= 0 && i < activeIdx ? `${color}/30` : 'bg-[rgba(0,0,0,0.06)]'}`} />
               )}
@@ -341,7 +361,7 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
         {financials.map(f => (
           <div key={f.label} className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
             <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">{f.label}</p>
-            <p className={`text-ds-card font-semibold mt-0.5 ${f.value ? f.color : 'text-semantic-red'}`}>{f.value ?? '—'}</p>
+            <p className={`text-ds-card font-semibold mt-0.5 ${f.value ? f.color : 'text-txt-muted'}`}>{f.value ?? 'Add in Edit →'}</p>
           </div>
         ))}
       </div>
@@ -809,11 +829,14 @@ function AITab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `[Property context: ${property.address}, ${property.city}, ${property.state}. Status: ${property.status}. Asking: ${property.askingPrice ?? 'N/A'}. ARV: ${property.arv ?? 'N/A'}. MAO: ${property.mao ?? 'N/A'}. Contract: ${property.contractPrice ?? 'N/A'}. Assignment Fee: ${property.assignmentFee ?? 'N/A'}.]\n\n${text}`,
+          messages: [{
+            role: 'user' as const,
+            content: `[Property context: ${property.address}, ${property.city}, ${property.state}. Status: ${property.status}. Asking: ${property.askingPrice ?? 'N/A'}. ARV: ${property.arv ?? 'N/A'}. MAO: ${property.mao ?? 'N/A'}. Contract: ${property.contractPrice ?? 'N/A'}. Assignment Fee: ${property.assignmentFee ?? 'N/A'}.]\n\n${text}`,
+          }],
         }),
       })
       const data = await res.json()
-      setMessages(prev => [...prev, { role: 'ai', text: data.reply ?? data.response ?? data.message ?? 'No response' }])
+      setMessages(prev => [...prev, { role: 'ai', text: data.reply ?? 'No response' }])
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'Failed to get response' }])
     }

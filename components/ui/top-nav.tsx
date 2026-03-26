@@ -91,10 +91,14 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
             <Settings size={16} />
           </Link>
 
-          <button className="relative p-2 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors">
+          <Link
+            href={`/${tenantSlug}/tasks`}
+            className="relative p-2 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors"
+            title="Day Hub — Inbox & Tasks"
+          >
             <Bell size={16} />
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-gunner-red" />
-          </button>
+          </Link>
 
           {/* User menu */}
           <div className="relative">
