@@ -228,6 +228,49 @@ function getSourceColor(source: string): string {
   return SOURCE_PALETTE[Math.abs(hash) % SOURCE_PALETTE.length]
 }
 
+const GHL_STAGE_COLORS: Record<string, string> = {
+  'New Lead (1)': 'bg-sky-100 text-sky-700',
+  'Warm Leads(2)': 'bg-orange-100 text-orange-700',
+  'Hot Leads(2)': 'bg-red-100 text-red-700',
+  'Pending Apt(3)': 'bg-yellow-100 text-yellow-700',
+  'Walkthrough Apt Scheduled': 'bg-amber-100 text-amber-700',
+  'Offer Apt Scheduled (3)': 'bg-lime-100 text-lime-700',
+  'Made Offer (4)': 'bg-purple-100 text-purple-700',
+  'Under Contract (5)': 'bg-emerald-100 text-emerald-700',
+  'Purchased (6)': 'bg-green-100 text-green-700',
+  '1 Month Follow Up': 'bg-teal-100 text-teal-700',
+  '4 Month Follow Up': 'bg-cyan-100 text-cyan-700',
+  '1 Year Follow Up': 'bg-indigo-100 text-indigo-700',
+  'Ghosted Lead': 'bg-stone-100 text-stone-600',
+  'New deal': 'bg-blue-100 text-blue-700',
+  'Clear to Send Out': 'bg-violet-100 text-violet-700',
+  'Sent to buyers': 'bg-fuchsia-100 text-fuchsia-700',
+  'Offers Received': 'bg-pink-100 text-pink-700',
+  'UC W/ Buyer': 'bg-emerald-100 text-emerald-700',
+  'Working w/ Title': 'bg-teal-100 text-teal-700',
+  'Closed': 'bg-green-100 text-green-700',
+}
+
+const STAGE_PALETTE = [
+  'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+  'bg-violet-100 text-violet-700',
+  'bg-lime-100 text-lime-700',
+  'bg-sky-100 text-sky-700',
+  'bg-amber-100 text-amber-700',
+  'bg-fuchsia-100 text-fuchsia-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-orange-100 text-orange-700',
+]
+
+function getStageColor(stage: string): string {
+  if (GHL_STAGE_COLORS[stage]) return GHL_STAGE_COLORS[stage]
+  let hash = 0
+  for (let i = 0; i < stage.length; i++) hash = stage.charCodeAt(i) + ((hash << 5) - hash)
+  return STAGE_PALETTE[Math.abs(hash) % STAGE_PALETTE.length]
+}
+
 const MARKET_COLORS: Record<string, string> = {
   'Nashville': 'bg-red-100 text-red-700',
   'Columbia': 'bg-teal-100 text-teal-700',
@@ -277,11 +320,7 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
                 {APP_STAGE_LABELS[appStage]}
               </span>
               {p.ghlStageName && !p.ghlStageName.includes('-') && (
-                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${
-                  appStage.startsWith('acquisition') ? 'bg-red-50 text-red-600' :
-                  appStage.startsWith('disposition') ? 'bg-blue-50 text-blue-600' :
-                  'bg-amber-50 text-amber-600'
-                }`}>
+                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${getStageColor(p.ghlStageName)}`}>
                   {p.ghlStageName}
                 </span>
               )}
