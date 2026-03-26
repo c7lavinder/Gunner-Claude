@@ -534,24 +534,50 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
 
 function ResearchTab({ property }: { property: PropertyDetail }) {
   const [researching, setResearching] = useState(false)
-  const [researchMsg, setResearchMsg] = useState('')
+  const [research, setResearch] = useState<Record<string, unknown> | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState('')
+
+  // Load existing research on mount
+  useEffect(() => {
+    fetch(`/api/properties/${property.id}/research`)
+      .then(r => r.json())
+      .then(d => { if (d.research) setResearch(d.research as Record<string, unknown>); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [property.id])
 
   async function handleReResearch() {
     setResearching(true)
-    setResearchMsg('')
-    // Placeholder — research integration not yet built
-    await new Promise(r => setTimeout(r, 1500))
-    setResearchMsg('Research data sync coming soon — public records integration in progress.')
+    setError('')
+    try {
+      const res = await fetch(`/api/properties/${property.id}/research`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setResearch(data.research)
+      } else {
+        setError(data.error ?? 'Research failed')
+      }
+    } catch { setError('Network error') }
     setResearching(false)
-    setTimeout(() => setResearchMsg(''), 5000)
   }
+
+  const googleData = research?.googlePlaceData as Record<string, unknown> | null
+  const coords = research?.coordinates as { lat: number; lng: number } | null
+  const streetViewUrl = research?.streetViewUrl as string | null
+  const researchedAt = research?.researchedAt as string | null
+
+  const fullAddr = `${property.address}, ${property.city}, ${property.state} ${property.zip}`
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-ds-label font-semibold text-txt-primary">Property Research</h3>
-          <p className="text-ds-fine text-txt-muted">{researchMsg || 'Data not yet synced'}</p>
+          <p className="text-ds-fine text-txt-muted">
+            {error ? <span className="text-semantic-red">{error}</span>
+              : researchedAt ? `Last updated: ${format(new Date(researchedAt), 'MMM d, yyyy h:mm a')}`
+              : loaded ? 'Not yet researched' : 'Loading...'}
+          </p>
         </div>
         <button
           onClick={handleReResearch}
@@ -559,41 +585,93 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark transition-colors disabled:opacity-50 flex items-center gap-1"
         >
           {researching && <Loader2 size={11} className="animate-spin" />}
-          {researching ? 'Researching...' : 'Re-Research'}
+          {researching ? 'Researching...' : researchedAt ? 'Re-Research' : 'Research Now'}
         </button>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-3">
-        <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase">Zestimate</p>
-          <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
+      {/* Street View image */}
+      {streetViewUrl && (
+        <div className="rounded-[10px] overflow-hidden border-[0.5px] border-[rgba(0,0,0,0.08)]">
+          <img src={streetViewUrl} alt="Street view" className="w-full h-48 object-cover" />
         </div>
-        <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase">Tax Assessment</p>
-          <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
+      )}
+
+      {/* Google Place data */}
+      {googleData && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Google Places Data</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {googleData.formattedAddress ? (
+              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+                <p className="text-[9px] font-semibold text-txt-muted uppercase">Verified Address</p>
+                <p className="text-ds-fine text-txt-primary mt-0.5">{String(googleData.formattedAddress)}</p>
+              </div>
+            ) : null}
+            {Array.isArray(googleData.types) ? (
+              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+                <p className="text-[9px] font-semibold text-txt-muted uppercase">Property Types</p>
+                <p className="text-ds-fine text-txt-primary mt-0.5">{googleData.types.map(String).join(', ')}</p>
+              </div>
+            ) : null}
+            {coords ? (
+              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+                <p className="text-[9px] font-semibold text-txt-muted uppercase">Coordinates</p>
+                <p className="text-ds-fine text-txt-primary mt-0.5">{coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}</p>
+              </div>
+            ) : null}
+            {googleData.photoCount ? (
+              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+                <p className="text-[9px] font-semibold text-txt-muted uppercase">Photos Available</p>
+                <p className="text-ds-fine text-txt-primary mt-0.5">{String(googleData.photoCount)} photos</p>
+              </div>
+            ) : null}
+          </div>
         </div>
-        <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase">Annual Tax</p>
-          <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
+      )}
+
+      {/* Valuation placeholders — will populate with paid provider */}
+      <div>
+        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Valuation & Tax</p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase">Zestimate</p>
+            <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
+          </div>
+          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase">Tax Assessment</p>
+            <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
+          </div>
+          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase">Annual Tax</p>
+            <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
+          </div>
         </div>
+        <p className="text-[9px] text-txt-muted mt-1">Valuation data requires a paid data provider (BatchData, ATTOM, etc.)</p>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Public Records</p>
-        <div className="bg-surface-secondary rounded-[10px] p-4 text-ds-fine text-txt-muted text-center">
-          Research data will populate once synced with public records
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <a href={`https://www.zillow.com/homes/${encodeURIComponent(property.address + ' ' + property.city + ' ' + property.state + ' ' + property.zip)}`} target="_blank" rel="noopener noreferrer"
-          className="text-ds-fine text-semantic-blue hover:underline flex items-center gap-1">
+      {/* External links */}
+      <div className="flex gap-3">
+        <a href={`https://www.zillow.com/homes/${encodeURIComponent(fullAddr)}`} target="_blank" rel="noopener noreferrer"
+          className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
           <ExternalLink size={10} /> Zillow
         </a>
-        <a href={`https://www.google.com/maps/place/${encodeURIComponent(property.address + ', ' + property.city + ', ' + property.state + ' ' + property.zip)}`} target="_blank" rel="noopener noreferrer"
-          className="text-ds-fine text-semantic-blue hover:underline flex items-center gap-1">
-          <ExternalLink size={10} /> Street View
-        </a>
+        {googleData?.googleMapsUrl ? (
+          <a href={String(googleData.googleMapsUrl)} target="_blank" rel="noopener noreferrer"
+            className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
+            <ExternalLink size={10} /> Google Maps
+          </a>
+        ) : (
+          <a href={`https://www.google.com/maps/place/${encodeURIComponent(fullAddr)}`} target="_blank" rel="noopener noreferrer"
+            className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
+            <ExternalLink size={10} /> Google Maps
+          </a>
+        )}
+        {coords && (
+          <a href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${coords.lat},${coords.lng}`} target="_blank" rel="noopener noreferrer"
+            className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
+            <ExternalLink size={10} /> Street View
+          </a>
+        )}
       </div>
     </div>
   )

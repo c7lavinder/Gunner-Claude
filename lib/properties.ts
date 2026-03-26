@@ -212,6 +212,13 @@ export async function createPropertyFromContact(
       propertyId: property.id,
     }).catch(err => console.warn('[Property] Workflow trigger failed:', err))
 
+    // Auto-trigger research (non-blocking, server-side)
+    if (address && process.env.GOOGLE_PLACES_API_KEY) {
+      researchProperty(property.id, address, city, state, zip).catch(err =>
+        console.warn('[Property] Auto-research failed:', err instanceof Error ? err.message : err)
+      )
+    }
+
     return property.id
   } catch (err) {
     console.error(`[Property] Failed to create from contact ${ghlContactId}:`, err)
@@ -229,6 +236,57 @@ export async function createPropertyFromContact(
 
     return null
   }
+}
+
+// ─── Auto-research using Google Places API ───────────────────────────────────
+
+async function researchProperty(propertyId: string, address: string, city: string, state: string, zip: string) {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY
+  if (!apiKey) return
+
+  const fullAddress = `${address}, ${city}, ${state} ${zip}`
+
+  const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'places.formattedAddress,places.location,places.types,places.displayName,places.googleMapsUri,places.photos,places.addressComponents',
+    },
+    body: JSON.stringify({ textQuery: fullAddress, maxResultCount: 1 }),
+  })
+
+  if (!searchRes.ok) return
+
+  const data = await searchRes.json()
+  const place = data.places?.[0]
+  if (!place) return
+
+  const lat = place.location?.latitude ?? null
+  const lng = place.location?.longitude ?? null
+
+  const researchData = {
+    googlePlaceData: {
+      formattedAddress: place.formattedAddress,
+      displayName: place.displayName?.text,
+      googleMapsUrl: place.googleMapsUri,
+      types: place.types,
+      addressComponents: place.addressComponents,
+      photoCount: place.photos?.length ?? 0,
+    },
+    coordinates: lat && lng ? { lat, lng } : null,
+    streetViewUrl: lat && lng ? `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${lat},${lng}&key=${apiKey}` : null,
+    zillowUrl: `https://www.zillow.com/homes/${encodeURIComponent(fullAddress)}`,
+    googleMapsUrl: `https://www.google.com/maps/place/${encodeURIComponent(fullAddress)}`,
+    researchedAt: new Date().toISOString(),
+  }
+
+  await db.property.update({
+    where: { id: propertyId },
+    data: { zillowData: researchData as unknown as import('@prisma/client').Prisma.InputJsonValue },
+  })
+
+  console.log(`[Property] Auto-researched ${address}: ${place.formattedAddress ?? 'no result'}`)
 }
 
 // Normalize street address for dedup matching
