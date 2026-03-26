@@ -8,7 +8,7 @@ import {
   ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink,
   MessageSquare, FileText, ChevronRight, Zap, Pencil, Check,
   DollarSign, Bot, Send, Clock, Plus, Loader2,
-  Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone,
+  Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
@@ -25,7 +25,7 @@ interface PropertyDetail {
   propertyType: string | null; occupancy: string | null; lockboxCode: string | null
   description: string | null; internalNotes: string | null
   lastOfferDate: string | null; lastContactedDate: string | null
-  sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean }>
+  sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
     id: string; score: number | null; gradingStatus: string; direction: string
@@ -65,7 +65,7 @@ export function PropertyDetailClient({
   const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
   const dom = Math.floor((Date.now() - new Date(property.createdAt).getTime()) / 86400000)
   const domColor = dom <= 7 ? 'text-green-600' : dom <= 30 ? 'text-amber-500' : 'text-red-600'
-  const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : null
+
 
   async function runGhlAction(type: string, payload: Record<string, string>) {
     if (!ghlContactId) return setActionMsg('No GHL contact linked')
@@ -170,7 +170,7 @@ export function PropertyDetailClient({
         {/* Tab content */}
         <div className="p-5">
           {activeTab === 'overview' && (
-            <OverviewTab property={property} fmt={fmt} dom={dom} domColor={domColor} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg} ghlContactId={ghlContactId} />
+            <OverviewTab property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg} ghlContactId={ghlContactId} />
           )}
           {activeTab === 'research' && <ResearchTab property={property} />}
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
@@ -340,89 +340,435 @@ function DealProgress({ currentStatus, propertyId, canEdit }: { currentStatus: s
   )
 }
 
+// ─── Inline Edit Components ──────────────────────────────────────────────────
+
+function InlineEditCard({
+  label, value, field, propertyId, color, onSaved,
+}: {
+  label: string; value: string | null; field: string; propertyId: string
+  color?: string; onSaved: (field: string, val: string | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function startEdit() {
+    setEditValue(value ?? '')
+    setEditing(true)
+  }
+
+  async function save() {
+    if (saving) return
+    const raw = editValue.trim()
+    if (raw === (value ?? '')) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: raw || null }),
+      })
+      if (res.ok) onSaved(field, raw || null)
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+  }
+
+  const displayValue = value ? `$${Number(value).toLocaleString()}` : null
+
+  if (editing) {
+    return (
+      <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">{label}</p>
+        <input
+          autoFocus type="number" value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
+          className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-ds-card font-semibold text-txt-primary mt-0.5 focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+          disabled={saving} placeholder="0"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div onClick={startEdit} className="bg-surface-secondary rounded-[10px] px-3 py-2.5 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group">
+      <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider flex items-center justify-between">
+        {label}
+        <Pencil size={8} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+      </p>
+      <p className={`text-ds-card font-semibold mt-0.5 ${displayValue ? (color ?? 'text-txt-primary') : 'text-txt-muted'}`}>
+        {displayValue ?? '—'}
+      </p>
+    </div>
+  )
+}
+
+function InlineDetailItem({
+  label, value, field, propertyId, type = 'text', onSaved,
+}: {
+  label: string; value: string | number | null; field: string; propertyId: string
+  type?: 'number' | 'text'; onSaved: (field: string, val: string | number | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (saving) return
+    const raw = editValue.trim()
+    const current = value != null ? String(value) : ''
+    if (raw === current) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const payload: Record<string, unknown> = {}
+      payload[field] = type === 'number' ? (raw ? Number(raw) : null) : (raw || null)
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) onSaved(field, type === 'number' ? (raw ? Number(raw) : null) : (raw || null))
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="text-txt-muted">{label}:</span>
+        <input
+          autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
+          className="w-20 bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-ds-fine font-medium text-txt-primary focus:outline-none"
+          disabled={saving}
+        />
+      </span>
+    )
+  }
+
+  const display = value != null ? (typeof value === 'number' ? value.toLocaleString() : value) : null
+
+  return (
+    <span
+      className="cursor-pointer hover:text-gunner-red transition-colors group inline-flex items-center gap-1"
+      onClick={() => { setEditValue(value != null ? String(value) : ''); setEditing(true) }}
+    >
+      <span className="text-txt-muted">{label}:</span>
+      <span className="text-txt-primary font-medium group-hover:underline">{display ?? '—'}</span>
+      <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+    </span>
+  )
+}
+
+function InlineTextArea({
+  label, value, field, propertyId, labelColor, bgColor, textColor, onSaved,
+}: {
+  label: string; value: string | null; field: string; propertyId: string
+  labelColor?: string; bgColor?: string; textColor?: string
+  onSaved: (field: string, val: string | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (saving) return
+    const raw = editValue.trim()
+    if (raw === (value ?? '')) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: raw || null }),
+      })
+      if (res.ok) onSaved(field, raw || null)
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className={`${bgColor ?? 'bg-surface-secondary'} rounded-[10px] px-4 py-3`}>
+        <p className={`text-[9px] font-semibold uppercase tracking-wider mb-1 ${labelColor ?? 'text-txt-muted'}`}>{label}</p>
+        <textarea
+          autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+          onBlur={save} onKeyDown={e => { if (e.key === 'Escape') setEditing(false) }}
+          rows={3}
+          className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1.5 text-ds-fine text-txt-primary focus:outline-none focus:ring-1 focus:ring-gunner-red/20 resize-none"
+          disabled={saving} placeholder="Click to add..."
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      onClick={() => { setEditValue(value ?? ''); setEditing(true) }}
+      className={`${bgColor ?? 'bg-surface-secondary'} rounded-[10px] px-4 py-3 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group`}
+    >
+      <p className={`text-[9px] font-semibold uppercase tracking-wider mb-1 flex items-center justify-between ${labelColor ?? 'text-txt-muted'}`}>
+        {label}
+        <Pencil size={8} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+      </p>
+      <p className={`text-ds-fine ${value ? (textColor ?? 'text-txt-secondary') : 'text-txt-muted'}`}>
+        {value ?? 'Click to add...'}
+      </p>
+    </div>
+  )
+}
+
+// ─── Contacts Section ────────────────────────────────────────────────────────
+
+const CONTACT_ROLES = ['Primary Seller', 'Co-Seller', 'Spouse', 'Attorney', 'Agent', 'Other']
+
+function ContactsSection({ propertyId, initialSellers }: {
+  propertyId: string
+  initialSellers: PropertyDetail['sellers']
+}) {
+  const [sellers, setSellers] = useState(initialSellers)
+  const [showSearch, setShowSearch] = useState(false)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Array<{ id: string; name: string; phone: string | null; email: string | null }>>([])
+  const [searching, setSearching] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [selectedRole, setSelectedRole] = useState('Primary Seller')
+
+  async function searchContacts(q: string) {
+    setQuery(q)
+    if (q.length < 2) { setResults([]); return }
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/ghl/contacts?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      setResults(data.contacts ?? [])
+    } catch { setResults([]) }
+    setSearching(false)
+  }
+
+  async function addContact(contact: { id: string; name: string; phone: string | null; email: string | null }) {
+    setAdding(true)
+    try {
+      const isPrimary = selectedRole === 'Primary Seller' || sellers.length === 0
+      const res = await fetch(`/api/properties/${propertyId}/sellers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ghlContactId: contact.id,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+          role: selectedRole,
+          isPrimary,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setSellers(prev => [...prev, data.seller])
+        setShowSearch(false)
+        setQuery('')
+        setResults([])
+      }
+    } catch {}
+    setAdding(false)
+  }
+
+  async function removeContact(sellerId: string) {
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/sellers`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sellerId }),
+      })
+      if (res.ok) setSellers(prev => prev.filter(s => s.id !== sellerId))
+    } catch {}
+  }
+
+  async function updateRole(sellerId: string, role: string) {
+    try {
+      await fetch(`/api/properties/${propertyId}/sellers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateRole', sellerId, role }),
+      })
+      setSellers(prev => prev.map(s => s.id === sellerId ? { ...s, role } : s))
+    } catch {}
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">
+          <Users size={10} className="inline -mt-0.5 text-gunner-red" /> Contacts ({sellers.length})
+        </p>
+        <button onClick={() => setShowSearch(!showSearch)}
+          className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-0.5 transition-colors">
+          {showSearch ? <X size={10} /> : <Plus size={10} />}
+          {showSearch ? 'Cancel' : 'Add'}
+        </button>
+      </div>
+
+      {/* GHL Contact search */}
+      {showSearch && (
+        <div className="mb-3 space-y-2">
+          <input
+            autoFocus value={query} onChange={e => searchContacts(e.target.value)}
+            placeholder="Search GHL contacts..."
+            className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none"
+          />
+          <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
+            className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary">
+            {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          {searching && <p className="text-ds-fine text-txt-muted">Searching...</p>}
+          {results.length > 0 && (
+            <div className="max-h-40 overflow-y-auto space-y-1">
+              {results.map(c => {
+                const alreadyLinked = sellers.some(s => s.ghlContactId === c.id)
+                return (
+                  <button key={c.id} onClick={() => !alreadyLinked && addContact(c)}
+                    disabled={alreadyLinked || adding}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-[6px] text-ds-fine transition-colors ${
+                      alreadyLinked ? 'bg-surface-tertiary text-txt-muted cursor-not-allowed' : 'bg-surface-secondary hover:bg-surface-tertiary text-txt-primary'
+                    }`}>
+                    <p className="font-medium">{c.name}{alreadyLinked ? ' (linked)' : ''}</p>
+                    <p className="text-txt-muted">{c.phone ?? c.email ?? '—'}</p>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Linked contacts list */}
+      {sellers.length === 0 ? (
+        <p className="text-ds-fine text-txt-muted">No contacts linked</p>
+      ) : (
+        <div className="space-y-2">
+          {sellers.map(s => (
+            <div key={s.id} className="bg-surface-secondary rounded-[8px] px-2.5 py-2 group">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="text-ds-body text-txt-primary font-medium truncate">{s.name}</p>
+                    <select value={s.role} onChange={e => updateRole(s.id, e.target.value)}
+                      className="text-[9px] font-medium bg-transparent text-gunner-red cursor-pointer border-none focus:outline-none">
+                      {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  {s.phone && <p className="text-ds-fine text-txt-secondary">{s.phone}</p>}
+                  {s.email && <p className="text-ds-fine text-txt-secondary truncate">{s.email}</p>}
+                </div>
+                <button onClick={() => removeContact(s.id)}
+                  className="opacity-0 group-hover:opacity-100 text-txt-muted hover:text-semantic-red transition-all shrink-0 mt-0.5">
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
-function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId }: {
-  property: PropertyDetail; fmt: (v: string | null) => string | null; dom: number; domColor: string
+function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId }: {
+  property: PropertyDetail; dom: number; domColor: string
   tenantSlug: string; runGhlAction: (type: string, payload: Record<string, string>) => void
   sending: boolean; actionMsg: string; ghlContactId: string | null
 }) {
   const [smsText, setSmsText] = useState('')
   const [noteText, setNoteText] = useState('')
 
-  // Compute spread
-  const spread = property.arv && property.contractPrice
-    ? Number(property.arv) - Number(property.contractPrice)
-    : null
+  // Local editable state — updates on save without page reload
+  const [vals, setVals] = useState({
+    contractPrice: property.contractPrice,
+    askingPrice: property.askingPrice,
+    offerPrice: property.offerPrice,
+    arv: property.arv,
+    mao: property.mao,
+    repairCost: property.repairCost,
+    assignmentFee: property.assignmentFee,
+    wholesalePrice: property.wholesalePrice,
+    beds: property.beds,
+    baths: property.baths,
+    sqft: property.sqft,
+    yearBuilt: property.yearBuilt,
+    lotSize: property.lotSize,
+    propertyType: property.propertyType,
+    occupancy: property.occupancy,
+    lockboxCode: property.lockboxCode,
+    description: property.description,
+    internalNotes: property.internalNotes,
+  })
 
-  const financials = [
-    { label: 'CONTRACT', value: fmt(property.contractPrice), color: 'text-txt-primary' },
-    { label: 'ASKING', value: fmt(property.askingPrice), color: 'text-txt-primary' },
-    { label: 'OFFER PRICE', value: fmt(property.offerPrice), color: 'text-txt-primary' },
-    { label: 'ARV', value: fmt(property.arv), color: 'text-semantic-green' },
-    { label: 'MAO', value: fmt(property.mao), color: 'text-semantic-amber' },
-    { label: 'REPAIR COST', value: fmt(property.repairCost), color: 'text-semantic-red' },
-    { label: 'ASSIGNMENT FEE', value: fmt(property.assignmentFee), color: 'text-semantic-blue' },
-    { label: 'WHOLESALE', value: fmt(property.wholesalePrice), color: 'text-semantic-blue' },
-    { label: 'EST. SPREAD', value: spread != null ? `$${spread.toLocaleString()}` : null, color: spread && spread > 0 ? 'text-semantic-green' : 'text-semantic-red' },
-    { label: 'DAYS ON MARKET', value: `${dom}`, color: domColor },
-  ]
+  function handleSaved(field: string, val: string | number | null) {
+    setVals(prev => ({ ...prev, [field]: val }))
+  }
+
+  const spread = vals.arv && vals.contractPrice
+    ? Number(vals.arv) - Number(vals.contractPrice)
+    : null
 
   return (
     <div className="space-y-5">
-      {/* Financials grid */}
+      {/* Financials grid — click any card to edit */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {financials.map(f => (
-          <div key={f.label} className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">{f.label}</p>
-            <p className={`text-ds-card font-semibold mt-0.5 ${f.value ? f.color : 'text-txt-muted'}`}>{f.value ?? 'Add in Edit →'}</p>
-          </div>
-        ))}
+        <InlineEditCard label="CONTRACT" value={vals.contractPrice} field="contractPrice" propertyId={property.id} onSaved={handleSaved} />
+        <InlineEditCard label="ASKING" value={vals.askingPrice} field="askingPrice" propertyId={property.id} onSaved={handleSaved} />
+        <InlineEditCard label="OFFER PRICE" value={vals.offerPrice} field="offerPrice" propertyId={property.id} onSaved={handleSaved} />
+        <InlineEditCard label="ARV" value={vals.arv} field="arv" propertyId={property.id} color="text-semantic-green" onSaved={handleSaved} />
+        <InlineEditCard label="MAO" value={vals.mao} field="mao" propertyId={property.id} color="text-semantic-amber" onSaved={handleSaved} />
+        <InlineEditCard label="REPAIR COST" value={vals.repairCost} field="repairCost" propertyId={property.id} color="text-semantic-red" onSaved={handleSaved} />
+        <InlineEditCard label="ASSIGNMENT FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={property.id} color="text-semantic-blue" onSaved={handleSaved} />
+        <InlineEditCard label="WHOLESALE" value={vals.wholesalePrice} field="wholesalePrice" propertyId={property.id} color="text-semantic-blue" onSaved={handleSaved} />
+        <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">EST. SPREAD</p>
+          <p className={`text-ds-card font-semibold mt-0.5 ${spread != null ? (spread > 0 ? 'text-semantic-green' : 'text-semantic-red') : 'text-txt-muted'}`}>
+            {spread != null ? `$${spread.toLocaleString()}` : '—'}
+          </p>
+        </div>
+        <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">DAYS ON MARKET</p>
+          <p className={`text-ds-card font-semibold mt-0.5 ${domColor}`}>{dom}</p>
+        </div>
       </div>
 
-      {/* Property details */}
-      {(property.beds || property.baths || property.sqft || property.propertyType || property.description) && (
-        <div className="bg-surface-secondary rounded-[10px] px-4 py-3">
-          <div className="flex flex-wrap gap-4 text-ds-fine">
-            {property.propertyType && <span><span className="text-txt-muted">Type:</span> <span className="text-txt-primary font-medium">{property.propertyType}</span></span>}
-            {property.beds && <span><span className="text-txt-muted">Beds:</span> <span className="text-txt-primary font-medium">{property.beds}</span></span>}
-            {property.baths && <span><span className="text-txt-muted">Baths:</span> <span className="text-txt-primary font-medium">{property.baths}</span></span>}
-            {property.sqft && <span><span className="text-txt-muted">Sqft:</span> <span className="text-txt-primary font-medium">{property.sqft.toLocaleString()}</span></span>}
-            {property.yearBuilt && <span><span className="text-txt-muted">Built:</span> <span className="text-txt-primary font-medium">{property.yearBuilt}</span></span>}
-            {property.lotSize && <span><span className="text-txt-muted">Lot:</span> <span className="text-txt-primary font-medium">{property.lotSize}</span></span>}
-            {property.occupancy && <span><span className="text-txt-muted">Occupancy:</span> <span className="text-txt-primary font-medium">{property.occupancy}</span></span>}
-            {property.lockboxCode && <span><span className="text-txt-muted">Lockbox:</span> <span className="text-txt-primary font-medium">{property.lockboxCode}</span></span>}
-          </div>
-          {property.description && <p className="text-ds-fine text-txt-secondary mt-2">{property.description}</p>}
+      {/* Property details — click any field to edit */}
+      <div className="bg-surface-secondary rounded-[10px] px-4 py-3">
+        <div className="flex flex-wrap gap-4 text-ds-fine">
+          <InlineDetailItem label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} onSaved={handleSaved} />
+          <InlineDetailItem label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" onSaved={handleSaved} />
+          <InlineDetailItem label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" onSaved={handleSaved} />
+          <InlineDetailItem label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" onSaved={handleSaved} />
+          <InlineDetailItem label="Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" onSaved={handleSaved} />
+          <InlineDetailItem label="Lot" value={vals.lotSize} field="lotSize" propertyId={property.id} onSaved={handleSaved} />
+          <InlineDetailItem label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} onSaved={handleSaved} />
+          <InlineDetailItem label="Lockbox" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} onSaved={handleSaved} />
         </div>
-      )}
+      </div>
 
-      {/* Internal notes */}
-      {property.internalNotes && (
-        <div className="bg-amber-50 border-[0.5px] border-amber-200 rounded-[10px] px-4 py-3">
-          <p className="text-[9px] font-semibold text-amber-700 uppercase tracking-wider mb-1">Internal Notes</p>
-          <p className="text-ds-fine text-amber-900">{property.internalNotes}</p>
-        </div>
-      )}
+      {/* Description — click to edit */}
+      <InlineTextArea label="Description" value={vals.description} field="description" propertyId={property.id} onSaved={handleSaved} />
+
+      {/* Internal notes — click to edit */}
+      <InlineTextArea label="Internal Notes" value={vals.internalNotes} field="internalNotes" propertyId={property.id}
+        labelColor="text-amber-700" bgColor="bg-amber-50 border-[0.5px] border-amber-200" textColor="text-amber-900" onSaved={handleSaved} />
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Left: seller + assigned + actions */}
         <div className="space-y-4">
-          {/* Seller */}
-          {property.sellers.length > 0 && (
-            <div>
-              <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">
-                <User size={10} className="inline -mt-0.5 text-gunner-red" /> Seller
-              </p>
-              {property.sellers.map(s => (
-                <div key={s.id} className="space-y-0.5">
-                  <p className="text-ds-body text-txt-primary font-medium">{s.name}{s.isPrimary && <span className="text-ds-fine text-txt-muted ml-1">(primary)</span>}</p>
-                  {s.phone && <p className="text-ds-fine text-txt-secondary">{s.phone}</p>}
-                  {s.email && <p className="text-ds-fine text-txt-secondary">{s.email}</p>}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Contacts (linked GHL contacts) */}
+          <ContactsSection propertyId={property.id} initialSellers={property.sellers} />
 
           {/* Assigned */}
           {property.assignedTo && (
@@ -773,11 +1119,27 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
 
 function OutreachTab({ property }: { property: PropertyDetail }) {
   const [subTab, setSubTab] = useState<'send' | 'offer' | 'showing'>('send')
-  const [logs, setLogs] = useState<Array<{ id: string; type: string; channel: string; recipientName: string; recipientContact: string; notes: string | null; loggedAt: string; loggedByName: string }>>([])
+  const [logs, setLogs] = useState<Array<{
+    id: string; type: string; channel: string; recipientName: string; recipientContact: string
+    ghlContactId: string | null; notes: string | null; offerAmount: number | null
+    showingDate: string | null; loggedAt: string; loggedByName: string
+  }>>([])
   const [loaded, setLoaded] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState({ channel: 'sms', recipientName: '', recipientContact: '', notes: '' })
   const [saving, setSaving] = useState(false)
+
+  // GHL contact search state
+  const [contactQuery, setContactQuery] = useState('')
+  const [contactResults, setContactResults] = useState<Array<{ id: string; name: string; phone: string | null; email: string | null }>>([])
+  const [contactSearching, setContactSearching] = useState(false)
+  const [selectedContact, setSelectedContact] = useState<{ id: string; name: string; phone: string | null; email: string | null } | null>(null)
+
+  // Form fields
+  const [channel, setChannel] = useState('sms')
+  const [notes, setNotes] = useState('')
+  const [offerAmount, setOfferAmount] = useState('')
+  const [showingDate, setShowingDate] = useState('')
+  const [showingTime, setShowingTime] = useState('')
 
   useEffect(() => {
     fetch(`/api/properties/${property.id}/outreach`).then(r => r.json()).then(d => { setLogs(d.logs ?? []); setLoaded(true) }).catch(() => setLoaded(true))
@@ -786,20 +1148,70 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
   const filtered = logs.filter(l => l.type === subTab)
   const counts = { send: logs.filter(l => l.type === 'send').length, offer: logs.filter(l => l.type === 'offer').length, showing: logs.filter(l => l.type === 'showing').length }
 
+  async function searchGhlContacts(q: string) {
+    setContactQuery(q)
+    if (q.length < 2) { setContactResults([]); return }
+    setContactSearching(true)
+    try {
+      const res = await fetch(`/api/ghl/contacts?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      setContactResults(data.contacts ?? [])
+    } catch { setContactResults([]) }
+    setContactSearching(false)
+  }
+
+  function selectContact(c: { id: string; name: string; phone: string | null; email: string | null }) {
+    setSelectedContact(c)
+    setContactQuery('')
+    setContactResults([])
+  }
+
+  function resetForm() {
+    setSelectedContact(null)
+    setContactQuery('')
+    setContactResults([])
+    setChannel('sms')
+    setNotes('')
+    setOfferAmount('')
+    setShowingDate('')
+    setShowingTime('')
+    setShowForm(false)
+  }
+
   async function saveLog() {
+    if (!selectedContact) return
     setSaving(true)
     try {
+      const payload: Record<string, unknown> = {
+        type: subTab,
+        recipientName: selectedContact.name,
+        recipientContact: selectedContact.phone ?? selectedContact.email ?? '',
+        ghlContactId: selectedContact.id,
+        notes: notes || null,
+      }
+      if (subTab === 'send') payload.channel = channel
+      if (subTab === 'offer') {
+        payload.channel = 'offer'
+        payload.offerAmount = offerAmount || null
+      }
+      if (subTab === 'showing') {
+        payload.channel = 'in_person'
+        if (showingDate) {
+          payload.showingDate = showingTime
+            ? `${showingDate}T${showingTime}:00`
+            : `${showingDate}T09:00:00`
+        }
+      }
+
       await fetch(`/api/properties/${property.id}/outreach`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: subTab, ...formData }),
+        body: JSON.stringify(payload),
       })
-      // Refresh
       const res = await fetch(`/api/properties/${property.id}/outreach`)
       const d = await res.json()
       setLogs(d.logs ?? [])
-      setShowForm(false)
-      setFormData({ channel: 'sms', recipientName: '', recipientContact: '', notes: '' })
+      resetForm()
     } catch {}
     setSaving(false)
   }
@@ -809,35 +1221,96 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
       <div className="flex items-center justify-between">
         <div className="flex gap-0 border-b border-[rgba(0,0,0,0.06)]">
           {(['send', 'offer', 'showing'] as const).map(t => (
-            <button key={t} onClick={() => setSubTab(t)}
+            <button key={t} onClick={() => { setSubTab(t); setShowForm(false) }}
               className={`px-3 py-1.5 text-ds-fine font-medium border-b-2 capitalize transition-colors ${
                 subTab === t ? 'border-gunner-red text-gunner-red' : 'border-transparent text-txt-muted hover:text-txt-secondary'
               }`}
             >{t}s ({counts[t]})</button>
           ))}
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors">
-          <Plus size={11} /> Log {subTab}
+        <button onClick={() => { setShowForm(!showForm); if (showForm) resetForm() }}
+          className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors">
+          {showForm ? <X size={11} /> : <Plus size={11} />}
+          {showForm ? 'Cancel' : `Log ${subTab}`}
         </button>
       </div>
 
-      {/* Log form */}
+      {/* Distinct form per sub-tab */}
       {showForm && (
         <div className="bg-surface-secondary rounded-[10px] p-4 space-y-2">
-          <select value={formData.channel} onChange={e => setFormData(p => ({ ...p, channel: e.target.value }))}
-            className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine">
-            <option value="sms">SMS</option><option value="email">Email</option>
-            <option value="call">Call</option><option value="in_person">In Person</option>
-          </select>
-          <input value={formData.recipientName} onChange={e => setFormData(p => ({ ...p, recipientName: e.target.value }))}
-            placeholder="Recipient name" className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine" />
-          <input value={formData.recipientContact} onChange={e => setFormData(p => ({ ...p, recipientContact: e.target.value }))}
-            placeholder="Phone or email" className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine" />
-          <textarea value={formData.notes} onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
-            placeholder="Notes (optional)" rows={2} className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine resize-none" />
-          <button onClick={saveLog} disabled={!formData.recipientName || saving}
+          {/* GHL Contact search — shared across all sub-tabs */}
+          {!selectedContact ? (
+            <div>
+              <input autoFocus value={contactQuery} onChange={e => searchGhlContacts(e.target.value)}
+                placeholder="Search GHL contacts..."
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
+              {contactSearching && <p className="text-ds-fine text-txt-muted mt-1">Searching...</p>}
+              {contactResults.length > 0 && (
+                <div className="max-h-32 overflow-y-auto space-y-1 mt-1">
+                  {contactResults.map(c => (
+                    <button key={c.id} onClick={() => selectContact(c)}
+                      className="w-full text-left px-2.5 py-1.5 rounded-[6px] bg-white hover:bg-surface-tertiary text-ds-fine transition-colors">
+                      <p className="font-medium text-txt-primary">{c.name}</p>
+                      <p className="text-txt-muted">{c.phone ?? c.email ?? '—'}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 bg-white rounded-[8px] px-3 py-1.5 border-[0.5px] border-[rgba(0,0,0,0.1)]">
+              <User size={12} className="text-gunner-red shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-ds-fine font-medium text-txt-primary">{selectedContact.name}</p>
+                <p className="text-ds-fine text-txt-muted">{selectedContact.phone ?? selectedContact.email ?? '—'}</p>
+              </div>
+              <button onClick={() => setSelectedContact(null)} className="text-txt-muted hover:text-semantic-red"><X size={12} /></button>
+            </div>
+          )}
+
+          {/* Send-specific: channel dropdown */}
+          {subTab === 'send' && (
+            <select value={channel} onChange={e => setChannel(e.target.value)}
+              className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine">
+              <option value="sms">SMS</option><option value="email">Email</option>
+              <option value="call">Call</option><option value="in_person">In Person</option>
+            </select>
+          )}
+
+          {/* Offer-specific: amount */}
+          {subTab === 'offer' && (
+            <div>
+              <label className="text-[9px] font-semibold text-txt-muted uppercase mb-0.5 block">Offer Amount</label>
+              <input type="number" value={offerAmount} onChange={e => setOfferAmount(e.target.value)}
+                placeholder="150000"
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
+            </div>
+          )}
+
+          {/* Showing-specific: date + time */}
+          {subTab === 'showing' && (
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-[9px] font-semibold text-txt-muted uppercase mb-0.5 block">Date</label>
+                <input type="date" value={showingDate} onChange={e => setShowingDate(e.target.value)}
+                  className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine focus:outline-none" />
+              </div>
+              <div className="flex-1">
+                <label className="text-[9px] font-semibold text-txt-muted uppercase mb-0.5 block">Time</label>
+                <input type="time" value={showingTime} onChange={e => setShowingTime(e.target.value)}
+                  className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine focus:outline-none" />
+              </div>
+            </div>
+          )}
+
+          {/* Notes — shared */}
+          <textarea value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="Notes (optional)" rows={2}
+            className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine resize-none placeholder-txt-muted focus:outline-none" />
+
+          <button onClick={saveLog} disabled={!selectedContact || saving}
             className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Saving...' : `Save ${subTab}`}
           </button>
         </div>
       )}
@@ -857,6 +1330,8 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
               <span className="text-[9px] font-semibold text-txt-muted uppercase w-12">{l.channel}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-ds-fine text-txt-primary font-medium">{l.recipientName}</p>
+                {l.offerAmount && <p className="text-ds-fine text-semantic-green font-medium">${l.offerAmount.toLocaleString()}</p>}
+                {l.showingDate && <p className="text-ds-fine text-semantic-blue">{format(new Date(l.showingDate), 'MMM d, yyyy h:mm a')}</p>}
                 {l.notes && <p className="text-ds-fine text-txt-muted truncate">{l.notes}</p>}
               </div>
               <span className="text-ds-fine text-txt-muted shrink-0">{format(new Date(l.loggedAt), 'MMM d')}</span>
@@ -1037,6 +1512,29 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
   const [expandedTier, setExpandedTier] = useState<string | null>(null)
   const [sendingTier, setSendingTier] = useState<string | null>(null)
   const [sendResult, setSendResult] = useState<string | null>(null)
+  const [emailPreview, setEmailPreview] = useState<string | null>(null) // tier being previewed
+  const [recipientCounts, setRecipientCounts] = useState<Record<string, number>>({})
+
+  // Update blast content (editable)
+  function updateBlast(tier: string, field: 'emailSubject' | 'emailBody' | 'smsBody', value: string) {
+    setBlasts(prev => ({
+      ...prev,
+      [tier]: { ...prev[tier], [field]: value },
+    }))
+  }
+
+  async function fetchRecipientCounts() {
+    try {
+      const res = await fetch(`/api/properties/${property.id}/buyers`)
+      const data = await res.json()
+      const buyers = data.buyers ?? []
+      const counts: Record<string, number> = {}
+      for (const b of buyers) {
+        counts[b.tier] = (counts[b.tier] ?? 0) + 1
+      }
+      setRecipientCounts(counts)
+    } catch {}
+  }
 
   async function sendToTier(tier: string, channel: 'sms' | 'email') {
     const content = blasts[tier]
@@ -1075,12 +1573,15 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
     if (selectedTiers.size === 0) return
     setGenerating(true)
     try {
-      const res = await fetch(`/api/properties/${property.id}/blast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', tiers: [...selectedTiers] }),
-      })
-      const data = await res.json()
+      const [blastRes] = await Promise.all([
+        fetch(`/api/properties/${property.id}/blast`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generate', tiers: [...selectedTiers] }),
+        }),
+        fetchRecipientCounts(),
+      ])
+      const data = await blastRes.json()
       setBlasts(data.blasts ?? {})
       setExpandedTier([...selectedTiers][0])
     } catch {}
@@ -1092,7 +1593,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-ds-label font-semibold text-txt-primary">Deal Blast Generator</h3>
-          <p className="text-ds-fine text-txt-muted">Send property details to matched buyers via SMS and email</p>
+          <p className="text-ds-fine text-txt-muted">Generate, preview, and send property blasts to buyers</p>
         </div>
         <button
           onClick={() => {
@@ -1134,44 +1635,83 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         {generating ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : `Generate Blast for ${selectedTiers.size} Tier${selectedTiers.size !== 1 ? 's' : ''}`}
       </button>
 
-      {/* Generated blasts per tier (accordion) */}
+      {/* Generated blasts per tier (accordion) — editable */}
       {Object.keys(blasts).length > 0 && (
         <div className="space-y-2">
           {Object.entries(blasts).map(([tier, content]) => {
             const def = tierDefs.find(t => t.tier === tier)
             const isOpen = expandedTier === tier
+            const count = recipientCounts[tier] ?? 0
+            const isPreviewing = emailPreview === tier
             return (
               <div key={tier} className="border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] overflow-hidden">
                 <button onClick={() => setExpandedTier(isOpen ? null : tier)}
                   className="w-full flex items-center gap-2 px-4 py-2.5 bg-surface-secondary hover:bg-surface-tertiary transition-colors text-left">
                   <ChevronRight size={10} className={`text-txt-muted transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                   <span className="text-ds-fine font-semibold text-txt-primary">{def?.emoji} {def?.label ?? tier}</span>
+                  {count > 0 && <span className="text-[9px] font-medium text-txt-muted bg-surface-tertiary px-1.5 py-0.5 rounded-full">{count} recipients</span>}
                 </button>
                 {isOpen && (
                   <div className="px-4 py-3 space-y-3">
-                    {/* Email */}
+                    {/* Email section */}
                     <div>
-                      <p className="text-[9px] font-semibold text-txt-muted uppercase mb-1">Email</p>
-                      <input value={content.emailSubject} readOnly className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary mb-1.5 border-[0.5px] border-[rgba(0,0,0,0.06)]" />
-                      <textarea value={content.emailBody} readOnly rows={6} className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)]" />
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[9px] font-semibold text-txt-muted uppercase">Email</p>
+                        <button onClick={() => setEmailPreview(isPreviewing ? null : tier)}
+                          className="text-[9px] font-medium text-semantic-blue hover:underline">
+                          {isPreviewing ? 'Edit' : 'Preview'}
+                        </button>
+                      </div>
+
+                      {isPreviewing ? (
+                        <div className="space-y-1.5">
+                          <div className="bg-surface-secondary rounded-[8px] px-3 py-1.5 border-[0.5px] border-[rgba(0,0,0,0.06)]">
+                            <p className="text-[9px] text-txt-muted">Subject</p>
+                            <p className="text-ds-fine text-txt-primary font-medium">{content.emailSubject}</p>
+                          </div>
+                          <div
+                            className="bg-white rounded-[8px] px-4 py-3 border-[0.5px] border-[rgba(0,0,0,0.06)] text-ds-fine text-txt-primary prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: content.emailBody.replace(/\n/g, '<br/>') }}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <input
+                            value={content.emailSubject}
+                            onChange={e => updateBlast(tier, 'emailSubject', e.target.value)}
+                            className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary mb-1.5 border-[0.5px] border-[rgba(0,0,0,0.06)] focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+                          />
+                          <textarea
+                            value={content.emailBody}
+                            onChange={e => updateBlast(tier, 'emailBody', e.target.value)}
+                            rows={6}
+                            className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)] focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+                          />
+                        </>
+                      )}
                       <button
                         onClick={() => sendToTier(tier, 'email')}
-                        disabled={sendingTier === `${tier}-email`}
+                        disabled={!!sendingTier}
                         className="mt-1.5 w-full bg-semantic-blue hover:bg-semantic-blue/90 disabled:opacity-50 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors"
                       >
-                        {sendingTier === `${tier}-email` ? 'Sending...' : 'Send Email to Tier'}
+                        {sendingTier === `${tier}-email` ? 'Sending...' : `Send Email${count ? ` to ${count} buyers` : ''}`}
                       </button>
                     </div>
-                    {/* SMS */}
+                    {/* SMS section */}
                     <div>
                       <p className="text-[9px] font-semibold text-txt-muted uppercase mb-1">SMS <span className="text-txt-muted font-normal">({content.smsBody.length}/160)</span></p>
-                      <textarea value={content.smsBody} readOnly rows={2} className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)]" />
+                      <textarea
+                        value={content.smsBody}
+                        onChange={e => updateBlast(tier, 'smsBody', e.target.value)}
+                        rows={2}
+                        className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)] focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+                      />
                       <button
                         onClick={() => sendToTier(tier, 'sms')}
-                        disabled={sendingTier === `${tier}-sms`}
+                        disabled={!!sendingTier}
                         className="mt-1.5 w-full bg-semantic-green hover:bg-semantic-green/90 disabled:opacity-50 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors"
                       >
-                        {sendingTier === `${tier}-sms` ? 'Sending...' : 'Send SMS to Tier'}
+                        {sendingTier === `${tier}-sms` ? 'Sending...' : `Send SMS${count ? ` to ${count} buyers` : ''}`}
                       </button>
                     </div>
                   </div>
@@ -1183,7 +1723,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       )}
 
       {sendResult && <p className="text-ds-fine text-gunner-red text-center font-medium">{sendResult}</p>}
-      <p className="text-[9px] text-txt-muted text-center">System learns from your edits to improve future blasts</p>
+      <p className="text-[9px] text-txt-muted text-center">Edit content before sending. System learns from your changes.</p>
     </div>
   )
 }

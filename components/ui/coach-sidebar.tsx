@@ -4,6 +4,7 @@
 // Renders as a collapsible right-side panel on lg+ screens, hidden on mobile
 
 import { useState, useRef, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { Bot, Send, Sparkles, Zap, Loader2, ChevronRight, X, MessageSquare } from 'lucide-react'
 
 interface CoachMessage {
@@ -17,6 +18,11 @@ export function CoachSidebar() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const pathname = usePathname()
+
+  // Extract propertyId from URL if on a property detail page
+  const propertyIdMatch = pathname?.match(/\/inventory\/([^/]+)$/)
+  const propertyId = propertyIdMatch ? propertyIdMatch[1] : null
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -34,7 +40,11 @@ export function CoachSidebar() {
       const res = await fetch('/api/ai/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({
+          messages: newMessages,
+          propertyId: propertyId ?? undefined,
+          currentRoute: pathname ?? undefined,
+        }),
       })
       const data = await res.json()
       if (data.reply) {
@@ -84,13 +94,17 @@ export function CoachSidebar() {
                 <p className="text-[13px] text-txt-secondary mb-1">Ask questions or give commands</p>
 
                 <div className="mt-6 text-left">
-                  <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2">Coaching</p>
+                  <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2">{propertyId ? 'This Property' : 'Coaching'}</p>
                   <div className="space-y-2">
-                    {[
+                    {(propertyId ? [
+                      'Analyze this deal',
+                      'What should my offer be?',
+                      'Write a follow-up script for this seller',
+                    ] : [
                       'How do I handle price objections?',
                       'Tips for building rapport quickly',
                       'What should I focus on this week?',
-                    ].map(q => (
+                    ]).map(q => (
                       <button
                         key={q}
                         onClick={() => send(q)}
@@ -106,11 +120,15 @@ export function CoachSidebar() {
                 <div className="mt-5 text-left">
                   <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2">Actions</p>
                   <div className="space-y-2">
-                    {[
+                    {(propertyId ? [
+                      'What comps should I pull?',
+                      'Draft a deal blast message',
+                      'Suggest a counter-offer strategy',
+                    ] : [
                       'Send SMS to recent contact',
                       'Create follow-up task for tomorrow',
                       'Add note to last call contact',
-                    ].map(a => (
+                    ]).map(a => (
                       <button
                         key={a}
                         onClick={() => send(a)}

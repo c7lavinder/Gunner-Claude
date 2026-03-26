@@ -324,6 +324,7 @@ model PropertySeller {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   seller     Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   isPrimary  Boolean  @default(false) @map("is_primary")
+  role       String   @default("Seller") @map("role")
 
   @@id([propertyId, sellerId])
   @@map("property_sellers")
@@ -826,12 +827,15 @@ model OutreachLog {
   userId     String   @map("user_id")
   user       User     @relation("OutreachLogUser", fields: [userId], references: [id])
 
-  type           String   // send, offer, showing
-  channel        String   // sms, email, call, in_person
-  recipientName  String   @map("recipient_name")
-  recipientContact String @map("recipient_contact")
-  notes          String?  @db.Text
-  loggedAt       DateTime @default(now()) @map("logged_at")
+  type             String   // send, offer, showing
+  channel          String   // sms, email, call, in_person
+  recipientName    String   @map("recipient_name")
+  recipientContact String   @map("recipient_contact")
+  ghlContactId     String?  @map("ghl_contact_id")
+  notes            String?  @db.Text
+  offerAmount      Float?   @map("offer_amount")
+  showingDate      DateTime? @map("showing_date")
+  loggedAt         DateTime @default(now()) @map("logged_at")
 
   @@map("outreach_logs")
 }

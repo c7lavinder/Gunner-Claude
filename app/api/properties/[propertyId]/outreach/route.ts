@@ -25,7 +25,10 @@ export async function GET(
         channel: l.channel,
         recipientName: l.recipientName,
         recipientContact: l.recipientContact,
+        ghlContactId: l.ghlContactId,
         notes: l.notes,
+        offerAmount: l.offerAmount,
+        showingDate: l.showingDate?.toISOString() ?? null,
         loggedAt: l.loggedAt.toISOString(),
         loggedByName: l.user.name,
       })),
@@ -43,9 +46,9 @@ export async function POST(
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { type, channel, recipientName, recipientContact, notes } = await req.json()
-    if (!type || !channel || !recipientName) {
-      return NextResponse.json({ error: 'type, channel, and recipientName required' }, { status: 400 })
+    const { type, channel, recipientName, recipientContact, ghlContactId, notes, offerAmount, showingDate } = await req.json()
+    if (!type || !recipientName) {
+      return NextResponse.json({ error: 'type and recipientName required' }, { status: 400 })
     }
 
     const log = await db.outreachLog.create({
@@ -54,10 +57,13 @@ export async function POST(
         propertyId: params.propertyId,
         userId: session.userId,
         type,
-        channel,
+        channel: channel ?? (type === 'offer' ? 'offer' : type === 'showing' ? 'in_person' : 'sms'),
         recipientName,
         recipientContact: recipientContact ?? '',
+        ghlContactId: ghlContactId ?? null,
         notes: notes ?? null,
+        offerAmount: offerAmount ? parseFloat(offerAmount) : null,
+        showingDate: showingDate ? new Date(showingDate) : null,
       },
     })
 

@@ -84,6 +84,8 @@ export default async function PropertyDetailPage({
           phone: ps.seller.phone,
           email: ps.seller.email,
           isPrimary: ps.isPrimary,
+          role: ps.role,
+          ghlContactId: ps.seller.ghlContactId,
         })),
         assignedTo: property.assignedTo,
         calls: property.calls.map((c) => ({

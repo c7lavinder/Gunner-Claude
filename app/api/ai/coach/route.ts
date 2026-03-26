@@ -12,6 +12,8 @@ const schema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })).min(1),
+  propertyId: z.string().optional(),
+  currentRoute: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -28,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
 
   try {
-    const reply = await getCoachResponse(tenantId, userId, userRole, userName, parsed.data.messages)
+    const reply = await getCoachResponse(tenantId, userId, userRole, userName, parsed.data.messages, parsed.data.propertyId)
     return NextResponse.json({ reply })
   } catch (err) {
     console.error('[AI Coach] Error:', err)

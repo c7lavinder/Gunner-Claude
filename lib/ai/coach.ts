@@ -124,6 +124,7 @@ export async function getCoachResponse(
   userRole: UserRole,
   userName: string,
   messages: CoachMessage[],
+  propertyId?: string,
 ): Promise<string> {
   const now = new Date()
   const weekAgo = subDays(now, 7)
@@ -160,6 +161,48 @@ export async function getCoachResponse(
     ? Math.round(weekCalls.reduce((s, c) => s + (c.score ?? 0), 0) / weekCalls.length)
     : null
 
+  // Fetch current property context if on a property page
+  let propertyContext = ''
+  if (propertyId) {
+    try {
+      const prop = await db.property.findUnique({
+        where: { id: propertyId, tenantId },
+        include: {
+          sellers: { include: { seller: true }, where: { isPrimary: true }, take: 1 },
+          assignedTo: { select: { name: true } },
+          market: { select: { name: true } },
+          _count: { select: { calls: true, tasks: true } },
+        },
+      })
+      if (prop) {
+        const fmt = (v: unknown) => v != null ? `$${Number(v).toLocaleString()}` : 'N/A'
+        propertyContext = `
+CURRENT PROPERTY (user is viewing this property right now):
+- Address: ${prop.address}, ${prop.city}, ${prop.state} ${prop.zip}
+- Status: ${prop.status}
+- Market: ${prop.market?.name ?? 'Unknown'}
+- Assigned to: ${prop.assignedTo?.name ?? 'Unassigned'}
+- Seller: ${prop.sellers[0]?.seller.name ?? 'No seller linked'}
+- Asking Price: ${fmt(prop.askingPrice)}
+- ARV: ${fmt(prop.arv)}
+- MAO: ${fmt(prop.mao)}
+- Contract Price: ${fmt(prop.contractPrice)}
+- Offer Price: ${fmt(prop.offerPrice)}
+- Assignment Fee: ${fmt(prop.assignmentFee)}
+- Repair Cost: ${fmt(prop.repairCost)}
+- Wholesale Price: ${fmt(prop.wholesalePrice)}
+- Beds: ${prop.beds ?? 'N/A'} | Baths: ${prop.baths ?? 'N/A'} | Sqft: ${prop.sqft ?? 'N/A'} | Built: ${prop.yearBuilt ?? 'N/A'}
+- Property Type: ${prop.propertyType ?? 'N/A'} | Occupancy: ${prop.occupancy ?? 'N/A'}
+- Days on market: ${Math.floor((Date.now() - prop.createdAt.getTime()) / 86400000)}
+- Calls: ${prop._count.calls} | Tasks: ${prop._count.tasks}
+${prop.description ? `- Description: ${prop.description.slice(0, 200)}` : ''}
+${prop.internalNotes ? `- Internal Notes: ${prop.internalNotes.slice(0, 200)}` : ''}
+
+When the user asks about "this property" or "this deal", they mean the property above. Use these numbers for analysis.`
+      }
+    } catch {}
+  }
+
   const systemPrompt = `You are Gunner, an elite AI coach for real estate wholesaling teams.
 
 You are talking with ${userName}, who is a ${formatRole(userRole)} on their wholesaling team.
@@ -177,6 +220,7 @@ ${weekAvg !== null ? `- This week avg: ${weekAvg}/100 across ${weekCalls.length}
 ${activeTasks > 0 ? `- ${activeTasks} open tasks` : '- No open tasks'}
 ${recentProperties > 0 ? `- ${recentProperties} active properties assigned` : ''}
 ${xpRecord ? `- Level ${xpRecord.level} (${xpRecord.totalXp} total XP, +${xpRecord.weeklyXp} this week)` : ''}
+${propertyContext}
 
 ${recentCalls.length > 0 ? `RECENT CALL HISTORY:
 ${recentCalls.map((c, i) => {
