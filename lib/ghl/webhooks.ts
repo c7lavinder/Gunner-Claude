@@ -453,11 +453,12 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       'acquisition.contract': 'UNDER_CONTRACT',
       'acquisition.closed': 'SOLD',
       'disposition.new_deal': 'IN_DISPOSITION',
-      'disposition.pushed_out': 'IN_DISPOSITION',
-      'disposition.offers_received': 'IN_DISPOSITION',
-      'disposition.contracted': 'UNDER_CONTRACT',
-      'disposition.closed': 'SOLD',
-      'longterm.follow_up': 'CONTACTED',
+      'disposition.pushed_out': 'DISPO_PUSHED',
+      'disposition.offers_received': 'DISPO_OFFERS',
+      'disposition.contracted': 'DISPO_CONTRACTED',
+      'disposition.closed': 'DISPO_CLOSED',
+      'longterm.follow_up': 'FOLLOW_UP',
+      // SOLD maps to DEAD per business rule (sold = done = dead pipeline)
       'longterm.dead': 'DEAD',
     }
 

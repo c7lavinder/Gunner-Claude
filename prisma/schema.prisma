@@ -295,8 +295,15 @@ enum PropertyStatus {
   APPOINTMENT_COMPLETED
   OFFER_MADE
   UNDER_CONTRACT
+  // Disposition pipeline stages
   IN_DISPOSITION
+  DISPO_PUSHED
+  DISPO_OFFERS
+  DISPO_CONTRACTED
+  DISPO_CLOSED
+  // Terminal + long-term
   SOLD
+  FOLLOW_UP
   DEAD
 
   @@map("property_status")

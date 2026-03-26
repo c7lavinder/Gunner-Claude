@@ -12,26 +12,30 @@ export const GHL_STAGE_MAP: Record<string, AppStage> = {
   'Warm Leads(2)':               'acquisition.new_lead',
   'Hot Leads(2)':                'acquisition.new_lead',
   'Pending Apt(3)':              'acquisition.appt_set',
+  'Pending Apt (3)':             'acquisition.appt_set',
   'Walkthrough Apt Scheduled':   'acquisition.appt_set',
+  'Walkthrough Apt Scheduled (3)': 'acquisition.appt_set',
   'Offer Apt Scheduled (3)':     'acquisition.appt_set',
+  'Offer Apt Scheduled(3)':      'acquisition.appt_set',
   'Made Offer (4)':              'acquisition.offer_made',
   'Under Contract (5)':          'acquisition.contract',
   'Purchased (6)':               'acquisition.closed',
-  'SOLD':                        'acquisition.closed',
+  'SOLD':                        'longterm.dead',
   '1 Month Follow Up':           'longterm.follow_up',
   '4 Month Follow Up':           'longterm.follow_up',
   '1 Year Follow Up':            'longterm.follow_up',
-  'Ghosted Lead':                'longterm.dead',
+  'Ghosted Lead':                'longterm.follow_up',
   'Agreement not closed':        'longterm.dead',
   'DO NOT WANT':                 'longterm.dead',
 
   // ─── Dispo Pipeline (Disposition) ────────────────────────────────
   'New deal':                    'disposition.new_deal',
-  'Clear to Send Out':           'disposition.pushed_out',
+  'Clear to Send Out':           'disposition.new_deal',
   'Sent to buyers':              'disposition.pushed_out',
   'Offers Received':             'disposition.offers_received',
-  '<1 Day — Need to Terminate':  'disposition.offers_received',
-  'With JV Partner':             'disposition.contracted',
+  '<1 Day — Need to Terminate':  'disposition.pushed_out',
+  '<1 Day - Need to Terminate':  'disposition.pushed_out',
+  'With JV Partner':             'disposition.pushed_out',
   'UC W/ Buyer':                 'disposition.contracted',
   'Working w/ Title':            'disposition.contracted',
   'Closed':                      'disposition.closed',
@@ -44,8 +48,7 @@ export const GHL_STAGE_MAP: Record<string, AppStage> = {
   // '1 Year Follow Up' already mapped above
   'Purchased':                   'acquisition.closed',
   'Agreement Not Closed':        'longterm.dead',
-  // 'SOLD' already mapped above
-  'Ghosted':                     'longterm.dead',
+  'Ghosted':                     'longterm.follow_up',
   'Trash':                       'longterm.dead',
 }
 
@@ -64,14 +67,15 @@ export function getAppStage(ghlStageName: string): AppStage {
   }
 
   // Keyword fallback
-  if (lower.includes('follow up') || lower.includes('followup')) return 'longterm.follow_up'
-  if (lower.includes('ghost') || lower.includes('trash') || lower.includes('dead') || lower.includes('do not')) return 'longterm.dead'
+  if (lower.includes('follow up') || lower.includes('followup') || lower.includes('ghost')) return 'longterm.follow_up'
+  if (lower.includes('trash') || lower.includes('dead') || lower.includes('do not') || lower.includes('agreement not')) return 'longterm.dead'
+  if (lower.includes('sold')) return 'longterm.dead'
   if (lower.includes('contract') || lower.includes('uc ')) return 'acquisition.contract'
   if (lower.includes('offer')) return 'acquisition.offer_made'
-  if (lower.includes('apt') || lower.includes('appt') || lower.includes('walkthrough')) return 'acquisition.appt_set'
-  if (lower.includes('sold') || lower.includes('closed') || lower.includes('purchased')) return 'acquisition.closed'
-  if (lower.includes('dispo') || lower.includes('new deal')) return 'disposition.new_deal'
-  if (lower.includes('buyer') || lower.includes('sent to')) return 'disposition.pushed_out'
+  if (lower.includes('apt') || lower.includes('appt') || lower.includes('walkthrough') || lower.includes('pending')) return 'acquisition.appt_set'
+  if (lower.includes('closed') || lower.includes('purchased')) return 'acquisition.closed'
+  if (lower.includes('dispo') || lower.includes('new deal') || lower.includes('clear to send')) return 'disposition.new_deal'
+  if (lower.includes('buyer') || lower.includes('sent to') || lower.includes('jv partner') || lower.includes('terminate')) return 'disposition.pushed_out'
 
   return 'acquisition.new_lead'
 }

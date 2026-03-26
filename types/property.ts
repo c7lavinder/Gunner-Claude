@@ -21,14 +21,22 @@ export type BuyerTier = 'priority' | 'qualified' | 'jv' | 'unqualified'
 
 // Maps DB PropertyStatus enum to our AppStage system
 export const STATUS_TO_APP_STAGE: Record<string, AppStage> = {
+  // Acquisition pipeline
   NEW_LEAD: 'acquisition.new_lead',
   CONTACTED: 'acquisition.new_lead',
   APPOINTMENT_SET: 'acquisition.appt_set',
   APPOINTMENT_COMPLETED: 'acquisition.appt_set',
   OFFER_MADE: 'acquisition.offer_made',
   UNDER_CONTRACT: 'acquisition.contract',
-  IN_DISPOSITION: 'disposition.new_deal',
   SOLD: 'acquisition.closed',
+  // Disposition pipeline
+  IN_DISPOSITION: 'disposition.new_deal',
+  DISPO_PUSHED: 'disposition.pushed_out',
+  DISPO_OFFERS: 'disposition.offers_received',
+  DISPO_CONTRACTED: 'disposition.contracted',
+  DISPO_CLOSED: 'disposition.closed',
+  // Long-term
+  FOLLOW_UP: 'longterm.follow_up',
   DEAD: 'longterm.dead',
 }
 
