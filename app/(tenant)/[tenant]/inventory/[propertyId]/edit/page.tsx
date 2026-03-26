@@ -62,6 +62,7 @@ export default async function PropertyEditPage({
         repairCost: property.repairCost?.toString() ?? '',
         wholesalePrice: property.wholesalePrice?.toString() ?? '',
         assignedToId: property.assignedToId ?? '',
+        ghlContactId: property.ghlContactId ?? '',
         sellerName: property.sellers[0]?.seller.name ?? '',
         sellerPhone: property.sellers[0]?.seller.phone ?? '',
         sellerEmail: property.sellers[0]?.seller.email ?? '',

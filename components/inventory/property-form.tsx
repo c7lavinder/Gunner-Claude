@@ -2,7 +2,7 @@
 // components/inventory/property-form.tsx
 // Shared form for creating and editing properties
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Loader2 } from 'lucide-react'
@@ -70,6 +70,7 @@ interface PropertyFormData {
   repairCost: string
   wholesalePrice: string
   assignedToId: string
+  ghlContactId: string
   sellerName: string
   sellerPhone: string
   sellerEmail: string
@@ -334,23 +335,28 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
           </div>
         </div>
 
-        {/* Seller */}
+        {/* GHL Contact (required) */}
         <div className={sectionCls}>
-          <h2 className="text-ds-label font-medium text-txt-primary">Seller info</h2>
-          <div>
-            <label className={labelCls}>Seller name</label>
-            <input value={form.sellerName} onChange={update('sellerName')} placeholder="Robert Smith" className={inputCls} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Phone</label>
-              <input value={form.sellerPhone} onChange={update('sellerPhone')} placeholder="555-0101" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Email</label>
-              <input value={form.sellerEmail} onChange={update('sellerEmail')} type="email" placeholder="seller@email.com" className={inputCls} />
-            </div>
-          </div>
+          <h2 className="text-ds-label font-medium text-txt-primary">Linked Contact *</h2>
+          <p className="text-ds-fine text-txt-muted mb-2">Search GHL contacts to link to this property. GHL is the source of truth for contact info.</p>
+          <GHLContactSearch
+            value={form.ghlContactId}
+            selectedName={form.sellerName}
+            selectedPhone={form.sellerPhone}
+            selectedEmail={form.sellerEmail}
+            onChange={(contact) => {
+              setForm(prev => ({
+                ...prev,
+                ghlContactId: contact?.id ?? '',
+                sellerName: contact?.name ?? '',
+                sellerPhone: contact?.phone ?? '',
+                sellerEmail: contact?.email ?? '',
+              }))
+            }}
+          />
+          {!form.ghlContactId && mode === 'create' && (
+            <p className="text-ds-fine text-semantic-red mt-1">A GHL contact is required to save the property</p>
+          )}
         </div>
 
         {/* Assignment */}
@@ -385,7 +391,7 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
           </Link>
           <button
             type="submit"
-            disabled={saving || !form.address || !form.city || !form.state}
+            disabled={saving || !form.address || !form.city || !form.state || (mode === 'create' && !form.ghlContactId)}
             className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-6 py-2.5 rounded-[10px] transition-colors"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -393,6 +399,86 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+// ─── GHL Contact Search ──────────────────────────────────────────────────────
+
+function GHLContactSearch({ value, selectedName, selectedPhone, selectedEmail, onChange }: {
+  value: string
+  selectedName: string
+  selectedPhone: string
+  selectedEmail: string
+  onChange: (contact: { id: string; name: string; phone: string; email: string } | null) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Array<{ id: string; name: string; phone: string | null; email: string | null; address: string }>>([])
+  const [searching, setSearching] = useState(false)
+  const [open, setOpen] = useState(false)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  function search(q: string) {
+    setQuery(q)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (q.length < 2) { setResults([]); return }
+    timerRef.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await fetch(`/api/ghl/contacts?q=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        setResults(data.contacts ?? [])
+        setOpen(true)
+      } catch { setResults([]) }
+      setSearching(false)
+    }, 300)
+  }
+
+  if (value && selectedName) {
+    return (
+      <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] p-3 flex items-center gap-3">
+        <div className="flex-1">
+          <p className="text-ds-body font-medium text-txt-primary">{selectedName}</p>
+          <div className="flex gap-3 text-ds-fine text-txt-secondary">
+            {selectedPhone && <span>{selectedPhone}</span>}
+            {selectedEmail && <span>{selectedEmail}</span>}
+          </div>
+        </div>
+        <button type="button" onClick={() => onChange(null)} className="text-ds-fine text-txt-muted hover:text-semantic-red transition-colors">
+          Change
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={query}
+        onChange={(e) => search(e.target.value)}
+        placeholder="Search by name, phone, or email..."
+        className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none"
+      />
+      {searching && <Loader2 size={14} className="absolute right-3 top-2.5 animate-spin text-txt-muted" />}
+      {open && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] shadow-lg z-20 max-h-[240px] overflow-y-auto">
+          {results.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => { onChange({ id: c.id, name: c.name, phone: c.phone ?? '', email: c.email ?? '' }); setOpen(false); setQuery('') }}
+              className="w-full text-left px-3 py-2.5 hover:bg-surface-secondary transition-colors border-b border-[rgba(0,0,0,0.04)] last:border-b-0"
+            >
+              <p className="text-ds-body font-medium text-txt-primary">{c.name}</p>
+              <div className="flex gap-3 text-ds-fine text-txt-muted">
+                {c.phone && <span>{c.phone}</span>}
+                {c.email && <span>{c.email}</span>}
+              </div>
+              {c.address && <p className="text-ds-fine text-txt-muted">{c.address}</p>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

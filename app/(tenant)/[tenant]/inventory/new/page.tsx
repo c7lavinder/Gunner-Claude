@@ -43,6 +43,7 @@ export default async function NewPropertyPage({
         repairCost: '',
         wholesalePrice: '',
         assignedToId: session.userId,
+        ghlContactId: '',
         sellerName: '',
         sellerPhone: '',
         sellerEmail: '',
