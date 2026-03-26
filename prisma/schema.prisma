@@ -201,6 +201,30 @@ model Property {
   ghlPipelineId    String? @map("ghl_pipeline_id")
   ghlPipelineStage String? @map("ghl_pipeline_stage")
 
+  // Property details
+  beds         Int?
+  baths        Int?
+  sqft         Int?
+  yearBuilt    Int?     @map("year_built")
+  lotSize      String?  @map("lot_size")
+  propertyType String?  @map("property_type")  // House, Land, Multi-Family, Commercial, Other
+  occupancy    String?                          // Vacant, Owner Occupied, Tenant Occupied, Unknown
+  description  String?  @db.Text
+  internalNotes String? @db.Text @map("internal_notes")
+
+  // Extended financials
+  offerPrice     Decimal? @db.Decimal(12, 2) @map("offer_price")
+  repairCost     Decimal? @db.Decimal(12, 2) @map("repair_cost")
+  wholesalePrice Decimal? @db.Decimal(12, 2) @map("wholesale_price")
+
+  // Tracking dates
+  lastOfferDate      DateTime? @map("last_offer_date")
+  lastContactedDate  DateTime? @map("last_contacted_date")
+
+  // Market assignment
+  marketId String? @map("market_id")
+  market   Market? @relation(fields: [marketId], references: [id])
+
   // Enrichment (Phase 2 — Zillow, county records)
   zillowData   Json? @map("zillow_data")
   countyData   Json? @map("county_data")
@@ -703,10 +727,11 @@ model Buyer {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  name     String
-  phone    String?
-  email    String?
-  company  String?
+  name           String
+  phone          String?
+  email          String?
+  company        String?
+  ghlContactId   String? @map("ghl_contact_id")
   markets  Json     @default("[]") // ["Dallas", "Fort Worth"]
   criteria Json     @default("{}") // { minARV: 100000, maxARV: 500000, types: ["SFR"] }
   tags     Json     @default("[]") // ["cash buyer", "fix and flip"]
@@ -776,6 +801,8 @@ model Market {
 
   name     String           // e.g. "Nashville, TN"
   zipCodes String[] @default([]) @map("zip_codes") // ["37201", "37202", ...]
+
+  properties Property[]
 
   @@map("markets")
 }

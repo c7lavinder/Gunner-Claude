@@ -18,7 +18,13 @@ interface PropertyDetail {
   id: string; address: string; city: string; state: string; zip: string; status: string
   arv: string | null; askingPrice: string | null; mao: string | null
   contractPrice: string | null; assignmentFee: string | null
+  offerPrice: string | null; repairCost: string | null; wholesalePrice: string | null
   ghlContactId: string | null; createdAt: string
+  beds: number | null; baths: number | null; sqft: number | null
+  yearBuilt: number | null; lotSize: string | null
+  propertyType: string | null; occupancy: string | null
+  description: string | null; internalNotes: string | null
+  lastOfferDate: string | null; lastContactedDate: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
@@ -204,8 +210,9 @@ function RecordOfferModal({ propertyId, tenantSlug, onClose }: { propertyId: str
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          askingPrice: offerAmount,
+          offerPrice: offerAmount,
           status: 'OFFER_MADE',
+          lastOfferDate: new Date().toISOString(),
         }),
       })
       if (res.ok) {
@@ -345,12 +352,21 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
   const [smsText, setSmsText] = useState('')
   const [noteText, setNoteText] = useState('')
 
+  // Compute spread
+  const spread = property.arv && property.contractPrice
+    ? Number(property.arv) - Number(property.contractPrice)
+    : null
+
   const financials = [
     { label: 'CONTRACT', value: fmt(property.contractPrice), color: 'text-txt-primary' },
     { label: 'ASKING', value: fmt(property.askingPrice), color: 'text-txt-primary' },
+    { label: 'OFFER PRICE', value: fmt(property.offerPrice), color: 'text-txt-primary' },
     { label: 'ARV', value: fmt(property.arv), color: 'text-semantic-green' },
     { label: 'MAO', value: fmt(property.mao), color: 'text-semantic-amber' },
+    { label: 'REPAIR COST', value: fmt(property.repairCost), color: 'text-semantic-red' },
     { label: 'ASSIGNMENT FEE', value: fmt(property.assignmentFee), color: 'text-semantic-blue' },
+    { label: 'WHOLESALE', value: fmt(property.wholesalePrice), color: 'text-semantic-blue' },
+    { label: 'EST. SPREAD', value: spread != null ? `$${spread.toLocaleString()}` : null, color: spread && spread > 0 ? 'text-semantic-green' : 'text-semantic-red' },
     { label: 'DAYS ON MARKET', value: `${dom}`, color: domColor },
   ]
 
@@ -365,6 +381,30 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
           </div>
         ))}
       </div>
+
+      {/* Property details */}
+      {(property.beds || property.baths || property.sqft || property.propertyType || property.description) && (
+        <div className="bg-surface-secondary rounded-[10px] px-4 py-3">
+          <div className="flex flex-wrap gap-4 text-ds-fine">
+            {property.propertyType && <span><span className="text-txt-muted">Type:</span> <span className="text-txt-primary font-medium">{property.propertyType}</span></span>}
+            {property.beds && <span><span className="text-txt-muted">Beds:</span> <span className="text-txt-primary font-medium">{property.beds}</span></span>}
+            {property.baths && <span><span className="text-txt-muted">Baths:</span> <span className="text-txt-primary font-medium">{property.baths}</span></span>}
+            {property.sqft && <span><span className="text-txt-muted">Sqft:</span> <span className="text-txt-primary font-medium">{property.sqft.toLocaleString()}</span></span>}
+            {property.yearBuilt && <span><span className="text-txt-muted">Built:</span> <span className="text-txt-primary font-medium">{property.yearBuilt}</span></span>}
+            {property.lotSize && <span><span className="text-txt-muted">Lot:</span> <span className="text-txt-primary font-medium">{property.lotSize}</span></span>}
+            {property.occupancy && <span><span className="text-txt-muted">Occupancy:</span> <span className="text-txt-primary font-medium">{property.occupancy}</span></span>}
+          </div>
+          {property.description && <p className="text-ds-fine text-txt-secondary mt-2">{property.description}</p>}
+        </div>
+      )}
+
+      {/* Internal notes */}
+      {property.internalNotes && (
+        <div className="bg-amber-50 border-[0.5px] border-amber-200 rounded-[10px] px-4 py-3">
+          <p className="text-[9px] font-semibold text-amber-700 uppercase tracking-wider mb-1">Internal Notes</p>
+          <p className="text-ds-fine text-amber-900">{property.internalNotes}</p>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Left: seller + assigned + actions */}
@@ -912,6 +952,32 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
   const [generating, setGenerating] = useState(false)
   const [blasts, setBlasts] = useState<Record<string, { emailSubject: string; emailBody: string; smsBody: string }>>({})
   const [expandedTier, setExpandedTier] = useState<string | null>(null)
+  const [sendingTier, setSendingTier] = useState<string | null>(null)
+  const [sendResult, setSendResult] = useState<string | null>(null)
+
+  async function sendToTier(tier: string, channel: 'sms' | 'email') {
+    const content = blasts[tier]
+    if (!content) return
+    setSendingTier(`${tier}-${channel}`)
+    setSendResult(null)
+    try {
+      const res = await fetch(`/api/properties/${property.id}/blast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send',
+          tier,
+          channel,
+          message: channel === 'email' ? content.emailBody : content.smsBody,
+          subject: content.emailSubject,
+        }),
+      })
+      const data = await res.json()
+      setSendResult(res.ok ? `Sent to ${data.sentTo} buyers${data.skipped ? `, ${data.skipped} skipped` : ''}` : 'Send failed')
+    } catch { setSendResult('Send failed') }
+    setSendingTier(null)
+    setTimeout(() => setSendResult(null), 5000)
+  }
 
   function toggleTier(tier: string) {
     setSelectedTiers(prev => {
@@ -1005,16 +1071,24 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
                       <p className="text-[9px] font-semibold text-txt-muted uppercase mb-1">Email</p>
                       <input value={content.emailSubject} readOnly className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary mb-1.5 border-[0.5px] border-[rgba(0,0,0,0.06)]" />
                       <textarea value={content.emailBody} readOnly rows={6} className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)]" />
-                      <button className="mt-1.5 w-full bg-semantic-blue hover:bg-semantic-blue/90 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
-                        Send Email to Tier
+                      <button
+                        onClick={() => sendToTier(tier, 'email')}
+                        disabled={sendingTier === `${tier}-email`}
+                        className="mt-1.5 w-full bg-semantic-blue hover:bg-semantic-blue/90 disabled:opacity-50 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors"
+                      >
+                        {sendingTier === `${tier}-email` ? 'Sending...' : 'Send Email to Tier'}
                       </button>
                     </div>
                     {/* SMS */}
                     <div>
                       <p className="text-[9px] font-semibold text-txt-muted uppercase mb-1">SMS <span className="text-txt-muted font-normal">({content.smsBody.length}/160)</span></p>
                       <textarea value={content.smsBody} readOnly rows={2} className="w-full bg-surface-secondary rounded-[8px] px-3 py-2 text-ds-fine text-txt-secondary resize-none border-[0.5px] border-[rgba(0,0,0,0.06)]" />
-                      <button className="mt-1.5 w-full bg-semantic-green hover:bg-semantic-green/90 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
-                        Send SMS to Tier
+                      <button
+                        onClick={() => sendToTier(tier, 'sms')}
+                        disabled={sendingTier === `${tier}-sms`}
+                        className="mt-1.5 w-full bg-semantic-green hover:bg-semantic-green/90 disabled:opacity-50 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors"
+                      >
+                        {sendingTier === `${tier}-sms` ? 'Sending...' : 'Send SMS to Tier'}
                       </button>
                     </div>
                   </div>
@@ -1025,6 +1099,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         </div>
       )}
 
+      {sendResult && <p className="text-ds-fine text-gunner-red text-center font-medium">{sendResult}</p>}
       <p className="text-[9px] text-txt-muted text-center">System learns from your edits to improve future blasts</p>
     </div>
   )

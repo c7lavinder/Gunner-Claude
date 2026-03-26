@@ -66,10 +66,22 @@ interface PropertyFormData {
   mao: string
   contractPrice: string
   assignmentFee: string
+  offerPrice: string
+  repairCost: string
+  wholesalePrice: string
   assignedToId: string
   sellerName: string
   sellerPhone: string
   sellerEmail: string
+  beds: string
+  baths: string
+  sqft: string
+  yearBuilt: string
+  lotSize: string
+  propertyType: string
+  occupancy: string
+  description: string
+  internalNotes: string
 }
 
 interface Props {
@@ -116,10 +128,22 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
           mao: form.mao || null,
           contractPrice: form.contractPrice || null,
           assignmentFee: form.assignmentFee || null,
+          offerPrice: form.offerPrice || null,
+          repairCost: form.repairCost || null,
+          wholesalePrice: form.wholesalePrice || null,
           assignedToId: form.assignedToId || null,
           sellerName: form.sellerName || null,
           sellerPhone: form.sellerPhone || null,
           sellerEmail: form.sellerEmail || null,
+          beds: form.beds ? parseInt(form.beds) : null,
+          baths: form.baths ? parseInt(form.baths) : null,
+          sqft: form.sqft ? parseInt(form.sqft) : null,
+          yearBuilt: form.yearBuilt ? parseInt(form.yearBuilt) : null,
+          lotSize: form.lotSize || null,
+          propertyType: form.propertyType || null,
+          occupancy: form.occupancy || null,
+          description: form.description || null,
+          internalNotes: form.internalNotes || null,
         }),
       })
 
@@ -231,6 +255,76 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
               <label className={labelCls}>Assignment fee ($)</label>
               <input value={form.assignmentFee} onChange={update('assignmentFee')} type="number" placeholder="12000" className={inputCls} />
             </div>
+            <div>
+              <label className={labelCls}>Offer price ($)</label>
+              <input value={form.offerPrice} onChange={update('offerPrice')} type="number" placeholder="85000" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Repair cost ($)</label>
+              <input value={form.repairCost} onChange={update('repairCost')} type="number" placeholder="25000" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Wholesale price ($)</label>
+              <input value={form.wholesalePrice} onChange={update('wholesalePrice')} type="number" placeholder="110000" className={inputCls} />
+            </div>
+          </div>
+        </div>
+
+        {/* Property details */}
+        <div className={sectionCls}>
+          <h2 className="text-ds-label font-medium text-txt-primary">Property details</h2>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Beds</label>
+              <input value={form.beds} onChange={update('beds')} type="number" placeholder="3" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Baths</label>
+              <input value={form.baths} onChange={update('baths')} type="number" placeholder="2" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Sqft</label>
+              <input value={form.sqft} onChange={update('sqft')} type="number" placeholder="1450" className={inputCls} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Year built</label>
+              <input value={form.yearBuilt} onChange={update('yearBuilt')} type="number" placeholder="1985" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Lot size</label>
+              <input value={form.lotSize} onChange={update('lotSize')} placeholder="0.25 acres" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Property type</label>
+              <select value={form.propertyType} onChange={update('propertyType')} className={inputCls}>
+                <option value="">Select type</option>
+                <option value="House">House</option>
+                <option value="Land">Land</option>
+                <option value="Multi-Family">Multi-Family</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Occupancy</label>
+              <select value={form.occupancy} onChange={update('occupancy')} className={inputCls}>
+                <option value="">Select occupancy</option>
+                <option value="Vacant">Vacant</option>
+                <option value="Owner Occupied">Owner Occupied</option>
+                <option value="Tenant Occupied">Tenant Occupied</option>
+                <option value="Unknown">Unknown</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Description</label>
+            <textarea value={form.description} onChange={update('description')} placeholder="Property description..." rows={3} className={inputCls + ' resize-none'} />
+          </div>
+          <div>
+            <label className={labelCls}>Internal notes</label>
+            <textarea value={form.internalNotes} onChange={update('internalNotes')} placeholder="Team-only notes..." rows={2} className={inputCls + ' resize-none'} />
           </div>
         </div>
 

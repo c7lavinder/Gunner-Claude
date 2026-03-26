@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power } from 'lucide-react'
+import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power, MapPin } from 'lucide-react'
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
 import { GHLDropdown } from '@/components/ui/ghl-dropdown'
@@ -36,7 +36,7 @@ interface Rubric {
   id: string; name: string; role: string; callType: string | null; isDefault: boolean
 }
 
-type Tab = 'team' | 'integrations' | 'pipeline' | 'calls' | 'workflows'
+type Tab = 'team' | 'integrations' | 'pipeline' | 'calls' | 'workflows' | 'markets'
 
 export function SettingsClient({
   tenant, teamMembers, rubrics, callTypes, currentUserId, currentUserRole, canManage,
@@ -186,6 +186,7 @@ export function SettingsClient({
     { id: 'pipeline', label: 'Pipeline', icon: <GitBranch size={14} /> },
     { id: 'calls', label: 'Call config', icon: <Phone size={14} /> },
     { id: 'workflows', label: 'Workflows', icon: <Workflow size={14} /> },
+    { id: 'markets', label: 'Markets', icon: <MapPin size={14} /> },
   ]
 
   return (
@@ -479,6 +480,103 @@ export function SettingsClient({
 
       {/* ── Workflows tab ────────────────────────────────────────────── */}
       {tab === 'workflows' && <WorkflowsTab canManage={canManage} />}
+
+      {/* Markets */}
+      {tab === 'markets' && <MarketsTab />}
+    </div>
+  )
+}
+
+// ─── Markets Tab ─────────────────────────────────────────────────────────────
+
+function MarketsTab() {
+  const [markets, setMarkets] = useState<Array<{ id: string; name: string; zipCodes: string[] }>>([])
+  const [loading, setLoading] = useState(true)
+  const [newName, setNewName] = useState('')
+  const [newZips, setNewZips] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/markets').then(r => r.json()).then(d => { setMarkets(d.markets ?? []); setLoading(false) }).catch(() => setLoading(false))
+  }, [])
+
+  async function addMarket() {
+    if (!newName.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/markets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, zipCodes: newZips }),
+      })
+      const data = await res.json()
+      if (data.market) setMarkets(prev => [...prev, data.market])
+      setNewName(''); setNewZips('')
+    } catch {}
+    setSaving(false)
+  }
+
+  async function deleteMarket(id: string) {
+    try {
+      await fetch('/api/markets', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      setMarkets(prev => prev.filter(m => m.id !== id))
+    } catch {}
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5 space-y-4">
+        <h2 className="text-ds-label font-medium text-txt-primary">Markets</h2>
+        <p className="text-ds-fine text-txt-muted">Define markets by name and zip codes. Properties are auto-assigned to markets based on their zip code.</p>
+
+        {/* Existing markets */}
+        {loading ? (
+          <div className="py-4 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+        ) : markets.length === 0 ? (
+          <p className="text-ds-fine text-txt-muted py-4 text-center">No markets configured yet</p>
+        ) : (
+          <div className="space-y-2">
+            {markets.map(m => (
+              <div key={m.id} className="flex items-center gap-3 bg-surface-secondary rounded-[10px] px-4 py-3">
+                <MapPin size={14} className="text-gunner-red shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-ds-body font-medium text-txt-primary">{m.name}</p>
+                  <p className="text-ds-fine text-txt-muted">{m.zipCodes.length} zip codes</p>
+                </div>
+                <button onClick={() => deleteMarket(m.id)} className="text-txt-muted hover:text-semantic-red transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add market form */}
+        <div className="border-t border-[rgba(0,0,0,0.06)] pt-4 space-y-2">
+          <input
+            value={newName} onChange={e => setNewName(e.target.value)}
+            placeholder="Market name (e.g. Nashville, TN)"
+            className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none"
+          />
+          <textarea
+            value={newZips} onChange={e => setNewZips(e.target.value)}
+            placeholder="Zip codes (comma or newline separated)&#10;37201, 37202, 37203..."
+            rows={3}
+            className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none resize-none"
+          />
+          <button
+            onClick={addMarket}
+            disabled={!newName.trim() || saving}
+            className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold rounded-[10px] py-2.5 transition-colors"
+          >
+            {saving ? 'Saving...' : 'Add Market'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

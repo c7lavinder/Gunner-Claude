@@ -10,7 +10,7 @@ import { awardPropertyXP } from '@/lib/gamification/xp'
 const updateSchema = z.object({
   address: z.string().min(1).optional(),
   city: z.string().min(1).optional(),
-  state: z.string().length(2).optional(),
+  state: z.string().optional(),
   zip: z.string().optional(),
   status: z.string().optional(),
   arv: z.string().nullable().optional(),
@@ -18,10 +18,26 @@ const updateSchema = z.object({
   mao: z.string().nullable().optional(),
   contractPrice: z.string().nullable().optional(),
   assignmentFee: z.string().nullable().optional(),
+  offerPrice: z.string().nullable().optional(),
+  repairCost: z.string().nullable().optional(),
+  wholesalePrice: z.string().nullable().optional(),
   assignedToId: z.string().nullable().optional(),
   sellerName: z.string().nullable().optional(),
   sellerPhone: z.string().nullable().optional(),
   sellerEmail: z.string().nullable().optional(),
+  // Property details
+  beds: z.number().nullable().optional(),
+  baths: z.number().nullable().optional(),
+  sqft: z.number().nullable().optional(),
+  yearBuilt: z.number().nullable().optional(),
+  lotSize: z.string().nullable().optional(),
+  propertyType: z.string().nullable().optional(),
+  occupancy: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  internalNotes: z.string().nullable().optional(),
+  // Tracking dates
+  lastOfferDate: z.string().nullable().optional(),
+  lastContactedDate: z.string().nullable().optional(),
 })
 
 export async function PATCH(
@@ -46,7 +62,10 @@ export async function PATCH(
   const {
     address, city, state, zip, status,
     arv, askingPrice, mao, contractPrice, assignmentFee,
+    offerPrice, repairCost, wholesalePrice,
     assignedToId, sellerName, sellerPhone, sellerEmail,
+    beds, baths, sqft, yearBuilt, lotSize, propertyType, occupancy,
+    description, internalNotes, lastOfferDate, lastContactedDate,
   } = parsed.data
 
   try {
@@ -65,7 +84,21 @@ export async function PATCH(
           ...(mao !== undefined && { mao: mao ? parseFloat(mao) : null }),
           ...(contractPrice !== undefined && { contractPrice: contractPrice ? parseFloat(contractPrice) : null }),
           ...(assignmentFee !== undefined && { assignmentFee: assignmentFee ? parseFloat(assignmentFee) : null }),
+          ...(offerPrice !== undefined && { offerPrice: offerPrice ? parseFloat(offerPrice) : null }),
+          ...(repairCost !== undefined && { repairCost: repairCost ? parseFloat(repairCost) : null }),
+          ...(wholesalePrice !== undefined && { wholesalePrice: wholesalePrice ? parseFloat(wholesalePrice) : null }),
           ...(assignedToId !== undefined && { assignedToId: assignedToId ?? undefined }),
+          ...(beds !== undefined && { beds }),
+          ...(baths !== undefined && { baths }),
+          ...(sqft !== undefined && { sqft }),
+          ...(yearBuilt !== undefined && { yearBuilt }),
+          ...(lotSize !== undefined && { lotSize }),
+          ...(propertyType !== undefined && { propertyType }),
+          ...(occupancy !== undefined && { occupancy }),
+          ...(description !== undefined && { description }),
+          ...(internalNotes !== undefined && { internalNotes }),
+          ...(lastOfferDate !== undefined && { lastOfferDate: lastOfferDate ? new Date(lastOfferDate) : null }),
+          ...(lastContactedDate !== undefined && { lastContactedDate: lastContactedDate ? new Date(lastContactedDate) : null }),
         },
       })
 

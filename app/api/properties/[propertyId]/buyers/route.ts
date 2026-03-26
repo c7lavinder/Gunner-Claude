@@ -60,11 +60,47 @@ export async function GET(
     })
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
 
-    // Get all active buyers for this tenant
+    // Get local buyers + GHL buyer contacts
     const buyers = await db.buyer.findMany({
       where: { tenantId, isActive: true },
       orderBy: { name: 'asc' },
     })
+
+    // Also search GHL for contacts tagged as "buyer"
+    try {
+      const { getGHLClient } = await import('@/lib/ghl/client')
+      const ghl = await getGHLClient(tenantId)
+      const ghlResult = await ghl.searchContacts({ query: 'buyer', limit: 50 })
+      const existingPhones = new Set(buyers.map(b => b.phone).filter(Boolean))
+      const existingEmails = new Set(buyers.map(b => b.email?.toLowerCase()).filter(Boolean))
+
+      for (const c of ghlResult.contacts ?? []) {
+        // Dedup by phone or email
+        if (c.phone && existingPhones.has(c.phone)) continue
+        if (c.email && existingEmails.has(c.email.toLowerCase())) continue
+
+        const name = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim()
+        if (!name) continue
+
+        // Create a synthetic buyer entry from GHL contact
+        buyers.push({
+          id: c.id ?? `ghl-${c.phone ?? c.email}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          tenantId,
+          name,
+          phone: c.phone ?? null,
+          email: c.email ?? null,
+          company: null,
+          ghlContactId: c.id ?? null,
+          markets: c.city ? [c.city] : [],
+          criteria: {},
+          tags: c.tags ?? [],
+          notes: null,
+          isActive: true,
+        })
+      }
+    } catch { /* GHL search optional — continue with local buyers */ }
 
     // Score and sort
     const matched = buyers.map(b => {

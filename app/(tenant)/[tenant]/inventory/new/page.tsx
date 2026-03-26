@@ -39,10 +39,22 @@ export default async function NewPropertyPage({
         mao: '',
         contractPrice: '',
         assignmentFee: '',
+        offerPrice: '',
+        repairCost: '',
+        wholesalePrice: '',
         assignedToId: session.userId,
         sellerName: '',
         sellerPhone: '',
         sellerEmail: '',
+        beds: '',
+        baths: '',
+        sqft: '',
+        yearBuilt: '',
+        lotSize: '',
+        propertyType: '',
+        occupancy: '',
+        description: '',
+        internalNotes: '',
       }}
     />
   )

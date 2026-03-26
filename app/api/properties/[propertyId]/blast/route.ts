@@ -95,23 +95,22 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
 
     // Send blast to a specific tier
     if (action === 'send' && tier) {
+      const { message, channel, subject } = await req.json().catch(() => ({ message: '', channel: 'sms', subject: '' }))
+
       // Get matched buyers for this tier
       const buyers = await db.buyer.findMany({
         where: { tenantId, isActive: true },
       })
 
-      // Filter by tier tag
       const tierBuyers = buyers.filter(b => {
         const tags = (Array.isArray(b.tags) ? b.tags : []).map((t: unknown) => String(t).toLowerCase())
         if (tier === 'priority') return tags.some(t => t.includes('priority'))
         if (tier === 'qualified') return tags.some(t => t.includes('qualified') || t.includes('cash') || t.includes('verified'))
         if (tier === 'jv') return tags.some(t => t.includes('jv') || t.includes('partner'))
-        return true // unqualified = everyone else
+        return true
       })
 
       // Create blast record
-      const { message, channel } = await req.json().catch(() => ({ message: '', channel: 'sms' }))
-
       const blast = await db.dealBlast.create({
         data: {
           tenantId,
@@ -119,9 +118,45 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
           createdById: session.userId,
           channel: channel ?? 'sms',
           message: message ?? '',
-          status: 'sent',
-          sentAt: new Date(),
+          status: 'sending',
         },
+      })
+
+      // Actually send through GHL — serial to avoid rate limits
+      const { getGHLClient } = await import('@/lib/ghl/client')
+      const ghl = await getGHLClient(tenantId)
+      let sentCount = 0
+      let skippedCount = 0
+
+      for (const buyer of tierBuyers) {
+        const contactId = buyer.ghlContactId
+        if (!contactId) { skippedCount++; continue }
+
+        try {
+          if (channel === 'email' && subject && message) {
+            await ghl.sendEmail(contactId, subject, `<div>${message.replace(/\n/g, '<br>')}</div>`)
+          } else if (message) {
+            await ghl.sendSMS(contactId, message)
+          }
+          sentCount++
+
+          // Log recipient
+          await db.dealBlastRecipient.create({
+            data: { blastId: blast.id, buyerId: buyer.id },
+          })
+
+          // Small delay to avoid rate limits
+          await new Promise(r => setTimeout(r, 100))
+        } catch (err) {
+          console.error(`[Blast] Failed to send to buyer ${buyer.id}:`, err instanceof Error ? err.message : err)
+          skippedCount++
+        }
+      }
+
+      // Update blast status
+      await db.dealBlast.update({
+        where: { id: blast.id },
+        data: { status: 'sent', sentAt: new Date() },
       })
 
       await db.auditLog.create({
@@ -131,11 +166,11 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
           action: 'deal_blast.sent',
           source: 'USER',
           severity: 'INFO',
-          payload: { propertyId: params.propertyId, tier, buyerCount: tierBuyers.length },
+          payload: { propertyId: params.propertyId, tier, channel, sent: sentCount, skipped: skippedCount },
         },
       })
 
-      return NextResponse.json({ status: 'success', blastId: blast.id, sentTo: tierBuyers.length })
+      return NextResponse.json({ status: 'success', blastId: blast.id, sentTo: sentCount, skipped: skippedCount })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })

@@ -21,6 +21,8 @@ interface Property {
   callCount: number; taskCount: number
   ghlContactId: string | null
   leadSource: string | null
+  lastOfferDate: string | null
+  lastContactedDate: string | null
 }
 
 type ViewMode = 'cards' | 'table'
@@ -238,10 +240,14 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocati
             <div className="flex items-center text-ds-body text-txt-primary">{fmt(p.askingPrice)}</div>
             {/* Contract */}
             <div className="flex items-center text-ds-body text-txt-primary">{fmt(p.contractPrice)}</div>
-            {/* Last offer — placeholder */}
-            <div className="flex items-center text-ds-fine text-txt-muted">—</div>
-            {/* Last contacted — placeholder */}
-            <div className="flex items-center text-ds-fine text-txt-muted">—</div>
+            {/* Last offer */}
+            <div className="flex items-center text-ds-fine text-txt-muted">
+              {p.lastOfferDate ? formatDistanceToNow(new Date(p.lastOfferDate), { addSuffix: true }).replace('about ', '') : '—'}
+            </div>
+            {/* Last contacted */}
+            <div className="flex items-center text-ds-fine text-txt-muted">
+              {p.lastContactedDate ? formatDistanceToNow(new Date(p.lastContactedDate), { addSuffix: true }).replace('about ', '') : '—'}
+            </div>
             {/* DOM */}
             <div className={`flex items-center text-ds-fine font-medium ${domColor}`}>{dom}d</div>
             {/* Actions */}

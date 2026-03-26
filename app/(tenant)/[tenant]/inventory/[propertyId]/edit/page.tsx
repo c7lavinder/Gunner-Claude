@@ -58,10 +58,22 @@ export default async function PropertyEditPage({
         mao: property.mao?.toString() ?? '',
         contractPrice: property.contractPrice?.toString() ?? '',
         assignmentFee: property.assignmentFee?.toString() ?? '',
+        offerPrice: property.offerPrice?.toString() ?? '',
+        repairCost: property.repairCost?.toString() ?? '',
+        wholesalePrice: property.wholesalePrice?.toString() ?? '',
         assignedToId: property.assignedToId ?? '',
         sellerName: property.sellers[0]?.seller.name ?? '',
         sellerPhone: property.sellers[0]?.seller.phone ?? '',
         sellerEmail: property.sellers[0]?.seller.email ?? '',
+        beds: property.beds?.toString() ?? '',
+        baths: property.baths?.toString() ?? '',
+        sqft: property.sqft?.toString() ?? '',
+        yearBuilt: property.yearBuilt?.toString() ?? '',
+        lotSize: property.lotSize ?? '',
+        propertyType: property.propertyType ?? '',
+        occupancy: property.occupancy ?? '',
+        description: property.description ?? '',
+        internalNotes: property.internalNotes ?? '',
       }}
     />
   )

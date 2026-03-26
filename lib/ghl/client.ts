@@ -123,6 +123,27 @@ export class GHLClient {
     })
   }
 
+  async sendEmail(contactId: string, subject: string, html: string, emailFrom?: string) {
+    return this.request('POST', `/conversations/messages`, {
+      type: 'Email',
+      contactId,
+      subject,
+      html,
+      ...(emailFrom ? { emailFrom } : {}),
+    })
+  }
+
+  // ─── Contact Search ─────────────────────────────────────────────────────────
+
+  async searchContacts(params: { query?: string; limit?: number }) {
+    const queryParams = new URLSearchParams({
+      locationId: this.locationId,
+      ...(params.limit && { limit: String(params.limit) }),
+      ...(params.query && { query: params.query }),
+    })
+    return this.request<{ contacts: GHLContact[]; total: number }>('GET', `/contacts/?${queryParams}`)
+  }
+
   // ─── Conversations / Inbox ─────────────────────────────────────────────────
 
   async getConversations(params?: { unreadOnly?: boolean; limit?: number; startAfterId?: string }) {
