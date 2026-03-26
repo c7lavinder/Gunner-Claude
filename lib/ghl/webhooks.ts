@@ -372,20 +372,24 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
   }
 
   const stageId = oppData.pipelineStageId || oppData.stageId
+  if (!oppData.contactId || !stageId) return
 
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
-    select: { propertyPipelineId: true, propertyTriggerStage: true },
+    select: {
+      propertyPipelineId: true, propertyTriggerStage: true,
+      dispoPipelineId: true, dispoTriggerStage: true,
+    },
   })
+  if (!tenant) return
 
-  if (!tenant?.propertyTriggerStage) return
-
-  const isPropertyTrigger =
+  // ─── Check: is this the acquisition trigger? ──────────────────────────
+  const isAcqTrigger =
+    tenant.propertyTriggerStage &&
     stageId === tenant.propertyTriggerStage &&
     (!tenant.propertyPipelineId || oppData.pipelineId === tenant.propertyPipelineId)
 
-  // Create property if this is the trigger stage
-  if (isPropertyTrigger && oppData.contactId) {
+  if (isAcqTrigger) {
     await createPropertyFromContact(tenantId, oppData.contactId, {
       ghlPipelineId: oppData.pipelineId,
       ghlPipelineStage: stageId,
@@ -394,59 +398,85 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     return
   }
 
-  // Update existing property's GHL stage when any stage changes
-  if (oppData.contactId && stageId) {
-    try {
-      // Resolve stage name from GHL pipeline
-      let stageName: string | null = null
-      try {
-        const { getGHLClient } = await import('@/lib/ghl/client')
-        const ghl = await getGHLClient(tenantId)
-        const pipelines = await ghl.getPipelines()
-        for (const pipeline of pipelines.pipelines ?? []) {
-          const stage = pipeline.stages?.find((s: { id: string; name: string }) => s.id === stageId)
-          if (stage) { stageName = stage.name; break }
-        }
-      } catch { /* non-fatal — stage name resolution optional */ }
+  // ─── Check: is this the dispo trigger? ────────────────────────────────
+  const isDispoTrigger =
+    tenant.dispoTriggerStage &&
+    stageId === tenant.dispoTriggerStage &&
+    (!tenant.dispoPipelineId || oppData.pipelineId === tenant.dispoPipelineId)
 
-      // Map to app stage using our mapping
-      const { getAppStage } = await import('@/lib/ghl-stage-map')
-      const appStage = stageName ? getAppStage(stageName) : null
-
-      // Map app stage back to PropertyStatus enum
-      const APP_STAGE_TO_STATUS: Record<string, string> = {
-        'acquisition.new_lead': 'NEW_LEAD',
-        'acquisition.appt_set': 'APPOINTMENT_SET',
-        'acquisition.offer_made': 'OFFER_MADE',
-        'acquisition.contract': 'UNDER_CONTRACT',
-        'acquisition.closed': 'SOLD',
-        'disposition.new_deal': 'IN_DISPOSITION',
-        'disposition.pushed_out': 'IN_DISPOSITION',
-        'disposition.offers_received': 'IN_DISPOSITION',
-        'disposition.contracted': 'UNDER_CONTRACT',
-        'disposition.closed': 'SOLD',
-        'longterm.follow_up': 'CONTACTED',
-        'longterm.dead': 'DEAD',
-      }
-
-      const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
-
-      // Update all properties linked to this contact
-      const updateData: Record<string, unknown> = {
-        ghlPipelineStage: stageName ?? stageId,
-        ghlPipelineId: oppData.pipelineId,
-      }
-      if (newStatus) updateData.status = newStatus
-
-      await db.property.updateMany({
-        where: { tenantId, ghlContactId: oppData.contactId },
-        data: updateData,
+  if (isDispoTrigger) {
+    // Update existing property to IN_DISPOSITION, or create if none exists
+    const existing = await db.property.findFirst({
+      where: { tenantId, ghlContactId: oppData.contactId },
+    })
+    if (existing) {
+      await db.property.update({
+        where: { id: existing.id },
+        data: {
+          status: 'IN_DISPOSITION',
+          ghlPipelineId: oppData.pipelineId,
+          ghlPipelineStage: stageId,
+        },
       })
-
-      console.log(`[GHL Webhook] Stage changed for contact ${oppData.contactId}: ${stageName ?? stageId} → ${appStage ?? 'unknown'} → ${newStatus ?? 'no update'}`)
-    } catch (err) {
-      console.error('[GHL Webhook] Stage update failed:', err instanceof Error ? err.message : err)
+      console.log(`[GHL Webhook] Dispo trigger: updated property ${existing.address} to IN_DISPOSITION`)
+    } else {
+      await createPropertyFromContact(tenantId, oppData.contactId, {
+        ghlPipelineId: oppData.pipelineId,
+        ghlPipelineStage: stageId,
+        opportunitySource: oppData.source,
+      })
     }
+    return
+  }
+
+  // ─── General stage change: update existing property status ────────────
+  try {
+    // Resolve stage name from GHL
+    let stageName: string | null = null
+    try {
+      const { getGHLClient } = await import('@/lib/ghl/client')
+      const ghl = await getGHLClient(tenantId)
+      const pipelines = await ghl.getPipelines()
+      for (const pipeline of pipelines.pipelines ?? []) {
+        const stage = pipeline.stages?.find((s: { id: string; name: string }) => s.id === stageId)
+        if (stage) { stageName = stage.name; break }
+      }
+    } catch { /* non-fatal */ }
+
+    const { getAppStage } = await import('@/lib/ghl-stage-map')
+    const appStage = stageName ? getAppStage(stageName) : null
+
+    const APP_STAGE_TO_STATUS: Record<string, string> = {
+      'acquisition.new_lead': 'NEW_LEAD',
+      'acquisition.appt_set': 'APPOINTMENT_SET',
+      'acquisition.offer_made': 'OFFER_MADE',
+      'acquisition.contract': 'UNDER_CONTRACT',
+      'acquisition.closed': 'SOLD',
+      'disposition.new_deal': 'IN_DISPOSITION',
+      'disposition.pushed_out': 'IN_DISPOSITION',
+      'disposition.offers_received': 'IN_DISPOSITION',
+      'disposition.contracted': 'UNDER_CONTRACT',
+      'disposition.closed': 'SOLD',
+      'longterm.follow_up': 'CONTACTED',
+      'longterm.dead': 'DEAD',
+    }
+
+    const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
+
+    const updateData: Record<string, unknown> = {
+      ghlPipelineStage: stageName ?? stageId,
+      ghlPipelineId: oppData.pipelineId,
+    }
+    if (newStatus) updateData.status = newStatus
+
+    await db.property.updateMany({
+      where: { tenantId, ghlContactId: oppData.contactId },
+      data: updateData,
+    })
+
+    console.log(`[GHL Webhook] Stage changed for contact ${oppData.contactId}: ${stageName ?? stageId} → ${appStage ?? 'unknown'} → ${newStatus ?? 'no update'}`)
+  } catch (err) {
+    console.error('[GHL Webhook] Stage update failed:', err instanceof Error ? err.message : err)
   }
 }
 

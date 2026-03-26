@@ -35,8 +35,10 @@ model Tenant {
   ghlWebhookId     String? @map("ghl_webhook_id")
 
   // Property trigger config
-  propertyPipelineId    String? @map("property_pipeline_id")    // which GHL pipeline
+  propertyPipelineId    String? @map("property_pipeline_id")    // which GHL pipeline (acquisition)
   propertyTriggerStage  String? @map("property_trigger_stage")  // which stage creates a property
+  dispoPipelineId       String? @map("dispo_pipeline_id")       // GHL dispo pipeline
+  dispoTriggerStage     String? @map("dispo_trigger_stage")     // stage that moves property into dispo
 
   // Onboarding state
   onboardingStep      Int     @default(0) @map("onboarding_step")

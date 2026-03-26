@@ -10,6 +10,8 @@ import { z } from 'zod'
 const configSchema = z.object({
   propertyPipelineId: z.string().optional(),
   propertyTriggerStage: z.string().optional(),
+  dispoPipelineId: z.string().nullable().optional(),
+  dispoTriggerStage: z.string().nullable().optional(),
   onboardingStep: z.number().optional(),
   onboardingCompleted: z.boolean().optional(),
   callTypes: z.array(z.string()).optional(),

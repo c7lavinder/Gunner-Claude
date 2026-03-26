@@ -21,6 +21,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         ghlLocationId: true, onboardingCompleted: true,
         callTypes: true, callResults: true, gradingMaterials: true,
         propertyPipelineId: true, propertyTriggerStage: true,
+        dispoPipelineId: true, dispoTriggerStage: true,
       },
     }),
     db.user.findMany({
@@ -51,6 +52,8 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         callResults: tenant.callResults as string[],
         propertyPipelineId: tenant.propertyPipelineId ?? '',
         propertyTriggerStage: tenant.propertyTriggerStage ?? '',
+        dispoPipelineId: tenant.dispoPipelineId ?? '',
+        dispoTriggerStage: tenant.dispoTriggerStage ?? '',
         gradingMaterials: tenant.gradingMaterials ?? '',
       }}
       teamMembers={teamMembers.map((u) => ({

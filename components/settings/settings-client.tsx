@@ -21,6 +21,9 @@ interface TenantInfo {
   // WRITES TO: tenants.property_trigger_stage (String?)
   // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
   propertyTriggerStage: string
+  // WRITES TO: tenants.dispo_pipeline_id + dispo_trigger_stage
+  dispoPipelineId: string
+  dispoTriggerStage: string
   // WRITES TO: tenants.grading_materials (String?)
   // READ BY: lib/ai/grading.ts → buildGradingSystemPrompt()
   gradingMaterials: string
@@ -73,6 +76,12 @@ export function SettingsClient({
   const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string }>>([])
   const [savingPipeline, setSavingPipeline] = useState(false)
   const [pipelineSaveMsg, setPipelineSaveMsg] = useState('')
+
+  // Dispo pipeline settings
+  const [selectedDispoPipeline, setSelectedDispoPipeline] = useState(tenant.dispoPipelineId)
+  const [selectedDispoStage, setSelectedDispoStage] = useState(tenant.dispoTriggerStage)
+  const [dispoStages, setDispoStages] = useState<Array<{ id: string; name: string }>>([])
+
 
   // GHL user mapping state
   const [ghlUsers, setGhlUsers] = useState<GHLUserOption[]>([])
@@ -144,17 +153,37 @@ export function SettingsClient({
       .catch(() => setPipelineStages([]))
   }, [])
 
+  // Generic stage fetcher
+  const fetchStagesForId = useCallback((pipelineId: string, setter: (stages: Array<{ id: string; name: string }>) => void) => {
+    if (!pipelineId) { setter([]); return }
+    fetch('/api/ghl/pipelines')
+      .then(r => r.json())
+      .then(data => {
+        const pipeline = (data.pipelines ?? []).find((p: { id: string }) => p.id === pipelineId)
+        if (pipeline?.stages) setter(pipeline.stages)
+      })
+      .catch(() => setter([]))
+  }, [])
+
   // Load stages on mount if pipeline already selected
   useEffect(() => {
-    if (selectedPipeline) fetchStagesForPipeline(selectedPipeline)
-  }, [selectedPipeline, fetchStagesForPipeline])
+    if (selectedPipeline) fetchStagesForId(selectedPipeline, setPipelineStages)
+    if (selectedDispoPipeline) fetchStagesForId(selectedDispoPipeline, setDispoStages)
+  }, [selectedPipeline, selectedDispoPipeline, fetchStagesForId])
 
   const handlePipelineChange = useCallback((pipelineId: string) => {
     setSelectedPipeline(pipelineId)
     setSelectedStage('')
     setPipelineStages([])
-    fetchStagesForPipeline(pipelineId)
-  }, [fetchStagesForPipeline])
+    fetchStagesForId(pipelineId, setPipelineStages)
+  }, [fetchStagesForId])
+
+  const handleDispoPipelineChange = useCallback((pipelineId: string) => {
+    setSelectedDispoPipeline(pipelineId)
+    setSelectedDispoStage('')
+    setDispoStages([])
+    fetchStagesForId(pipelineId, setDispoStages)
+  }, [fetchStagesForId])
 
   async function savePipelineSettings() {
     setSavingPipeline(true)
@@ -166,6 +195,8 @@ export function SettingsClient({
         body: JSON.stringify({
           propertyPipelineId: selectedPipeline || null,
           propertyTriggerStage: selectedStage || null,
+          dispoPipelineId: selectedDispoPipeline || null,
+          dispoTriggerStage: selectedDispoStage || null,
         }),
       })
       if (res.ok) {
@@ -419,6 +450,49 @@ export function SettingsClient({
                     When a contact enters stage <strong className="font-semibold">{pipelineStages.find(s => s.id === selectedStage)?.name}</strong>, a property will be created automatically.
                   </div>
                 )}
+
+                {/* ── Disposition Pipeline ─────────────────────── */}
+                <div className="border-t border-[rgba(0,0,0,0.06)] pt-5 mt-5">
+                  <h2 className="text-ds-label font-medium text-txt-primary mb-1">Disposition pipeline trigger</h2>
+                  <p className="text-ds-fine text-txt-secondary mb-4">
+                    When an opportunity enters the selected dispo stage, the property moves into Disposition.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-ds-fine text-txt-muted block mb-1">Dispo pipeline</label>
+                      <GHLDropdown
+                        endpoint="/api/ghl/pipelines"
+                        valueKey="id"
+                        labelKey="name"
+                        value={selectedDispoPipeline}
+                        onChange={handleDispoPipelineChange}
+                        placeholder="Select dispo pipeline..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-ds-fine text-txt-muted block mb-1">Dispo trigger stage</label>
+                      {dispoStages.length > 0 ? (
+                        <select
+                          value={selectedDispoStage}
+                          onChange={(e) => setSelectedDispoStage(e.target.value)}
+                          className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-3 py-2 text-ds-body focus:outline-none"
+                        >
+                          <option value="">Select stage...</option>
+                          {dispoStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      ) : (
+                        <div className="text-ds-fine text-txt-muted bg-surface-secondary rounded-[10px] px-3 py-2">
+                          {selectedDispoPipeline ? 'Loading stages...' : 'Select a dispo pipeline first'}
+                        </div>
+                      )}
+                    </div>
+                    {selectedDispoStage && (
+                      <div className="bg-semantic-blue-bg border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] p-4 text-ds-body text-semantic-blue">
+                        When an opportunity enters <strong>{dispoStages.find(s => s.id === selectedDispoStage)?.name}</strong>, the property moves to Disposition.
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* Save button */}
                 <button
