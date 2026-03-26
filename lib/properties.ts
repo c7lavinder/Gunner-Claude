@@ -78,14 +78,30 @@ export async function createPropertyFromContact(
       if (localUser) assignedToId = localUser.id
     }
 
-    // Auto-assign market by zip code
+    // Auto-assign market by zip code (check DB first, then config fallback)
     let marketId: string | null = null
     if (zip) {
       const market = await db.market.findFirst({
         where: { tenantId, zipCodes: { has: zip } },
         select: { id: true },
       })
-      if (market) marketId = market.id
+      if (market) {
+        marketId = market.id
+      } else {
+        // Check config and auto-create market if zip is in our network
+        try {
+          const { getMarketsForZip, MARKETS } = await import('@/lib/config/crm.config')
+          const marketNames = getMarketsForZip(zip)
+          if (marketNames.length > 0) {
+            const name = marketNames[0]
+            const zips = [...MARKETS[name].zips] as string[]
+            const created = await db.market.create({
+              data: { tenantId, name, zipCodes: zips },
+            })
+            marketId = created.id
+          }
+        } catch { /* config lookup optional */ }
+      }
     }
 
     // Map GHL stage to app status

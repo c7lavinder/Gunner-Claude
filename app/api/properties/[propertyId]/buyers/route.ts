@@ -1,45 +1,112 @@
-// GET /api/properties/[propertyId]/buyers — match buyers to property
-// POST /api/properties/[propertyId]/buyers — trigger re-match
+// GET /api/properties/[propertyId]/buyers — match buyers from GHL custom fields
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
+import { getGHLClient } from '@/lib/ghl/client'
+import { CONTACT_FIELDS, TIER_MAP, getMarketsForZip } from '@/lib/config/crm.config'
 
-// Buyer matching score (0-100)
-function scoreBuyer(buyer: {
-  markets: string[]
-  criteria: Record<string, unknown>
+// Extract a custom field value from GHL contact by field label
+function getCustomField(customFields: Array<{ id: string; value: string }>, label: string): string {
+  // GHL custom fields have IDs, not labels — but the value is what we match
+  // We search by checking if any field value matches expected patterns
+  for (const f of customFields) {
+    if (f.id.toLowerCase().includes(label.toLowerCase()) || f.value) {
+      // Return the value for now — in production, map field IDs from GHL custom fields API
+    }
+  }
+  return ''
+}
+
+// Parse GHL custom fields into structured buyer data
+function parseBuyerFields(contact: {
+  id: string
+  firstName: string
+  lastName: string
+  phone: string
+  email: string
+  city?: string
+  state?: string
   tags: string[]
-  notes: string | null
-}, property: {
-  city: string
-  state: string
-  zip: string
-}): number {
+  customFields: Array<{ id: string; value: string }>
+}) {
+  const fields = contact.customFields ?? []
+  const fieldMap = new Map<string, string>()
+  for (const f of fields) {
+    fieldMap.set(f.id, f.value)
+  }
+
+  // Find fields by label patterns in field IDs (GHL uses field IDs like "buyer_tier", "buybox" etc.)
+  const findField = (pattern: string): string => {
+    for (const [id, value] of fieldMap) {
+      if (id.toLowerCase().includes(pattern.toLowerCase())) return value
+    }
+    // Also check tags for tier info
+    return ''
+  }
+
+  const tierRaw = findField('buyer_tier') || findField('tier')
+  const tier = TIER_MAP[tierRaw] ?? 'unqualified'
+  const verifiedFunding = findField('verified_funding').toLowerCase() === 'true' || findField('verified_funding') === '1'
+  const hasPurchased = findField('has_purchased_before').toLowerCase() === 'true' || findField('has_purchased_before') === '1'
+  const responseSpeed = findField('response_speed')
+  const buybox = findField('buybox')
+  const marketsRaw = findField('markets')
+  const secondaryMarket = findField('secondary_market')
+  const buyerNotes = findField('buyer_notes')
+
+  // Parse markets — could be comma-separated or array-like
+  const markets = marketsRaw
+    ? marketsRaw.split(/[,;|]/).map(m => m.trim()).filter(Boolean)
+    : contact.city ? [contact.city] : []
+
+  return {
+    id: contact.id,
+    name: `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim(),
+    phone: contact.phone,
+    email: contact.email,
+    tier,
+    markets,
+    secondaryMarket,
+    buybox,
+    verifiedFunding,
+    hasPurchased,
+    responseSpeed,
+    buyerNotes,
+  }
+}
+
+// Score a buyer against a property (0-100)
+function scoreBuyer(buyer: ReturnType<typeof parseBuyerFields>, propertyMarkets: string[], propertyType?: string | null): number {
   let score = 0
-  const propMarket = `${property.city}, ${property.state}`.toLowerCase()
-  const propCity = property.city.toLowerCase()
 
   // Primary market match: +40
-  const buyerMarkets = (buyer.markets ?? []).map((m: string) => m.toLowerCase())
-  if (buyerMarkets.some(m => propMarket.includes(m) || m.includes(propCity))) {
+  if (buyer.markets.some(m => propertyMarkets.some(pm => pm.toLowerCase().includes(m.toLowerCase()) || m.toLowerCase().includes(pm.toLowerCase())))) {
     score += 40
   }
 
-  // Criteria has secondary markets: +20
-  const secondaryMarkets = ((buyer.criteria as Record<string, unknown>)?.secondaryMarkets as string[] ?? []).map((m: string) => m.toLowerCase())
-  if (secondaryMarkets.some(m => propMarket.includes(m) || m.includes(propCity))) {
+  // Secondary market match: +20
+  if (buyer.secondaryMarket && propertyMarkets.some(pm => pm.toLowerCase().includes(buyer.secondaryMarket.toLowerCase()))) {
     score += 20
   }
 
-  // Tags: cash buyer, verified funding, has purchased
-  const tagsLower = (buyer.tags ?? []).map((t: string) => t.toLowerCase())
-  if (tagsLower.some(t => t.includes('cash') || t.includes('verified') || t.includes('funding'))) score += 10
-  if (tagsLower.some(t => t.includes('purchased') || t.includes('closed'))) score += 5
-  if (tagsLower.some(t => t.includes('same day') || t.includes('fast'))) score += 5
+  // Buybox matches property type: +20
+  if (buyer.buybox && propertyType) {
+    const bbLower = buyer.buybox.toLowerCase()
+    const ptLower = propertyType.toLowerCase()
+    if (bbLower.includes('flip') && ptLower.includes('house')) score += 20
+    else if (bbLower.includes('rental') && ptLower.includes('house')) score += 20
+    else if (bbLower.includes('land') && ptLower.includes('land')) score += 20
+    else if (bbLower.includes(ptLower) || ptLower.includes(bbLower)) score += 20
+  }
 
-  // Buy box match: +20 (if criteria.types overlap property type)
-  const buyBoxTypes = ((buyer.criteria as Record<string, unknown>)?.types as string[] ?? []).map((t: string) => t.toLowerCase())
-  if (buyBoxTypes.length > 0) score += 20 // base points for having a buy box
+  // Verified funding: +10
+  if (buyer.verifiedFunding) score += 10
+
+  // Has purchased before: +5
+  if (buyer.hasPurchased) score += 5
+
+  // Response speed: +5 for fast
+  if (buyer.responseSpeed?.toLowerCase() === 'fast') score += 5
 
   return Math.min(score, 100)
 }
@@ -56,83 +123,83 @@ export async function GET(
 
     const property = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
-      select: { city: true, state: true, zip: true },
+      select: { city: true, state: true, zip: true, propertyType: true },
     })
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
 
-    // Get local buyers + GHL buyer contacts
-    const buyers = await db.buyer.findMany({
+    // Determine which markets this property is in
+    const propertyMarkets = property.zip
+      ? getMarketsForZip(property.zip).map(String)
+      : property.city ? [property.city] : []
+
+    // Search GHL for buyer contacts
+    const ghl = await getGHLClient(tenantId)
+    let ghlBuyers: ReturnType<typeof parseBuyerFields>[] = []
+
+    try {
+      // Search for contacts tagged as buyers or with buyer tier set
+      const result = await ghl.searchContacts({ query: 'buyer', limit: 100 })
+      ghlBuyers = (result.contacts ?? []).map(c => parseBuyerFields({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        phone: c.phone,
+        email: c.email,
+        city: c.city,
+        state: c.state,
+        tags: c.tags ?? [],
+        customFields: c.customFields ?? [],
+      })).filter(b => b.name)
+    } catch (err) {
+      console.error('[Buyers] GHL search failed:', err instanceof Error ? err.message : err)
+    }
+
+    // Also include local buyers
+    const localBuyers = await db.buyer.findMany({
       where: { tenantId, isActive: true },
-      orderBy: { name: 'asc' },
     })
 
-    // Also search GHL for contacts tagged as "buyer"
-    try {
-      const { getGHLClient } = await import('@/lib/ghl/client')
-      const ghl = await getGHLClient(tenantId)
-      const ghlResult = await ghl.searchContacts({ query: 'buyer', limit: 50 })
-      const existingPhones = new Set(buyers.map(b => b.phone).filter(Boolean))
-      const existingEmails = new Set(buyers.map(b => b.email?.toLowerCase()).filter(Boolean))
+    // Merge local buyers (dedup by phone/email)
+    const seenPhones = new Set(ghlBuyers.map(b => b.phone).filter(Boolean))
+    const seenEmails = new Set(ghlBuyers.map(b => b.email?.toLowerCase()).filter(Boolean))
 
-      for (const c of ghlResult.contacts ?? []) {
-        // Dedup by phone or email
-        if (c.phone && existingPhones.has(c.phone)) continue
-        if (c.email && existingEmails.has(c.email.toLowerCase())) continue
+    for (const lb of localBuyers) {
+      if (lb.phone && seenPhones.has(lb.phone)) continue
+      if (lb.email && seenEmails.has(lb.email.toLowerCase())) continue
 
-        const name = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim()
-        if (!name) continue
-
-        // Create a synthetic buyer entry from GHL contact
-        buyers.push({
-          id: c.id ?? `ghl-${c.phone ?? c.email}`,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          tenantId,
-          name,
-          phone: c.phone ?? null,
-          email: c.email ?? null,
-          company: null,
-          ghlContactId: c.id ?? null,
-          markets: c.city ? [c.city] : [],
-          criteria: {},
-          tags: c.tags ?? [],
-          notes: null,
-          isActive: true,
-        })
-      }
-    } catch { /* GHL search optional — continue with local buyers */ }
-
-    // Score and sort
-    const matched = buyers.map(b => {
-      const markets = Array.isArray(b.markets) ? b.markets as string[] : []
-      const criteria = (b.criteria && typeof b.criteria === 'object') ? b.criteria as Record<string, unknown> : {}
-      const tags = Array.isArray(b.tags) ? b.tags as string[] : []
-
-      const matchScore = scoreBuyer({ markets, criteria, tags, notes: b.notes }, property)
-
-      // Determine tier from tags
-      let tier: 'priority' | 'qualified' | 'jv' | 'unqualified' = 'unqualified'
+      const tags = Array.isArray(lb.tags) ? lb.tags as string[] : []
       const tagsLower = tags.map(t => t.toLowerCase())
-      if (tagsLower.some(t => t.includes('priority'))) tier = 'priority'
-      else if (tagsLower.some(t => t.includes('qualified') || t.includes('cash') || t.includes('verified'))) tier = 'qualified'
-      else if (tagsLower.some(t => t.includes('jv') || t.includes('partner'))) tier = 'jv'
+      let tier: 'priority' | 'qualified' | 'jv' | 'unqualified' = 'unqualified'
+      if (tagsLower.some(t => t.includes('priority') || t === 'a')) tier = 'priority'
+      else if (tagsLower.some(t => t.includes('qualified') || t === 'b')) tier = 'qualified'
+      else if (tagsLower.some(t => t.includes('jv') || t === 'c')) tier = 'jv'
 
-      return {
-        id: b.id,
-        name: b.name,
-        phone: b.phone,
-        email: b.email,
-        company: b.company,
+      const markets = Array.isArray(lb.markets) ? lb.markets as string[] : []
+
+      ghlBuyers.push({
+        id: lb.id,
+        name: lb.name,
+        phone: lb.phone ?? '',
+        email: lb.email ?? '',
         tier,
         markets,
-        tags,
-        notes: b.notes,
-        matchScore,
-      }
-    })
+        secondaryMarket: '',
+        buybox: '',
+        verifiedFunding: false,
+        hasPurchased: false,
+        responseSpeed: '',
+        buyerNotes: lb.notes ?? '',
+      })
+    }
+
+    // Score all buyers
+    const matched = ghlBuyers
+      .map(b => ({
+        ...b,
+        matchScore: scoreBuyer(b, propertyMarkets, property.propertyType),
+      }))
       .filter(b => b.matchScore > 0)
       .sort((a, b) => {
-        // Sort by tier first, then score
         const tierOrder = { priority: 0, qualified: 1, jv: 2, unqualified: 3 }
         const tierDiff = tierOrder[a.tier] - tierOrder[b.tier]
         if (tierDiff !== 0) return tierDiff
@@ -141,7 +208,6 @@ export async function GET(
 
     return NextResponse.json({ buyers: matched, total: matched.length })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to match buyers'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to match buyers' }, { status: 500 })
   }
 }
