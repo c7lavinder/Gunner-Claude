@@ -189,7 +189,24 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
 
 // ─── Property Table ──────────────────────────────────────────────────────────
 
-function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocationId }: {
+const SOURCE_COLORS: Record<string, string> = {
+  'GHL': 'bg-blue-100 text-blue-700',
+  'Manual': 'bg-gray-100 text-gray-600',
+  'Website': 'bg-purple-100 text-purple-700',
+  'Referral': 'bg-green-100 text-green-700',
+  'Cold Call': 'bg-orange-100 text-orange-700',
+  'Direct Mail': 'bg-pink-100 text-pink-700',
+}
+
+const MARKET_COLORS: Record<string, string> = {
+  'Nashville': 'bg-red-100 text-red-700',
+  'Columbia': 'bg-teal-100 text-teal-700',
+  'Knoxville': 'bg-indigo-100 text-indigo-700',
+  'Chattanooga': 'bg-amber-100 text-amber-700',
+  'Global': 'bg-gray-100 text-gray-600',
+}
+
+function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
   properties: Property[]
   tenantSlug: string
   selectedId: string | null
@@ -197,66 +214,51 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocati
   ghlLocationId?: string
 }) {
   return (
-    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-x-auto">
-      {/* Header */}
-      <div className="grid grid-cols-[minmax(200px,2.5fr)_90px_110px_100px_90px_90px_50px_36px] gap-2 px-4 py-2.5 bg-surface-secondary border-b border-[rgba(0,0,0,0.06)] text-[10px] font-semibold text-txt-muted uppercase tracking-wider min-w-[780px]">
-        <span>Address</span>
-        <span>Status</span>
-        <span>Source</span>
-        <span>Market</span>
-        <span>Asking</span>
-        <span>Contract</span>
-        <span>DOM</span>
-        <span></span>
-      </div>
-      {/* Rows */}
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
       {properties.map(p => {
         const appStage = STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
         const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
         const isSelected = selectedId === p.id
-        const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
-        const domColor = dom <= 7 ? 'text-green-600' : dom <= 30 ? 'text-amber-500' : 'text-red-600'
-        const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : <span className="text-txt-muted">—</span>
+        const sourceColor = SOURCE_COLORS[p.leadSource ?? ''] ?? 'bg-surface-tertiary text-txt-secondary'
+        const marketColor = MARKET_COLORS[p.market ?? ''] ?? 'bg-surface-tertiary text-txt-secondary'
 
         return (
           <button
             key={p.id}
             onClick={() => onSelect(isSelected ? null : p.id)}
-            className={`grid grid-cols-[minmax(200px,2.5fr)_90px_110px_100px_90px_90px_50px_36px] gap-2 px-4 py-2.5 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors min-w-[780px] ${
-              isSelected ? 'bg-gunner-red-light border-l-2 border-l-gunner-red' : ''
+            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors ${
+              isSelected ? 'bg-gunner-red-light' : ''
             }`}
           >
             {/* Address */}
-            <div className="min-w-0">
+            <div className="flex-1 min-w-0">
               <p className="text-ds-body font-medium text-txt-primary truncate">{p.address}</p>
               <p className="text-ds-fine text-txt-muted">{p.city}, {p.state} {p.zip}</p>
             </div>
-            {/* Status */}
-            <div className="flex items-center">
-              <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full ${badgeColor}`}>
+            {/* Labels */}
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+              <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
                 {APP_STAGE_LABELS[appStage]}
               </span>
+              {p.leadSource && (
+                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
+                  {p.leadSource}
+                </span>
+              )}
+              {p.market && (
+                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${marketColor}`}>
+                  {p.market}
+                </span>
+              )}
             </div>
-            {/* Source */}
-            <div className="flex items-center text-ds-fine text-txt-secondary truncate">{p.leadSource ?? <span className="text-semantic-amber">Missing</span>}</div>
-            {/* Market */}
-            <div className="flex items-center text-ds-fine text-txt-secondary truncate">{p.market ?? <span className="text-txt-muted">—</span>}</div>
-            {/* Asking */}
-            <div className="flex items-center text-ds-body text-txt-primary">{fmt(p.askingPrice)}</div>
-            {/* Contract */}
-            <div className="flex items-center text-ds-body text-txt-primary">{fmt(p.contractPrice)}</div>
-            {/* DOM */}
-            <div className={`flex items-center text-ds-fine font-medium ${domColor}`}>{dom}d</div>
-            {/* Actions */}
-            <div className="flex items-center justify-end">
-              <Link
-                href={`/${tenantSlug}/inventory/${p.id}`}
-                onClick={e => e.stopPropagation()}
-                className="text-txt-muted hover:text-gunner-red transition-colors"
-              >
-                <ExternalLink size={12} />
-              </Link>
-            </div>
+            {/* Link */}
+            <Link
+              href={`/${tenantSlug}/inventory/${p.id}`}
+              onClick={e => e.stopPropagation()}
+              className="text-txt-muted hover:text-gunner-red transition-colors shrink-0"
+            >
+              <ExternalLink size={12} />
+            </Link>
           </button>
         )
       })}
