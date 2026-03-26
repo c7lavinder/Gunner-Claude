@@ -271,12 +271,40 @@ function getStageColor(stage: string): string {
   return STAGE_PALETTE[Math.abs(hash) % STAGE_PALETTE.length]
 }
 
+const STAGE_DISPLAY_NAMES: Record<string, string> = {
+  'New Lead (1)': 'New Lead',
+  'Warm Leads(2)': 'Warm Lead',
+  'Hot Leads(2)': 'Hot Lead',
+  'Pending Apt(3)': 'Pending Apt',
+  'Pending Apt (3)': 'Pending Apt',
+  'Walkthrough Apt Scheduled': 'Walkthrough',
+  'Walkthrough Apt Scheduled (3)': 'Walkthrough',
+  'Offer Apt Scheduled (3)': 'Offer Apt',
+  'Offer Apt Scheduled(3)': 'Offer Apt',
+  'Made Offer (4)': 'Made Offer',
+  'Under Contract (5)': 'Under Contract',
+  'Purchased (6)': 'Purchased',
+  '1 Month Follow Up': '1 Month',
+  '4 Month Follow Up': '4 Month',
+  '1 Year Follow Up': '1 Year',
+  'Ghosted Lead': 'Ghosted',
+  'Agreement not closed': 'No Agreement',
+  'DO NOT WANT': 'Do Not Want',
+  'New deal': 'New Deal',
+  'Clear to Send Out': 'Clear to Send',
+  'Sent to buyers': 'Sent to Buyers',
+  'Offers Received': 'Offers In',
+  '<1 Day — Need to Terminate': 'Terminating',
+  '<1 Day - Need to Terminate': 'Terminating',
+  'With JV Partner': 'JV Partner',
+  'UC W/ Buyer': 'UC w/ Buyer',
+  'Working w/ Title': 'Title Work',
+}
+
 function cleanStageName(raw: string): string {
-  return raw
-    .replace(/\s*\(\d+\)\s*/g, '')  // Remove (1), (2), etc.
-    .replace(/\s*\((\d+)\)\s*/g, '') // Remove (3) variants
-    .replace(/\s+/g, ' ')            // Collapse whitespace
-    .trim()
+  if (STAGE_DISPLAY_NAMES[raw]) return STAGE_DISPLAY_NAMES[raw]
+  // Fallback: strip numbers in parens, collapse whitespace
+  return raw.replace(/\s*\(\d+\)\s*/g, '').replace(/\s+/g, ' ').trim()
 }
 
 const MARKET_COLORS: Record<string, string> = {
