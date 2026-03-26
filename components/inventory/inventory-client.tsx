@@ -37,6 +37,8 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   ghlLocationId?: string
 }) {
   const [selectedStage, setSelectedStage] = useState<AppStage | null>(null)
+  const [selectedMarket, setSelectedMarket] = useState<string | null>(null)
+  const [selectedSource, setSelectedSource] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
@@ -56,6 +58,13 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
       const propStage = STATUS_TO_APP_STAGE[p.status]
       if (propStage !== selectedStage) return false
     }
+    if (selectedMarket) {
+      if (p.market !== selectedMarket) return false
+    }
+    if (selectedSource) {
+      if (selectedSource === '__none__') { if (p.leadSource) return false }
+      else if (p.leadSource !== selectedSource) return false
+    }
     if (search) {
       if (search === '__missing_source__') return !p.leadSource
       const q = search.toLowerCase()
@@ -73,6 +82,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   const activeCount = properties.filter(p => !['SOLD', 'DEAD'].includes(p.status)).length
   const missingSourceCount = properties.filter(p => !p.leadSource).length
   const leadSources = [...new Set(properties.map(p => p.leadSource).filter(Boolean))] as string[]
+  const markets = [...new Set(properties.map(p => p.market).filter(Boolean))] as string[]
   const selectedProperty = selectedPropertyId ? properties.find(p => p.id === selectedPropertyId) : null
 
   return (
@@ -148,6 +158,40 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
               Clear
             </button>
           </div>
+        )}
+      </div>
+
+      {/* Quick filters: Market + Source */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Market:</span>
+        {markets.map(m => {
+          const isActive = selectedMarket === m
+          const color = MARKET_COLORS[m] ?? 'bg-surface-tertiary text-txt-secondary'
+          return (
+            <button key={m} onClick={() => { setSelectedMarket(isActive ? null : m); setSelectedPropertyId(null) }}
+              className={`text-[10px] font-medium px-2.5 py-1 rounded-full transition-all ${isActive ? color + ' ring-1 ring-offset-1 ring-current' : color + ' opacity-60 hover:opacity-100'}`}>
+              {m}
+            </button>
+          )
+        })}
+
+        <span className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider ml-3">Source:</span>
+        {leadSources.map(s => {
+          const isActive = selectedSource === s
+          const color = getSourceColor(s)
+          return (
+            <button key={s} onClick={() => { setSelectedSource(isActive ? null : s); setSelectedPropertyId(null) }}
+              className={`text-[10px] font-medium px-2.5 py-1 rounded-full transition-all ${isActive ? color + ' ring-1 ring-offset-1 ring-current' : color + ' opacity-60 hover:opacity-100'}`}>
+              {s}
+            </button>
+          )
+        })}
+
+        {(selectedMarket || selectedSource) && (
+          <button onClick={() => { setSelectedMarket(null); setSelectedSource(null) }}
+            className="text-[10px] text-txt-muted hover:text-txt-secondary underline ml-1">
+            Clear filters
+          </button>
         )}
       </div>
 
