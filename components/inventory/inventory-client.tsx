@@ -271,6 +271,14 @@ function getStageColor(stage: string): string {
   return STAGE_PALETTE[Math.abs(hash) % STAGE_PALETTE.length]
 }
 
+function cleanStageName(raw: string): string {
+  return raw
+    .replace(/\s*\(\d+\)\s*/g, '')  // Remove (1), (2), etc.
+    .replace(/\s*\((\d+)\)\s*/g, '') // Remove (3) variants
+    .replace(/\s+/g, ' ')            // Collapse whitespace
+    .trim()
+}
+
 const MARKET_COLORS: Record<string, string> = {
   'Nashville': 'bg-red-100 text-red-700',
   'Columbia': 'bg-teal-100 text-teal-700',
@@ -321,7 +329,7 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
               </span>
               {p.ghlStageName && !p.ghlStageName.includes('-') && (
                 <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${getStageColor(p.ghlStageName)}`}>
-                  {p.ghlStageName}
+                  {cleanStageName(p.ghlStageName)}
                 </span>
               )}
               {p.leadSource && (
