@@ -21,6 +21,7 @@ interface Property {
   callCount: number; taskCount: number
   ghlContactId: string | null
   leadSource: string | null
+  market: string | null
   lastOfferDate: string | null
   lastContactedDate: string | null
 }
@@ -198,13 +199,13 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocati
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-x-auto">
       {/* Header */}
-      <div className="grid grid-cols-[minmax(200px,2fr)_100px_100px_100px_80px_80px_60px_40px] gap-2 px-4 py-2.5 bg-surface-secondary border-b border-[rgba(0,0,0,0.06)] text-[10px] font-semibold text-txt-muted uppercase tracking-wider min-w-[800px]">
+      <div className="grid grid-cols-[minmax(200px,2.5fr)_90px_110px_100px_90px_90px_50px_36px] gap-2 px-4 py-2.5 bg-surface-secondary border-b border-[rgba(0,0,0,0.06)] text-[10px] font-semibold text-txt-muted uppercase tracking-wider min-w-[780px]">
         <span>Address</span>
         <span>Status</span>
+        <span>Source</span>
+        <span>Market</span>
         <span>Asking</span>
         <span>Contract</span>
-        <span>Last Offer</span>
-        <span>Contacted</span>
         <span>DOM</span>
         <span></span>
       </div>
@@ -221,7 +222,7 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocati
           <button
             key={p.id}
             onClick={() => onSelect(isSelected ? null : p.id)}
-            className={`grid grid-cols-[minmax(200px,2fr)_100px_100px_100px_80px_80px_60px_40px] gap-2 px-4 py-2.5 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors min-w-[800px] ${
+            className={`grid grid-cols-[minmax(200px,2.5fr)_90px_110px_100px_90px_90px_50px_36px] gap-2 px-4 py-2.5 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors min-w-[780px] ${
               isSelected ? 'bg-gunner-red-light border-l-2 border-l-gunner-red' : ''
             }`}
           >
@@ -236,18 +237,14 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, ghlLocati
                 {APP_STAGE_LABELS[appStage]}
               </span>
             </div>
+            {/* Source */}
+            <div className="flex items-center text-ds-fine text-txt-secondary truncate">{p.leadSource ?? <span className="text-semantic-amber">Missing</span>}</div>
+            {/* Market */}
+            <div className="flex items-center text-ds-fine text-txt-secondary truncate">{p.market ?? <span className="text-txt-muted">—</span>}</div>
             {/* Asking */}
             <div className="flex items-center text-ds-body text-txt-primary">{fmt(p.askingPrice)}</div>
             {/* Contract */}
             <div className="flex items-center text-ds-body text-txt-primary">{fmt(p.contractPrice)}</div>
-            {/* Last offer */}
-            <div className="flex items-center text-ds-fine text-txt-muted">
-              {p.lastOfferDate ? formatDistanceToNow(new Date(p.lastOfferDate), { addSuffix: true }).replace('about ', '') : '—'}
-            </div>
-            {/* Last contacted */}
-            <div className="flex items-center text-ds-fine text-txt-muted">
-              {p.lastContactedDate ? formatDistanceToNow(new Date(p.lastContactedDate), { addSuffix: true }).replace('about ', '') : '—'}
-            </div>
             {/* DOM */}
             <div className={`flex items-center text-ds-fine font-medium ${domColor}`}>{dom}d</div>
             {/* Actions */}

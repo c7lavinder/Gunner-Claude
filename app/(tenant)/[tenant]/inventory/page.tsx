@@ -33,6 +33,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         take: 1,
       },
       assignedTo: { select: { id: true, name: true } },
+      market: { select: { name: true } },
       _count: { select: { calls: true, tasks: true } },
     },
   })
@@ -71,6 +72,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         taskCount: p._count.tasks,
         ghlContactId: p.ghlContactId,
         leadSource: p.leadSource,
+        market: p.market?.name ?? null,
         lastOfferDate: p.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: p.lastContactedDate?.toISOString() ?? null,
       }))}
