@@ -374,6 +374,18 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
   const stageId = oppData.pipelineStageId || oppData.stageId
   if (!oppData.contactId || !stageId) return
 
+  // Resolve stage name from GHL upfront — used by all paths below
+  let resolvedStageName: string | null = null
+  try {
+    const { getGHLClient } = await import('@/lib/ghl/client')
+    const ghl = await getGHLClient(tenantId)
+    const pipelines = await ghl.getPipelines()
+    for (const pipeline of pipelines.pipelines ?? []) {
+      const stage = pipeline.stages?.find((s: { id: string; name: string }) => s.id === stageId)
+      if (stage) { resolvedStageName = stage.name; break }
+    }
+  } catch { /* non-fatal */ }
+
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
     select: {
@@ -392,7 +404,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
   if (isAcqTrigger) {
     await createPropertyFromContact(tenantId, oppData.contactId, {
       ghlPipelineId: oppData.pipelineId,
-      ghlPipelineStage: stageId,
+      ghlPipelineStage: resolvedStageName ?? stageId,
       opportunitySource: oppData.source,
     })
     return
@@ -415,14 +427,14 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
         data: {
           status: 'IN_DISPOSITION',
           ghlPipelineId: oppData.pipelineId,
-          ghlPipelineStage: stageId,
+          ghlPipelineStage: resolvedStageName ?? stageId,
         },
       })
       console.log(`[GHL Webhook] Dispo trigger: updated property ${existing.address} to IN_DISPOSITION`)
     } else {
       await createPropertyFromContact(tenantId, oppData.contactId, {
         ghlPipelineId: oppData.pipelineId,
-        ghlPipelineStage: stageId,
+        ghlPipelineStage: resolvedStageName ?? stageId,
         opportunitySource: oppData.source,
       })
     }
@@ -431,17 +443,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
 
   // ─── General stage change: update existing property status ────────────
   try {
-    // Resolve stage name from GHL
-    let stageName: string | null = null
-    try {
-      const { getGHLClient } = await import('@/lib/ghl/client')
-      const ghl = await getGHLClient(tenantId)
-      const pipelines = await ghl.getPipelines()
-      for (const pipeline of pipelines.pipelines ?? []) {
-        const stage = pipeline.stages?.find((s: { id: string; name: string }) => s.id === stageId)
-        if (stage) { stageName = stage.name; break }
-      }
-    } catch { /* non-fatal */ }
+    const stageName = resolvedStageName
 
     const { getAppStage } = await import('@/lib/ghl-stage-map')
     const appStage = stageName ? getAppStage(stageName) : null
