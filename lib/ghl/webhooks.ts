@@ -463,17 +463,38 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     }
 
     const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
+    const isDispoStage = appStage?.startsWith('disposition')
 
-    const updateData: Record<string, unknown> = {
-      ghlPipelineStage: stageName ?? stageId,
-      ghlPipelineId: oppData.pipelineId,
-    }
-    if (newStatus) updateData.status = newStatus
-
-    await db.property.updateMany({
+    // Check if property is already in dispo — dispo outweighs acquisition
+    const existingProp = await db.property.findFirst({
       where: { tenantId, ghlContactId: oppData.contactId },
-      data: updateData,
+      select: { status: true },
     })
+    const currentlyInDispo = existingProp?.status && ['IN_DISPOSITION', 'DISPO_PUSHED', 'DISPO_OFFERS', 'DISPO_CONTRACTED', 'DISPO_CLOSED'].includes(existingProp.status)
+
+    const updateData: Record<string, unknown> = {}
+
+    if (isDispoStage) {
+      // Dispo stage changes always update everything
+      updateData.ghlPipelineStage = stageName ?? stageId
+      updateData.ghlPipelineId = oppData.pipelineId
+      if (newStatus) updateData.status = newStatus
+    } else if (currentlyInDispo) {
+      // Property is in dispo — don't let acquisition stage overwrite status or stage name
+      console.log(`[GHL Webhook] Skipping acq stage update — property already in dispo (${existingProp.status})`)
+    } else {
+      // Normal acquisition/longterm update
+      updateData.ghlPipelineStage = stageName ?? stageId
+      updateData.ghlPipelineId = oppData.pipelineId
+      if (newStatus) updateData.status = newStatus
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await db.property.updateMany({
+        where: { tenantId, ghlContactId: oppData.contactId },
+        data: updateData,
+      })
+    }
 
     console.log(`[GHL Webhook] Stage changed for contact ${oppData.contactId}: ${stageName ?? stageId} → ${appStage ?? 'unknown'} → ${newStatus ?? 'no update'}`)
   } catch (err) {
