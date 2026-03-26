@@ -30,6 +30,16 @@ export async function createPropertyFromContact(
     const state = standardizeState(contact.state ?? '')
     const zip = standardizeZip(contact.postalCode ?? '')
 
+    // Deduplicate: first check by ghlContactId (prevents race condition duplicates)
+    const existingByContact = await db.property.findFirst({
+      where: { tenantId, ghlContactId },
+      select: { id: true },
+    })
+    if (existingByContact) {
+      console.log(`[Property] Already exists for GHL contact ${ghlContactId} — skipping`)
+      return existingByContact.id
+    }
+
     // Deduplicate by normalized street address + state
     // Skip city (suburbs vs nearest city mismatch) and zip (often missing)
     // One contact CAN have multiple properties at different addresses
