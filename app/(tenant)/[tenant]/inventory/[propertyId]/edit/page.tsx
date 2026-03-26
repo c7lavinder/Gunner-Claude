@@ -72,6 +72,7 @@ export default async function PropertyEditPage({
         lotSize: property.lotSize ?? '',
         propertyType: property.propertyType ?? '',
         occupancy: property.occupancy ?? '',
+        lockboxCode: property.lockboxCode ?? '',
         description: property.description ?? '',
         internalNotes: property.internalNotes ?? '',
       }}

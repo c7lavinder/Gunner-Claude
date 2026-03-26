@@ -53,6 +53,7 @@ export default async function NewPropertyPage({
         lotSize: '',
         propertyType: '',
         occupancy: '',
+        lockboxCode: '',
         description: '',
         internalNotes: '',
       }}

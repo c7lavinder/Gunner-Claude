@@ -209,6 +209,7 @@ model Property {
   lotSize      String?  @map("lot_size")
   propertyType String?  @map("property_type")  // House, Land, Multi-Family, Commercial, Other
   occupancy    String?                          // Vacant, Owner Occupied, Tenant Occupied, Unknown
+  lockboxCode  String?  @map("lockbox_code")
   description  String?  @db.Text
   internalNotes String? @db.Text @map("internal_notes")
 

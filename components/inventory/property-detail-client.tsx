@@ -22,7 +22,7 @@ interface PropertyDetail {
   ghlContactId: string | null; createdAt: string
   beds: number | null; baths: number | null; sqft: number | null
   yearBuilt: number | null; lotSize: string | null
-  propertyType: string | null; occupancy: string | null
+  propertyType: string | null; occupancy: string | null; lockboxCode: string | null
   description: string | null; internalNotes: string | null
   lastOfferDate: string | null; lastContactedDate: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean }>
@@ -393,6 +393,7 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
             {property.yearBuilt && <span><span className="text-txt-muted">Built:</span> <span className="text-txt-primary font-medium">{property.yearBuilt}</span></span>}
             {property.lotSize && <span><span className="text-txt-muted">Lot:</span> <span className="text-txt-primary font-medium">{property.lotSize}</span></span>}
             {property.occupancy && <span><span className="text-txt-muted">Occupancy:</span> <span className="text-txt-primary font-medium">{property.occupancy}</span></span>}
+            {property.lockboxCode && <span><span className="text-txt-muted">Lockbox:</span> <span className="text-txt-primary font-medium">{property.lockboxCode}</span></span>}
           </div>
           {property.description && <p className="text-ds-fine text-txt-secondary mt-2">{property.description}</p>}
         </div>

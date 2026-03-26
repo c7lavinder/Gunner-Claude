@@ -33,6 +33,7 @@ const updateSchema = z.object({
   lotSize: z.string().nullable().optional(),
   propertyType: z.string().nullable().optional(),
   occupancy: z.string().nullable().optional(),
+  lockboxCode: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
   // Tracking dates
@@ -65,7 +66,7 @@ export async function PATCH(
     offerPrice, repairCost, wholesalePrice,
     assignedToId, sellerName, sellerPhone, sellerEmail,
     beds, baths, sqft, yearBuilt, lotSize, propertyType, occupancy,
-    description, internalNotes, lastOfferDate, lastContactedDate,
+    lockboxCode, description, internalNotes, lastOfferDate, lastContactedDate,
   } = parsed.data
 
   try {
@@ -95,6 +96,7 @@ export async function PATCH(
           ...(lotSize !== undefined && { lotSize }),
           ...(propertyType !== undefined && { propertyType }),
           ...(occupancy !== undefined && { occupancy }),
+          ...(lockboxCode !== undefined && { lockboxCode }),
           ...(description !== undefined && { description }),
           ...(internalNotes !== undefined && { internalNotes }),
           ...(lastOfferDate !== undefined && { lastOfferDate: lastOfferDate ? new Date(lastOfferDate) : null }),

@@ -451,6 +451,7 @@ export interface GHLContact {
   source: string
   tags: string[]
   customFields: Array<{ id: string; value: string }>
+  assignedTo?: string
 }
 
 export interface GHLContactUpdate {

@@ -68,6 +68,42 @@ export async function createPropertyFromContact(
     // Lead source: from opportunity source, or contact source
     const leadSource = context.opportunitySource || contact.source || null
 
+    // Map GHL assigned user → local user
+    let assignedToId: string | null = null
+    if (contact.assignedTo) {
+      const localUser = await db.user.findFirst({
+        where: { tenantId, ghlUserId: contact.assignedTo },
+        select: { id: true },
+      })
+      if (localUser) assignedToId = localUser.id
+    }
+
+    // Auto-assign market by zip code
+    let marketId: string | null = null
+    if (zip) {
+      const market = await db.market.findFirst({
+        where: { tenantId, zipCodes: { has: zip } },
+        select: { id: true },
+      })
+      if (market) marketId = market.id
+    }
+
+    // Map GHL stage to app status
+    let status: string = 'NEW_LEAD'
+    if (context.ghlPipelineStage) {
+      try {
+        const { getAppStage } = await import('@/lib/ghl-stage-map')
+        const appStage = getAppStage(context.ghlPipelineStage)
+        const stageToStatus: Record<string, string> = {
+          'acquisition.new_lead': 'NEW_LEAD', 'acquisition.appt_set': 'APPOINTMENT_SET',
+          'acquisition.offer_made': 'OFFER_MADE', 'acquisition.contract': 'UNDER_CONTRACT',
+          'acquisition.closed': 'SOLD', 'disposition.new_deal': 'IN_DISPOSITION',
+          'longterm.follow_up': 'CONTACTED', 'longterm.dead': 'DEAD',
+        }
+        status = stageToStatus[appStage] ?? 'NEW_LEAD'
+      } catch { /* use default */ }
+    }
+
     // Create property — Gunner is source of truth
     const property = await db.property.create({
       data: {
@@ -80,7 +116,9 @@ export async function createPropertyFromContact(
         city: city || '',
         state: state || '',
         zip: zip || '',
-        status: 'NEW_LEAD',
+        status: status as 'NEW_LEAD',
+        assignedToId,
+        marketId,
       },
     })
 

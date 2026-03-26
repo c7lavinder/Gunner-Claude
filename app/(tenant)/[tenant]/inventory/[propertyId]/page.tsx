@@ -74,7 +74,7 @@ export default async function PropertyDetailPage({
         createdAt: property.createdAt.toISOString(),
         beds: property.beds, baths: property.baths, sqft: property.sqft,
         yearBuilt: property.yearBuilt, lotSize: property.lotSize,
-        propertyType: property.propertyType, occupancy: property.occupancy,
+        propertyType: property.propertyType, occupancy: property.occupancy, lockboxCode: property.lockboxCode,
         description: property.description, internalNotes: property.internalNotes,
         lastOfferDate: property.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: property.lastContactedDate?.toISOString() ?? null,

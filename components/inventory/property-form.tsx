@@ -80,6 +80,7 @@ interface PropertyFormData {
   lotSize: string
   propertyType: string
   occupancy: string
+  lockboxCode: string
   description: string
   internalNotes: string
 }
@@ -142,6 +143,7 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
           lotSize: form.lotSize || null,
           propertyType: form.propertyType || null,
           occupancy: form.occupancy || null,
+          lockboxCode: form.lockboxCode || null,
           description: form.description || null,
           internalNotes: form.internalNotes || null,
         }),
@@ -316,6 +318,10 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
                 <option value="Tenant Occupied">Tenant Occupied</option>
                 <option value="Unknown">Unknown</option>
               </select>
+            </div>
+            <div>
+              <label className={labelCls}>Lockbox / Access Code</label>
+              <input value={form.lockboxCode} onChange={update('lockboxCode')} placeholder="1234" className={inputCls} />
             </div>
           </div>
           <div>
