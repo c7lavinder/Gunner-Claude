@@ -15,8 +15,12 @@ import type { AppStage } from '@/types/property'
 interface Property {
   id: string; address: string; city: string; state: string; zip: string
   status: string; arv: string | null; askingPrice: string | null
-  mao: string | null; contractPrice: string | null; assignmentFee: string | null; createdAt: string
+  mao: string | null; contractPrice: string | null; assignmentFee: string | null
+  currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
+  fieldSources: Record<string, string>
+  createdAt: string
   sellerName: string | null; sellerPhone: string | null
+  sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string } | null
   callCount: number; taskCount: number
   ghlContactId: string | null
@@ -408,6 +412,69 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
 
 // ─── Property Drawer (quick detail on row click) ─────────────────────────────
 
+// Source-based color styles for drawer inline edit cards
+function drawerSourceStyles(source: string | null) {
+  if (source === 'ai') return { bg: 'bg-blue-50 border-[0.5px] border-blue-300', label: 'text-blue-700', value: 'text-blue-800' }
+  if (source === 'user') return { bg: 'bg-green-50 border-[0.5px] border-green-300', label: 'text-green-700', value: 'text-green-800' }
+  return { bg: 'bg-surface-secondary', label: 'text-txt-muted', value: 'text-txt-primary' }
+}
+
+function DrawerEditCard({ label, value, field, propertyId, source, onSaved }: {
+  label: string; value: string | null; field: string; propertyId: string
+  source?: string | null; onSaved: (field: string, val: string | null, src: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (saving) return
+    const raw = editValue.trim()
+    if (raw === (value ?? '')) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: raw || null, fieldSources: { [field]: 'user' } }),
+      })
+      if (res.ok) onSaved(field, raw || null, 'user')
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+  }
+
+  const displayValue = value ? `$${Number(value).toLocaleString()}` : null
+  const s = drawerSourceStyles(source ?? null)
+
+  if (editing) {
+    return (
+      <div className={`${s.bg} rounded-[8px] px-2.5 py-2`}>
+        <p className={`text-[8px] font-semibold uppercase tracking-wider ${s.label}`}>{label}</p>
+        <input autoFocus type="number" value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
+          className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-ds-fine font-semibold text-txt-primary mt-0.5 focus:outline-none"
+          disabled={saving} placeholder="0"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div onClick={() => { setEditValue(value ?? ''); setEditing(true) }}
+      className={`${s.bg} rounded-[8px] px-2.5 py-2 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group`}>
+      <p className={`text-[8px] font-semibold uppercase tracking-wider flex items-center justify-between ${s.label}`}>
+        {label}
+      </p>
+      <p className={`text-ds-fine font-semibold mt-0.5 ${displayValue ? s.value : 'text-txt-muted'}`}>
+        {displayValue ?? '—'}
+      </p>
+    </div>
+  )
+}
+
 function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
   property: Property
   tenantSlug: string
@@ -416,26 +483,39 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
 }) {
   const appStage = STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
   const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
-  const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : '—'
   const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
-  const domColor = dom <= 7 ? 'text-green-600' : dom <= 30 ? 'text-amber-500' : 'text-red-600'
+  const domColor = dom < 6 ? 'text-green-600 bg-green-50' : dom <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+
+  const [vals, setVals] = useState({
+    askingPrice: p.askingPrice, mao: p.mao, currentOffer: p.currentOffer,
+    contractPrice: p.contractPrice, highestOffer: p.highestOffer, acceptedPrice: p.acceptedPrice,
+    assignmentFee: p.assignmentFee, finalProfit: p.finalProfit,
+  })
+  const [sources, setSources] = useState<Record<string, string>>(p.fieldSources ?? {})
+
+  function handleSaved(field: string, val: string | null, src: string) {
+    setVals(prev => ({ ...prev, [field]: val }))
+    setSources(prev => ({ ...prev, [field]: src }))
+  }
+
+  const spreadBase = vals.acceptedPrice ?? vals.contractPrice
+  const spread = spreadBase && vals.askingPrice
+    ? Number(spreadBase) - Number(vals.askingPrice) : null
 
   return (
     <div className="w-[420px] shrink-0 bg-white border-l border-[rgba(0,0,0,0.08)] shadow-sm flex flex-col max-h-[calc(100vh-120px)] sticky top-[60px]">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-[rgba(0,0,0,0.06)] shrink-0">
-        <div className="flex items-center justify-between mb-2">
+      <div className="px-4 py-3 border-b border-[rgba(0,0,0,0.06)] shrink-0">
+        <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full ${badgeColor}`}>
               {APP_STAGE_LABELS[appStage]}
             </span>
-            <span className={`text-ds-fine font-medium ${domColor}`}>{dom}d</span>
+            <span className={`text-[10px] font-bold px-1.5 py-[2px] rounded-[4px] ${domColor}`}>{dom}d</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/${tenantSlug}/inventory/${p.id}`}
-              className="text-ds-fine text-txt-muted hover:text-gunner-red transition-colors"
-            >
+            <Link href={`/${tenantSlug}/inventory/${p.id}`}
+              className="text-ds-fine text-txt-muted hover:text-gunner-red transition-colors">
               Full detail
             </Link>
             <button onClick={onClose} className="text-txt-muted hover:text-txt-primary transition-colors">
@@ -443,81 +523,91 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
             </button>
           </div>
         </div>
-        <h2 className="text-ds-section font-semibold text-txt-primary">{p.address}</h2>
-        <p className="text-ds-body text-txt-secondary">{p.city}, {p.state} {p.zip}</p>
+        <h2 className="text-ds-label font-semibold text-txt-primary">{p.address}</h2>
+        <p className="text-ds-fine text-txt-secondary">{p.city}, {p.state} {p.zip}</p>
       </div>
 
       {/* Body — scrollable */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-        {/* Seller */}
-        {p.sellerName && (
-          <div>
-            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Seller</p>
-            <p className="text-ds-body text-txt-primary font-medium">{p.sellerName}</p>
-            {p.sellerPhone && <p className="text-ds-fine text-txt-secondary">{p.sellerPhone}</p>}
-          </div>
-        )}
-
-        {/* Financials */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {/* Row 1 — Pricing Intent */}
         <div>
-          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Financials</p>
-          <div className="grid grid-cols-2 gap-3">
-            <FinCard label="Asking" value={fmt(p.askingPrice)} />
-            <FinCard label="ARV" value={fmt(p.arv)} color="text-semantic-green" />
-            <FinCard label="Contract" value={fmt(p.contractPrice)} />
-            <FinCard label="MAO" value={fmt(p.mao)} color="text-semantic-amber" />
-            <FinCard label="Assignment Fee" value={fmt(p.assignmentFee)} color="text-semantic-blue" />
-            <FinCard label="DOM" value={`${dom} days`} color={domColor} />
+          <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Pricing Intent</p>
+          <div className="grid grid-cols-3 gap-2">
+            <DrawerEditCard label="ASKING" value={vals.askingPrice} field="askingPrice" propertyId={p.id} source={sources.askingPrice} onSaved={handleSaved} />
+            <DrawerEditCard label="MAO" value={vals.mao} field="mao" propertyId={p.id} source={sources.mao} onSaved={handleSaved} />
+            <DrawerEditCard label="CURRENT OFFER" value={vals.currentOffer} field="currentOffer" propertyId={p.id} source={sources.currentOffer} onSaved={handleSaved} />
           </div>
+        </div>
+
+        {/* Row 2 — Deal Outcomes */}
+        <div>
+          <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Deal Outcomes</p>
+          <div className="grid grid-cols-3 gap-2">
+            <DrawerEditCard label="CONTRACT" value={vals.contractPrice} field="contractPrice" propertyId={p.id} source={sources.contractPrice} onSaved={handleSaved} />
+            <DrawerEditCard label="HIGHEST OFFER" value={vals.highestOffer} field="highestOffer" propertyId={p.id} source={sources.highestOffer} onSaved={handleSaved} />
+            <DrawerEditCard label="ACCEPTED" value={vals.acceptedPrice} field="acceptedPrice" propertyId={p.id} source={sources.acceptedPrice} onSaved={handleSaved} />
+          </div>
+        </div>
+
+        {/* Row 3 — Profit Summary */}
+        <div>
+          <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Profit Summary</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-surface-secondary rounded-[8px] px-2.5 py-2">
+              <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">EST. SPREAD</p>
+              <p className={`text-ds-fine font-semibold mt-0.5 ${spread != null ? (spread > 0 ? 'text-semantic-green' : 'text-semantic-red') : 'text-txt-muted'}`}>
+                {spread != null ? `$${spread.toLocaleString()}` : '—'}
+              </p>
+            </div>
+            <DrawerEditCard label="ASSIGN. FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={p.id} source={sources.assignmentFee} onSaved={handleSaved} />
+            <DrawerEditCard label="FINAL PROFIT" value={vals.finalProfit} field="finalProfit" propertyId={p.id} source={sources.finalProfit} onSaved={handleSaved} />
+          </div>
+        </div>
+
+        {/* Contacts */}
+        <div>
+          <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Contacts ({p.sellers.length})</p>
+          {p.sellers.length === 0 ? (
+            <p className="text-ds-fine text-txt-muted">No contacts linked</p>
+          ) : (
+            <div className="space-y-1.5">
+              {p.sellers.map(s => (
+                <div key={s.id} className="bg-surface-secondary rounded-[8px] px-2.5 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-ds-fine text-txt-primary font-medium">{s.name}</p>
+                    <span className="text-[8px] font-medium text-gunner-red">{s.role}</span>
+                  </div>
+                  {s.phone && <p className="text-[10px] text-txt-secondary">{s.phone}</p>}
+                  {s.email && <p className="text-[10px] text-txt-secondary truncate">{s.email}</p>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Assigned */}
         {p.assignedTo && (
           <div>
-            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Assigned To</p>
-            <p className="text-ds-body text-txt-primary">{p.assignedTo.name}</p>
+            <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Assigned To</p>
+            <p className="text-ds-fine text-txt-primary font-medium">{p.assignedTo.name}</p>
           </div>
         )}
 
-        {/* Activity summary */}
-        <div>
-          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Activity</p>
-          <div className="flex gap-4 text-ds-body text-txt-secondary">
-            <span className="flex items-center gap-1.5"><Phone size={12} className="text-txt-muted" /> {p.callCount} calls</span>
-            <span className="flex items-center gap-1.5"><CheckSquare size={12} className="text-txt-muted" /> {p.taskCount} tasks</span>
-          </div>
-        </div>
-
         {/* Quick links */}
-        <div className="flex gap-2 pt-2">
-          <Link
-            href={`/${tenantSlug}/inventory/${p.id}`}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-fine font-semibold py-2.5 rounded-[10px] transition-colors"
-          >
+        <div className="flex gap-2 pt-1">
+          <Link href={`/${tenantSlug}/inventory/${p.id}`}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
             View Full Detail
           </Link>
           {p.ghlContactId && ghlLocationId && (
-            <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${p.ghlContactId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 bg-surface-secondary hover:bg-surface-tertiary text-txt-secondary text-ds-fine font-semibold py-2.5 px-4 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
-            >
-              <ExternalLink size={12} /> GHL
+            <a href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${p.ghlContactId}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 bg-surface-secondary hover:bg-surface-tertiary text-txt-secondary text-ds-fine font-semibold py-2 px-3 rounded-[8px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors">
+              <ExternalLink size={11} /> GHL
             </a>
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-function FinCard({ label, value, color }: { label: string; value: string; color?: string }) {
-  const isDash = value === '—'
-  return (
-    <div className="bg-surface-secondary rounded-[10px] px-3 py-2">
-      <p className="text-[10px] text-txt-muted uppercase">{label}</p>
-      <p className={`text-ds-label font-semibold ${isDash ? 'text-semantic-red' : color ?? 'text-txt-primary'}`}>{value}</p>
     </div>
   )
 }
