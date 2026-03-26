@@ -72,6 +72,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         taskCount: p._count.tasks,
         ghlContactId: p.ghlContactId,
         leadSource: p.leadSource,
+        ghlStageName: p.ghlPipelineStage,
         market: p.market?.name ?? null,
         lastOfferDate: p.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: p.lastContactedDate?.toISOString() ?? null,

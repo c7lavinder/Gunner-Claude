@@ -21,6 +21,7 @@ interface Property {
   callCount: number; taskCount: number
   ghlContactId: string | null
   leadSource: string | null
+  ghlStageName: string | null
   market: string | null
   lastOfferDate: string | null
   lastContactedDate: string | null
@@ -275,6 +276,11 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
               <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
                 {APP_STAGE_LABELS[appStage]}
               </span>
+              {p.ghlStageName && (
+                <span className="text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap bg-gray-100 text-gray-600">
+                  {p.ghlStageName}
+                </span>
+              )}
               {p.leadSource && (
                 <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
                   {p.leadSource}
