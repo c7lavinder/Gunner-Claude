@@ -251,7 +251,7 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
         const sourceColor = p.leadSource ? getSourceColor(p.leadSource) : ''
         const marketColor = MARKET_COLORS[p.market ?? ''] ?? 'bg-surface-tertiary text-txt-secondary'
         const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
-        const domColor = dom <= 7 ? 'text-green-600 bg-green-50' : dom <= 30 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+        const domColor = dom < 6 ? 'text-green-600 bg-green-50' : dom <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
 
         return (
           <button
@@ -261,8 +261,12 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
               isSelected ? 'bg-gunner-red-light' : ''
             }`}
           >
+            {/* Days in stage */}
+            <span className={`text-[11px] font-bold px-2 py-1 rounded-[6px] whitespace-nowrap shrink-0 ${domColor}`}>
+              {dom}d
+            </span>
             {/* Address */}
-            <div className="min-w-0 shrink-0" style={{ maxWidth: '45%' }}>
+            <div className="min-w-0 shrink-0" style={{ maxWidth: '40%' }}>
               <p className="text-ds-body font-medium text-txt-primary truncate">{p.address}</p>
               <p className="text-ds-fine text-txt-muted">{p.city}, {p.state} {p.zip}</p>
             </div>
@@ -270,9 +274,6 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
             <div className="flex items-center gap-1.5 flex-1 flex-wrap">
               <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
                 {APP_STAGE_LABELS[appStage]}
-              </span>
-              <span className={`text-[10px] font-medium px-1.5 py-[2px] rounded-full whitespace-nowrap ${domColor}`}>
-                {dom}d
               </span>
               {p.leadSource && (
                 <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
