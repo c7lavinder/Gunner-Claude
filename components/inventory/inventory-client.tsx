@@ -96,7 +96,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
       <PipelineStageTabs
         stageCounts={stageCounts}
         selectedStage={selectedStage}
-        onStageSelect={setSelectedStage}
+        onStageSelect={(stage) => { setSelectedStage(stage); setSelectedPropertyId(null) }}
       />
 
       {/* Toolbar: search + view toggle + filter info */}
@@ -150,39 +150,43 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
         )}
       </div>
 
-      {/* Content */}
-      {filtered.length === 0 ? (
-        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] py-16 text-center">
-          <Building2 size={24} className="text-txt-muted mx-auto mb-3" />
-          <p className="text-txt-secondary text-ds-body">
-            {search || selectedStage ? 'No properties match your filter' : 'No properties yet'}
-          </p>
+      {/* Content — flex split: list + optional detail panel */}
+      <div className="flex gap-0">
+        <div className={`${selectedProperty ? 'flex-1 min-w-0' : 'w-full'} transition-all`}>
+          {filtered.length === 0 ? (
+            <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] py-16 text-center">
+              <Building2 size={24} className="text-txt-muted mx-auto mb-3" />
+              <p className="text-txt-secondary text-ds-body">
+                {search || selectedStage ? 'No properties match your filter' : 'No properties yet'}
+              </p>
+            </div>
+          ) : viewMode === 'table' ? (
+            <PropertyTable
+              properties={filtered}
+              tenantSlug={tenantSlug}
+              selectedId={selectedPropertyId}
+              onSelect={setSelectedPropertyId}
+              ghlLocationId={ghlLocationId}
+            />
+          ) : (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map((p) => (
+                <PropertyCard key={p.id} property={p} tenantSlug={tenantSlug} />
+              ))}
+            </div>
+          )}
         </div>
-      ) : viewMode === 'table' ? (
-        <PropertyTable
-          properties={filtered}
-          tenantSlug={tenantSlug}
-          selectedId={selectedPropertyId}
-          onSelect={setSelectedPropertyId}
-          ghlLocationId={ghlLocationId}
-        />
-      ) : (
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((p) => (
-            <PropertyCard key={p.id} property={p} tenantSlug={tenantSlug} />
-          ))}
-        </div>
-      )}
 
-      {/* Quick detail drawer */}
-      {selectedProperty && (
-        <PropertyDrawer
-          property={selectedProperty}
-          tenantSlug={tenantSlug}
-          ghlLocationId={ghlLocationId}
-          onClose={() => setSelectedPropertyId(null)}
-        />
-      )}
+        {/* Detail panel — in-flow, not fixed */}
+        {selectedProperty && (
+          <PropertyDrawer
+            property={selectedProperty}
+            tenantSlug={tenantSlug}
+            ghlLocationId={ghlLocationId}
+            onClose={() => setSelectedPropertyId(null)}
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -230,26 +234,25 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
               isSelected ? 'bg-gunner-red-light' : ''
             }`}
           >
-            {/* Address */}
-            <div className="flex-1 min-w-0">
+            {/* Address + Labels */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
+                  {APP_STAGE_LABELS[appStage]}
+                </span>
+                {p.leadSource && (
+                  <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
+                    {p.leadSource}
+                  </span>
+                )}
+                {p.market && (
+                  <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${marketColor}`}>
+                    {p.market}
+                  </span>
+                )}
+              </div>
               <p className="text-ds-body font-medium text-txt-primary truncate">{p.address}</p>
               <p className="text-ds-fine text-txt-muted">{p.city}, {p.state} {p.zip}</p>
-            </div>
-            {/* Labels */}
-            <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-              <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
-                {APP_STAGE_LABELS[appStage]}
-              </span>
-              {p.leadSource && (
-                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
-                  {p.leadSource}
-                </span>
-              )}
-              {p.market && (
-                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${marketColor}`}>
-                  {p.market}
-                </span>
-              )}
             </div>
             {/* Link */}
             <Link
@@ -324,7 +327,7 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
   const domColor = dom <= 7 ? 'text-green-600' : dom <= 30 ? 'text-amber-500' : 'text-red-600'
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white border-l border-[rgba(0,0,0,0.08)] shadow-xl z-40 flex flex-col">
+    <div className="w-[420px] shrink-0 bg-white border-l border-[rgba(0,0,0,0.08)] shadow-sm flex flex-col max-h-[calc(100vh-120px)] sticky top-[60px]">
       {/* Header */}
       <div className="px-5 py-4 border-b border-[rgba(0,0,0,0.06)] shrink-0">
         <div className="flex items-center justify-between mb-2">
