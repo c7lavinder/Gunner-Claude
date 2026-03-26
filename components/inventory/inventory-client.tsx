@@ -4,8 +4,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-  Building2, Phone, CheckSquare, Search, Plus, List, LayoutGrid,
-  Trash2, ExternalLink, X,
+  Building2, Phone, CheckSquare, Search, Plus,
+  ExternalLink, X,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { PipelineStageTabs } from './PipelineStageTabs'
@@ -27,8 +27,6 @@ interface Property {
   lastContactedDate: string | null
 }
 
-type ViewMode = 'cards' | 'table'
-
 export function InventoryClient({ properties, statusCounts, tenantSlug, canManage, ghlLocationId }: {
   properties: Property[]
   statusCounts: Record<string, number>
@@ -40,7 +38,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null)
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [viewMode, setViewMode] = useState<ViewMode>('table')
+
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
 
   // Convert DB status counts to AppStage counts
@@ -122,22 +120,6 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
           />
         </div>
 
-        {/* View toggle */}
-        <div className="flex bg-surface-tertiary rounded-[10px] p-0.5">
-          <button
-            onClick={() => setViewMode('table')}
-            className={`p-2 rounded-[8px] transition-all ${viewMode === 'table' ? 'bg-white shadow-ds-float text-txt-primary' : 'text-txt-muted hover:text-txt-secondary'}`}
-          >
-            <List size={14} />
-          </button>
-          <button
-            onClick={() => setViewMode('cards')}
-            className={`p-2 rounded-[8px] transition-all ${viewMode === 'cards' ? 'bg-white shadow-ds-float text-txt-primary' : 'text-txt-muted hover:text-txt-secondary'}`}
-          >
-            <LayoutGrid size={14} />
-          </button>
-        </div>
-
         {/* Missing source alert */}
         {missingSourceCount > 0 && (
           <button
@@ -202,10 +184,10 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
             <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] py-16 text-center">
               <Building2 size={24} className="text-txt-muted mx-auto mb-3" />
               <p className="text-txt-secondary text-ds-body">
-                {search || selectedStage ? 'No properties match your filter' : 'No properties yet'}
+                {search || selectedStage || selectedMarket || selectedSource ? 'No properties match your filter' : 'No properties yet'}
               </p>
             </div>
-          ) : viewMode === 'table' ? (
+          ) : (
             <PropertyTable
               properties={filtered}
               tenantSlug={tenantSlug}
@@ -213,12 +195,6 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
               onSelect={setSelectedPropertyId}
               ghlLocationId={ghlLocationId}
             />
-          ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filtered.map((p) => (
-                <PropertyCard key={p.id} property={p} tenantSlug={tenantSlug} />
-              ))}
-            </div>
           )}
         </div>
 
@@ -427,49 +403,6 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
         )
       })}
     </div>
-  )
-}
-
-// ─── Property Card (grid view) ───────────────────────────────────────────────
-
-function PropertyCard({ property: p, tenantSlug }: { property: Property; tenantSlug: string }) {
-  const appStage = STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
-  const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
-  const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : null
-  const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
-  const domColor = dom <= 7 ? 'text-green-600' : dom <= 30 ? 'text-amber-500' : 'text-red-600'
-
-  return (
-    <Link
-      href={`/${tenantSlug}/inventory/${p.id}`}
-      className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] hover:border-[rgba(0,0,0,0.14)] hover:shadow-ds-float rounded-[14px] p-5 transition-all flex flex-col gap-3"
-    >
-      <div className="flex items-center gap-2">
-        <span className={`text-ds-fine font-medium px-2 py-[3px] rounded-full ${badgeColor}`}>
-          {APP_STAGE_LABELS[appStage]}
-        </span>
-        <span className="flex-1" />
-        <span className={`text-ds-fine font-medium ${domColor}`}>{dom}d</span>
-      </div>
-      <div>
-        <p className="text-ds-card font-medium text-txt-primary truncate">{p.address}</p>
-        <p className="text-ds-fine text-txt-muted">{p.city}, {p.state} {p.zip}</p>
-      </div>
-      {p.sellerName && <p className="text-ds-body text-txt-secondary truncate">{p.sellerName}</p>}
-      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[rgba(0,0,0,0.06)]">
-        {fmt(p.askingPrice) && <div><p className="text-ds-fine text-txt-muted">Asking</p><p className="text-ds-label font-medium text-txt-primary">{fmt(p.askingPrice)}</p></div>}
-        {fmt(p.arv) && <div><p className="text-ds-fine text-txt-muted">ARV</p><p className="text-ds-label font-medium text-semantic-green">{fmt(p.arv)}</p></div>}
-        {fmt(p.mao) && <div><p className="text-ds-fine text-txt-muted">MAO</p><p className="text-ds-label font-medium text-semantic-amber">{fmt(p.mao)}</p></div>}
-        {fmt(p.assignmentFee) && <div><p className="text-ds-fine text-txt-muted">Assignment</p><p className="text-ds-label font-medium text-semantic-blue">{fmt(p.assignmentFee)}</p></div>}
-      </div>
-      <div className="flex items-center justify-between text-ds-fine text-txt-muted">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1"><Phone size={10} />{p.callCount}</span>
-          <span className="flex items-center gap-1"><CheckSquare size={10} />{p.taskCount}</span>
-        </div>
-        {p.assignedTo && <span className="text-txt-secondary">{p.assignedTo.name}</span>}
-      </div>
-    </Link>
   )
 }
 
