@@ -193,13 +193,38 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
 
 // ─── Property Table ──────────────────────────────────────────────────────────
 
+// Rotating palette for lead sources — any new source gets a consistent color
+const SOURCE_PALETTE = [
+  'bg-violet-100 text-violet-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-rose-100 text-rose-700',
+  'bg-lime-100 text-lime-700',
+  'bg-sky-100 text-sky-700',
+  'bg-fuchsia-100 text-fuchsia-700',
+  'bg-orange-100 text-orange-700',
+  'bg-emerald-100 text-emerald-700',
+]
+
 const SOURCE_COLORS: Record<string, string> = {
-  'GHL': 'bg-blue-100 text-blue-700',
-  'Manual': 'bg-gray-100 text-gray-600',
-  'Website': 'bg-purple-100 text-purple-700',
-  'Referral': 'bg-green-100 text-green-700',
+  'PPL': 'bg-violet-100 text-violet-700',
+  'PPC': 'bg-sky-100 text-sky-700',
+  'Texts': 'bg-cyan-100 text-cyan-700',
+  'Form': 'bg-rose-100 text-rose-700',
+  'Dialer': 'bg-orange-100 text-orange-700',
   'Cold Call': 'bg-orange-100 text-orange-700',
   'Direct Mail': 'bg-pink-100 text-pink-700',
+  'Referral': 'bg-green-100 text-green-700',
+  'Website': 'bg-purple-100 text-purple-700',
+  'GHL': 'bg-blue-100 text-blue-700',
+  'Manual': 'bg-gray-100 text-gray-600',
+}
+
+function getSourceColor(source: string): string {
+  if (SOURCE_COLORS[source]) return SOURCE_COLORS[source]
+  // Hash-based fallback for unknown sources
+  let hash = 0
+  for (let i = 0; i < source.length; i++) hash = source.charCodeAt(i) + ((hash << 5) - hash)
+  return SOURCE_PALETTE[Math.abs(hash) % SOURCE_PALETTE.length]
 }
 
 const MARKET_COLORS: Record<string, string> = {
@@ -223,8 +248,10 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
         const appStage = STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
         const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
         const isSelected = selectedId === p.id
-        const sourceColor = SOURCE_COLORS[p.leadSource ?? ''] ?? 'bg-surface-tertiary text-txt-secondary'
+        const sourceColor = p.leadSource ? getSourceColor(p.leadSource) : ''
         const marketColor = MARKET_COLORS[p.market ?? ''] ?? 'bg-surface-tertiary text-txt-secondary'
+        const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
+        const domColor = dom <= 7 ? 'text-green-600 bg-green-50' : dom <= 30 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
 
         return (
           <button
@@ -234,25 +261,29 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
               isSelected ? 'bg-gunner-red-light' : ''
             }`}
           >
-            {/* Address + Labels */}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
-                  {APP_STAGE_LABELS[appStage]}
-                </span>
-                {p.leadSource && (
-                  <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
-                    {p.leadSource}
-                  </span>
-                )}
-                {p.market && (
-                  <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${marketColor}`}>
-                    {p.market}
-                  </span>
-                )}
-              </div>
+            {/* Address */}
+            <div className="min-w-0 shrink-0" style={{ maxWidth: '45%' }}>
               <p className="text-ds-body font-medium text-txt-primary truncate">{p.address}</p>
               <p className="text-ds-fine text-txt-muted">{p.city}, {p.state} {p.zip}</p>
+            </div>
+            {/* Labels */}
+            <div className="flex items-center gap-1.5 flex-1 flex-wrap">
+              <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
+                {APP_STAGE_LABELS[appStage]}
+              </span>
+              <span className={`text-[10px] font-medium px-1.5 py-[2px] rounded-full whitespace-nowrap ${domColor}`}>
+                {dom}d
+              </span>
+              {p.leadSource && (
+                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
+                  {p.leadSource}
+                </span>
+              )}
+              {p.market && (
+                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${marketColor}`}>
+                  {p.market}
+                </span>
+              )}
             </div>
             {/* Link */}
             <Link
