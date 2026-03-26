@@ -43,7 +43,6 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
   { key: 'buyers',   label: 'Buyers',        icon: Users },
   { key: 'outreach', label: 'Outreach',      icon: Send },
   { key: 'activity', label: 'Activity',      icon: Activity },
-  { key: 'ai',       label: 'AI Assistant',  icon: Sparkles },
   { key: 'blast',    label: 'Deal Blast',    icon: Megaphone },
 ]
 
@@ -138,10 +137,10 @@ export function PropertyDetailClient({
             <DollarSign size={11} /> Record Offer
           </button>
           <button
-            onClick={() => setActiveTab('ai')}
+            onClick={() => setActiveTab('blast')}
             className="flex items-center gap-1.5 text-ds-fine font-semibold bg-surface-secondary hover:bg-surface-tertiary text-txt-secondary px-3 py-1.5 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
           >
-            <Bot size={11} /> Ask AI
+            <Megaphone size={11} /> Deal Blast
           </button>
         </div>
       </div>
@@ -177,7 +176,6 @@ export function PropertyDetailClient({
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'outreach' && <OutreachTab property={property} />}
           {activeTab === 'activity' && <ActivityTab property={property} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} ghlContactId={ghlContactId} />}
-          {activeTab === 'ai' && <AITab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'blast' && <DealBlastTab property={property} tenantSlug={tenantSlug} />}
         </div>
       </div>
@@ -329,7 +327,7 @@ function DealProgress({ currentStatus, propertyId, canEdit }: { currentStatus: s
   }
 
   return (
-    <div className="bg-surface-secondary rounded-[8px] px-3 py-2 mt-3 space-y-2">
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[8px] px-3 py-2 mt-3 space-y-2">
       <div>
         <p className="text-[7px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Acquisition</p>
         <ProgressRow steps={ACQ_STEPS} activeIdx={acqIdx} color="bg-gunner-red" />
@@ -460,7 +458,7 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
                 <button
                   onClick={() => { runGhlAction('add_note', { note: noteText }); setNoteText('') }}
                   disabled={!noteText.trim() || sending}
-                  className="w-full bg-surface-tertiary hover:bg-surface-secondary text-txt-secondary text-ds-fine font-semibold rounded-[8px] py-1.5 border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
+                  className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors"
                 >
                   Save Note
                 </button>
@@ -474,14 +472,18 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
         <div className="lg:col-span-2 space-y-4">
           {/* Calls */}
           <div>
+            {(() => {
+              // Filter to graded calls with duration > 0
+              const gradedCalls = property.calls.filter(c => c.gradingStatus === 'COMPLETED' && (c.durationSeconds ?? 0) > 0)
+              return <>
             <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">
-              <Phone size={10} className="inline -mt-0.5 text-gunner-red" /> Calls ({property.calls.length})
+              <Phone size={10} className="inline -mt-0.5 text-gunner-red" /> Graded Calls ({gradedCalls.length})
             </p>
-            {property.calls.length === 0 ? (
-              <p className="text-ds-fine text-txt-muted">No calls yet</p>
+            {gradedCalls.length === 0 ? (
+              <p className="text-ds-fine text-txt-muted">No graded calls yet</p>
             ) : (
               <div className="space-y-1">
-                {property.calls.map(c => {
+                {gradedCalls.map(c => {
                   const score = c.score ?? 0
                   const sc = score >= 80 ? 'bg-semantic-green text-white' : score >= 60 ? 'bg-semantic-amber text-white' : 'bg-semantic-red text-white'
                   return (
@@ -499,6 +501,8 @@ function OverviewTab({ property, fmt, dom, domColor, tenantSlug, runGhlAction, s
                 })}
               </div>
             )}
+              </>
+            })()}
           </div>
 
           {/* Tasks */}
