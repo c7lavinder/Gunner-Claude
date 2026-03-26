@@ -99,6 +99,18 @@ export async function createPropertyFromContact(
               data: { tenantId, name, zipCodes: zips },
             })
             marketId = created.id
+          } else {
+            // No match — assign to "Global" catch-all market
+            let global = await db.market.findFirst({
+              where: { tenantId, name: 'Global' },
+              select: { id: true },
+            })
+            if (!global) {
+              global = await db.market.create({
+                data: { tenantId, name: 'Global', zipCodes: [] },
+              })
+            }
+            marketId = global.id
           }
         } catch { /* config lookup optional */ }
       }
