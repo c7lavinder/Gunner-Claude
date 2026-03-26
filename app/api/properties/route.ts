@@ -35,20 +35,22 @@ export async function POST(request: NextRequest) {
   }
 
   const {
-    address, city, state, zip, status,
+    address: rawAddr, city: rawCity, state: rawState, zip: rawZip, status,
     arv, askingPrice, mao, contractPrice, assignmentFee,
     assignedToId, sellerName, sellerPhone, sellerEmail,
   } = parsed.data
+
+  const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
 
   try {
     const property = await db.$transaction(async (tx) => {
       const prop = await tx.property.create({
         data: {
           tenantId: session.tenantId,
-          address,
-          city,
-          state,
-          zip: zip ?? '',
+          address: standardizeStreet(rawAddr),
+          city: standardizeCity(rawCity),
+          state: standardizeState(rawState),
+          zip: standardizeZip(rawZip ?? ''),
           status: status as PropertyStatus,
           arv: arv ? parseFloat(arv) : null,
           askingPrice: askingPrice ? parseFloat(askingPrice) : null,
@@ -97,7 +99,7 @@ export async function POST(request: NextRequest) {
         resourceId: property.id,
         source: 'USER',
         severity: 'INFO',
-        payload: { address, city, state },
+        payload: { address: standardizeStreet(rawAddr), city: standardizeCity(rawCity), state: standardizeState(rawState) },
       },
     })
 

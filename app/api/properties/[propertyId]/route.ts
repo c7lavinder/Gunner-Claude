@@ -60,8 +60,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
+  // Standardize address fields on save
+  const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
+
   const {
-    address, city, state, zip, status,
+    address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status,
     arv, askingPrice, mao, contractPrice, assignmentFee,
     offerPrice, repairCost, wholesalePrice,
     assignedToId, sellerName, sellerPhone, sellerEmail,
@@ -75,10 +78,10 @@ export async function PATCH(
       await tx.property.update({
         where: { id: params.propertyId, tenantId: session.tenantId },
         data: {
-          ...(address && { address }),
-          ...(city && { city }),
-          ...(state && { state }),
-          ...(zip !== undefined && { zip }),
+          ...(rawAddress && { address: standardizeStreet(rawAddress) }),
+          ...(rawCity && { city: standardizeCity(rawCity) }),
+          ...(rawState && { state: standardizeState(rawState) }),
+          ...(rawZip !== undefined && { zip: standardizeZip(rawZip ?? '') }),
           ...(status && { status: status as PropertyStatus }),
           ...(arv !== undefined && { arv: arv ? parseFloat(arv) : null }),
           ...(askingPrice !== undefined && { askingPrice: askingPrice ? parseFloat(askingPrice) : null }),

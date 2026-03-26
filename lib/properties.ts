@@ -23,11 +23,12 @@ export async function createPropertyFromContact(
     const ghlClient = await getGHLClient(tenantId)
     const contact = await ghlClient.getContact(ghlContactId)
 
-    // Parse address from contact
-    const address = contact.address1 ?? ''
-    const city = contact.city ?? ''
-    const state = contact.state ?? ''
-    const zip = contact.postalCode ?? ''
+    // Parse and standardize address from contact
+    const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
+    const address = standardizeStreet(contact.address1 ?? '')
+    const city = standardizeCity(contact.city ?? '')
+    const state = standardizeState(contact.state ?? '')
+    const zip = standardizeZip(contact.postalCode ?? '')
 
     // Deduplicate by normalized street address + state
     // Skip city (suburbs vs nearest city mismatch) and zip (often missing)
