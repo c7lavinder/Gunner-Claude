@@ -21,6 +21,12 @@ const updateSchema = z.object({
   offerPrice: z.string().nullable().optional(),
   repairCost: z.string().nullable().optional(),
   wholesalePrice: z.string().nullable().optional(),
+  currentOffer: z.string().nullable().optional(),
+  highestOffer: z.string().nullable().optional(),
+  acceptedPrice: z.string().nullable().optional(),
+  finalProfit: z.string().nullable().optional(),
+  // Source tracking: { fieldName: "ai" | "user" }
+  fieldSources: z.record(z.string(), z.enum(['ai', 'user'])).optional(),
   assignedToId: z.string().nullable().optional(),
   sellerName: z.string().nullable().optional(),
   sellerPhone: z.string().nullable().optional(),
@@ -68,6 +74,8 @@ export async function PATCH(
     address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status,
     arv, askingPrice, mao, contractPrice, assignmentFee,
     offerPrice, repairCost, wholesalePrice,
+    currentOffer, highestOffer, acceptedPrice, finalProfit,
+    fieldSources,
     assignedToId, sellerName, sellerPhone, sellerEmail,
     beds, baths, sqft, yearBuilt, lotSize, propertyType, occupancy,
     lockboxCode, projectType, description, internalNotes, lastOfferDate, lastContactedDate,
@@ -92,6 +100,10 @@ export async function PATCH(
           ...(offerPrice !== undefined && { offerPrice: offerPrice ? parseFloat(offerPrice) : null }),
           ...(repairCost !== undefined && { repairCost: repairCost ? parseFloat(repairCost) : null }),
           ...(wholesalePrice !== undefined && { wholesalePrice: wholesalePrice ? parseFloat(wholesalePrice) : null }),
+          ...(currentOffer !== undefined && { currentOffer: currentOffer ? parseFloat(currentOffer) : null }),
+          ...(highestOffer !== undefined && { highestOffer: highestOffer ? parseFloat(highestOffer) : null }),
+          ...(acceptedPrice !== undefined && { acceptedPrice: acceptedPrice ? parseFloat(acceptedPrice) : null }),
+          ...(finalProfit !== undefined && { finalProfit: finalProfit ? parseFloat(finalProfit) : null }),
           ...(assignedToId !== undefined && { assignedToId: assignedToId ?? undefined }),
           ...(beds !== undefined && { beds }),
           ...(baths !== undefined && { baths }),
@@ -106,6 +118,13 @@ export async function PATCH(
           ...(internalNotes !== undefined && { internalNotes }),
           ...(lastOfferDate !== undefined && { lastOfferDate: lastOfferDate ? new Date(lastOfferDate) : null }),
           ...(lastContactedDate !== undefined && { lastContactedDate: lastContactedDate ? new Date(lastContactedDate) : null }),
+          // Merge field sources (AI vs user tracking)
+          ...(fieldSources && {
+            fieldSources: {
+              ...((property.fieldSources as Record<string, string>) ?? {}),
+              ...fieldSources,
+            },
+          }),
         },
       })
 

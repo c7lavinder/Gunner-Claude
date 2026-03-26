@@ -19,6 +19,8 @@ interface PropertyDetail {
   arv: string | null; askingPrice: string | null; mao: string | null
   contractPrice: string | null; assignmentFee: string | null
   offerPrice: string | null; repairCost: string | null; wholesalePrice: string | null
+  currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
+  fieldSources: Record<string, string>
   ghlContactId: string | null; createdAt: string
   beds: number | null; baths: number | null; sqft: number | null
   yearBuilt: number | null; lotSize: string | null
@@ -342,11 +344,18 @@ function DealProgress({ currentStatus, propertyId, canEdit }: { currentStatus: s
 
 // ─── Inline Edit Components ──────────────────────────────────────────────────
 
+// Source-based color styles: null=gray, "ai"=blue, "user"=green
+function sourceStyles(source: string | null) {
+  if (source === 'ai') return { bg: 'bg-blue-50 border-[0.5px] border-blue-300', label: 'text-blue-700', value: 'text-blue-800' }
+  if (source === 'user') return { bg: 'bg-green-50 border-[0.5px] border-green-300', label: 'text-green-700', value: 'text-green-800' }
+  return { bg: 'bg-surface-secondary', label: 'text-txt-muted', value: 'text-txt-primary' }
+}
+
 function InlineEditCard({
-  label, value, field, propertyId, color, onSaved,
+  label, value, field, propertyId, source, onSaved,
 }: {
   label: string; value: string | null; field: string; propertyId: string
-  color?: string; onSaved: (field: string, val: string | null) => void
+  source?: string | null; onSaved: (field: string, val: string | null, src: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
@@ -366,20 +375,21 @@ function InlineEditCard({
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: raw || null }),
+        body: JSON.stringify({ [field]: raw || null, fieldSources: { [field]: 'user' } }),
       })
-      if (res.ok) onSaved(field, raw || null)
+      if (res.ok) onSaved(field, raw || null, 'user')
     } catch {}
     setSaving(false)
     setEditing(false)
   }
 
   const displayValue = value ? `$${Number(value).toLocaleString()}` : null
+  const s = sourceStyles(source ?? null)
 
   if (editing) {
     return (
-      <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">{label}</p>
+      <div className={`${s.bg} rounded-[10px] px-3 py-2.5`}>
+        <p className={`text-[9px] font-semibold uppercase tracking-wider ${s.label}`}>{label}</p>
         <input
           autoFocus type="number" value={editValue}
           onChange={e => setEditValue(e.target.value)}
@@ -393,12 +403,12 @@ function InlineEditCard({
   }
 
   return (
-    <div onClick={startEdit} className="bg-surface-secondary rounded-[10px] px-3 py-2.5 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group">
-      <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider flex items-center justify-between">
+    <div onClick={startEdit} className={`${s.bg} rounded-[10px] px-3 py-2.5 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group`}>
+      <p className={`text-[9px] font-semibold uppercase tracking-wider flex items-center justify-between ${s.label}`}>
         {label}
-        <Pencil size={8} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+        <Pencil size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
       </p>
-      <p className={`text-ds-card font-semibold mt-0.5 ${displayValue ? (color ?? 'text-txt-primary') : 'text-txt-muted'}`}>
+      <p className={`text-ds-card font-semibold mt-0.5 ${displayValue ? s.value : 'text-txt-muted'}`}>
         {displayValue ?? '—'}
       </p>
     </div>
@@ -406,10 +416,11 @@ function InlineEditCard({
 }
 
 function InlineDetailItem({
-  label, value, field, propertyId, type = 'text', onSaved,
+  label, value, field, propertyId, type = 'text', source, onSaved,
 }: {
   label: string; value: string | number | null; field: string; propertyId: string
-  type?: 'number' | 'text'; onSaved: (field: string, val: string | number | null) => void
+  type?: 'number' | 'text'; source?: string | null
+  onSaved: (field: string, val: string | number | null, src: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
@@ -424,21 +435,24 @@ function InlineDetailItem({
     try {
       const payload: Record<string, unknown> = {}
       payload[field] = type === 'number' ? (raw ? Number(raw) : null) : (raw || null)
+      payload.fieldSources = { [field]: 'user' }
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (res.ok) onSaved(field, type === 'number' ? (raw ? Number(raw) : null) : (raw || null))
+      if (res.ok) onSaved(field, type === 'number' ? (raw ? Number(raw) : null) : (raw || null), 'user')
     } catch {}
     setSaving(false)
     setEditing(false)
   }
 
+  const s = sourceStyles(source ?? null)
+
   if (editing) {
     return (
       <span className="inline-flex items-center gap-1">
-        <span className="text-txt-muted">{label}:</span>
+        <span className={s.label}>{label}:</span>
         <input
           autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
           onChange={e => setEditValue(e.target.value)}
@@ -455,11 +469,11 @@ function InlineDetailItem({
 
   return (
     <span
-      className="cursor-pointer hover:text-gunner-red transition-colors group inline-flex items-center gap-1"
+      className={`cursor-pointer hover:text-gunner-red transition-colors group inline-flex items-center gap-1 ${source ? `px-1.5 py-0.5 rounded ${s.bg}` : ''}`}
       onClick={() => { setEditValue(value != null ? String(value) : ''); setEditing(true) }}
     >
-      <span className="text-txt-muted">{label}:</span>
-      <span className="text-txt-primary font-medium group-hover:underline">{display ?? '—'}</span>
+      <span className={s.label}>{label}:</span>
+      <span className={`font-medium group-hover:underline ${display ? s.value : 'text-txt-muted'}`}>{display ?? '—'}</span>
       <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
     </span>
   )
@@ -691,14 +705,14 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
   // Local editable state — updates on save without page reload
   const [vals, setVals] = useState({
-    contractPrice: property.contractPrice,
     askingPrice: property.askingPrice,
-    offerPrice: property.offerPrice,
-    arv: property.arv,
     mao: property.mao,
-    repairCost: property.repairCost,
+    currentOffer: property.currentOffer,
+    contractPrice: property.contractPrice,
+    highestOffer: property.highestOffer,
+    acceptedPrice: property.acceptedPrice,
     assignmentFee: property.assignmentFee,
-    wholesalePrice: property.wholesalePrice,
+    finalProfit: property.finalProfit,
     beds: property.beds,
     baths: property.baths,
     sqft: property.sqft,
@@ -711,49 +725,68 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
     internalNotes: property.internalNotes,
   })
 
-  function handleSaved(field: string, val: string | number | null) {
+  const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
+
+  function handleSaved(field: string, val: string | number | null, src?: string) {
     setVals(prev => ({ ...prev, [field]: val }))
+    if (src) setSources(prev => ({ ...prev, [field]: src }))
   }
 
-  const spread = vals.arv && vals.contractPrice
-    ? Number(vals.arv) - Number(vals.contractPrice)
+  // Computed: Est. Spread = Accepted (or Contract) - Asking
+  const spreadBase = vals.acceptedPrice ?? vals.contractPrice
+  const spread = spreadBase && vals.askingPrice
+    ? Number(spreadBase) - Number(vals.askingPrice)
     : null
 
   return (
     <div className="space-y-5">
-      {/* Financials grid — click any card to edit */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <InlineEditCard label="CONTRACT" value={vals.contractPrice} field="contractPrice" propertyId={property.id} onSaved={handleSaved} />
-        <InlineEditCard label="ASKING" value={vals.askingPrice} field="askingPrice" propertyId={property.id} onSaved={handleSaved} />
-        <InlineEditCard label="OFFER PRICE" value={vals.offerPrice} field="offerPrice" propertyId={property.id} onSaved={handleSaved} />
-        <InlineEditCard label="ARV" value={vals.arv} field="arv" propertyId={property.id} color="text-semantic-green" onSaved={handleSaved} />
-        <InlineEditCard label="MAO" value={vals.mao} field="mao" propertyId={property.id} color="text-semantic-amber" onSaved={handleSaved} />
-        <InlineEditCard label="REPAIR COST" value={vals.repairCost} field="repairCost" propertyId={property.id} color="text-semantic-red" onSaved={handleSaved} />
-        <InlineEditCard label="ASSIGNMENT FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={property.id} color="text-semantic-blue" onSaved={handleSaved} />
-        <InlineEditCard label="WHOLESALE" value={vals.wholesalePrice} field="wholesalePrice" propertyId={property.id} color="text-semantic-blue" onSaved={handleSaved} />
-        <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">EST. SPREAD</p>
-          <p className={`text-ds-card font-semibold mt-0.5 ${spread != null ? (spread > 0 ? 'text-semantic-green' : 'text-semantic-red') : 'text-txt-muted'}`}>
-            {spread != null ? `$${spread.toLocaleString()}` : '—'}
-          </p>
-        </div>
-        <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">DAYS ON MARKET</p>
-          <p className={`text-ds-card font-semibold mt-0.5 ${domColor}`}>{dom}</p>
+      {/* Row 1 — Pricing Intent */}
+      <div>
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Pricing Intent</p>
+        <div className="grid grid-cols-3 gap-3">
+          <InlineEditCard label="ASKING PRICE" value={vals.askingPrice} field="askingPrice" propertyId={property.id} source={sources.askingPrice} onSaved={handleSaved} />
+          <InlineEditCard label="MAX ALLOWABLE OFFER" value={vals.mao} field="mao" propertyId={property.id} source={sources.mao} onSaved={handleSaved} />
+          <InlineEditCard label="CURRENT OFFER" value={vals.currentOffer} field="currentOffer" propertyId={property.id} source={sources.currentOffer} onSaved={handleSaved} />
         </div>
       </div>
 
-      {/* Property details — click any field to edit */}
+      {/* Row 2 — Deal Outcomes */}
+      <div>
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Deal Outcomes</p>
+        <div className="grid grid-cols-3 gap-3">
+          <InlineEditCard label="CONTRACT PRICE" value={vals.contractPrice} field="contractPrice" propertyId={property.id} source={sources.contractPrice} onSaved={handleSaved} />
+          <InlineEditCard label="HIGHEST OFFER" value={vals.highestOffer} field="highestOffer" propertyId={property.id} source={sources.highestOffer} onSaved={handleSaved} />
+          <InlineEditCard label="ACCEPTED PRICE" value={vals.acceptedPrice} field="acceptedPrice" propertyId={property.id} source={sources.acceptedPrice} onSaved={handleSaved} />
+        </div>
+      </div>
+
+      {/* Row 3 — Profit Summary */}
+      <div>
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Profit Summary</p>
+        <div className="grid grid-cols-3 gap-3">
+          {/* Est. Spread — computed, read-only */}
+          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">EST. SPREAD</p>
+            <p className={`text-ds-card font-semibold mt-0.5 ${spread != null ? (spread > 0 ? 'text-semantic-green' : 'text-semantic-red') : 'text-txt-muted'}`}>
+              {spread != null ? `$${spread.toLocaleString()}` : '—'}
+            </p>
+          </div>
+          <InlineEditCard label="ASSIGNMENT FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={property.id} source={sources.assignmentFee} onSaved={handleSaved} />
+          <InlineEditCard label="FINAL PROFIT" value={vals.finalProfit} field="finalProfit" propertyId={property.id} source={sources.finalProfit} onSaved={handleSaved} />
+        </div>
+      </div>
+
+      {/* Property details strip — click any field to edit */}
       <div className="bg-surface-secondary rounded-[10px] px-4 py-3">
         <div className="flex flex-wrap gap-4 text-ds-fine">
-          <InlineDetailItem label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} onSaved={handleSaved} />
-          <InlineDetailItem label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" onSaved={handleSaved} />
-          <InlineDetailItem label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" onSaved={handleSaved} />
-          <InlineDetailItem label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" onSaved={handleSaved} />
-          <InlineDetailItem label="Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" onSaved={handleSaved} />
-          <InlineDetailItem label="Lot" value={vals.lotSize} field="lotSize" propertyId={property.id} onSaved={handleSaved} />
-          <InlineDetailItem label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} onSaved={handleSaved} />
-          <InlineDetailItem label="Lockbox" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} onSaved={handleSaved} />
+          <InlineDetailItem label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} source={sources.propertyType} onSaved={handleSaved} />
+          <InlineDetailItem label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
+          <InlineDetailItem label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
+          <InlineDetailItem label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} onSaved={handleSaved} />
+          <InlineDetailItem label="Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
+          <InlineDetailItem label="Lot" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
+          <InlineDetailItem label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} source={sources.occupancy} onSaved={handleSaved} />
+          <InlineDetailItem label="Lockbox" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
         </div>
       </div>
 

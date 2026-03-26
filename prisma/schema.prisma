@@ -220,6 +220,13 @@ model Property {
   offerPrice     Decimal? @db.Decimal(12, 2) @map("offer_price")
   repairCost     Decimal? @db.Decimal(12, 2) @map("repair_cost")
   wholesalePrice Decimal? @db.Decimal(12, 2) @map("wholesale_price")
+  currentOffer   Decimal? @db.Decimal(12, 2) @map("current_offer")
+  highestOffer   Decimal? @db.Decimal(12, 2) @map("highest_offer")
+  acceptedPrice  Decimal? @db.Decimal(12, 2) @map("accepted_price")
+  finalProfit    Decimal? @db.Decimal(12, 2) @map("final_profit")
+
+  // Source tracking for AI vs user edits — { fieldName: "ai" | "user" }
+  fieldSources   Json     @default("{}") @map("field_sources")
 
   // Tracking dates
   lastOfferDate      DateTime? @map("last_offer_date")
