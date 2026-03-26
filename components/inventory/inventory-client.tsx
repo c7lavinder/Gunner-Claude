@@ -276,8 +276,12 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
               <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
                 {APP_STAGE_LABELS[appStage]}
               </span>
-              {p.ghlStageName && (
-                <span className="text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap bg-gray-100 text-gray-600">
+              {p.ghlStageName && !p.ghlStageName.includes('-') && (
+                <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${
+                  appStage.startsWith('acquisition') ? 'bg-red-50 text-red-600' :
+                  appStage.startsWith('disposition') ? 'bg-blue-50 text-blue-600' :
+                  'bg-amber-50 text-amber-600'
+                }`}>
                   {p.ghlStageName}
                 </span>
               )}
