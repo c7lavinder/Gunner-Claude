@@ -93,58 +93,83 @@ function parseBuyerFields(contact: {
   }
 }
 
-// Score a buyer against a property (0-100)
-function scoreBuyer(
+// Check if a buyer's markets match the property
+function buyerMatchesMarket(
   buyer: ReturnType<typeof parseBuyerFields>,
-  zipMarkets: string[],
-  propertyCity: string | null,
-  projectTypes: string[],
-  customMarkets: string[],
-): number {
-  let score = 0
-
-  // Market match targets: zip-based markets + custom propertyMarkets + city
-  const matchTargets = [...zipMarkets, ...customMarkets]
-  if (propertyCity) matchTargets.push(propertyCity)
-
-  const matchesMarket = (markets: string[]) => markets.some(m =>
+  matchTargets: string[],
+): boolean {
+  const check = (markets: string[]) => markets.some(m =>
     matchTargets.some(pm =>
       pm.toLowerCase().includes(m.toLowerCase()) || m.toLowerCase().includes(pm.toLowerCase())
     )
   )
-
-  // Primary market match: +40
   const primaryMarkets = buyer.markets.filter(m => m.toLowerCase() !== 'other')
-  if (matchesMarket(primaryMarkets)) {
-    score += 40
-  }
+  if (check(primaryMarkets)) return true
+  if (buyer.secondaryMarkets.length > 0 && check(buyer.secondaryMarkets)) return true
+  return false
+}
 
-  // Secondary market match: +20
-  if (buyer.secondaryMarkets.length > 0 && matchesMarket(buyer.secondaryMarkets)) {
-    score += 20
-  }
+// Use LLM to match property project types against buyer buybox values
+async function llmMatchBuybox(projectTypes: string[], uniqueBuyboxValues: string[]): Promise<Set<string>> {
+  if (projectTypes.length === 0 || uniqueBuyboxValues.length === 0) return new Set()
+  try {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      messages: [{
+        role: 'user',
+        content: `Property project types: ${JSON.stringify(projectTypes)}
+Buyer buybox values: ${JSON.stringify(uniqueBuyboxValues)}
 
-  // Buybox vs Project Type: exact match on shared terms: +20
-  // Both use the same options (Flipper, Rental, Builder, Landlord, Wholesale, etc.)
-  if (buyer.buybox && projectTypes.length > 0) {
-    const buyerTypes = buyer.buybox.split(',').map(b => b.trim().toLowerCase())
-    const propTypes = projectTypes.map(p => p.toLowerCase())
-    if (buyerTypes.some(bt => propTypes.some(pt => bt === pt || bt.includes(pt) || pt.includes(bt)))) {
-      score += 20
+Which buybox values match or are synonymous with the property project types?
+For example: "Flipper" matches "Fix and Flip", "Rental" matches "Buy and Hold" or "Landlord".
+Return ONLY a JSON array of matching buybox values. If none match, return [].`,
+      }],
+    })
+    const text = res.content[0].type === 'text' ? res.content[0].text : '[]'
+    const match = text.match(/\[[\s\S]*\]/)
+    if (match) {
+      const arr = JSON.parse(match[0]) as string[]
+      return new Set(arr.map(v => v.toLowerCase()))
     }
+  } catch (err) {
+    console.error('[Buyers] LLM buybox match failed:', err)
+  }
+  return new Set()
+}
+
+// Score a market-matched buyer (0-100)
+function scoreBuyer(
+  buyer: ReturnType<typeof parseBuyerFields>,
+  buyboxMatches: Set<string>,
+): number {
+  let score = 0
+
+  // Buyer Tier — heaviest weight (+30/+20/+10)
+  if (buyer.tier === 'priority') score += 30
+  else if (buyer.tier === 'qualified') score += 20
+  else if (buyer.tier === 'jv') score += 10
+
+  // Buybox matches project type — LLM-verified (+25)
+  if (buyer.buybox) {
+    const buyerTypes = buyer.buybox.split(',').map(b => b.trim().toLowerCase())
+    if (buyerTypes.some(bt => buyboxMatches.has(bt))) score += 25
   }
 
-  // Tier bonus: priority=+15, qualified=+10, jv=+5
-  if (buyer.tier === 'priority') score += 15
-  else if (buyer.tier === 'qualified') score += 10
-  else if (buyer.tier === 'jv') score += 5
+  // Has purchased before (+15)
+  if (buyer.hasPurchased) score += 15
 
-  // Verified funding: +10
+  // Response speed (+10 for same day/fast)
+  const speed = buyer.responseSpeed?.toLowerCase() ?? ''
+  if (speed === 'same day' || speed === 'fast') score += 10
+
+  // Verified funding (+10)
   if (buyer.verifiedFunding) score += 10
 
-  // Response speed: +5 for same day/fast
-  const speed = buyer.responseSpeed?.toLowerCase() ?? ''
-  if (speed === 'same day' || speed === 'fast') score += 5
+  // Last contact date — recent = +5 (within 30 days)
+  // TODO: check last_contact_date field when available
 
   return Math.min(score, 100)
 }
@@ -231,13 +256,26 @@ export async function GET(
       })
     }
 
-    // Score all buyers
-    const matched = ghlBuyers
+    // Step 1: Market is the BASE filter — no market match = not shown
+    const customMarkets = (property.propertyMarkets ?? []) as string[]
+    const allPropertyMarkets = [...propertyMarkets, ...customMarkets]
+    if (property.city) allPropertyMarkets.push(property.city)
+
+    const marketMatched = ghlBuyers.filter(b => buyerMatchesMarket(b, allPropertyMarkets))
+    console.log(`[Buyers] Market filter: ${ghlBuyers.length} total → ${marketMatched.length} in market`)
+
+    // Step 2: LLM-assisted buybox matching (one call for all unique buybox values)
+    const projectTypes = (property.projectType ?? []) as string[]
+    const uniqueBuybox = [...new Set(marketMatched.map(b => b.buybox).filter(Boolean))]
+    const buyboxMatches = await llmMatchBuybox(projectTypes, uniqueBuybox)
+    console.log(`[Buyers] Buybox LLM: projectTypes=${JSON.stringify(projectTypes)}, matched=${JSON.stringify([...buyboxMatches])}`)
+
+    // Step 3: Score within market-matched buyers
+    const matched = marketMatched
       .map(b => ({
         ...b,
-        matchScore: scoreBuyer(b, propertyMarkets, property.city, (property.projectType ?? []) as string[], (property.propertyMarkets ?? []) as string[]),
+        matchScore: scoreBuyer(b, buyboxMatches),
       }))
-      .filter(b => b.matchScore > 0)
       .sort((a, b) => {
         const tierOrder = { priority: 0, qualified: 1, jv: 2, unqualified: 3 }
         const tierDiff = tierOrder[a.tier] - tierOrder[b.tier]
