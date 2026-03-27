@@ -1980,7 +1980,7 @@ function BuyerRow({ buyer: b, tierColors }: {
         )}
       </div>
       {/* Tier badge */}
-      <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${tierColors[b.tier] ?? tierColors.unqualified}`}>
+      <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 capitalize ${tierColors[b.tier] ?? tierColors.unqualified}`}>
         {b.tier}
       </span>
       {/* Name */}
