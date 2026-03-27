@@ -26,7 +26,7 @@ export async function GET() {
 }
 
 async function reregisterAllWebhooks() {
-  const { reregisterWebhookForTenant } = await import('@/app/api/ghl/reregister-webhook/route')
+  const { reregisterWebhookForTenant } = await import('@/lib/ghl/webhook-register')
   const tenants = await db.tenant.findMany({
     where: { ghlAccessToken: { not: null } },
     select: { id: true, slug: true },
