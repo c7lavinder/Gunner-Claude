@@ -1574,7 +1574,8 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
   const [logs, setLogs] = useState<Array<{
     id: string; type: string; channel: string; recipientName: string; recipientContact: string
     ghlContactId: string | null; notes: string | null; offerAmount: number | null
-    showingDate: string | null; loggedAt: string; loggedByName: string
+    offerStatus: string | null; showingDate: string | null; showingStatus: string | null
+    source: string; loggedAt: string; loggedByName: string
   }>>([])
   const [loaded, setLoaded] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -1776,21 +1777,152 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
           <p className="text-ds-body text-txt-muted">No {subTab}s logged yet</p>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {filtered.map(l => (
-            <div key={l.id} className="flex items-center gap-3 bg-surface-secondary rounded-[8px] px-3 py-2">
-              <span className="text-[9px] font-semibold text-txt-muted uppercase w-12">{l.channel}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-ds-fine text-txt-primary font-medium">{l.recipientName}</p>
-                {l.offerAmount && <p className="text-ds-fine text-semantic-green font-medium">${l.offerAmount.toLocaleString()}</p>}
-                {l.showingDate && <p className="text-ds-fine text-semantic-blue">{format(new Date(l.showingDate), 'MMM d, yyyy h:mm a')}</p>}
-                {l.notes && <p className="text-ds-fine text-txt-muted truncate">{l.notes}</p>}
-              </div>
-              <span className="text-ds-fine text-txt-muted shrink-0">{format(new Date(l.loggedAt), 'MMM d')}</span>
-            </div>
+            <OutreachLogCard key={l.id} log={l} propertyId={property.id} onUpdated={async () => {
+              const res = await fetch(`/api/properties/${property.id}/outreach`)
+              const d = await res.json()
+              setLogs(d.logs ?? [])
+            }} />
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Outreach Log Card ──────────────────────────────────────────────────────
+
+const OFFER_STATUSES = ['Pending', 'Accepted', 'Rejected', 'Countered', 'Expired']
+const SHOWING_STATUSES = ['Scheduled', 'Completed', 'Cancelled', 'No Show']
+const OFFER_STATUS_COLORS: Record<string, string> = {
+  Pending: 'bg-amber-100 text-amber-700', Accepted: 'bg-green-100 text-green-700',
+  Rejected: 'bg-red-100 text-red-700', Countered: 'bg-purple-100 text-purple-700',
+  Expired: 'bg-gray-100 text-gray-500',
+}
+const SHOWING_STATUS_COLORS: Record<string, string> = {
+  Scheduled: 'bg-blue-100 text-blue-700', Completed: 'bg-green-100 text-green-700',
+  Cancelled: 'bg-red-100 text-red-700', 'No Show': 'bg-amber-100 text-amber-700',
+}
+
+function OutreachLogCard({ log: l, propertyId, onUpdated }: {
+  log: {
+    id: string; type: string; channel: string; recipientName: string; recipientContact: string
+    notes: string | null; offerAmount: number | null; offerStatus: string | null
+    showingDate: string | null; showingStatus: string | null; source: string; loggedAt: string; loggedByName: string
+  }
+  propertyId: string
+  onUpdated: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editNotes, setEditNotes] = useState(l.notes ?? '')
+  const [editAmount, setEditAmount] = useState(l.offerAmount?.toString() ?? '')
+  const [editDate, setEditDate] = useState(l.showingDate ? l.showingDate.slice(0, 10) : '')
+  const [editTime, setEditTime] = useState(l.showingDate ? l.showingDate.slice(11, 16) : '')
+  const [saving, setSaving] = useState(false)
+
+  async function updateField(data: Record<string, unknown>) {
+    setSaving(true)
+    try {
+      await fetch(`/api/properties/${propertyId}/outreach`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update', logId: l.id, type: l.type, ...data }),
+      })
+      onUpdated()
+    } catch {}
+    setSaving(false)
+  }
+
+  async function saveEdits() {
+    const data: Record<string, unknown> = { notes: editNotes }
+    if (l.type === 'offer') data.offerAmount = editAmount
+    if (l.type === 'showing' && editDate) data.showingDate = editTime ? `${editDate}T${editTime}:00` : `${editDate}T09:00:00`
+    await updateField(data)
+    setEditing(false)
+  }
+
+  const sourceLabel = l.source === 'Blast' ? 'Blast' : l.source === 'Auto' ? 'Auto' : 'Manual'
+  const sourceColor = l.source === 'Blast' ? 'bg-purple-100 text-purple-700' : l.source === 'Auto' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+
+  return (
+    <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5 group">
+      <div className="flex items-start gap-3">
+        {/* Left: source badge */}
+        <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 mt-0.5 ${sourceColor}`}>
+          {sourceLabel}
+        </span>
+
+        {/* Center: details */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-ds-fine text-txt-primary font-medium">{l.recipientName}</p>
+            <span className="text-[9px] text-txt-muted">{l.channel}</span>
+          </div>
+
+          {/* Offer details */}
+          {l.type === 'offer' && (
+            <div className="flex items-center gap-2 mt-0.5">
+              {editing ? (
+                <input type="number" value={editAmount} onChange={e => setEditAmount(e.target.value)}
+                  className="w-24 bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-ds-fine font-medium focus:outline-none" />
+              ) : (
+                l.offerAmount && <span className="text-ds-fine font-semibold text-semantic-green">${l.offerAmount.toLocaleString()}</span>
+              )}
+              <select value={l.offerStatus ?? 'Pending'} onChange={e => updateField({ offerStatus: e.target.value, offerAmount: l.offerAmount })}
+                disabled={saving}
+                className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border-none cursor-pointer ${OFFER_STATUS_COLORS[l.offerStatus ?? 'Pending'] ?? OFFER_STATUS_COLORS.Pending}`}>
+                {OFFER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Showing details */}
+          {l.type === 'showing' && (
+            <div className="flex items-center gap-2 mt-0.5">
+              {editing ? (
+                <div className="flex gap-1">
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
+                    className="bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" />
+                  <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)}
+                    className="bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" />
+                </div>
+              ) : (
+                l.showingDate && <span className="text-ds-fine text-semantic-blue">{format(new Date(l.showingDate), 'EEE, MMM d · h:mm a')}</span>
+              )}
+              <select value={l.showingStatus ?? 'Scheduled'} onChange={e => updateField({ showingStatus: e.target.value })}
+                disabled={saving}
+                className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border-none cursor-pointer ${SHOWING_STATUS_COLORS[l.showingStatus ?? 'Scheduled'] ?? SHOWING_STATUS_COLORS.Scheduled}`}>
+                {SHOWING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Notes */}
+          {editing ? (
+            <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2}
+              className="w-full mt-1 bg-white border-[0.5px] border-gunner-red/30 rounded px-2 py-1 text-ds-fine focus:outline-none resize-none" />
+          ) : (
+            l.notes && <p className="text-ds-fine text-txt-muted mt-0.5 truncate">{l.notes}</p>
+          )}
+        </div>
+
+        {/* Right: date + edit */}
+        <div className="text-right shrink-0">
+          <span className="text-[10px] text-txt-muted">{format(new Date(l.loggedAt), 'MMM d')}</span>
+          <div className="mt-0.5">
+            {editing ? (
+              <div className="flex gap-1">
+                <button onClick={saveEdits} disabled={saving} className="text-[9px] text-semantic-green hover:underline">Save</button>
+                <button onClick={() => setEditing(false)} className="text-[9px] text-txt-muted hover:underline">Cancel</button>
+              </div>
+            ) : (
+              <button onClick={() => setEditing(true)} className="text-[9px] text-txt-muted opacity-0 group-hover:opacity-100 hover:text-gunner-red transition-all">
+                Edit
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

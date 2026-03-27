@@ -850,7 +850,10 @@ model OutreachLog {
   ghlContactId     String?  @map("ghl_contact_id")
   notes            String?  @db.Text
   offerAmount      Float?   @map("offer_amount")
+  offerStatus      String?  @map("offer_status")    // Pending, Accepted, Rejected, Countered, Expired
   showingDate      DateTime? @map("showing_date")
+  showingStatus    String?  @map("showing_status")   // Scheduled, Completed, Cancelled, No Show
+  source           String   @default("Manual") @map("source") // Manual, Blast, Auto
   loggedAt         DateTime @default(now()) @map("logged_at")
 
   @@map("outreach_logs")
