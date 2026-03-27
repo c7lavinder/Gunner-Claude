@@ -1738,6 +1738,8 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
 
   // Kanban stage tracking: buyerId -> column
   const [buyerStages, setBuyerStages] = useState<Record<string, KanbanStage>>({})
+  // Left column tab: switch between Added (manual) and Matched (auto)
+  const [leftTab, setLeftTab] = useState<'matched' | 'added'>('matched')
 
   // Edit buyer slide-over
   const [editTarget, setEditTarget] = useState<BuyerItem | null>(null)
@@ -1885,6 +1887,12 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   }
 
   function buyersInColumn(col: KanbanStage) {
+    if (col === 'matched') {
+      // Left column: filter by Added vs Matched tab
+      const inCol = allBuyers.filter(b => getBuyerStage(b.id) === 'matched')
+      if (leftTab === 'added') return inCol.filter(b => addedBuyers.some(a => a.id === b.id))
+      return inCol.filter(b => !addedBuyers.some(a => a.id === b.id))
+    }
     return allBuyers.filter(b => getBuyerStage(b.id) === col)
   }
 
@@ -2149,15 +2157,28 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
               <div key={col.key} className="min-w-[280px] flex-1 rounded-xl border border-[rgba(0,0,0,0.06)] bg-surface-secondary/50 p-3">
                 {/* Column header */}
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-txt-muted">{col.label}</span>
-                    <span className="text-[10px] font-medium bg-surface-tertiary text-txt-muted px-1.5 py-0.5 rounded-full">{colBuyers.length}</span>
-                  </div>
-                  {col.key === 'matched' && (
-                    <button onClick={openAddForm}
-                      className="text-[10px] font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-0.5 transition-colors">
-                      <Plus size={10} /> Add
-                    </button>
+                  {col.key === 'matched' ? (
+                    <>
+                      <div className="flex items-center gap-1 bg-surface-tertiary rounded-lg p-0.5">
+                        <button onClick={() => setLeftTab('matched')}
+                          className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${leftTab === 'matched' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}>
+                          Matched <span className="text-[9px] font-normal ml-0.5">({allBuyers.filter(b => getBuyerStage(b.id) === 'matched' && !addedBuyers.some(a => a.id === b.id)).length})</span>
+                        </button>
+                        <button onClick={() => setLeftTab('added')}
+                          className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${leftTab === 'added' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}>
+                          Added <span className="text-[9px] font-normal ml-0.5">({addedBuyers.filter(b => getBuyerStage(b.id) === 'matched').length})</span>
+                        </button>
+                      </div>
+                      <button onClick={openAddForm}
+                        className="text-[10px] font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-0.5 transition-colors">
+                        <Plus size={10} /> Add
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-txt-muted">{col.label}</span>
+                      <span className="text-[10px] font-medium bg-surface-tertiary text-txt-muted px-1.5 py-0.5 rounded-full">{colBuyers.length}</span>
+                    </div>
                   )}
                 </div>
 
