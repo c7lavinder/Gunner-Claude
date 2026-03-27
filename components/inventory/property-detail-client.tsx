@@ -511,15 +511,18 @@ function InlineDetailItem({
 }
 
 function InlineTextArea({
-  label, value, field, propertyId, labelColor, bgColor, textColor, onSaved,
+  label, value, field, propertyId, labelColor, bgColor, textColor, source, onSaved,
 }: {
   label: string; value: string | null; field: string; propertyId: string
-  labelColor?: string; bgColor?: string; textColor?: string
-  onSaved: (field: string, val: string | null) => void
+  labelColor?: string; bgColor?: string; textColor?: string; source?: string
+  onSaved: (field: string, val: string | null, src?: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const sourceTag = source === 'ai' ? 'AI' : source === 'api' ? 'API' : source === 'user' ? 'EDITED' : null
+  const tagColor = source === 'ai' ? 'text-blue-400' : source === 'api' ? 'text-purple-400' : source === 'user' ? 'text-green-400' : ''
 
   async function save() {
     if (saving) return
@@ -530,9 +533,9 @@ function InlineTextArea({
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: raw || null }),
+        body: JSON.stringify({ [field]: raw || null, fieldSources: { [field]: raw ? 'user' : '' } }),
       })
-      if (res.ok) onSaved(field, raw || null)
+      if (res.ok) onSaved(field, raw || null, raw ? 'user' : undefined)
     } catch {}
     setSaving(false)
     setEditing(false)
@@ -556,11 +559,14 @@ function InlineTextArea({
   return (
     <div
       onClick={() => { setEditValue(value ?? ''); setEditing(true) }}
-      className={`${bgColor ?? 'bg-surface-secondary'} rounded-[10px] px-4 py-3 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group`}
+      className={`${bgColor ?? 'bg-surface-secondary'} rounded-[10px] px-4 py-3 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group relative`}
     >
+      {sourceTag && (
+        <span className={`absolute top-1.5 right-2 text-[7px] font-bold uppercase ${tagColor}`}>{sourceTag}</span>
+      )}
       <p className={`text-[9px] font-semibold uppercase tracking-wider mb-1 flex items-center justify-between ${labelColor ?? 'text-txt-muted'}`}>
         {label}
-        <Pencil size={8} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+        <Pencil size={8} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity mr-6" />
       </p>
       <p className={`text-ds-fine ${value ? (textColor ?? 'text-txt-secondary') : 'text-txt-muted'}`}>
         {value ?? 'Click to add...'}
@@ -1262,8 +1268,10 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         </div>
       </div>
 
-      {/* Description — click to edit */}
-      <InlineTextArea label="Description" value={vals.description} field="description" propertyId={property.id} onSaved={handleSaved} />
+      {/* Description — click to edit, blue when AI-generated */}
+      <InlineTextArea label="Description" value={vals.description} field="description" propertyId={property.id} onSaved={handleSaved}
+        {...(sources.description === 'ai' ? { labelColor: 'text-blue-700', bgColor: 'bg-blue-50 border-[0.5px] border-blue-200', textColor: 'text-blue-900' } : {})}
+        source={sources.description} />
 
       {/* Internal notes — click to edit */}
       <InlineTextArea label="Internal Notes" value={vals.internalNotes} field="internalNotes" propertyId={property.id}
