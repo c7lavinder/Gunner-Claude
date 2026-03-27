@@ -81,6 +81,21 @@ function sumRevenue(props: KpiProperty[]): number {
   return props.reduce((s, p) => s + (p.finalProfit ?? p.assignmentFee ?? 0), 0)
 }
 
+// Cumulative stage count: a property at stage N counts in stages 0..N
+function cumulativeCounts(
+  props: KpiProperty[],
+  stages: typeof ACQ_STAGES,
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const s of stages) counts[s.key] = 0
+  for (const p of props) {
+    const idx = stages.findIndex(s => s.statuses.includes(p.status))
+    if (idx < 0) continue
+    for (let i = 0; i <= idx; i++) counts[stages[i].key]++
+  }
+  return counts
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProperty[]; tenantSlug: string }) {
@@ -117,14 +132,8 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
   const missingSource = properties.filter(p => !p.leadSource && ACQ_ALL_STATUSES.includes(p.status)).length
   const missingMarket = properties.filter(p => p.propertyMarkets.length === 0).length
 
-  // ── Acquisition Counts ──────────────────────────────────────────────────────
-  const acqCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    for (const stage of ACQ_STAGES) {
-      counts[stage.key] = acqFiltered.filter(p => stage.statuses.includes(p.status)).length
-    }
-    return counts
-  }, [acqFiltered])
+  // ── Acquisition Counts (cumulative: Offer Made also counts in Lead + Apt Set)
+  const acqCounts = useMemo(() => cumulativeCounts(acqFiltered, ACQ_STAGES), [acqFiltered])
 
   const acqRevenue = useMemo(() => sumRevenue(acqFiltered.filter(p => p.status === 'SOLD')), [acqFiltered])
 
@@ -132,14 +141,8 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
     label: s.label, count: acqCounts[s.key], color: FUNNEL_COLORS[i],
   }))
 
-  // ── Disposition Counts ──────────────────────────────────────────────────────
-  const dispoCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    for (const stage of DISPO_STAGES) {
-      counts[stage.key] = dispoFiltered.filter(p => stage.statuses.includes(p.status)).length
-    }
-    return counts
-  }, [dispoFiltered])
+  // ── Disposition Counts (cumulative: Contracted also counts in New Deal, Pushed Out, Offers)
+  const dispoCounts = useMemo(() => cumulativeCounts(dispoFiltered, DISPO_STAGES), [dispoFiltered])
 
   const dispoRevenue = useMemo(() => sumRevenue(dispoFiltered.filter(p => p.status === 'DISPO_CLOSED')), [dispoFiltered])
 
@@ -154,18 +157,18 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
 
     const rows = sources.map(src => {
       const group = acqFiltered.filter(p => src === 'Unassigned' ? !p.leadSource : p.leadSource === src)
-      const leadCount = group.filter(p => ACQ_STAGES[0].statuses.includes(p.status)).length
       const total = group.length
       const type = INBOUND_SOURCES.includes(src) ? 'Inbound' : OUTBOUND_SOURCES.includes(src) ? 'Outbound' : 'Unknown'
       const rev = sumRevenue(group.filter(p => p.status === 'SOLD'))
+      const cc = cumulativeCounts(group, ACQ_STAGES)
 
       return {
         source: src, type, spend: '—', vol: total,
-        lead: countPct(group.filter(p => ACQ_STAGES[0].statuses.includes(p.status)).length, total),
-        aptSet: countPct(group.filter(p => ACQ_STAGES[1].statuses.includes(p.status)).length, total),
-        offerMade: countPct(group.filter(p => ACQ_STAGES[2].statuses.includes(p.status)).length, total),
-        underContract: countPct(group.filter(p => ACQ_STAGES[3].statuses.includes(p.status)).length, total),
-        closed: countPct(group.filter(p => ACQ_STAGES[4].statuses.includes(p.status)).length, total),
+        lead: countPct(cc.lead, total),
+        aptSet: countPct(cc.aptSet, total),
+        offerMade: countPct(cc.offerMade, total),
+        underContract: countPct(cc.underContract, total),
+        closed: countPct(cc.closed, total),
         revenue: fmt$(rev), cpl: '—', roi: '—',
       }
     })
@@ -190,13 +193,14 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
       const group = acqFiltered.filter(p => mkt === 'Unassigned' ? p.propertyMarkets.length === 0 : p.propertyMarkets.includes(mkt))
       const total = group.length
       const rev = sumRevenue(group.filter(p => p.status === 'SOLD'))
+      const cc = cumulativeCounts(group, ACQ_STAGES)
       return {
         market: mkt, spend: '—', vol: total,
-        lead: countPct(group.filter(p => ACQ_STAGES[0].statuses.includes(p.status)).length, total),
-        aptSet: countPct(group.filter(p => ACQ_STAGES[1].statuses.includes(p.status)).length, total),
-        offerMade: countPct(group.filter(p => ACQ_STAGES[2].statuses.includes(p.status)).length, total),
-        underContract: countPct(group.filter(p => ACQ_STAGES[3].statuses.includes(p.status)).length, total),
-        closed: countPct(group.filter(p => ACQ_STAGES[4].statuses.includes(p.status)).length, total),
+        lead: countPct(cc.lead, total),
+        aptSet: countPct(cc.aptSet, total),
+        offerMade: countPct(cc.offerMade, total),
+        underContract: countPct(cc.underContract, total),
+        closed: countPct(cc.closed, total),
         revenue: fmt$(rev), cpl: '—', roi: '—',
       }
     })
