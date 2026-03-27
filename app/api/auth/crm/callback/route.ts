@@ -14,7 +14,10 @@ const GHL_WEBHOOK_EVENTS = [
   'OutboundMessage',
   'CallCompleted',
   'OpportunityStageChanged',
+  'OpportunityCreate',
   'ContactCreated',
+  'ContactUpdate',
+  'ContactDelete',
   'TaskCompleted',
   'AppointmentCreated',
 ]
