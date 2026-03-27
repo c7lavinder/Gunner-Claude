@@ -81,6 +81,16 @@ export class GHLClient {
     return result.contact
   }
 
+  async createContact(data: {
+    firstName: string; lastName?: string; phone?: string; email?: string
+    tags?: string[]; source?: string; customFields?: Array<{ id: string; value: unknown }>
+  }) {
+    return this.request<{ contact: GHLContact }>('POST', '/contacts', {
+      ...data,
+      locationId: this.locationId,
+    })
+  }
+
   async updateContact(contactId: string, data: Partial<GHLContactUpdate>) {
     return this.request<GHLContact>('PUT', `/contacts/${contactId}`, data)
   }
@@ -303,6 +313,15 @@ export class GHLClient {
       page++
     }
     return contactIds
+  }
+
+  async createOpportunity(data: {
+    pipelineId: string; stageId: string; contactId: string; name: string; source?: string
+  }) {
+    return this.request<{ opportunity: { id: string } }>('POST', '/opportunities', {
+      ...data,
+      locationId: this.locationId,
+    })
   }
 
   async updateOpportunityStage(opportunityId: string, stageId: string) {

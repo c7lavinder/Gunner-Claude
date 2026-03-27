@@ -1,9 +1,10 @@
-// GET /api/properties/[propertyId]/buyers — match buyers from GHL custom fields
-import { NextResponse } from 'next/server'
+// GET + POST /api/properties/[propertyId]/buyers — match + add buyers via GHL
+import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { CONTACT_FIELDS, TIER_MAP, getMarketsForZip } from '@/lib/config/crm.config'
+import { z } from 'zod'
 
 // GHL custom field ID → field name mapping (from live GHL location)
 // These are the actual field IDs from the New Again Houses GHL account
@@ -327,5 +328,139 @@ export async function GET(
     return NextResponse.json({ buyers: matched, total: matched.length })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to match buyers' }, { status: 500 })
+  }
+}
+
+// ─── Reverse map: field name → GHL custom field ID ──────────────────────────
+const FIELD_NAME_TO_GHL: Record<string, string> = Object.fromEntries(
+  Object.entries(GHL_FIELD_MAP).map(([id, name]) => [name, id])
+)
+
+const addBuyerSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().optional(),
+  phone: z.string().min(1),
+  email: z.string().optional(),
+  buyerTier: z.string().min(1),
+  buybox: z.array(z.string()).min(1),
+  markets: z.array(z.string()).min(1),
+  secondaryMarket: z.string().optional(),
+  source: z.string().min(1),
+  stageId: z.string().min(1),
+  verifiedFunding: z.boolean().optional(),
+  hasPurchased: z.boolean().optional(),
+  responseSpeed: z.string().optional(),
+  notes: z.string().optional(),
+  tags: z.string().optional(), // comma-separated
+})
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { propertyId: string } },
+) {
+  try {
+    const session = await getSession()
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const body = await request.json()
+
+    // If action is 'getFormOptions', return pipeline stages + custom field options from GHL
+    if (body.action === 'getStages' || body.action === 'getFormOptions') {
+      const ghl = await getGHLClient(session.tenantId)
+      const pipelines = await ghl.getPipelines()
+      const buyerPipeline = pipelines.pipelines?.find(p => p.name.toLowerCase().includes('buyer'))
+      if (!buyerPipeline) return NextResponse.json({ error: 'No buyer pipeline found' }, { status: 404 })
+
+      // Pull unique field values from existing buyers in the pipeline
+      const contactIds = await ghl.getAllPipelineContacts(buyerPipeline.id)
+      const sampleSize = Math.min(contactIds.length, 50) // sample up to 50 for speed
+      const tierValues = new Set<string>()
+      const buyboxValues = new Set<string>()
+      const marketValues = new Set<string>()
+      const speedValues = new Set<string>()
+
+      const sampleIds = contactIds.slice(0, sampleSize)
+      for (let i = 0; i < sampleIds.length; i += 10) {
+        const batch = sampleIds.slice(i, i + 10)
+        const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
+        for (const c of contacts) {
+          if (!c) continue
+          for (const cf of (c.customFields ?? [])) {
+            const fieldName = GHL_FIELD_MAP[cf.id]
+            const vals = Array.isArray(cf.value) ? cf.value.map(String) : cf.value ? [String(cf.value)] : []
+            if (fieldName === 'buyer_tier') vals.forEach(v => tierValues.add(v))
+            if (fieldName === 'buybox') vals.forEach(v => buyboxValues.add(v))
+            if (fieldName === 'markets') vals.forEach(v => marketValues.add(v))
+            if (fieldName === 'response_speed') vals.forEach(v => speedValues.add(v))
+          }
+        }
+      }
+
+      return NextResponse.json({
+        pipelineId: buyerPipeline.id,
+        stages: buyerPipeline.stages.map(s => ({ id: s.id, name: s.name })),
+        options: {
+          tiers: [...tierValues].sort(),
+          buybox: [...buyboxValues].sort(),
+          markets: [...marketValues].sort(),
+          speeds: [...speedValues].sort(),
+        },
+      })
+    }
+
+    // Create a buyer
+    const parsed = addBuyerSchema.safeParse(body)
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid input', details: parsed.error.issues }, { status: 400 })
+
+    const d = parsed.data
+    const ghl = await getGHLClient(session.tenantId)
+
+    // Build custom fields array
+    const customFields: Array<{ id: string; value: unknown }> = []
+    if (FIELD_NAME_TO_GHL.buyer_tier) customFields.push({ id: FIELD_NAME_TO_GHL.buyer_tier, value: d.buyerTier })
+    if (FIELD_NAME_TO_GHL.buybox) customFields.push({ id: FIELD_NAME_TO_GHL.buybox, value: d.buybox })
+    if (FIELD_NAME_TO_GHL.markets) customFields.push({ id: FIELD_NAME_TO_GHL.markets, value: d.markets })
+    if (d.secondaryMarket && FIELD_NAME_TO_GHL.secondary_market) customFields.push({ id: FIELD_NAME_TO_GHL.secondary_market, value: d.secondaryMarket })
+    if (d.verifiedFunding && FIELD_NAME_TO_GHL.verified_funding) customFields.push({ id: FIELD_NAME_TO_GHL.verified_funding, value: ['Yes'] })
+    if (d.responseSpeed && FIELD_NAME_TO_GHL.response_speed) customFields.push({ id: FIELD_NAME_TO_GHL.response_speed, value: d.responseSpeed })
+    if (d.notes && FIELD_NAME_TO_GHL.notes) customFields.push({ id: FIELD_NAME_TO_GHL.notes, value: d.notes })
+
+    // Parse tags
+    const tags = d.tags ? d.tags.split(',').map(t => t.trim()).filter(Boolean) : []
+
+    // Format phone to E.164
+    const phoneDigits = d.phone.replace(/\D/g, '')
+    const phone = phoneDigits.length === 10 ? `+1${phoneDigits}` : phoneDigits.length === 11 && phoneDigits.startsWith('1') ? `+${phoneDigits}` : d.phone
+
+    // Create contact in GHL
+    const contactResult = await ghl.createContact({
+      firstName: d.firstName,
+      lastName: d.lastName,
+      phone,
+      email: d.email,
+      tags,
+      source: d.source,
+      customFields,
+    })
+    const contactId = contactResult.contact.id
+
+    // Find buyer pipeline
+    const pipelines = await ghl.getPipelines()
+    const buyerPipeline = pipelines.pipelines?.find(p => p.name.toLowerCase().includes('buyer'))
+    if (!buyerPipeline) return NextResponse.json({ error: 'No buyer pipeline found' }, { status: 404 })
+
+    // Create opportunity in buyer pipeline
+    await ghl.createOpportunity({
+      pipelineId: buyerPipeline.id,
+      stageId: d.stageId,
+      contactId,
+      name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
+      source: d.source,
+    })
+
+    return NextResponse.json({ success: true, contactId })
+  } catch (err) {
+    console.error('[Buyers] Add buyer failed:', err)
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to add buyer' }, { status: 500 })
   }
 }

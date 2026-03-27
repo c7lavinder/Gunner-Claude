@@ -1222,14 +1222,26 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   }>>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [stages, setStages] = useState<Array<{ id: string; name: string }>>([])
+  const [formOptions, setFormOptions] = useState<{ tiers: string[]; buybox: string[]; markets: string[]; speeds: string[] } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [loadingOptions, setLoadingOptions] = useState(false)
+  const [addForm, setAddForm] = useState({
+    firstName: '', lastName: '', phone: '', email: '',
+    buyerTier: '', buybox: [] as string[], markets: [] as string[],
+    secondaryMarket: '', source: '', stageId: '',
+    verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '',
+  })
 
   const tierColors: Record<string, string> = {
     priority: 'bg-amber-100 text-amber-700',
     qualified: 'bg-green-100 text-green-700',
     jv: 'bg-blue-100 text-blue-700',
     unqualified: 'bg-gray-100 text-gray-500',
+    halted: 'bg-red-100 text-red-500',
   }
-  const tierEmoji: Record<string, string> = { priority: '👑', qualified: '⭐', jv: '🤝', unqualified: '👤' }
+  const tierEmoji: Record<string, string> = { priority: '👑', qualified: '⭐', jv: '🤝', unqualified: '👤', halted: '⛔' }
 
   async function matchBuyers() {
     setLoading(true)
@@ -1242,11 +1254,58 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
     setLoading(false)
   }
 
+  async function openAddForm() {
+    setShowAddForm(true)
+    if (!formOptions) {
+      setLoadingOptions(true)
+      try {
+        const res = await fetch(`/api/properties/${property.id}/buyers`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'getFormOptions' }),
+        })
+        const data = await res.json()
+        setStages(data.stages ?? [])
+        setFormOptions(data.options ?? { tiers: [], buybox: [], markets: [], speeds: [] })
+        if (data.stages?.length > 0) setAddForm(f => ({ ...f, stageId: data.stages[0].id }))
+        if (data.options?.tiers?.length > 0) setAddForm(f => ({ ...f, buyerTier: data.options.tiers[0] }))
+      } catch {}
+      setLoadingOptions(false)
+    }
+  }
+
+  async function submitBuyer() {
+    if (!addForm.firstName || !addForm.phone || !addForm.stageId || addForm.buybox.length === 0 || addForm.markets.length === 0 || !addForm.source) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${property.id}/buyers`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addForm),
+      })
+      if (res.ok) {
+        setShowAddForm(false)
+        setAddForm({ firstName: '', lastName: '', phone: '', email: '', buyerTier: 'Qualified', buybox: [], markets: [], secondaryMarket: '', source: '', stageId: stages[0]?.id ?? '', verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '' })
+        matchBuyers() // refresh
+      }
+    } catch {}
+    setSaving(false)
+  }
+
+  function toggleArrayField(field: 'buybox' | 'markets', val: string) {
+    setAddForm(f => ({
+      ...f,
+      [field]: f[field].includes(val) ? f[field].filter(v => v !== val) : [...f[field], val],
+    }))
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-ds-label font-semibold text-txt-primary">Matched Buyers{fetched ? ` (${buyers.length})` : ''}</h3>
         <div className="flex gap-2">
+          <button onClick={openAddForm}
+            className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors">
+            <Plus size={11} /> Add Buyer
+          </button>
           <button onClick={matchBuyers} disabled={loading}
             className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
             {loading ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
@@ -1254,6 +1313,145 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
           </button>
         </div>
       </div>
+
+      {/* Add Buyer Form */}
+      {showAddForm && (
+        <div className="bg-surface-secondary rounded-[10px] p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Add Buyer to GHL</p>
+            <button onClick={() => setShowAddForm(false)} className="text-txt-muted hover:text-txt-secondary"><X size={14} /></button>
+          </div>
+
+          {/* Required fields */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">First Name *</label>
+              <input value={addForm.firstName} onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))}
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Phone *</label>
+              <input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="(615) 555-1234"
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+            </div>
+          </div>
+
+          {loadingOptions && <p className="text-ds-fine text-txt-muted">Loading options from GHL...</p>}
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Buyer Tier *</label>
+              <select value={addForm.buyerTier} onChange={e => setAddForm(f => ({ ...f, buyerTier: e.target.value }))}
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine">
+                {(formOptions?.tiers ?? []).map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Pipeline Stage *</label>
+              <select value={addForm.stageId} onChange={e => setAddForm(f => ({ ...f, stageId: e.target.value }))}
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine">
+                {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Source *</label>
+            <input value={addForm.source} onChange={e => setAddForm(f => ({ ...f, source: e.target.value }))}
+              placeholder="e.g. Referral, Website, Cold Call"
+              className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+          </div>
+
+          {/* Buybox — multi-select pills */}
+          <div>
+            <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Buybox * (select all that apply)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {(formOptions?.buybox ?? []).map(b => (
+                <button key={b} onClick={() => toggleArrayField('buybox', b)}
+                  className={`text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
+                    addForm.buybox.includes(b) ? 'bg-gunner-red text-white' : 'bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary hover:bg-surface-tertiary'
+                  }`}>{b}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Markets — multi-select pills */}
+          <div>
+            <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Market(s) * (select all that apply)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {(formOptions?.markets ?? []).map(m => (
+                <button key={m} onClick={() => toggleArrayField('markets', m)}
+                  className={`text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
+                    addForm.markets.includes(m) ? 'bg-gunner-red text-white' : 'bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary hover:bg-surface-tertiary'
+                  }`}>{m}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Optional fields — collapsible */}
+          <details className="text-ds-fine">
+            <summary className="text-[9px] text-txt-muted uppercase cursor-pointer hover:text-txt-secondary">Optional Fields</summary>
+            <div className="mt-2 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Last Name</label>
+                  <input value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))}
+                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Email</label>
+                  <input value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Response Speed</label>
+                  <select value={addForm.responseSpeed} onChange={e => setAddForm(f => ({ ...f, responseSpeed: e.target.value }))}
+                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine">
+                    <option value="">—</option>
+                    {(formOptions?.speeds ?? []).map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Secondary Market</label>
+                  <input value={addForm.secondaryMarket} onChange={e => setAddForm(f => ({ ...f, secondaryMarket: e.target.value }))}
+                    placeholder="e.g. Arkansas"
+                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-1.5 text-ds-fine text-txt-secondary cursor-pointer">
+                  <input type="checkbox" checked={addForm.verifiedFunding} onChange={e => setAddForm(f => ({ ...f, verifiedFunding: e.target.checked }))} className="accent-gunner-red" />
+                  Verified Funding
+                </label>
+                <label className="flex items-center gap-1.5 text-ds-fine text-txt-secondary cursor-pointer">
+                  <input type="checkbox" checked={addForm.hasPurchased} onChange={e => setAddForm(f => ({ ...f, hasPurchased: e.target.checked }))} className="accent-gunner-red" />
+                  Purchased Before
+                </label>
+              </div>
+              <div>
+                <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Tags (comma separated)</label>
+                <input value={addForm.tags} onChange={e => setAddForm(f => ({ ...f, tags: e.target.value }))}
+                  placeholder="flipper, knoxville"
+                  className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Notes</label>
+                <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={2} className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none resize-none" />
+              </div>
+            </div>
+          </details>
+
+          <button onClick={submitBuyer}
+            disabled={!addForm.firstName || !addForm.phone || !addForm.stageId || addForm.buybox.length === 0 || addForm.markets.length === 0 || !addForm.source || saving}
+            className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
+            {saving ? 'Creating in GHL...' : 'Add Buyer'}
+          </button>
+        </div>
+      )}
 
       {!fetched && !loading ? (
         <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
