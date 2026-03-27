@@ -22,9 +22,14 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
   const result = await lookupProperty(property.address, property.city, property.state, property.zip)
   if (!result) return false
 
-  // Build update — only backfill empty fields, mark as "ai" (blue)
+  // Build update — only backfill empty fields, mark as "api" (purple)
   const updateData: Record<string, unknown> = {}
   const fieldSources = { ...((property.fieldSources as Record<string, string>) ?? {}) }
+
+  // Fix any old 'ai' sources that should be 'api' (from before the source rename)
+  for (const f of ['beds', 'baths', 'sqft', 'yearBuilt', 'lotSize', 'propertyType']) {
+    if (fieldSources[f] === 'ai') fieldSources[f] = 'api'
+  }
 
   if (property.beds == null && result.bedrooms) {
     updateData.beds = result.bedrooms; fieldSources.beds = 'api'

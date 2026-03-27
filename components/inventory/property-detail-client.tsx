@@ -1525,7 +1525,7 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
           <DataCard label="Owner" value={fmtStr(bd.ownerName)} fieldKey="ownerName" />
-          <DataCard label="Absentee" value={fmtBool(bd.absenteeOwner)} fieldKey="absenteeOwner" />
+          <DataCard label="Absentee" value={fmtBool(bd.absenteeOwner)} fieldKey="absenteeOwner" highlight={bd.absenteeOwner != null} />
           <DataCard label="Owner Occupied" value={fmtBool(bd.ownerOccupied)} fieldKey="ownerOccupied" />
           <DataCard label="County" value={fmtStr(bd.county)} fieldKey="county" />
         </div>
@@ -1565,24 +1565,25 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
             const isFalse = edited !== undefined ? edited === 'No' || edited === 'false' : apiVal === false
 
             // Absentee: if API says false but ownerOccupied is true, that's an AI derivation
+            // Determine source for coloring
             let source: 'api' | 'ai' | 'user' | null = null
             if (edited !== undefined) source = 'user'
-            else if (apiVal != null) {
-              if (flag.k === 'absenteeOwner' && apiVal === false && bd.ownerOccupied === true) source = 'ai'
-              else source = 'api'
-            }
+            else if (apiVal === true) source = 'api' // only color when YES from API
 
             const s = sourceStyles(source)
+
+            // Only show colored card when YES — No/empty stay blank/gray
+            const showColored = isTrue && source != null
 
             return (
               <div key={flag.k}
                 onClick={() => startEdit(flag.k, isTrue ? 'Yes' : isFalse ? 'No' : '')}
-                className={`rounded-[8px] px-2.5 py-2 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group relative ${source ? s.bg : 'bg-surface-secondary'}`}
+                className={`rounded-[8px] px-2.5 py-2 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group relative ${showColored ? s.bg : 'bg-surface-secondary'}`}
               >
-                {source && s.tag && (
+                {showColored && s.tag && (
                   <span className={`absolute top-0.5 right-1 text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
                 )}
-                <p className={`text-[8px] font-semibold uppercase tracking-wider ${source ? s.label : 'text-txt-muted'}`}>{flag.l}</p>
+                <p className={`text-[8px] font-semibold uppercase tracking-wider ${showColored ? s.label : 'text-txt-muted'}`}>{flag.l}</p>
                 {editingField === flag.k ? (
                   <select autoFocus value={editValue}
                     onChange={e => { setEditValue(e.target.value); saveEdit(flag.k) }}
@@ -1593,8 +1594,8 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
                     <option value="No">No</option>
                   </select>
                 ) : (
-                  <p className={`text-ds-fine font-bold mt-0.5 ${isTrue ? (source ? s.value : 'text-semantic-green') : isFalse ? (source ? s.value : 'text-txt-muted') : 'text-txt-muted'}`}>
-                    {isTrue ? '✓ Yes' : isFalse ? '✗ No' : '—'}
+                  <p className={`text-ds-fine font-bold mt-0.5 ${isTrue ? (showColored ? s.value : 'text-semantic-green') : 'text-txt-muted'}`}>
+                    {isTrue ? '✓ Yes' : '—'}
                     <Pencil size={6} className="inline ml-1 opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
                   </p>
                 )}
