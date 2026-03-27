@@ -420,19 +420,12 @@ export async function POST(
         }
       } catch {}
 
-      // Fallback: if custom fields API not available, sample contacts
+      // Fallback: if custom fields API not available, scan ALL buyer pipeline contacts
       if (tierValues.size === 0 && buyboxValues.size === 0) {
-        // Sample 50 contacts across multiple pages for better coverage
-        const page1 = await ghl.searchOpportunities(buyerPipeline.id, 100)
-        const allOpps = page1.opportunities ?? []
-        // Get second page too for diversity
-        if (page1.meta?.startAfter && page1.meta?.startAfterId) {
-          const page2 = await ghl.searchOpportunities(buyerPipeline.id, 100, page1.meta.startAfter, page1.meta.startAfterId)
-          allOpps.push(...(page2.opportunities ?? []))
-        }
-        const sampleIds = [...new Set(allOpps.map(o => o.contactId).filter(Boolean))].slice(0, 50)
-        for (let i = 0; i < sampleIds.length; i += 10) {
-          const batch = sampleIds.slice(i, i + 10)
+        const allContactIds = await ghl.getAllPipelineContacts(buyerPipeline.id)
+        console.log(`[Buyers] Scanning ${allContactIds.length} contacts for field options`)
+        for (let i = 0; i < allContactIds.length; i += 10) {
+          const batch = allContactIds.slice(i, i + 10)
           const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
           for (const c of contacts) {
             if (!c) continue
@@ -445,6 +438,8 @@ export async function POST(
               if (fieldName === 'response_speed') vals.forEach(v => speedValues.add(v))
             }
           }
+          // Stop early if we've found a good set (at least 3 of each)
+          if (tierValues.size >= 3 && buyboxValues.size >= 3 && marketValues.size >= 3 && speedValues.size >= 2) break
         }
       }
 
