@@ -69,7 +69,6 @@ export function PropertyDetailClient({
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [sending, setSending] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
-  const [showOfferModal, setShowOfferModal] = useState(false)
 
   const appStage = STATUS_TO_APP_STAGE[property.status] ?? 'acquisition.new_lead'
   const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
@@ -138,21 +137,7 @@ export function PropertyDetailClient({
         {/* Deal progress — click to change stage */}
         <DealProgress currentStatus={property.status} propertyId={property.id} canEdit={canEdit} />
 
-        {/* Quick actions */}
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => setShowOfferModal(true)}
-            className="flex items-center gap-1.5 text-ds-fine font-semibold bg-gunner-red hover:bg-gunner-red-dark text-white px-3 py-1.5 rounded-[10px] transition-colors"
-          >
-            <DollarSign size={11} /> Record Offer
-          </button>
-          <button
-            onClick={() => setActiveTab('blast')}
-            className="flex items-center gap-1.5 text-ds-fine font-semibold bg-surface-secondary hover:bg-surface-tertiary text-txt-secondary px-3 py-1.5 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
-          >
-            <Megaphone size={11} /> Deal Blast
-          </button>
-        </div>
+        {/* Quick actions removed — use Outreach tab for offers, Deal Blast tab directly */}
       </div>
 
       {/* Tab bar */}
@@ -190,14 +175,7 @@ export function PropertyDetailClient({
         </div>
       </div>
 
-      {/* Record Offer Modal */}
-      {showOfferModal && (
-        <RecordOfferModal
-          propertyId={property.id}
-          tenantSlug={tenantSlug}
-          onClose={() => setShowOfferModal(false)}
-        />
-      )}
+      {/* Offers are recorded via Outreach tab */}
     </div>
   )
 }
@@ -1216,7 +1194,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         {/* Row 2: Lot, Occupancy, Lockbox (3 cols) */}
         <div className="grid grid-cols-3 divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)]">
           <DetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
-          <DetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} source={sources.occupancy} onSaved={handleSaved} />
+          <DetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={handleSaved} />
           <DetailCell label="Lockbox" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
         </div>
 
@@ -2149,6 +2127,12 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
   const sourceLabel = l.source === 'AI' ? 'AI' : l.source === 'Blast' ? 'Blast' : l.source === 'Auto' ? 'Auto' : 'Manual'
   const sourceColor = l.source === 'AI' ? 'bg-purple-100 text-purple-700' : l.source === 'Blast' ? 'bg-fuchsia-100 text-fuchsia-700' : l.source === 'Auto' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
 
+  const CHANNEL_COLORS: Record<string, string> = {
+    sms: 'bg-blue-100 text-blue-700', email: 'bg-purple-100 text-purple-700',
+    call: 'bg-green-100 text-green-700', in_person: 'bg-amber-100 text-amber-700',
+  }
+  const CHANNEL_LABELS: Record<string, string> = { sms: 'SMS', email: 'Email', call: 'Call', in_person: 'In Person' }
+
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-3 group hover:border-[rgba(0,0,0,0.12)] transition-colors">
       <div className="flex items-start gap-3">
@@ -2159,16 +2143,24 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Header row: name + source + channel */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Header row: name + source */}
+          <div className="flex items-center gap-2">
             <p className="text-ds-body font-semibold text-txt-primary">{titleCase(l.recipientName)}</p>
             <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${sourceColor}`}>{sourceLabel}</span>
-            {l.type === 'send' && <span className="text-[9px] text-txt-muted capitalize">{l.channel}</span>}
           </div>
 
-          {/* Offer details */}
+          {/* Send: colored channel badge */}
+          {l.type === 'send' && (
+            <div className="mt-1">
+              <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full ${CHANNEL_COLORS[l.channel] ?? 'bg-gray-100 text-gray-600'}`}>
+                {CHANNEL_LABELS[l.channel] ?? l.channel}
+              </span>
+            </div>
+          )}
+
+          {/* Offer: amount */}
           {l.type === 'offer' && (
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="mt-1">
               {editing ? (
                 <div className="flex items-center gap-1">
                   <span className="text-ds-fine text-txt-muted">$</span>
@@ -2178,17 +2170,12 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
               ) : (
                 l.offerAmount && <span className="text-ds-body font-bold text-semantic-green">${l.offerAmount.toLocaleString()}</span>
               )}
-              <select value={l.offerStatus ?? 'Pending'} onChange={e => updateField({ offerStatus: e.target.value, offerAmount: l.offerAmount })}
-                disabled={saving}
-                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border-none cursor-pointer ${OFFER_STATUS_COLORS[l.offerStatus ?? 'Pending'] ?? OFFER_STATUS_COLORS.Pending}`}>
-                {OFFER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
             </div>
           )}
 
-          {/* Showing details */}
+          {/* Showing: date/time */}
           {l.type === 'showing' && (
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="mt-1">
               {editing ? (
                 <div className="flex gap-1.5">
                   <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
@@ -2203,11 +2190,6 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
                   </span>
                 )
               )}
-              <select value={l.showingStatus ?? 'Scheduled'} onChange={e => updateField({ showingStatus: e.target.value })}
-                disabled={saving}
-                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border-none cursor-pointer ${SHOWING_STATUS_COLORS[l.showingStatus ?? 'Scheduled'] ?? SHOWING_STATUS_COLORS.Scheduled}`}>
-                {SHOWING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
             </div>
           )}
 
@@ -2220,12 +2202,28 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
           )}
         </div>
 
-        {/* Right: timestamp + actions */}
-        <div className="text-right shrink-0 space-y-1">
+        {/* Right column: status + date + actions */}
+        <div className="text-right shrink-0 space-y-1.5 flex flex-col items-end">
+          {/* Status dropdown — far right for offers */}
+          {l.type === 'offer' && (
+            <select value={l.offerStatus ?? 'Pending'} onChange={e => updateField({ offerStatus: e.target.value, offerAmount: l.offerAmount })}
+              disabled={saving}
+              className={`text-[9px] font-semibold px-2.5 py-1 rounded-full border-none cursor-pointer ${OFFER_STATUS_COLORS[l.offerStatus ?? 'Pending'] ?? OFFER_STATUS_COLORS.Pending}`}>
+              {OFFER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+          {/* Status dropdown — far right for showings */}
+          {l.type === 'showing' && (
+            <select value={l.showingStatus ?? 'Scheduled'} onChange={e => updateField({ showingStatus: e.target.value })}
+              disabled={saving}
+              className={`text-[9px] font-semibold px-2.5 py-1 rounded-full border-none cursor-pointer ${SHOWING_STATUS_COLORS[l.showingStatus ?? 'Scheduled'] ?? SHOWING_STATUS_COLORS.Scheduled}`}>
+              {SHOWING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
           <p className="text-[10px] text-txt-muted">{format(new Date(l.loggedAt), 'MMM d')}</p>
           <p className="text-[9px] text-txt-muted">{l.loggedByName}</p>
           {editing ? (
-            <div className="flex gap-1.5 mt-1">
+            <div className="flex gap-1.5">
               <button onClick={saveEdits} disabled={saving}
                 className="text-[9px] font-semibold text-white bg-semantic-green hover:bg-semantic-green/90 px-2 py-0.5 rounded transition-colors">
                 Save
@@ -2237,7 +2235,7 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
             </div>
           ) : (
             <button onClick={() => setEditing(true)}
-              className="text-[9px] font-medium text-txt-muted opacity-0 group-hover:opacity-100 hover:text-gunner-red transition-all mt-1">
+              className="text-[9px] font-medium text-txt-muted opacity-0 group-hover:opacity-100 hover:text-gunner-red transition-all">
               <Pencil size={10} />
             </button>
           )}
