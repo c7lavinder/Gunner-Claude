@@ -12,7 +12,7 @@ import {
   Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
-import { formatPhone } from '@/lib/format'
+import { formatPhone, titleCase } from '@/lib/format'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
 
@@ -40,6 +40,9 @@ interface PropertyDetail {
   tasks: Array<{ id: string; title: string; category: string | null; priority: string; status: string; dueAt: string | null }>
   auditLogs: Array<{ id: string; action: string; payload: Record<string, unknown> | null; createdAt: string; userName: string }>
 }
+
+// Timezone abbreviation for display (e.g. "CST", "EST")
+const TZ_ABBR = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
 
 type TabKey = 'overview' | 'research' | 'buyers' | 'outreach' | 'activity' | 'ai' | 'blast'
 
@@ -813,7 +816,8 @@ function InlineAI({ propertyId }: { propertyId: string }) {
       } else if (a.type === 'showing') {
         payload.type = 'showing'
         if (a.showingDate) {
-          payload.showingDate = a.showingTime ? `${a.showingDate}T${a.showingTime}:00` : `${a.showingDate}T09:00:00`
+          const showDt = new Date(`${a.showingDate}T${a.showingTime || '09:00'}:00`)
+          payload.showingDate = showDt.toISOString()
         }
       } else if (a.type === 'send') {
         payload.type = 'send'
@@ -1080,7 +1084,7 @@ function ContactsSection({ propertyId, initialSellers }: {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className="text-ds-body text-txt-primary font-medium truncate">{s.name}</p>
+                    <p className="text-ds-body text-txt-primary font-medium truncate">{titleCase(s.name)}</p>
                     <select value={s.role} onChange={e => updateRole(s.id, e.target.value)}
                       className="text-[9px] font-medium bg-transparent text-gunner-red cursor-pointer border-none focus:outline-none">
                       {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
@@ -1789,7 +1793,7 @@ function BuyerCard({ buyer: b, tierColors, tierEmoji }: {
           <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${tierColors[b.tier] ?? tierColors.unqualified}`}>
             {tierEmoji[b.tier] ?? '👤'} {b.tier}
           </span>
-          <span className="text-ds-body font-medium text-txt-primary">{b.name}</span>
+          <span className="text-ds-body font-medium text-txt-primary">{titleCase(b.name)}</span>
         </div>
         <div className="flex gap-3 text-ds-fine text-txt-secondary">
           {b.phone && <span>{formatPhone(b.phone)}</span>}
@@ -1820,7 +1824,7 @@ function BuyerCard({ buyer: b, tierColors, tierEmoji }: {
 // ─── Outreach Tab ────────────────────────────────────────────────────────────
 
 function OutreachTab({ property }: { property: PropertyDetail }) {
-  const [subTab, setSubTab] = useState<'all' | 'send' | 'offer' | 'showing'>('all')
+  const [subTab, setSubTab] = useState<'send' | 'offer' | 'showing'>('send')
   const [logs, setLogs] = useState<Array<{
     id: string; type: string; channel: string; recipientName: string; recipientContact: string
     ghlContactId: string | null; notes: string | null; offerAmount: number | null
@@ -1849,8 +1853,8 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
     fetch(`/api/properties/${property.id}/outreach`).then(r => r.json()).then(d => { setLogs(d.logs ?? []); setLoaded(true) }).catch(() => setLoaded(true))
   }, [property.id])
 
-  const filtered = subTab === 'all' ? logs : logs.filter(l => l.type === subTab)
-  const counts = { all: logs.length, send: logs.filter(l => l.type === 'send').length, offer: logs.filter(l => l.type === 'offer').length, showing: logs.filter(l => l.type === 'showing').length }
+  const filtered = logs.filter(l => l.type === subTab)
+  const counts = { send: logs.filter(l => l.type === 'send').length, offer: logs.filter(l => l.type === 'offer').length, showing: logs.filter(l => l.type === 'showing').length }
 
   async function searchGhlContacts(q: string) {
     setContactQuery(q)
@@ -1895,7 +1899,8 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
       if (formType === 'showing') {
         payload.channel = 'in_person'
         if (showingDate) {
-          payload.showingDate = showingTime ? `${showingDate}T${showingTime}:00` : `${showingDate}T09:00:00`
+          const dt = new Date(`${showingDate}T${showingTime || '09:00'}:00`)
+          payload.showingDate = dt.toISOString()
         }
       }
 
@@ -1926,14 +1931,14 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
       {/* Header with pill filters */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          {(['all', 'send', 'offer', 'showing'] as const).map(t => (
+          {(['send', 'offer', 'showing'] as const).map(t => (
             <button key={t} onClick={() => { setSubTab(t); setShowForm(false) }}
               className={`px-3 py-1 text-[10px] font-semibold rounded-full transition-all capitalize ${
                 subTab === t
                   ? 'bg-gunner-red text-white shadow-sm'
                   : 'bg-surface-secondary text-txt-muted hover:text-txt-secondary hover:bg-surface-tertiary'
               }`}>
-              {t === 'all' ? 'All' : `${t}s`} ({counts[t]})
+              {`${t}s`} ({counts[t]})
             </button>
           ))}
         </div>
@@ -2065,7 +2070,7 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
       ) : filtered.length === 0 ? (
         <div className="bg-surface-secondary rounded-[12px] p-8 text-center">
           <Send size={20} className="text-txt-muted mx-auto mb-2 opacity-40" />
-          <p className="text-ds-body text-txt-muted">No {subTab === 'all' ? '' : subTab + ' '}activity yet</p>
+          <p className="text-ds-body text-txt-muted">No {subTab} activity yet</p>
           <p className="text-[10px] text-txt-muted mt-1">Click &ldquo;Log Activity&rdquo; to record outreach</p>
         </div>
       ) : (
@@ -2110,8 +2115,10 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
   const [editing, setEditing] = useState(false)
   const [editNotes, setEditNotes] = useState(l.notes ?? '')
   const [editAmount, setEditAmount] = useState(l.offerAmount?.toString() ?? '')
-  const [editDate, setEditDate] = useState(l.showingDate ? l.showingDate.slice(0, 10) : '')
-  const [editTime, setEditTime] = useState(l.showingDate ? l.showingDate.slice(11, 16) : '')
+  // Parse ISO (UTC) → local date/time for editing
+  const localShowingDate = l.showingDate ? new Date(l.showingDate) : null
+  const [editDate, setEditDate] = useState(localShowingDate ? `${localShowingDate.getFullYear()}-${String(localShowingDate.getMonth() + 1).padStart(2, '0')}-${String(localShowingDate.getDate()).padStart(2, '0')}` : '')
+  const [editTime, setEditTime] = useState(localShowingDate ? `${String(localShowingDate.getHours()).padStart(2, '0')}:${String(localShowingDate.getMinutes()).padStart(2, '0')}` : '')
   const [saving, setSaving] = useState(false)
 
   async function updateField(data: Record<string, unknown>) {
@@ -2129,7 +2136,11 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
   async function saveEdits() {
     const data: Record<string, unknown> = { notes: editNotes }
     if (l.type === 'offer') data.offerAmount = editAmount
-    if (l.type === 'showing' && editDate) data.showingDate = editTime ? `${editDate}T${editTime}:00` : `${editDate}T09:00:00`
+    if (l.type === 'showing' && editDate) {
+      // Construct Date in local timezone, send as ISO (UTC) so server stores correctly
+      const dt = new Date(`${editDate}T${editTime || '09:00'}:00`)
+      data.showingDate = dt.toISOString()
+    }
     await updateField(data)
     setEditing(false)
   }
@@ -2150,7 +2161,7 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
         <div className="flex-1 min-w-0">
           {/* Header row: name + source + channel */}
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-ds-body font-semibold text-txt-primary">{l.recipientName}</p>
+            <p className="text-ds-body font-semibold text-txt-primary">{titleCase(l.recipientName)}</p>
             <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${sourceColor}`}>{sourceLabel}</span>
             {l.type === 'send' && <span className="text-[9px] text-txt-muted capitalize">{l.channel}</span>}
           </div>
@@ -2188,7 +2199,7 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
               ) : (
                 l.showingDate && (
                   <span className="text-ds-fine font-medium text-semantic-blue flex items-center gap-1">
-                    <Clock size={10} /> {format(new Date(l.showingDate), 'EEE, MMM d · h:mm a')}
+                    <Clock size={10} /> {format(new Date(l.showingDate), 'EEE, MMM d · h:mm a')} {TZ_ABBR}
                   </span>
                 )
               )}
@@ -2283,7 +2294,7 @@ function ActivityTab({ property, tenantSlug, runGhlAction, sending, ghlContactId
     const color = l.type === 'offer' ? 'bg-semantic-green' : l.type === 'showing' ? 'bg-semantic-blue' : 'bg-semantic-purple'
     let detail = l.recipientName
     if (l.type === 'offer' && l.offerAmount) detail += ` — $${l.offerAmount.toLocaleString()}${l.offerStatus ? ` (${l.offerStatus})` : ''}`
-    if (l.type === 'showing' && l.showingDate) detail += ` — ${format(new Date(l.showingDate), 'MMM d, h:mm a')}${l.showingStatus ? ` (${l.showingStatus})` : ''}`
+    if (l.type === 'showing' && l.showingDate) detail += ` — ${format(new Date(l.showingDate), 'MMM d, h:mm a')} ${TZ_ABBR}${l.showingStatus ? ` (${l.showingStatus})` : ''}`
     if (l.type === 'send') detail += ` via ${l.channel}`
     if (l.notes) detail += ` — ${l.notes}`
     events.push({

@@ -9,6 +9,7 @@ import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/
 import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
 import { z } from 'zod'
+import { titleCase } from '@/lib/format'
 
 const addSchema = z.object({
   ghlContactId: z.string().min(1),
@@ -114,7 +115,7 @@ export async function POST(
       seller = await db.seller.create({
         data: {
           tenantId: session.tenantId,
-          name: parsed.data.name,
+          name: titleCase(parsed.data.name),
           phone: parsed.data.phone ?? null,
           email: parsed.data.email ?? null,
           ghlContactId: parsed.data.ghlContactId,

@@ -8,7 +8,7 @@ import {
   ExternalLink, X, Send, Users,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { formatPhone } from '@/lib/format'
+import { formatPhone, titleCase } from '@/lib/format'
 import { PipelineStageTabs } from './PipelineStageTabs'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
@@ -688,7 +688,7 @@ function DrawerContacts({ propertyId, initialSellers }: {
                 return (
                   <button key={c.id} onClick={() => !linked && addContact(c)} disabled={linked || adding}
                     className={`w-full text-left px-2 py-1 rounded text-[10px] ${linked ? 'bg-surface-tertiary text-txt-muted' : 'bg-surface-secondary hover:bg-surface-tertiary text-txt-primary'}`}>
-                    <p className="font-medium">{c.name}{linked ? ' (linked)' : ''}</p>
+                    <p className="font-medium">{titleCase(c.name)}{linked ? ' (linked)' : ''}</p>
                     <p className="text-txt-muted">{formatPhone(c.phone) || c.email || '—'}</p>
                   </button>
                 )
@@ -707,7 +707,7 @@ function DrawerContacts({ propertyId, initialSellers }: {
               <div className="flex items-start justify-between gap-1">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-ds-fine text-txt-primary font-medium">{s.name}</p>
+                    <p className="text-ds-fine text-txt-primary font-medium">{titleCase(s.name)}</p>
                     <span className="text-[8px] font-medium text-gunner-red">{s.role}</span>
                   </div>
                   {s.phone && <p className="text-[10px] text-txt-secondary">{formatPhone(s.phone)}</p>}

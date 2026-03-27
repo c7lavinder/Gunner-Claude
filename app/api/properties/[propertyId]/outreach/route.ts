@@ -89,7 +89,7 @@ async function syncOfferFields(propertyId: string, tenantId?: string) {
         seller = await db.seller.create({
           data: {
             tenantId: resolvedTenantId,
-            name: accepted.recipientName,
+            name: titleCase(accepted.recipientName),
             phone: isPhone ? contact : null,
             email: !isPhone && contact.includes('@') ? contact : null,
             ghlContactId: accepted.ghlContactId,
