@@ -80,6 +80,8 @@ export default async function PropertyDetailPage({
         beds: property.beds, baths: property.baths, sqft: property.sqft,
         yearBuilt: property.yearBuilt, lotSize: property.lotSize,
         propertyType: property.propertyType, occupancy: property.occupancy, lockboxCode: property.lockboxCode,
+        projectType: (property.projectType ?? []) as string[],
+        propertyMarkets: (property.propertyMarkets ?? []) as string[],
         description: property.description, internalNotes: property.internalNotes,
         lastOfferDate: property.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: property.lastContactedDate?.toISOString() ?? null,

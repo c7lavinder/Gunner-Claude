@@ -27,6 +27,7 @@ interface PropertyDetail {
   beds: number | null; baths: number | null; sqft: number | null
   yearBuilt: number | null; lotSize: string | null
   propertyType: string | null; occupancy: string | null; lockboxCode: string | null
+  projectType: string[]; propertyMarkets: string[]
   description: string | null; internalNotes: string | null
   lastOfferDate: string | null; lastContactedDate: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
@@ -544,6 +545,89 @@ function InlineTextArea({
   )
 }
 
+// ─── Multi-Select Tag Fields ─────────────────────────────────────────────────
+
+const PROJECT_TYPE_OPTIONS = ['Flipper', 'Rental', 'Builder', 'Landlord', 'Wholesale', 'Land', 'Commercial', 'Multi-Family', 'New Construction', 'Buy & Hold']
+const PROPERTY_TYPE_OPTIONS = ['House', 'Land', 'Multi-Family', 'Commercial', 'Condo', 'Townhome', 'Mobile Home', 'Other']
+
+function MultiSelectField({ label, values, options, field, propertyId, allowCustom, onSaved }: {
+  label: string; values: string[]; options: string[]; field: string; propertyId: string
+  allowCustom?: boolean; onSaved: (field: string, vals: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const filtered = options.filter(o =>
+    !values.includes(o) && o.toLowerCase().includes(search.toLowerCase())
+  )
+  const showCustom = allowCustom && search.length >= 2 && !options.some(o => o.toLowerCase() === search.toLowerCase()) && !values.some(v => v.toLowerCase() === search.toLowerCase())
+
+  async function toggle(val: string) {
+    const newVals = values.includes(val) ? values.filter(v => v !== val) : [...values, val]
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: newVals }),
+      })
+      if (res.ok) onSaved(field, newVals)
+    } catch {}
+    setSaving(false)
+    setSearch('')
+  }
+
+  return (
+    <div className="relative">
+      <div onClick={() => setOpen(!open)} className="cursor-pointer group">
+        <span className="text-txt-muted">{label}:</span>{' '}
+        {values.length > 0 ? (
+          <span className="inline-flex items-center gap-1 flex-wrap">
+            {values.map(v => (
+              <span key={v} className="inline-flex items-center gap-0.5 bg-gunner-red-light text-gunner-red text-[10px] font-medium px-1.5 py-0.5 rounded-full">
+                {v}
+                <button onClick={e => { e.stopPropagation(); toggle(v) }} className="hover:text-gunner-red-dark">
+                  <X size={8} />
+                </button>
+              </span>
+            ))}
+            <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+          </span>
+        ) : (
+          <span className="text-txt-muted group-hover:underline">—</span>
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute top-full left-0 z-20 mt-1 w-56 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-2">
+          <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search or type custom..."
+            className="w-full bg-surface-secondary rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none mb-1.5" />
+          <div className="max-h-36 overflow-y-auto space-y-0.5">
+            {filtered.map(o => (
+              <button key={o} onClick={() => toggle(o)} disabled={saving}
+                className="w-full text-left text-[10px] text-txt-primary px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
+                {o}
+              </button>
+            ))}
+            {showCustom && (
+              <button onClick={() => toggle(search)} disabled={saving}
+                className="w-full text-left text-[10px] text-gunner-red font-medium px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
+                + Add &ldquo;{search}&rdquo;
+              </button>
+            )}
+          </div>
+          <button onClick={() => { setOpen(false); setSearch('') }}
+            className="w-full text-[9px] text-txt-muted mt-1.5 hover:text-txt-secondary">
+            Done
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Inline AI Actions ───────────────────────────────────────────────────────
 
 function InlineAI({ propertyId }: { propertyId: string }) {
@@ -799,6 +883,8 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
     yearBuilt: property.yearBuilt,
     lotSize: property.lotSize,
     propertyType: property.propertyType,
+    projectType: property.projectType,
+    propertyMarkets: property.propertyMarkets,
     occupancy: property.occupancy,
     lockboxCode: property.lockboxCode,
     description: property.description,
@@ -806,6 +892,10 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   })
 
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
+
+  function handleArraySaved(field: string, vals: string[]) {
+    setVals(prev => ({ ...prev, [field]: vals }))
+  }
 
   function handleSaved(field: string, val: string | number | null, src?: string) {
     setVals(prev => ({ ...prev, [field]: val }))
@@ -861,10 +951,18 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         </div>
       </div>
 
-      {/* Property details strip — click any field to edit */}
-      <div className="bg-surface-secondary rounded-[10px] px-4 py-3">
+      {/* Property details strip */}
+      <div className="bg-surface-secondary rounded-[10px] px-4 py-3 space-y-2">
+        {/* Multi-select fields */}
         <div className="flex flex-wrap gap-4 text-ds-fine">
-          <InlineDetailItem label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} source={sources.propertyType} onSaved={handleSaved} />
+          <MultiSelectField label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
+            field="propertyMarkets" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
+          <MultiSelectField label="Project Type" values={vals.projectType} options={PROJECT_TYPE_OPTIONS}
+            field="projectType" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
+        </div>
+        {/* Inline detail fields */}
+        <div className="flex flex-wrap gap-4 text-ds-fine">
+          <InlineDetailItem label="Prop Type" value={vals.propertyType} field="propertyType" propertyId={property.id} source={sources.propertyType} onSaved={handleSaved} />
           <InlineDetailItem label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
           <InlineDetailItem label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
           <InlineDetailItem label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} onSaved={handleSaved} />

@@ -235,6 +235,7 @@ model Property {
   // Market assignment
   marketId String? @map("market_id")
   market   Market? @relation(fields: [marketId], references: [id])
+  propertyMarkets Json @default("[]") @map("property_markets") // ["Nashville", "Hot Springs", "Arkansas"]
 
   // Enrichment (Phase 2 — Zillow, county records)
   zillowData   Json? @map("zillow_data")
