@@ -44,10 +44,11 @@ export async function GET(
 }
 
 // Helper: sync highestOffer + acceptedPrice on property from all offer logs
-async function syncOfferFields(propertyId: string) {
+// Also auto-links the accepted buyer contact to the property
+async function syncOfferFields(propertyId: string, tenantId?: string) {
   const offers = await db.outreachLog.findMany({
     where: { propertyId, type: 'offer', offerAmount: { not: null } },
-    select: { offerAmount: true, offerStatus: true },
+    select: { offerAmount: true, offerStatus: true, ghlContactId: true, recipientName: true, recipientContact: true },
     orderBy: { loggedAt: 'desc' },
   })
   const highest = offers.length > 0
@@ -58,8 +59,9 @@ async function syncOfferFields(propertyId: string) {
 
   const prop = await db.property.findUnique({
     where: { id: propertyId },
-    select: { fieldSources: true },
+    select: { fieldSources: true, tenantId: true },
   })
+  const resolvedTenantId = tenantId ?? prop?.tenantId
   const sources = { ...((prop?.fieldSources as Record<string, string>) ?? {}) }
   if (highest !== null) sources.highestOffer = 'ai'; else delete sources.highestOffer
   if (acceptedAmount !== null) sources.acceptedPrice = 'ai'
@@ -72,6 +74,43 @@ async function syncOfferFields(propertyId: string) {
       fieldSources: sources,
     },
   })
+
+  // Auto-link accepted buyer contact to property with "Buyer" role
+  if (accepted && accepted.ghlContactId && resolvedTenantId) {
+    try {
+      // Find or create seller record for this buyer contact
+      let seller = await db.seller.findFirst({
+        where: { tenantId: resolvedTenantId, ghlContactId: accepted.ghlContactId },
+      })
+      if (!seller) {
+        // Parse phone from recipientContact if it looks like a phone
+        const contact = accepted.recipientContact ?? ''
+        const isPhone = /^\+?\d[\d\s()-]{6,}$/.test(contact)
+        seller = await db.seller.create({
+          data: {
+            tenantId: resolvedTenantId,
+            name: accepted.recipientName,
+            phone: isPhone ? contact : null,
+            email: !isPhone && contact.includes('@') ? contact : null,
+            ghlContactId: accepted.ghlContactId,
+          },
+        })
+      }
+
+      // Check if already linked to this property
+      const existing = await db.propertySeller.findUnique({
+        where: { propertyId_sellerId: { propertyId, sellerId: seller.id } },
+      })
+      if (!existing) {
+        await db.propertySeller.create({
+          data: { propertyId, sellerId: seller.id, isPrimary: false, role: 'Buyer' },
+        })
+        console.log(`[Outreach] Auto-linked buyer ${accepted.recipientName} to property ${propertyId}`)
+      }
+    } catch (err) {
+      console.error('[Outreach] Failed to auto-link buyer:', err)
+    }
+  }
 }
 
 export async function POST(
@@ -100,8 +139,8 @@ export async function POST(
         data: updateData,
       })
 
-      // Sync offer fields on property (highestOffer, acceptedPrice)
-      await syncOfferFields(params.propertyId)
+      // Sync offer fields on property (highestOffer, acceptedPrice, buyer link)
+      await syncOfferFields(params.propertyId, session.tenantId)
 
       return NextResponse.json({ success: true })
     }
@@ -129,9 +168,9 @@ export async function POST(
       },
     })
 
-    // Sync offer fields on property (highestOffer, acceptedPrice)
+    // Sync offer fields on property (highestOffer, acceptedPrice, buyer link)
     if (type === 'offer') {
-      await syncOfferFields(params.propertyId)
+      await syncOfferFields(params.propertyId, session.tenantId)
     }
 
     return NextResponse.json({ id: log.id, status: 'success' })
