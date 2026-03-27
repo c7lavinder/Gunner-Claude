@@ -14,8 +14,8 @@ const refreshLocks = new Map<string, Promise<string>>()
 
 export class GHLClient {
   private tenantId: string
-  private accessToken: string
-  private locationId: string
+  accessToken: string
+  readonly locationId: string
 
   constructor(tenantId: string, accessToken: string, locationId: string) {
     this.tenantId = tenantId

@@ -398,25 +398,52 @@ export async function POST(
       const buyerPipeline = pipelines.pipelines?.find(p => p.name.toLowerCase().includes('buyer'))
       if (!buyerPipeline) return NextResponse.json({ error: 'No buyer pipeline found' }, { status: 404 })
 
-      // Pull unique field values by sampling first 20 contacts from the pipeline
-      const firstPage = await ghl.searchOpportunities(buyerPipeline.id, 20)
-      const sampleIds = [...new Set((firstPage.opportunities ?? []).map(o => o.contactId).filter(Boolean))].slice(0, 20)
-      const tierValues = new Set<string>()
-      const buyboxValues = new Set<string>()
-      const marketValues = new Set<string>()
-      const speedValues = new Set<string>()
-      for (let i = 0; i < sampleIds.length; i += 10) {
-        const batch = sampleIds.slice(i, i + 10)
-        const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
-        for (const c of contacts) {
-          if (!c) continue
-          for (const cf of (c.customFields ?? [])) {
-            const fieldName = GHL_FIELD_MAP[cf.id]
-            const vals = Array.isArray(cf.value) ? cf.value.map(String) : cf.value ? [String(cf.value)] : []
-            if (fieldName === 'buyer_tier') vals.forEach(v => tierValues.add(v))
-            if (fieldName === 'buybox') vals.forEach(v => buyboxValues.add(v))
-            if (fieldName === 'markets') vals.forEach(v => marketValues.add(v))
-            if (fieldName === 'response_speed') vals.forEach(v => speedValues.add(v))
+      // Try to get custom field definitions directly from GHL
+      let tierValues = new Set<string>()
+      let buyboxValues = new Set<string>()
+      let marketValues = new Set<string>()
+      let speedValues = new Set<string>()
+
+      try {
+        const cfRes = await fetch(`https://services.leadconnectorhq.com/locations/${ghl.locationId}/customFields`, {
+          headers: { 'Authorization': `Bearer ${ghl.accessToken}`, 'Version': '2021-07-28' },
+        })
+        if (cfRes.ok) {
+          const cfData = await cfRes.json()
+          for (const f of (cfData.customFields ?? [])) {
+            const opts = (f.options ?? f.picklistOptions ?? []).map((o: { value: string } | string) => typeof o === 'string' ? o : o.value)
+            if (f.id === FIELD_NAME_TO_GHL.buyer_tier) opts.forEach((v: string) => tierValues.add(v))
+            if (f.id === FIELD_NAME_TO_GHL.buybox) opts.forEach((v: string) => buyboxValues.add(v))
+            if (f.id === FIELD_NAME_TO_GHL.markets) opts.forEach((v: string) => marketValues.add(v))
+            if (f.id === FIELD_NAME_TO_GHL.response_speed) opts.forEach((v: string) => speedValues.add(v))
+          }
+        }
+      } catch {}
+
+      // Fallback: if custom fields API not available, sample contacts
+      if (tierValues.size === 0 && buyboxValues.size === 0) {
+        // Sample 50 contacts across multiple pages for better coverage
+        const page1 = await ghl.searchOpportunities(buyerPipeline.id, 100)
+        const allOpps = page1.opportunities ?? []
+        // Get second page too for diversity
+        if (page1.meta?.startAfter && page1.meta?.startAfterId) {
+          const page2 = await ghl.searchOpportunities(buyerPipeline.id, 100, page1.meta.startAfter, page1.meta.startAfterId)
+          allOpps.push(...(page2.opportunities ?? []))
+        }
+        const sampleIds = [...new Set(allOpps.map(o => o.contactId).filter(Boolean))].slice(0, 50)
+        for (let i = 0; i < sampleIds.length; i += 10) {
+          const batch = sampleIds.slice(i, i + 10)
+          const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
+          for (const c of contacts) {
+            if (!c) continue
+            for (const cf of (c.customFields ?? [])) {
+              const fieldName = GHL_FIELD_MAP[cf.id]
+              const vals = Array.isArray(cf.value) ? cf.value.map(String) : cf.value ? [String(cf.value)] : []
+              if (fieldName === 'buyer_tier') vals.forEach(v => tierValues.add(v))
+              if (fieldName === 'buybox') vals.forEach(v => buyboxValues.add(v))
+              if (fieldName === 'markets') vals.forEach(v => marketValues.add(v))
+              if (fieldName === 'response_speed') vals.forEach(v => speedValues.add(v))
+            }
           }
         }
       }
