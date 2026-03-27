@@ -94,11 +94,17 @@ function parseBuyerFields(contact: {
 }
 
 // Score a buyer against a property (0-100)
-function scoreBuyer(buyer: ReturnType<typeof parseBuyerFields>, propertyMarkets: string[], propertyCity: string | null, propertyType?: string | null): number {
+function scoreBuyer(
+  buyer: ReturnType<typeof parseBuyerFields>,
+  zipMarkets: string[],
+  propertyCity: string | null,
+  projectTypes: string[],
+  customMarkets: string[],
+): number {
   let score = 0
 
-  // Market match targets: property market names + city
-  const matchTargets = [...propertyMarkets]
+  // Market match targets: zip-based markets + custom propertyMarkets + city
+  const matchTargets = [...zipMarkets, ...customMarkets]
   if (propertyCity) matchTargets.push(propertyCity)
 
   const matchesMarket = (markets: string[]) => markets.some(m =>
@@ -108,26 +114,23 @@ function scoreBuyer(buyer: ReturnType<typeof parseBuyerFields>, propertyMarkets:
   )
 
   // Primary market match: +40
-  // If buyer has "Other" in markets, their secondary_market is their real market
   const primaryMarkets = buyer.markets.filter(m => m.toLowerCase() !== 'other')
   if (matchesMarket(primaryMarkets)) {
     score += 40
   }
 
-  // Secondary market match: +20 (one-off deal markets, or "Other" market details)
+  // Secondary market match: +20
   if (buyer.secondaryMarkets.length > 0 && matchesMarket(buyer.secondaryMarkets)) {
     score += 20
   }
 
-  // Buybox matches property type or general wholesaling: +20
-  if (buyer.buybox) {
-    const bbLower = buyer.buybox.toLowerCase()
-    if (bbLower.includes('flip') || bbLower.includes('rental') || bbLower.includes('wholesale')) {
-      score += 20 // General wholesaling buyer
-    }
-    if (propertyType) {
-      const ptLower = propertyType.toLowerCase()
-      if (bbLower.includes(ptLower) || ptLower.includes(bbLower)) score += 20
+  // Buybox vs Project Type: exact match on shared terms: +20
+  // Both use the same options (Flipper, Rental, Builder, Landlord, Wholesale, etc.)
+  if (buyer.buybox && projectTypes.length > 0) {
+    const buyerTypes = buyer.buybox.split(',').map(b => b.trim().toLowerCase())
+    const propTypes = projectTypes.map(p => p.toLowerCase())
+    if (buyerTypes.some(bt => propTypes.some(pt => bt === pt || bt.includes(pt) || pt.includes(bt)))) {
+      score += 20
     }
   }
 
@@ -158,7 +161,7 @@ export async function GET(
 
     const property = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
-      select: { city: true, state: true, zip: true, propertyType: true },
+      select: { city: true, state: true, zip: true, propertyType: true, projectType: true, propertyMarkets: true },
     })
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
 
@@ -232,7 +235,7 @@ export async function GET(
     const matched = ghlBuyers
       .map(b => ({
         ...b,
-        matchScore: scoreBuyer(b, propertyMarkets, property.city, property.propertyType),
+        matchScore: scoreBuyer(b, propertyMarkets, property.city, (property.projectType ?? []) as string[], (property.propertyMarkets ?? []) as string[]),
       }))
       .filter(b => b.matchScore > 0)
       .sort((a, b) => {
