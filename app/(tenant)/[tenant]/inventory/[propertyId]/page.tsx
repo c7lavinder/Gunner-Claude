@@ -48,12 +48,47 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound()
 
-  // Fetch milestones for pipeline display
-  const milestones = await db.propertyMilestone.findMany({
-    where: { propertyId: params.propertyId, tenantId },
-    orderBy: { createdAt: 'asc' },
-    select: { type: true, createdAt: true, notes: true },
-  })
+  // Fetch milestones for pipeline display — from PropertyMilestone table + KPI entries
+  const [dbMilestones, kpiEntries] = await Promise.all([
+    db.propertyMilestone.findMany({
+      where: { propertyId: params.propertyId, tenantId },
+      orderBy: { createdAt: 'asc' },
+      select: { type: true, createdAt: true, notes: true },
+    }),
+    db.auditLog.findMany({
+      where: {
+        tenantId, action: 'kpi.entry',
+        payload: { path: ['propertyId'], equals: params.propertyId },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { payload: true, createdAt: true },
+    }),
+  ])
+
+  // Map KPI entry types to milestone types
+  const kpiTypeToMilestone: Record<string, string> = {
+    apts: 'APPOINTMENT_SET', offers: 'OFFER_MADE', contracts: 'UNDER_CONTRACT',
+  }
+  const kpiMilestones = kpiEntries
+    .filter(e => {
+      const p = e.payload as Record<string, unknown> | null
+      return p?.type && kpiTypeToMilestone[p.type as string]
+    })
+    .map(e => {
+      const p = e.payload as Record<string, unknown>
+      return {
+        type: kpiTypeToMilestone[p.type as string],
+        createdAt: e.createdAt,
+        notes: (p.contactName as string) ?? (p.notes as string) ?? null,
+      }
+    })
+
+  // Merge: DB milestones take priority, KPI entries fill gaps
+  const milestoneTypes = new Set(dbMilestones.map(m => m.type as string))
+  const milestones = [
+    ...dbMilestones,
+    ...kpiMilestones.filter(m => !milestoneTypes.has(m.type)),
+  ]
 
   // Fetch team members for @mentions in messaging
   const teamMembers = await db.user.findMany({
