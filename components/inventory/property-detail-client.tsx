@@ -1222,6 +1222,9 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   }>>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
+  const [buyerTab, setBuyerTab] = useState<'added' | 'matched'>('added')
+  const [addedBuyers, setAddedBuyers] = useState<typeof buyers>([])
+  const [addedLoaded, setAddedLoaded] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [stages, setStages] = useState<Array<{ id: string; name: string }>>([])
   const [formOptions, setFormOptions] = useState<{ tiers: string[]; buybox: string[]; markets: string[]; speeds: string[] } | null>(null)
@@ -1242,6 +1245,22 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
     halted: 'bg-red-100 text-red-500',
   }
   const tierEmoji: Record<string, string> = { priority: '👑', qualified: '⭐', jv: '🤝', unqualified: '👤', halted: '⛔' }
+
+  async function loadAddedBuyers() {
+    if (addedLoaded) return
+    try {
+      const res = await fetch(`/api/properties/${property.id}/buyers`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getManualBuyers' }),
+      })
+      const data = await res.json()
+      setAddedBuyers(data.buyers ?? [])
+      setAddedLoaded(true)
+    } catch {}
+  }
+
+  // Load added buyers on mount
+  useEffect(() => { loadAddedBuyers() }, [property.id])
 
   async function matchBuyers() {
     setLoading(true)
@@ -1282,9 +1301,11 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         body: JSON.stringify(addForm),
       })
       if (res.ok) {
+        const data = await res.json()
+        if (data.buyer) setAddedBuyers(prev => [...prev, data.buyer])
         setShowAddForm(false)
-        setAddForm({ firstName: '', lastName: '', phone: '', email: '', buyerTier: 'Qualified', buybox: [], markets: [], secondaryMarket: '', source: '', stageId: stages[0]?.id ?? '', verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '' })
-        matchBuyers() // refresh
+        setAddForm({ firstName: '', lastName: '', phone: '', email: '', buyerTier: '', buybox: [], markets: [], secondaryMarket: '', source: '', stageId: stages[0]?.id ?? '', verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '' })
+        setBuyerTab('added')
       }
     } catch {}
     setSaving(false)
@@ -1299,18 +1320,34 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
 
   return (
     <div className="space-y-4">
+      {/* Header with sub-tabs */}
       <div className="flex items-center justify-between">
-        <h3 className="text-ds-label font-semibold text-txt-primary">Matched Buyers{fetched ? ` (${buyers.length})` : ''}</h3>
+        <div className="flex gap-0 border-b border-[rgba(0,0,0,0.06)]">
+          <button onClick={() => setBuyerTab('added')}
+            className={`px-3 py-1.5 text-ds-fine font-medium border-b-2 transition-colors ${
+              buyerTab === 'added' ? 'border-gunner-red text-gunner-red' : 'border-transparent text-txt-muted hover:text-txt-secondary'
+            }`}>
+            Added ({addedBuyers.length})
+          </button>
+          <button onClick={() => { setBuyerTab('matched'); if (!fetched) matchBuyers() }}
+            className={`px-3 py-1.5 text-ds-fine font-medium border-b-2 transition-colors ${
+              buyerTab === 'matched' ? 'border-gunner-red text-gunner-red' : 'border-transparent text-txt-muted hover:text-txt-secondary'
+            }`}>
+            Matched {fetched ? `(${buyers.length})` : ''}
+          </button>
+        </div>
         <div className="flex gap-2">
           <button onClick={openAddForm}
             className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors">
             <Plus size={11} /> Add Buyer
           </button>
-          <button onClick={matchBuyers} disabled={loading}
-            className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
-            {loading ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
-            {loading ? 'Matching...' : fetched ? 'Rematch' : 'Match from CRM'}
-          </button>
+          {buyerTab === 'matched' && (
+            <button onClick={matchBuyers} disabled={loading}
+              className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
+              {loading ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
+              {loading ? 'Matching...' : fetched ? 'Rematch' : 'Match'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1453,11 +1490,26 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         </div>
       )}
 
-      {!fetched && !loading ? (
+      {/* Added tab */}
+      {buyerTab === 'added' && (addedBuyers.length === 0 ? (
         <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
           <Users size={20} className="text-txt-muted mx-auto mb-2" />
-          <p className="text-ds-body text-txt-muted">No buyers matched yet</p>
-          <p className="text-ds-fine text-txt-muted mt-1">Click &ldquo;Match from CRM&rdquo; to find buyers</p>
+          <p className="text-ds-body text-txt-muted">No buyers added for this property</p>
+          <p className="text-ds-fine text-txt-muted mt-1">Click &ldquo;Add Buyer&rdquo; to create one in GHL</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {addedBuyers.map(b => (
+            <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
+          ))}
+        </div>
+      ))}
+
+      {/* Matched tab */}
+      {buyerTab === 'matched' && (!fetched && !loading ? (
+        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
+          <Users size={20} className="text-txt-muted mx-auto mb-2" />
+          <p className="text-ds-body text-txt-muted">Click &ldquo;Match&rdquo; to find buyers from CRM</p>
         </div>
       ) : loading ? (
         <div className="py-8 text-center"><Loader2 size={16} className="animate-spin text-txt-muted mx-auto" /></div>
@@ -1468,39 +1520,49 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
       ) : (
         <div className="space-y-2">
           {buyers.map(b => (
-            <div key={b.id} className="bg-surface-secondary rounded-[10px] p-3 flex items-start gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${tierColors[b.tier] ?? tierColors.unqualified}`}>
-                    {tierEmoji[b.tier]} {b.tier}
-                  </span>
-                  <span className="text-ds-body font-medium text-txt-primary">{b.name}</span>
-                </div>
-                <div className="flex gap-3 text-ds-fine text-txt-secondary">
-                  {b.phone && <span>{formatPhone(b.phone)}</span>}
-                  {b.email && <span>{b.email}</span>}
-                </div>
-                {b.markets.length > 0 && (
-                  <p className="text-ds-fine text-txt-muted mt-0.5">Markets: {b.markets.join(', ')}</p>
-                )}
-              </div>
-              <div className="text-right shrink-0 relative group cursor-default">
-                <span className={`text-ds-label font-bold ${b.matchScore >= 75 ? 'text-semantic-green' : b.matchScore >= 60 ? 'text-semantic-amber' : 'text-txt-muted'}`}>
-                  {b.matchScore}
-                </span>
-                <p className="text-[8px] text-txt-muted">score</p>
-                {b.scoreBreakdown && (
-                  <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-[10px] px-3 py-2 rounded-[8px] shadow-lg whitespace-nowrap">
-                    {b.scoreBreakdown.split(', ').map((part, i) => (
-                      <div key={i}>{part}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
           ))}
         </div>
-      )}
+      ))}
+    </div>
+  )
+}
+
+function BuyerCard({ buyer: b, tierColors, tierEmoji }: {
+  buyer: { id: string; name: string; phone: string | null; email: string | null; tier: string; markets: string[]; buybox?: string; matchScore: number; scoreBreakdown?: string }
+  tierColors: Record<string, string>; tierEmoji: Record<string, string>
+}) {
+  return (
+    <div className="bg-surface-secondary rounded-[10px] p-3 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${tierColors[b.tier] ?? tierColors.unqualified}`}>
+            {tierEmoji[b.tier] ?? '👤'} {b.tier}
+          </span>
+          <span className="text-ds-body font-medium text-txt-primary">{b.name}</span>
+        </div>
+        <div className="flex gap-3 text-ds-fine text-txt-secondary">
+          {b.phone && <span>{formatPhone(b.phone)}</span>}
+          {b.email && <span>{b.email}</span>}
+        </div>
+        {b.markets.length > 0 && (
+          <p className="text-ds-fine text-txt-muted mt-0.5">Markets: {b.markets.join(', ')}</p>
+        )}
+        {b.buybox && <p className="text-ds-fine text-txt-muted">Buybox: {b.buybox}</p>}
+      </div>
+      <div className="text-right shrink-0 relative group cursor-default">
+        <span className={`text-ds-label font-bold ${b.matchScore >= 75 ? 'text-semantic-green' : b.matchScore >= 60 ? 'text-semantic-amber' : 'text-txt-muted'}`}>
+          {b.matchScore || '—'}
+        </span>
+        <p className="text-[8px] text-txt-muted">{b.matchScore ? 'score' : ''}</p>
+        {b.scoreBreakdown && b.scoreBreakdown !== 'Manually added' && (
+          <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-[10px] px-3 py-2 rounded-[8px] shadow-lg whitespace-nowrap">
+            {b.scoreBreakdown.split(', ').map((part, i) => (
+              <div key={i}>{part}</div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

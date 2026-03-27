@@ -365,6 +365,33 @@ export async function POST(
     const body = await request.json()
 
     // If action is 'getFormOptions', return pipeline stages + custom field options from GHL
+    // Get manually added buyers for this property
+    if (body.action === 'getManualBuyers') {
+      const prop = await db.property.findUnique({
+        where: { id: params.propertyId, tenantId: session.tenantId },
+        select: { manualBuyerIds: true },
+      })
+      const ids = (prop?.manualBuyerIds ?? []) as string[]
+      if (ids.length === 0) return NextResponse.json({ buyers: [] })
+
+      const ghl = await getGHLClient(session.tenantId)
+      const buyers = []
+      for (let i = 0; i < ids.length; i += 10) {
+        const batch = ids.slice(i, i + 10)
+        const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
+        for (const c of contacts) {
+          if (!c) continue
+          const parsed = parseBuyerFields({
+            id: c.id, firstName: c.firstName, lastName: c.lastName,
+            phone: c.phone, email: c.email, city: c.city, state: c.state,
+            tags: c.tags ?? [], customFields: c.customFields ?? [],
+          })
+          buyers.push({ ...parsed, matchScore: 0, scoreBreakdown: 'Manually added' })
+        }
+      }
+      return NextResponse.json({ buyers })
+    }
+
     if (body.action === 'getStages' || body.action === 'getFormOptions') {
       const ghl = await getGHLClient(session.tenantId)
       const pipelines = await ghl.getPipelines()
@@ -458,7 +485,34 @@ export async function POST(
       source: d.source,
     })
 
-    return NextResponse.json({ success: true, contactId })
+    // Save contactId to property's manualBuyerIds
+    const prop = await db.property.findUnique({
+      where: { id: params.propertyId },
+      select: { manualBuyerIds: true },
+    })
+    const existingIds = (prop?.manualBuyerIds ?? []) as string[]
+    if (!existingIds.includes(contactId)) {
+      await db.property.update({
+        where: { id: params.propertyId },
+        data: { manualBuyerIds: [...existingIds, contactId] },
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      contactId,
+      buyer: {
+        id: contactId,
+        name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
+        phone: d.phone,
+        email: d.email ?? null,
+        tier: d.buyerTier.toLowerCase(),
+        markets: d.markets,
+        buybox: d.buybox.join(', '),
+        matchScore: 0,
+        scoreBreakdown: 'Manually added',
+      },
+    })
   } catch (err) {
     console.error('[Buyers] Add buyer failed:', err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to add buyer' }, { status: 500 })

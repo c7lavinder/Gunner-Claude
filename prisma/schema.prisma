@@ -235,7 +235,8 @@ model Property {
   // Market assignment
   marketId String? @map("market_id")
   market   Market? @relation(fields: [marketId], references: [id])
-  propertyMarkets Json @default("[]") @map("property_markets") // ["Nashville", "Hot Springs", "Arkansas"]
+  propertyMarkets  Json @default("[]") @map("property_markets") // ["Nashville", "Hot Springs", "Arkansas"]
+  manualBuyerIds   Json @default("[]") @map("manual_buyer_ids") // GHL contact IDs added manually for this property
 
   // Enrichment (Phase 2 — Zillow, county records)
   zillowData   Json? @map("zillow_data")
