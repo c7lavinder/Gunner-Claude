@@ -1,7 +1,7 @@
 'use client'
 // components/inventory/inventory-client.tsx
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
@@ -496,6 +496,16 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
   })
   const [sources, setSources] = useState<Record<string, string>>(p.fieldSources ?? {})
 
+  // Reset all local state when the selected property changes
+  useEffect(() => {
+    setVals({
+      askingPrice: p.askingPrice, mao: p.mao, currentOffer: p.currentOffer,
+      contractPrice: p.contractPrice, highestOffer: p.highestOffer, acceptedPrice: p.acceptedPrice,
+      assignmentFee: p.assignmentFee, finalProfit: p.finalProfit,
+    })
+    setSources(p.fieldSources ?? {})
+  }, [p.id])
+
   function handleSaved(field: string, val: string | null, src: string) {
     setVals(prev => ({ ...prev, [field]: val }))
     setSources(prev => {
@@ -509,7 +519,7 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
     ? Number(vals.acceptedPrice) - Number(vals.contractPrice) : null
 
   return (
-    <div className="w-[420px] shrink-0 bg-white border-l border-[rgba(0,0,0,0.08)] shadow-sm flex flex-col max-h-[calc(100vh-120px)] sticky top-[60px]">
+    <div className="w-[420px] max-w-[50vw] shrink-0 bg-white border-l border-[rgba(0,0,0,0.08)] shadow-sm flex flex-col max-h-[calc(100vh-120px)] sticky top-[60px]">
       {/* Header */}
       <div className="px-4 py-3 border-b border-[rgba(0,0,0,0.06)] shrink-0">
         <div className="flex items-center justify-between mb-1.5">
@@ -618,6 +628,14 @@ function DrawerContacts({ propertyId, initialSellers }: {
   const [searching, setSearching] = useState(false)
   const [adding, setAdding] = useState(false)
   const [selectedRole, setSelectedRole] = useState('Primary Seller')
+
+  // Reset when property changes
+  useEffect(() => {
+    setSellers(initialSellers)
+    setShowSearch(false)
+    setQuery('')
+    setResults([])
+  }, [propertyId])
 
   async function searchContacts(q: string) {
     setQuery(q)
@@ -732,6 +750,9 @@ function DrawerInlineAI({ propertyId }: { propertyId: string }) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([])
   const [loading, setLoading] = useState(false)
+
+  // Reset chat when property changes
+  useEffect(() => { setInput(''); setMessages([]); setLoading(false) }, [propertyId])
 
   async function send() {
     const text = input.trim()
