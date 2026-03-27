@@ -43,9 +43,13 @@ interface PipelineStageTabsProps {
 }
 
 export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }: PipelineStageTabsProps) {
-  const [acqOpen, setAcqOpen] = useState(true)
-  const [dispoOpen, setDispoOpen] = useState(true)
-  const [ltOpen, setLtOpen] = useState(true)
+  const [acqOpen, setAcqOpen] = useState(() => { try { return localStorage.getItem('pipeline.acq') !== 'false' } catch { return true } })
+  const [dispoOpen, setDispoOpen] = useState(() => { try { return localStorage.getItem('pipeline.dispo') !== 'false' } catch { return true } })
+  const [ltOpen, setLtOpen] = useState(() => { try { return localStorage.getItem('pipeline.lt') !== 'false' } catch { return true } })
+
+  function toggleAcq() { const next = !acqOpen; setAcqOpen(next); try { localStorage.setItem('pipeline.acq', String(next)) } catch {} }
+  function toggleDispo() { const next = !dispoOpen; setDispoOpen(next); try { localStorage.setItem('pipeline.dispo', String(next)) } catch {} }
+  function toggleLt() { const next = !ltOpen; setLtOpen(next); try { localStorage.setItem('pipeline.lt', String(next)) } catch {} }
 
   function handleSelect(stage: AppStage) {
     onStageSelect(selectedStage === stage ? null : stage)
@@ -58,7 +62,7 @@ export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }:
         label="Acquisition"
         icon={<ChevronRight size={11} />}
         open={acqOpen}
-        onToggle={() => setAcqOpen(!acqOpen)}
+        onToggle={toggleAcq}
       >
         <StageRow stages={ACQ_STAGES} stageCounts={stageCounts} selectedStage={selectedStage} onSelect={handleSelect} />
       </Section>
@@ -68,7 +72,7 @@ export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }:
         label="Disposition"
         icon={<SlidersHorizontal size={11} />}
         open={dispoOpen}
-        onToggle={() => setDispoOpen(!dispoOpen)}
+        onToggle={toggleDispo}
         border
       >
         <StageRow stages={DISPO_STAGES} stageCounts={stageCounts} selectedStage={selectedStage} onSelect={handleSelect} />
@@ -79,7 +83,7 @@ export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }:
         label="Long-Term"
         icon={<Clock size={11} />}
         open={ltOpen}
-        onToggle={() => setLtOpen(!ltOpen)}
+        onToggle={toggleLt}
         border
       >
         <div className="flex gap-2 px-4 pb-4">
