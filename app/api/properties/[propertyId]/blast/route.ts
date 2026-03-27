@@ -1,10 +1,39 @@
-// POST /api/properties/[propertyId]/blast — generate + send deal blast
+// GET + POST /api/properties/[propertyId]/blast — blast history + generate + send
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+export async function GET(
+  _req: Request,
+  { params }: { params: { propertyId: string } }
+) {
+  try {
+    const session = await getSession()
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const blasts = await db.dealBlast.findMany({
+      where: { propertyId: params.propertyId, tenantId: session.tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: { _count: { select: { recipients: true } } },
+    })
+
+    return NextResponse.json({
+      history: blasts.map(b => ({
+        id: b.id,
+        channel: b.channel,
+        status: b.status,
+        sentAt: b.sentAt?.toISOString() ?? null,
+        recipientCount: b._count.recipients,
+      })),
+    })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
+  }
+}
 
 export async function POST(
   req: Request,
@@ -15,14 +44,16 @@ export async function POST(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const tenantId = session.tenantId
-    const { action, tiers, tier } = await req.json()
+    const { action, tiers, tier, message, channel, subject, buyerIds } = await req.json()
 
     const property = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
       select: {
         address: true, city: true, state: true, zip: true,
         askingPrice: true, arv: true, contractPrice: true, assignmentFee: true,
-        status: true,
+        beds: true, baths: true, sqft: true, yearBuilt: true, lotSize: true,
+        propertyType: true, description: true, status: true,
+        zillowData: true,
       },
     })
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
@@ -32,24 +63,58 @@ export async function POST(
       const selectedTiers = (tiers as string[]) ?? []
       const results: Record<string, { emailSubject: string; emailBody: string; smsBody: string }> = {}
 
+      // Build rich property context for AI
+      const batchData = ((property.zillowData as Record<string, unknown>)?.batchData ?? {}) as Record<string, unknown>
+      const specs: string[] = []
+      if (property.beds) specs.push(`${property.beds} bed`)
+      if (property.baths) specs.push(`${property.baths} bath`)
+      if (property.sqft) specs.push(`${property.sqft.toLocaleString()} sqft`)
+      if (property.yearBuilt) specs.push(`built ${property.yearBuilt}`)
+      if (property.lotSize) specs.push(`lot ${property.lotSize}`)
+      if (property.propertyType) specs.push(property.propertyType)
+
+      const signals: string[] = []
+      if (batchData.highEquity === true) signals.push('high equity')
+      if (batchData.freeAndClear === true) signals.push('free & clear')
+      if (batchData.vacant === true) signals.push('vacant')
+      if (batchData.absenteeOwner === true) signals.push('absentee owner')
+
+      const equity = batchData.equityPercent as number | undefined
+      const estVal = batchData.estimatedValue as number | undefined
+
+      const propertyContext = [
+        `Address: ${property.address}, ${property.city}, ${property.state} ${property.zip}`,
+        specs.length > 0 ? `Specs: ${specs.join(', ')}` : null,
+        property.askingPrice ? `Asking: $${Number(property.askingPrice).toLocaleString()}` : null,
+        property.arv ? `ARV: $${Number(property.arv).toLocaleString()}` : null,
+        property.contractPrice ? `Contract: $${Number(property.contractPrice).toLocaleString()}` : null,
+        property.assignmentFee ? `Assignment Fee: $${Number(property.assignmentFee).toLocaleString()}` : null,
+        estVal ? `Estimated Value: $${estVal.toLocaleString()}` : null,
+        equity != null ? `Equity: ${Math.round(equity)}%` : null,
+        signals.length > 0 ? `Deal signals: ${signals.join(', ')}` : null,
+        property.description ? `Description: ${property.description}` : null,
+      ].filter(Boolean).join('\n')
+
       for (const t of selectedTiers) {
         const tierContext: Record<string, string> = {
-          priority: 'Priority Buyer: exclusive early access, urgency, high confidence tone',
-          qualified: 'Qualified Buyer: professional, detail-focused, ROI-oriented',
-          jv: 'JV Partner: partnership framing, profit split potential',
-          unqualified: 'Educational: no jargon, simple CTA',
+          priority: 'Priority Buyer: exclusive early access, urgency, high confidence tone. Emphasize scarcity and deal quality.',
+          qualified: 'Qualified Buyer: professional, detail-focused, ROI-oriented. Include numbers and return potential.',
+          jv: 'JV Partner: partnership framing, profit split potential. Focus on deal economics and co-investment opportunity.',
+          unqualified: 'Educational: no jargon, simple CTA. Keep it conversational and inviting.',
         }
 
         const emailPrompt = `Generate a professional wholesale real estate deal blast email for the ${t} buyer tier.
-Property: ${property.address}, ${property.city}, ${property.state} ${property.zip}
-Asking: ${property.askingPrice ? `$${Number(property.askingPrice).toLocaleString()}` : 'N/A'}
-ARV: ${property.arv ? `$${Number(property.arv).toLocaleString()}` : 'N/A'}
-Tier context: ${tierContext[t] ?? tierContext.unqualified}
 
-Keep subject line under 60 chars. Email under 300 words. Return ONLY JSON: {"subject":"...","body":"..."}`
+${propertyContext}
+
+Tier tone: ${tierContext[t] ?? tierContext.unqualified}
+
+Include the property specs (beds/baths/sqft/year) and key deal numbers in the email body.
+Keep subject line under 60 chars. Email under 300 words. Professional but urgent.
+Return ONLY JSON: {"subject":"...","body":"..."}`
 
         const smsPrompt = `Write a wholesale deal alert SMS for ${t} buyers.
-Property: ${property.address} | Asking: ${property.askingPrice ? `$${Number(property.askingPrice).toLocaleString()}` : 'TBD'} | ARV: ${property.arv ? `$${Number(property.arv).toLocaleString()}` : 'TBD'}
+${property.address}, ${property.city} ${property.state} | ${specs.slice(0, 3).join(', ')} | Asking: ${property.askingPrice ? `$${Number(property.askingPrice).toLocaleString()}` : 'TBD'} | ARV: ${property.arv ? `$${Number(property.arv).toLocaleString()}` : 'TBD'}
 Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.`
 
         try {
@@ -84,8 +149,8 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
         } catch {
           results[t] = {
             emailSubject: `Investment Opportunity: ${property.address}`,
-            emailBody: `Property available at ${property.address}, ${property.city}, ${property.state}. Contact us for details.`,
-            smsBody: `Deal alert: ${property.address}. ARV ${property.arv ? `$${Number(property.arv).toLocaleString()}` : 'TBD'}. Reply for details.`,
+            emailBody: `Property available at ${property.address}, ${property.city}, ${property.state}. ${specs.join(', ')}. Contact us for details.`,
+            smsBody: `Deal alert: ${property.address}. ${specs.slice(0, 2).join(', ')}. ARV ${property.arv ? `$${Number(property.arv).toLocaleString()}` : 'TBD'}. Reply for details.`,
           }
         }
       }
@@ -95,14 +160,15 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
 
     // Send blast to a specific tier
     if (action === 'send' && tier) {
-      const { message, channel, subject } = await req.json().catch(() => ({ message: '', channel: 'sms', subject: '' }))
-
-      // Get matched buyers for this tier
+      // Get buyers — use explicit IDs if provided, otherwise filter by tier
+      const selectedIds = Array.isArray(buyerIds) ? buyerIds as string[] : null
       const buyers = await db.buyer.findMany({
-        where: { tenantId, isActive: true },
+        where: selectedIds
+          ? { tenantId, isActive: true, id: { in: selectedIds } }
+          : { tenantId, isActive: true },
       })
 
-      const tierBuyers = buyers.filter(b => {
+      const tierBuyers = selectedIds ? buyers : buyers.filter(b => {
         const tags = (Array.isArray(b.tags) ? b.tags : []).map((t: unknown) => String(t).toLowerCase())
         if (tier === 'priority') return tags.some(t => t.includes('priority'))
         if (tier === 'qualified') return tags.some(t => t.includes('qualified') || t.includes('cash') || t.includes('verified'))
@@ -134,9 +200,9 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
 
         try {
           if (channel === 'email' && subject && message) {
-            await ghl.sendEmail(contactId, subject, `<div>${message.replace(/\n/g, '<br>')}</div>`)
+            await ghl.sendEmail(contactId, subject, `<div>${(message as string).replace(/\n/g, '<br>')}</div>`)
           } else if (message) {
-            await ghl.sendSMS(contactId, message)
+            await ghl.sendSMS(contactId, message as string)
           }
           sentCount++
 
@@ -175,7 +241,7 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to process blast'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const msg = err instanceof Error ? err.message : 'Failed to process blast'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

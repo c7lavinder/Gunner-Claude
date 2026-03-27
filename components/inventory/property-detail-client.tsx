@@ -2814,16 +2814,29 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
     { tier: 'unqualified', label: 'Unqualified', emoji: '👤', desc: 'Not yet verified' },
   ]
 
+  interface BuyerItem { id: string; name: string; phone: string | null; email: string | null; tier: string; ghlContactId: string | null; markets: string[] }
+
   const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set(['priority', 'qualified']))
   const [generating, setGenerating] = useState(false)
   const [blasts, setBlasts] = useState<Record<string, { emailSubject: string; emailBody: string; smsBody: string }>>({})
   const [expandedTier, setExpandedTier] = useState<string | null>(null)
   const [sendingTier, setSendingTier] = useState<string | null>(null)
   const [sendResult, setSendResult] = useState<string | null>(null)
-  const [emailPreview, setEmailPreview] = useState<string | null>(null) // tier being previewed
+  const [emailPreview, setEmailPreview] = useState<string | null>(null)
   const [recipientCounts, setRecipientCounts] = useState<Record<string, number>>({})
+  const [blastHistory, setBlastHistory] = useState<Array<{ id: string; channel: string; status: string; sentAt: string | null; recipientCount: number }>>([])
+  const [allBuyers, setAllBuyers] = useState<BuyerItem[]>([])
+  const [selectedBuyerIds, setSelectedBuyerIds] = useState<Set<string>>(new Set())
+  const [showRecipients, setShowRecipients] = useState(false)
+  const [sendChannel, setSendChannel] = useState<'sms' | 'email'>('sms')
 
-  // Update blast content (editable)
+  // Fetch blast history + buyer list on mount
+  useEffect(() => {
+    fetchBuyers()
+    fetchBlastHistory()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function updateBlast(tier: string, field: 'emailSubject' | 'emailBody' | 'smsBody', value: string) {
     setBlasts(prev => ({
       ...prev,
@@ -2831,16 +2844,47 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
     }))
   }
 
-  async function fetchRecipientCounts() {
+  async function fetchBuyers() {
     try {
       const res = await fetch(`/api/properties/${property.id}/buyers`)
       const data = await res.json()
-      const buyers = data.buyers ?? []
+      const buyers: BuyerItem[] = (data.buyers ?? []).map((b: Record<string, unknown>) => ({
+        id: b.id as string, name: b.name as string, phone: b.phone as string | null,
+        email: b.email as string | null, tier: b.tier as string,
+        ghlContactId: b.ghlContactId as string | null,
+        markets: (b.markets ?? []) as string[],
+      }))
+      setAllBuyers(buyers)
+      // Auto-select all buyers initially
+      setSelectedBuyerIds(new Set(buyers.map(b => b.id)))
+      // Build tier counts
       const counts: Record<string, number> = {}
-      for (const b of buyers) {
-        counts[b.tier] = (counts[b.tier] ?? 0) + 1
-      }
+      for (const b of buyers) { counts[b.tier] = (counts[b.tier] ?? 0) + 1 }
       setRecipientCounts(counts)
+    } catch {}
+  }
+
+  function toggleBuyer(id: string) {
+    setSelectedBuyerIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllBuyers() { setSelectedBuyerIds(new Set(filteredBuyers.map(b => b.id))) }
+  function deselectAllBuyers() { setSelectedBuyerIds(new Set()) }
+
+  // Filter buyers by selected tiers
+  const filteredBuyers = allBuyers.filter(b => selectedTiers.has(b.tier))
+
+  async function fetchBlastHistory() {
+    try {
+      const res = await fetch(`/api/properties/${property.id}/blast`)
+      if (res.ok) {
+        const data = await res.json()
+        setBlastHistory(data.history ?? [])
+      }
     } catch {}
   }
 
@@ -2859,10 +2903,12 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
           channel,
           message: channel === 'email' ? content.emailBody : content.smsBody,
           subject: content.emailSubject,
+          buyerIds: [...selectedBuyerIds],
         }),
       })
       const data = await res.json()
       setSendResult(res.ok ? `Sent to ${data.sentTo} buyers${data.skipped ? `, ${data.skipped} skipped` : ''}` : 'Send failed')
+      if (res.ok) fetchBlastHistory()
     } catch { setSendResult('Send failed') }
     setSendingTier(null)
     setTimeout(() => setSendResult(null), 5000)
@@ -2887,7 +2933,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'generate', tiers: [...selectedTiers] }),
         }),
-        fetchRecipientCounts(),
+        fetchBuyers(),
       ])
       const data = await blastRes.json()
       setBlasts(data.blasts ?? {})
@@ -2895,6 +2941,9 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
     } catch {}
     setGenerating(false)
   }
+
+  const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : '—'
+  const totalRecipients = Object.values(recipientCounts).reduce((a, b) => a + b, 0)
 
   return (
     <div className="space-y-5">
@@ -2909,12 +2958,54 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
               address: property.address, city: property.city, state: property.state, zip: property.zip,
               askingPrice: property.askingPrice, arv: property.arv, contractPrice: property.contractPrice,
               assignmentFee: property.assignmentFee, mao: property.mao,
+              beds: property.beds, baths: property.baths, sqft: property.sqft, yearBuilt: property.yearBuilt,
+              description: property.description,
             }))
           }}
           className="text-ds-fine font-medium text-txt-secondary hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[8px] border-[0.5px] border-[rgba(0,0,0,0.08)] flex items-center gap-1 transition-colors"
         >
           <FileText size={11} /> PDF Flyer
         </button>
+      </div>
+
+      {/* Property summary card — key deal numbers at a glance */}
+      <div className="bg-surface-secondary rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.06)] p-4">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Deal Summary</p>
+        <div className="grid grid-cols-4 gap-3">
+          <div>
+            <p className="text-[9px] text-txt-muted">Asking</p>
+            <p className="text-ds-fine font-semibold text-txt-primary">{fmt(property.askingPrice)}</p>
+          </div>
+          <div>
+            <p className="text-[9px] text-txt-muted">ARV</p>
+            <p className="text-ds-fine font-semibold text-semantic-green">{fmt(property.arv)}</p>
+          </div>
+          <div>
+            <p className="text-[9px] text-txt-muted">Contract</p>
+            <p className="text-ds-fine font-semibold text-txt-primary">{fmt(property.contractPrice)}</p>
+          </div>
+          <div>
+            <p className="text-[9px] text-txt-muted">Assignment Fee</p>
+            <p className="text-ds-fine font-semibold text-semantic-amber">{fmt(property.assignmentFee)}</p>
+          </div>
+        </div>
+        {(property.beds || property.baths || property.sqft) && (
+          <div className="flex items-center gap-3 mt-2 text-[10px] text-txt-secondary">
+            {property.beds && <span>{property.beds} bed</span>}
+            {property.baths && <span>{property.baths} bath</span>}
+            {property.sqft && <span>{property.sqft.toLocaleString()} sqft</span>}
+            {property.yearBuilt && <span>Built {property.yearBuilt}</span>}
+          </div>
+        )}
+        {property.description && (
+          <p className="text-[10px] text-txt-muted mt-2 line-clamp-2">{property.description}</p>
+        )}
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-[9px] font-medium text-txt-muted bg-surface-tertiary px-1.5 py-0.5 rounded-full">{totalRecipients} matched buyers</span>
+          {property.propertyMarkets?.length > 0 && (
+            <span className="text-[9px] font-medium text-semantic-blue bg-semantic-blue-bg px-1.5 py-0.5 rounded-full">{property.propertyMarkets.join(', ')}</span>
+          )}
+        </div>
       </div>
 
       {/* Tier selection */}
@@ -2928,7 +3019,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
               <input type="checkbox" checked={selectedTiers.has(t.tier)} onChange={() => toggleTier(t.tier)} className="mt-0.5 accent-gunner-red" />
               <div>
                 <p className="text-ds-fine font-semibold text-txt-primary">{t.emoji} {t.label}</p>
-                <p className="text-[9px] text-txt-muted">{t.desc}</p>
+                <p className="text-[9px] text-txt-muted">{t.desc}{recipientCounts[t.tier] ? ` — ${recipientCounts[t.tier]} buyers` : ''}</p>
               </div>
             </label>
           ))}
@@ -2942,6 +3033,56 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       >
         {generating ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : `Generate Blast for ${selectedTiers.size} Tier${selectedTiers.size !== 1 ? 's' : ''}`}
       </button>
+
+      {/* Recipients — selectable buyer list */}
+      {filteredBuyers.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">
+              Recipients ({selectedBuyerIds.size} of {filteredBuyers.length} selected)
+            </p>
+            <div className="flex items-center gap-2">
+              <button onClick={selectAllBuyers} className="text-[9px] font-medium text-semantic-blue hover:underline">Select All</button>
+              <button onClick={deselectAllBuyers} className="text-[9px] font-medium text-txt-muted hover:underline">Clear</button>
+              <button onClick={() => setShowRecipients(p => !p)} className="text-[9px] font-medium text-txt-secondary hover:text-txt-primary">
+                {showRecipients ? 'Hide' : 'Show'} List
+              </button>
+            </div>
+          </div>
+          {showRecipients && (
+            <div className="max-h-[200px] overflow-y-auto space-y-1 mb-2">
+              {filteredBuyers.map(b => (
+                <label key={b.id} className={`flex items-center gap-2 rounded-[8px] px-3 py-1.5 cursor-pointer transition-colors border-[0.5px] ${
+                  selectedBuyerIds.has(b.id) ? 'bg-gunner-red-light border-gunner-red/20' : 'bg-surface-secondary border-[rgba(0,0,0,0.06)]'
+                }`}>
+                  <input type="checkbox" checked={selectedBuyerIds.has(b.id)} onChange={() => toggleBuyer(b.id)} className="accent-gunner-red" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-ds-fine font-medium text-txt-primary">{b.name}</span>
+                    <span className="text-[9px] text-txt-muted ml-2">{b.phone ?? b.email ?? 'No contact'}</span>
+                  </div>
+                  <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                    b.tier === 'priority' ? 'bg-amber-100 text-amber-700' : b.tier === 'qualified' ? 'bg-green-100 text-green-700' : b.tier === 'jv' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                  }`}>{b.tier}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* Send from / channel toggle */}
+          <div className="flex items-center gap-3 bg-surface-secondary rounded-[8px] px-3 py-2 border-[0.5px] border-[rgba(0,0,0,0.06)]">
+            <span className="text-[9px] font-semibold text-txt-muted uppercase">Send via:</span>
+            <button onClick={() => setSendChannel('sms')}
+              className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors ${sendChannel === 'sms' ? 'bg-green-600 text-white' : 'bg-surface-tertiary text-txt-secondary'}`}>
+              SMS
+            </button>
+            <button onClick={() => setSendChannel('email')}
+              className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors ${sendChannel === 'email' ? 'bg-blue-600 text-white' : 'bg-surface-tertiary text-txt-secondary'}`}>
+              Email
+            </button>
+            <span className="text-[9px] text-txt-muted ml-auto">From: {property.sellers?.[0]?.name ?? tenantSlug}</span>
+          </div>
+        </div>
+      )}
 
       {/* Generated blasts per tier (accordion) — editable */}
       {Object.keys(blasts).length > 0 && (
@@ -3031,6 +3172,30 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       )}
 
       {sendResult && <p className="text-ds-fine text-gunner-red text-center font-medium">{sendResult}</p>}
+
+      {/* Blast History */}
+      {blastHistory.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Blast History</p>
+          <div className="space-y-1.5">
+            {blastHistory.map(b => (
+              <div key={b.id} className="flex items-center justify-between bg-surface-secondary rounded-[8px] px-3 py-2 border-[0.5px] border-[rgba(0,0,0,0.06)]">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${b.channel === 'email' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                    {b.channel.toUpperCase()}
+                  </span>
+                  <span className="text-ds-fine text-txt-primary">{b.recipientCount} recipients</span>
+                  <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${b.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {b.status}
+                  </span>
+                </div>
+                {b.sentAt && <span className="text-[9px] text-txt-muted">{format(new Date(b.sentAt), 'MMM d, h:mm a')}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="text-[9px] text-txt-muted text-center">Edit content before sending. System learns from your changes.</p>
     </div>
   )
