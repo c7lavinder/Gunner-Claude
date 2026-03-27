@@ -49,6 +49,11 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
 
     case 'ContactCreated':
     case 'contact.created':
+    case 'ContactUpdate':
+    case 'contact.updated':
+    case 'ContactDelete':
+    case 'contact.deleted':
+      await handleContactChange(tenant.id, event)
       break
 
     case 'TaskCompleted':
@@ -543,4 +548,50 @@ async function handleAppointmentCreated(tenantId: string, event: GHLWebhookEvent
       payload: JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue,
     },
   })
+}
+
+// ─── Contact Change → Buyer Sync ─────────────────────────────────────────────
+// When a GHL contact is created/updated/deleted, sync to local Buyer table
+// This keeps the buyer DB fresh for instant matching
+
+async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
+  const contactId = (event.contactId ?? event.id ?? (event as Record<string, unknown>).contact_id) as string | undefined
+  if (!contactId) return
+
+  const isDelete = event.type === 'ContactDelete' || event.type === 'contact.deleted'
+
+  if (isDelete) {
+    // Mark buyer as inactive
+    await db.buyer.updateMany({
+      where: { ghlContactId: contactId, tenantId },
+      data: { isActive: false },
+    }).catch(() => {})
+    console.log(`[GHL Webhook] Buyer deactivated: ${contactId}`)
+    return
+  }
+
+  // For create/update, check if this contact is in the buyer pipeline
+  try {
+    const { getGHLClient } = await import('@/lib/ghl/client')
+    const ghl = await getGHLClient(tenantId)
+    const contact = await ghl.getContact(contactId)
+    if (!contact) return
+
+    // Check if they have buyer-related custom fields or are in buyer pipeline
+    const hasCustomFields = (contact.customFields ?? []).some(
+      (f: { id: string }) => ['Y4ton500NvCkJKtb4YzP', 'ghOapC4jq1iSzmCzv5up', 'VcdWDP2lXuuV1LwedOhs'].includes(f.id)
+    )
+
+    if (hasCustomFields) {
+      const { syncBuyerFromGHL } = await import('@/lib/buyers/sync')
+      await syncBuyerFromGHL(tenantId, {
+        id: contact.id, firstName: contact.firstName, lastName: contact.lastName,
+        phone: contact.phone, email: contact.email, city: contact.city, state: contact.state,
+        tags: contact.tags ?? [], customFields: contact.customFields ?? [],
+      })
+      console.log(`[GHL Webhook] Buyer synced: ${contact.firstName} ${contact.lastName}`)
+    }
+  } catch (err) {
+    console.error('[GHL Webhook] Contact sync failed:', err instanceof Error ? err.message : err)
+  }
 }
