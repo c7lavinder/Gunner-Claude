@@ -15,6 +15,8 @@ const GHL_FIELD_MAP: Record<string, string> = {
   'IZdG26j5rw0yiU1jvDEo': 'verified_funding',
   'FRyMcgqWes9BuWqo97HF': 'last_contact_date',
   '4qyjtjm5DWVgFgMCHdqQ': 'notes',
+  // secondary_market — field ID TBD, will auto-map once created in GHL
+  // Add the GHL field ID here when you create it: 'FIELD_ID_HERE': 'secondary_market',
 }
 
 // Parse GHL custom fields into structured buyer data
@@ -62,6 +64,9 @@ function parseBuyerFields(contact: {
   const buybox = getStr('buybox')
   const buyerNotes = getStr('notes')
 
+  // Secondary market — one-off deal markets
+  const secondaryMarkets = getArr('secondary_market')
+
   // Markets from custom field, fallback to tags, then city
   let markets = getArr('markets')
   if (markets.length === 0 && contact.tags?.length) {
@@ -79,7 +84,7 @@ function parseBuyerFields(contact: {
     email: contact.email,
     tier,
     markets,
-    secondaryMarket: '',
+    secondaryMarkets,
     buybox,
     verifiedFunding,
     hasPurchased: false,
@@ -93,16 +98,26 @@ function parseBuyerFields(contact: {
 function scoreBuyer(buyer: ReturnType<typeof parseBuyerFields>, propertyMarkets: string[], propertyCity: string | null, propertyType?: string | null): number {
   let score = 0
 
-  // Primary market match: +40 (check buyer markets against property market names AND city)
+  // Market match targets: property market names + city
   const matchTargets = [...propertyMarkets]
   if (propertyCity) matchTargets.push(propertyCity)
 
-  if (buyer.markets.some(m =>
+  const matchesMarket = (markets: string[]) => markets.some(m =>
     matchTargets.some(pm =>
       pm.toLowerCase().includes(m.toLowerCase()) || m.toLowerCase().includes(pm.toLowerCase())
     )
-  )) {
+  )
+
+  // Primary market match: +40
+  // If buyer has "Other" in markets, their secondary_market is their real market
+  const primaryMarkets = buyer.markets.filter(m => m.toLowerCase() !== 'other')
+  if (matchesMarket(primaryMarkets)) {
     score += 40
+  }
+
+  // Secondary market match: +20 (one-off deal markets, or "Other" market details)
+  if (buyer.secondaryMarkets.length > 0 && matchesMarket(buyer.secondaryMarkets)) {
+    score += 20
   }
 
   // Buybox matches property type or general wholesaling: +20
@@ -204,7 +219,7 @@ export async function GET(
         email: lb.email ?? '',
         tier,
         markets,
-        secondaryMarket: '',
+        secondaryMarkets: [],
         buybox: '',
         verifiedFunding: false,
         hasPurchased: false,
