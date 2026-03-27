@@ -5,9 +5,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
-  ExternalLink, X,
+  ExternalLink, X, MessageSquare, Send, FileText, User, Users,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { formatPhone } from '@/lib/format'
 import { PipelineStageTabs } from './PipelineStageTabs'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
@@ -568,26 +569,8 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
           </div>
         </div>
 
-        {/* Contacts */}
-        <div>
-          <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Contacts ({p.sellers.length})</p>
-          {p.sellers.length === 0 ? (
-            <p className="text-ds-fine text-txt-muted">No contacts linked</p>
-          ) : (
-            <div className="space-y-1.5">
-              {p.sellers.map(s => (
-                <div key={s.id} className="bg-surface-secondary rounded-[8px] px-2.5 py-2">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-ds-fine text-txt-primary font-medium">{s.name}</p>
-                    <span className="text-[8px] font-medium text-gunner-red">{s.role}</span>
-                  </div>
-                  {s.phone && <p className="text-[10px] text-txt-secondary">{s.phone}</p>}
-                  {s.email && <p className="text-[10px] text-txt-secondary truncate">{s.email}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Contacts — with add */}
+        <DrawerContacts propertyId={p.id} initialSellers={p.sellers} />
 
         {/* Assigned */}
         {p.assignedTo && (
@@ -597,7 +580,10 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
           </div>
         )}
 
-        {/* Quick links */}
+        {/* Quick actions — SMS + Email */}
+        {p.ghlContactId && <DrawerQuickActions ghlContactId={p.ghlContactId} />}
+
+        {/* Links */}
         <div className="flex gap-2 pt-1">
           <Link href={`/${tenantSlug}/inventory/${p.id}`}
             className="flex-1 flex items-center justify-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
@@ -612,6 +598,177 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Drawer Contacts (with add/remove) ──────────────────────────────────────
+
+const DRAWER_ROLES = ['Primary Seller', 'Co-Seller', 'Spouse', 'Buyer', 'Buyer Agent', 'Attorney', 'Agent', 'Other']
+
+function DrawerContacts({ propertyId, initialSellers }: {
+  propertyId: string
+  initialSellers: Property['sellers']
+}) {
+  const [sellers, setSellers] = useState(initialSellers)
+  const [showSearch, setShowSearch] = useState(false)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Array<{ id: string; name: string; phone: string | null; email: string | null }>>([])
+  const [searching, setSearching] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [selectedRole, setSelectedRole] = useState('Primary Seller')
+
+  async function searchContacts(q: string) {
+    setQuery(q)
+    if (q.length < 2) { setResults([]); return }
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/ghl/contacts?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      setResults(data.contacts ?? [])
+    } catch { setResults([]) }
+    setSearching(false)
+  }
+
+  async function addContact(c: { id: string; name: string; phone: string | null; email: string | null }) {
+    setAdding(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/sellers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ghlContactId: c.id, name: c.name, phone: c.phone, email: c.email, role: selectedRole, isPrimary: sellers.length === 0 }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setSellers(prev => [...prev, data.seller])
+        setShowSearch(false); setQuery(''); setResults([])
+      }
+    } catch {}
+    setAdding(false)
+  }
+
+  async function removeContact(sellerId: string) {
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/sellers`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sellerId }),
+      })
+      if (res.ok) setSellers(prev => prev.filter(s => s.id !== sellerId))
+    } catch {}
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">
+          <Users size={9} className="inline -mt-0.5 text-gunner-red" /> Contacts ({sellers.length})
+        </p>
+        <button onClick={() => setShowSearch(!showSearch)}
+          className="text-[10px] font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-0.5 transition-colors">
+          {showSearch ? <X size={9} /> : <Plus size={9} />}
+          {showSearch ? 'Cancel' : 'Add'}
+        </button>
+      </div>
+
+      {showSearch && (
+        <div className="mb-2 space-y-1.5">
+          <input autoFocus value={query} onChange={e => searchContacts(e.target.value)}
+            placeholder="Search GHL contacts..."
+            className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none" />
+          <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
+            className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-[10px]">
+            {DRAWER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          {searching && <p className="text-[10px] text-txt-muted">Searching...</p>}
+          {results.length > 0 && (
+            <div className="max-h-28 overflow-y-auto space-y-1">
+              {results.map(c => {
+                const linked = sellers.some(s => s.ghlContactId === c.id)
+                return (
+                  <button key={c.id} onClick={() => !linked && addContact(c)} disabled={linked || adding}
+                    className={`w-full text-left px-2 py-1 rounded text-[10px] ${linked ? 'bg-surface-tertiary text-txt-muted' : 'bg-surface-secondary hover:bg-surface-tertiary text-txt-primary'}`}>
+                    <p className="font-medium">{c.name}{linked ? ' (linked)' : ''}</p>
+                    <p className="text-txt-muted">{formatPhone(c.phone) || c.email || '—'}</p>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {sellers.length === 0 ? (
+        <p className="text-ds-fine text-txt-muted">No contacts linked</p>
+      ) : (
+        <div className="space-y-1.5">
+          {sellers.map(s => (
+            <div key={s.id} className="bg-surface-secondary rounded-[8px] px-2.5 py-2 group">
+              <div className="flex items-start justify-between gap-1">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-ds-fine text-txt-primary font-medium">{s.name}</p>
+                    <span className="text-[8px] font-medium text-gunner-red">{s.role}</span>
+                  </div>
+                  {s.phone && <p className="text-[10px] text-txt-secondary">{formatPhone(s.phone)}</p>}
+                  {s.email && <p className="text-[10px] text-txt-secondary truncate">{s.email}</p>}
+                </div>
+                <button onClick={() => removeContact(s.id)}
+                  className="opacity-0 group-hover:opacity-100 text-txt-muted hover:text-semantic-red transition-all shrink-0 mt-0.5">
+                  <X size={10} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Drawer Quick Actions ───────────────────────────────────────────────────
+
+function DrawerQuickActions({ ghlContactId }: { ghlContactId: string }) {
+  const [smsText, setSmsText] = useState('')
+  const [emailText, setEmailText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  async function sendAction(type: string, payload: Record<string, string>) {
+    setSending(true)
+    try {
+      const res = await fetch('/api/ghl/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, contactId: ghlContactId, ...payload }),
+      })
+      setMsg(res.ok ? 'Sent!' : 'Failed')
+    } catch { setMsg('Error') }
+    setSending(false)
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Quick Actions</p>
+      <div className="space-y-1.5">
+        <textarea value={smsText} onChange={e => setSmsText(e.target.value)}
+          placeholder="Send SMS..." rows={2}
+          className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none resize-none" />
+        <button onClick={() => { sendAction('send_sms', { message: smsText }); setSmsText('') }}
+          disabled={!smsText.trim() || sending}
+          className="w-full bg-semantic-green hover:bg-semantic-green/90 disabled:opacity-40 text-white text-[10px] font-semibold rounded-[6px] py-1.5 transition-colors flex items-center justify-center gap-1">
+          <MessageSquare size={10} /> {sending ? 'Sending...' : 'Send SMS'}
+        </button>
+        <textarea value={emailText} onChange={e => setEmailText(e.target.value)}
+          placeholder="Send email..." rows={2}
+          className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none resize-none" />
+        <button onClick={() => { sendAction('send_email', { message: emailText }); setEmailText('') }}
+          disabled={!emailText.trim() || sending}
+          className="w-full bg-semantic-blue hover:bg-semantic-blue/90 disabled:opacity-40 text-white text-[10px] font-semibold rounded-[6px] py-1.5 transition-colors flex items-center justify-center gap-1">
+          <Send size={10} /> {sending ? 'Sending...' : 'Send Email'}
+        </button>
+      </div>
+      {msg && <p className="text-[10px] text-gunner-red text-center">{msg}</p>}
     </div>
   )
 }

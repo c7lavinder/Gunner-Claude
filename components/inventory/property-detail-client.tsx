@@ -11,6 +11,7 @@ import {
   Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
+import { formatPhone } from '@/lib/format'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
 
@@ -542,7 +543,7 @@ function InlineTextArea({
 
 // ─── Contacts Section ────────────────────────────────────────────────────────
 
-const CONTACT_ROLES = ['Primary Seller', 'Co-Seller', 'Spouse', 'Attorney', 'Agent', 'Other']
+const CONTACT_ROLES = ['Primary Seller', 'Co-Seller', 'Spouse', 'Buyer', 'Buyer Agent', 'Attorney', 'Agent', 'Other']
 
 function ContactsSection({ propertyId, initialSellers }: {
   propertyId: string
@@ -679,7 +680,7 @@ function ContactsSection({ propertyId, initialSellers }: {
                       {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
-                  {s.phone && <p className="text-ds-fine text-txt-secondary">{s.phone}</p>}
+                  {s.phone && <p className="text-ds-fine text-txt-secondary">{formatPhone(s.phone)}</p>}
                   {s.email && <p className="text-ds-fine text-txt-secondary truncate">{s.email}</p>}
                 </div>
                 <button onClick={() => removeContact(s.id)}
@@ -832,22 +833,31 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
                 <button
                   onClick={() => { runGhlAction('send_sms', { message: smsText }); setSmsText('') }}
                   disabled={!smsText.trim() || sending}
-                  className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors"
+                  className="w-full bg-semantic-green hover:bg-semantic-green/90 disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors flex items-center justify-center gap-1.5"
                 >
-                  {sending ? 'Sending...' : 'Send SMS'}
+                  <MessageSquare size={11} /> {sending ? 'Sending...' : 'Send SMS'}
                 </button>
                 <textarea
                   value={noteText} onChange={e => setNoteText(e.target.value)}
-                  placeholder="Add note..." rows={2}
+                  placeholder="Send email or add note..." rows={2}
                   className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none resize-none"
                 />
-                <button
-                  onClick={() => { runGhlAction('add_note', { note: noteText }); setNoteText('') }}
-                  disabled={!noteText.trim() || sending}
-                  className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors"
-                >
-                  Save Note
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => { runGhlAction('send_email', { message: noteText }); setNoteText('') }}
+                    disabled={!noteText.trim() || sending}
+                    className="flex-1 bg-semantic-blue hover:bg-semantic-blue/90 disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Send size={11} /> Email
+                  </button>
+                  <button
+                    onClick={() => { runGhlAction('add_note', { note: noteText }); setNoteText('') }}
+                    disabled={!noteText.trim() || sending}
+                    className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <FileText size={11} /> Save Note
+                  </button>
+                </div>
               </div>
               {actionMsg && <p className="text-ds-fine text-gunner-red">{actionMsg}</p>}
             </div>
