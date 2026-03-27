@@ -1536,27 +1536,71 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         )}
       </div>
 
-      {/* Quick Flags — wholesale signals */}
+      {/* Deal Signals — same source color system */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Signals</p>
+          <div className="flex items-center gap-2">
+            <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">API</span>
+            <span className="text-[7px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">AI</span>
+            <span className="text-[7px] font-bold text-green-500 bg-green-50 px-1 py-0.5 rounded">EDITED</span>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2 p-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 p-3">
           {[
-            { k: 'highEquity', l: 'High Equity', c: 'bg-green-100 text-green-700' },
-            { k: 'freeAndClear', l: 'Free & Clear', c: 'bg-green-100 text-green-700' },
-            { k: 'cashBuyer', l: 'Cash Buyer', c: 'bg-blue-100 text-blue-700' },
-            { k: 'taxDefault', l: 'Tax Default', c: 'bg-red-100 text-red-700' },
-            { k: 'preforeclosure', l: 'Pre-Foreclosure', c: 'bg-red-100 text-red-700' },
-            { k: 'vacant', l: 'Vacant', c: 'bg-amber-100 text-amber-700' },
-            { k: 'absenteeOwner', l: 'Absentee Owner', c: 'bg-purple-100 text-purple-700' },
-            { k: 'corporateOwned', l: 'Corporate', c: 'bg-gray-100 text-gray-600' },
-            { k: 'trustOwned', l: 'Trust', c: 'bg-gray-100 text-gray-600' },
-          ].map(flag => (
-            <span key={flag.k} className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${bd[flag.k] === true ? flag.c : 'bg-surface-secondary text-txt-muted'}`}>
-              {bd[flag.k] === true ? '✓' : '—'} {flag.l}
-            </span>
-          ))}
+            { k: 'highEquity', l: 'High Equity' },
+            { k: 'freeAndClear', l: 'Free & Clear' },
+            { k: 'cashBuyer', l: 'Cash Buyer' },
+            { k: 'taxDefault', l: 'Tax Default' },
+            { k: 'preforeclosure', l: 'Pre-Foreclosure' },
+            { k: 'vacant', l: 'Vacant' },
+            { k: 'absenteeOwner', l: 'Absentee Owner' },
+            { k: 'corporateOwned', l: 'Corporate' },
+            { k: 'trustOwned', l: 'Trust' },
+          ].map(flag => {
+            // Determine source: user override > API direct > AI derived
+            const edited = editedFields[flag.k]
+            const apiVal = bd[flag.k]
+            const isTrue = edited !== undefined ? edited === 'Yes' || edited === 'true' : apiVal === true
+            const isFalse = edited !== undefined ? edited === 'No' || edited === 'false' : apiVal === false
+
+            // Absentee: if API says false but ownerOccupied is true, that's an AI derivation
+            let source: 'api' | 'ai' | 'user' | null = null
+            if (edited !== undefined) source = 'user'
+            else if (apiVal != null) {
+              if (flag.k === 'absenteeOwner' && apiVal === false && bd.ownerOccupied === true) source = 'ai'
+              else source = 'api'
+            }
+
+            const s = sourceStyles(source)
+
+            return (
+              <div key={flag.k}
+                onClick={() => startEdit(flag.k, isTrue ? 'Yes' : isFalse ? 'No' : '')}
+                className={`rounded-[8px] px-2.5 py-2 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group relative ${source ? s.bg : 'bg-surface-secondary'}`}
+              >
+                {source && s.tag && (
+                  <span className={`absolute top-0.5 right-1 text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+                )}
+                <p className={`text-[8px] font-semibold uppercase tracking-wider ${source ? s.label : 'text-txt-muted'}`}>{flag.l}</p>
+                {editingField === flag.k ? (
+                  <select autoFocus value={editValue}
+                    onChange={e => { setEditValue(e.target.value); saveEdit(flag.k) }}
+                    onBlur={() => setEditingField(null)}
+                    className="w-full bg-white border-[0.5px] border-green-300 rounded px-1 py-0.5 text-ds-fine font-semibold mt-0.5 focus:outline-none">
+                    <option value="">—</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                ) : (
+                  <p className={`text-ds-fine font-bold mt-0.5 ${isTrue ? (source ? s.value : 'text-semantic-green') : isFalse ? (source ? s.value : 'text-txt-muted') : 'text-txt-muted'}`}>
+                    {isTrue ? '✓ Yes' : isFalse ? '✗ No' : '—'}
+                    <Pencil size={6} className="inline ml-1 opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+                  </p>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
