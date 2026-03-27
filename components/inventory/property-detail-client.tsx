@@ -372,19 +372,21 @@ function InlineEditCard({
     if (raw === (value ?? '')) { setEditing(false); return }
     setSaving(true)
     try {
+      const newVal = raw || null
+      const newSource = newVal ? 'user' : ''
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: raw || null, fieldSources: { [field]: 'user' } }),
+        body: JSON.stringify({ [field]: newVal, fieldSources: newVal ? { [field]: 'user' } : { [field]: '' } }),
       })
-      if (res.ok) onSaved(field, raw || null, 'user')
+      if (res.ok) onSaved(field, newVal, newSource)
     } catch {}
     setSaving(false)
     setEditing(false)
   }
 
   const displayValue = value ? `$${Number(value).toLocaleString()}` : null
-  const s = sourceStyles(source ?? null)
+  const s = sourceStyles(source || null)
 
   if (editing) {
     return (
@@ -729,7 +731,13 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
   function handleSaved(field: string, val: string | number | null, src?: string) {
     setVals(prev => ({ ...prev, [field]: val }))
-    if (src) setSources(prev => ({ ...prev, [field]: src }))
+    if (src !== undefined) {
+      setSources(prev => {
+        const next = { ...prev }
+        if (src) next[field] = src; else delete next[field]
+        return next
+      })
+    }
   }
 
   // Computed: Est. Spread = Accepted (or Contract) - Asking

@@ -433,19 +433,20 @@ function DrawerEditCard({ label, value, field, propertyId, source, onSaved }: {
     if (raw === (value ?? '')) { setEditing(false); return }
     setSaving(true)
     try {
+      const newVal = raw || null
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: raw || null, fieldSources: { [field]: 'user' } }),
+        body: JSON.stringify({ [field]: newVal, fieldSources: newVal ? { [field]: 'user' } : { [field]: '' } }),
       })
-      if (res.ok) onSaved(field, raw || null, 'user')
+      if (res.ok) onSaved(field, newVal, newVal ? 'user' : '')
     } catch {}
     setSaving(false)
     setEditing(false)
   }
 
   const displayValue = value ? `$${Number(value).toLocaleString()}` : null
-  const s = drawerSourceStyles(source ?? null)
+  const s = drawerSourceStyles(source || null)
 
   if (editing) {
     return (
@@ -495,7 +496,11 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
 
   function handleSaved(field: string, val: string | null, src: string) {
     setVals(prev => ({ ...prev, [field]: val }))
-    setSources(prev => ({ ...prev, [field]: src }))
+    setSources(prev => {
+      const next = { ...prev }
+      if (src) next[field] = src; else delete next[field]
+      return next
+    })
   }
 
   const spread = vals.acceptedPrice && vals.contractPrice

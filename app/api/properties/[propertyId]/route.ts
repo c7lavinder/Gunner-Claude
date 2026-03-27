@@ -118,12 +118,13 @@ export async function PATCH(
           ...(internalNotes !== undefined && { internalNotes }),
           ...(lastOfferDate !== undefined && { lastOfferDate: lastOfferDate ? new Date(lastOfferDate) : null }),
           ...(lastContactedDate !== undefined && { lastContactedDate: lastContactedDate ? new Date(lastContactedDate) : null }),
-          // Merge field sources (AI vs user tracking)
+          // Merge field sources (AI vs user tracking) — empty string removes the key
           ...(fieldSources && {
-            fieldSources: {
-              ...((property.fieldSources as Record<string, string>) ?? {}),
-              ...fieldSources,
-            },
+            fieldSources: (() => {
+              const merged = { ...((property.fieldSources as Record<string, string>) ?? {}), ...fieldSources }
+              for (const k of Object.keys(merged)) { if (!merged[k]) delete merged[k] }
+              return merged
+            })(),
           }),
         },
       })
