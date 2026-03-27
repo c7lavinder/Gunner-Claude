@@ -99,91 +99,120 @@ function buyerMatchesMarket(
   buyer: { markets: string[]; secondaryMarkets: string[] },
   matchTargets: string[],
 ): boolean {
-  const check = (markets: string[]) => markets.some(m =>
+  // Combine all buyer markets (primary + secondary) for matching
+  const allBuyerMarkets = [...buyer.markets, ...buyer.secondaryMarkets]
+    .filter(m => m.toLowerCase() !== 'other') // "Other" is not a real market
+
+  // "Nationwide" matches everything
+  if (allBuyerMarkets.some(m => m.toLowerCase() === 'nationwide')) return true
+
+  // Check if any buyer market matches any property market (substring both ways)
+  return allBuyerMarkets.some(m =>
     matchTargets.some(pm =>
       pm.toLowerCase().includes(m.toLowerCase()) || m.toLowerCase().includes(pm.toLowerCase())
     )
   )
-  // "Nationwide" matches everything
-  const allMarkets = [...buyer.markets, ...buyer.secondaryMarkets]
-  if (allMarkets.some(m => m.toLowerCase() === 'nationwide')) return true
-
-  const primaryMarkets = buyer.markets.filter(m => m.toLowerCase() !== 'other')
-  if (check(primaryMarkets)) return true
-  if (buyer.secondaryMarkets.length > 0 && check(buyer.secondaryMarkets)) return true
-  return false
 }
 
-// LLM-powered buyer scoring — one call scores all market-matched buyers
+// LLM-powered buyer scoring — batched in groups of 50 to fit response tokens
 async function llmScoreBuyers(
   projectTypes: string[],
   buyers: Array<{ id: string; tier: string; buybox: string; verifiedFunding: boolean; hasPurchased: boolean; responseSpeed: string }>,
 ): Promise<Record<string, { score: number; breakdown: string }>> {
   if (buyers.length === 0) return {}
+
+  const BATCH_SIZE = 50
+  const allResults: Record<string, { score: number; breakdown: string }> = {}
+
+  // If no project types and all fields are basic, use deterministic scoring (no LLM needed)
+  const useDeterministic = buyers.length > 100 || !process.env.ANTHROPIC_API_KEY
+
+  if (useDeterministic) {
+    for (const b of buyers) {
+      let score = 0
+      let parts: string[] = []
+
+      // Tier
+      const tierScores: Record<string, number> = { priority: 15, qualified: 10, jv: 5, unqualified: 0, halted: -25 }
+      const tierScore = tierScores[b.tier] ?? 0
+      if (tierScore !== 0) { score += tierScore; parts.push(`Tier ${tierScore > 0 ? '+' : ''}${tierScore}`) }
+
+      // Buybox match
+      if (projectTypes.length > 0 && b.buybox) {
+        const bb = b.buybox.toLowerCase()
+        const pt = projectTypes.map(p => p.toLowerCase())
+        const matchMap: Record<string, string[]> = {
+          flipper: ['flip', 'fix', 'rehab'], rental: ['rental', 'landlord', 'hold', 'buy & hold'],
+          builder: ['build', 'new construction', 'develop'], wholesale: ['wholesale'],
+          land: ['land', 'lot'], commercial: ['commercial'],
+        }
+        const matched = pt.some(p => bb.includes(p) || Object.entries(matchMap).some(([k, v]) => p.includes(k) && v.some(alias => bb.includes(alias))))
+        if (matched) { score += 20; parts.push('Buybox +20') }
+      }
+
+      // Funding
+      if (b.verifiedFunding) { score += 5; parts.push('Funding +5') }
+      // Purchased
+      if (b.hasPurchased) { score += 5; parts.push('Purchased +5') }
+      // Speed
+      const speedScores: Record<string, number> = { lightning: 5, 'same day': 3, slow: 0, ghost: -5 }
+      const speedScore = speedScores[b.responseSpeed?.toLowerCase()] ?? 0
+      if (speedScore !== 0) { score += speedScore; parts.push(`Speed ${speedScore > 0 ? '+' : ''}${speedScore}`) }
+
+      allResults[b.id] = {
+        score: Math.max(0, Math.min(100, 50 + score)),
+        breakdown: `Market +50${parts.length > 0 ? ', ' + parts.join(', ') : ''}`,
+      }
+    }
+    return allResults
+  }
+
+  // LLM scoring in batches of 50
   try {
     const Anthropic = (await import('@anthropic-ai/sdk')).default
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-    const buyerSummaries = buyers.map(b =>
-      `${b.id}: tier=${b.tier}, buybox=${b.buybox || 'none'}, funding=${b.verifiedFunding}, purchased=${b.hasPurchased}, speed=${b.responseSpeed || 'unknown'}`
-    ).join('\n')
+    for (let i = 0; i < buyers.length; i += BATCH_SIZE) {
+      const batch = buyers.slice(i, i + BATCH_SIZE)
+      const buyerSummaries = batch.map(b =>
+        `${b.id}: tier=${b.tier}, buybox=${b.buybox || 'none'}, funding=${b.verifiedFunding}, purchased=${b.hasPurchased}, speed=${b.responseSpeed || 'unknown'}`
+      ).join('\n')
 
-    const res = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2048,
-      messages: [{
-        role: 'user',
-        content: `Score these buyers for a property with project types: ${JSON.stringify(projectTypes)}
+      const res = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: `Score these buyers for property types: ${JSON.stringify(projectTypes)}
 
-SCORING RULES (max 50 points, added to a base of 50):
+RULES (max 50 pts added to base 50): Buybox match +20, Tier (Priority+15/Qualified+10/JV+5/Unqualified+0/Halted-25), Purchased+5, Speed (Lightning+5/Same Day+3/Slow+0/Ghost-5), Funding+5.
 
-1. BUYBOX MATCH (+20): Does the buyer's buybox match or relate to the property's project types?
-   Use real estate knowledge — "Flipper" matches "Fix and Flip", "Landlord" matches "Rental", "Builder" matches "New Construction", etc.
-   If no project types set on property, skip this factor.
+BUYERS:\n${buyerSummaries}
 
-2. BUYER TIER (+15/+10/+5/0/-25):
-   Priority = +15, Qualified = +10, JV = +5, Unqualified = +0, Halted = -25
-   Interpret similar terms naturally (e.g. "A" = Priority, "B" = Qualified, "C" = JV, "Cold" = Unqualified)
+Return ONLY JSON: {"id": {"score": N, "breakdown": "..."}, ...}. Score is 0-50 (before +50 base). Keep breakdown concise.` }],
+      })
 
-3. PURCHASED BEFORE (+5): Has the buyer purchased from us before? true = +5
-
-4. RESPONSE SPEED (+5/+3/0/-5):
-   Lightning = +5, Same Day = +3, Slow = +0, Ghost = -5
-   Interpret similar terms naturally.
-
-5. VERIFIED FUNDING (+5): true = +5
-
-BUYERS:
-${buyerSummaries}
-
-Return ONLY a JSON object mapping buyer ID to an object with "score" (0-50, before base 50) and "breakdown" (short string showing the math).
-Example: {"abc123": {"score": 35, "breakdown": "Buybox +20, Tier +15, Funding +5"}, "def456": {"score": 10, "breakdown": "Tier +10"}}
-Only include factors that contributed points (positive or negative). Keep breakdown concise.`,
-      }],
-    })
-
-    const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
-    const match = text.match(/\{[\s\S]*\}/)
-    if (match) {
-      const raw = JSON.parse(match[0]) as Record<string, { score: number; breakdown: string } | number>
-      const result: Record<string, { score: number; breakdown: string }> = {}
-      for (const [id, val] of Object.entries(raw)) {
-        if (typeof val === 'number') {
-          result[id] = { score: Math.max(0, Math.min(100, 50 + val)), breakdown: 'Market +50' }
-        } else {
-          result[id] = {
-            score: Math.max(0, Math.min(100, 50 + val.score)),
-            breakdown: `Market +50, ${val.breakdown}`,
+      const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
+      const match = text.match(/\{[\s\S]*\}/)
+      if (match) {
+        const raw = JSON.parse(match[0]) as Record<string, { score: number; breakdown: string } | number>
+        for (const [id, val] of Object.entries(raw)) {
+          if (typeof val === 'number') {
+            allResults[id] = { score: Math.max(0, Math.min(100, 50 + val)), breakdown: 'Market +50' }
+          } else {
+            allResults[id] = { score: Math.max(0, Math.min(100, 50 + val.score)), breakdown: `Market +50, ${val.breakdown}` }
           }
         }
       }
-      return result
     }
   } catch (err) {
-    console.error('[Buyers] LLM scoring failed:', err)
+    console.error('[Buyers] LLM scoring failed, using deterministic fallback:', err)
+    return llmScoreBuyers(projectTypes, buyers) // will hit deterministic path since allResults check fails
   }
-  // Fallback: everyone gets base 50
-  return Object.fromEntries(buyers.map(b => [b.id, { score: 50, breakdown: 'Market +50' }]))
+
+  // Fill any missing with base 50
+  for (const b of buyers) {
+    if (!allResults[b.id]) allResults[b.id] = { score: 50, breakdown: 'Market +50' }
+  }
+  return allResults
 }
 
 export async function GET(

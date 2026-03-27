@@ -1578,8 +1578,11 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
     } catch {}
   }
 
-  // Load added buyers on mount
-  useEffect(() => { loadAddedBuyers() }, [property.id])
+  // Load added buyers + auto-match on mount
+  useEffect(() => {
+    loadAddedBuyers()
+    if (!fetched && !loading) matchBuyers()
+  }, [property.id])
 
   const [syncMsg, setSyncMsg] = useState('')
 
@@ -1846,7 +1849,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
           ) : (
             <div className="space-y-2">
               {addedBuyers.map(b => (
-                <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
+                <BuyerRow key={b.id} buyer={b} tierColors={tierColors} />
               ))}
             </div>
           )}
@@ -1873,7 +1876,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
           ) : (
             <div className="space-y-2">
               {buyers.map(b => (
-                <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
+                <BuyerRow key={b.id} buyer={b} tierColors={tierColors} />
               ))}
             </div>
           )}
@@ -1883,41 +1886,33 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   )
 }
 
-function BuyerCard({ buyer: b, tierColors, tierEmoji }: {
+function BuyerRow({ buyer: b, tierColors }: {
   buyer: { id: string; name: string; phone: string | null; email: string | null; tier: string; markets: string[]; buybox?: string; matchScore: number; scoreBreakdown?: string }
-  tierColors: Record<string, string>; tierEmoji: Record<string, string>
+  tierColors: Record<string, string>
 }) {
   return (
-    <div className="bg-surface-secondary rounded-[10px] p-3 flex items-start gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${tierColors[b.tier] ?? tierColors.unqualified}`}>
-            {tierEmoji[b.tier] ?? '👤'} {b.tier}
-          </span>
-          <span className="text-ds-body font-medium text-txt-primary">{titleCase(b.name)}</span>
-        </div>
-        <div className="flex gap-3 text-ds-fine text-txt-secondary">
-          {b.phone && <span>{formatPhone(b.phone)}</span>}
-          {b.email && <span>{b.email}</span>}
-        </div>
-        {b.markets.length > 0 && (
-          <p className="text-ds-fine text-txt-muted mt-0.5">Markets: {b.markets.join(', ')}</p>
-        )}
-        {b.buybox && <p className="text-ds-fine text-txt-muted">Buybox: {b.buybox}</p>}
-      </div>
-      <div className="text-right shrink-0 relative group cursor-default">
-        <span className={`text-ds-label font-bold ${b.matchScore >= 75 ? 'text-semantic-green' : b.matchScore >= 60 ? 'text-semantic-amber' : 'text-txt-muted'}`}>
+    <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-surface-secondary transition-colors rounded-[6px] group">
+      {/* Score */}
+      <div className="w-8 text-center shrink-0 relative">
+        <span className={`text-ds-fine font-bold ${b.matchScore >= 75 ? 'text-semantic-green' : b.matchScore >= 60 ? 'text-semantic-amber' : 'text-txt-muted'}`}>
           {b.matchScore || '—'}
         </span>
-        <p className="text-[8px] text-txt-muted">{b.matchScore ? 'score' : ''}</p>
         {b.scoreBreakdown && b.scoreBreakdown !== 'Manually added' && (
-          <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-[10px] px-3 py-2 rounded-[8px] shadow-lg whitespace-nowrap">
-            {b.scoreBreakdown.split(', ').map((part, i) => (
-              <div key={i}>{part}</div>
-            ))}
+          <div className="absolute left-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-[9px] px-2.5 py-1.5 rounded-[6px] shadow-lg whitespace-nowrap">
+            {b.scoreBreakdown.split(', ').map((part, i) => <div key={i}>{part}</div>)}
           </div>
         )}
       </div>
+      {/* Tier badge */}
+      <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${tierColors[b.tier] ?? tierColors.unqualified}`}>
+        {b.tier}
+      </span>
+      {/* Name */}
+      <span className="text-ds-fine font-medium text-txt-primary truncate min-w-0 flex-1">{titleCase(b.name)}</span>
+      {/* Phone */}
+      <span className="text-[10px] text-txt-muted shrink-0 hidden sm:block w-28">{b.phone ? formatPhone(b.phone) : ''}</span>
+      {/* Markets */}
+      <span className="text-[10px] text-txt-muted truncate shrink-0 hidden md:block w-24">{b.markets.join(', ')}</span>
     </div>
   )
 }
