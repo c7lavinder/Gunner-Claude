@@ -27,21 +27,21 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
   const fieldSources = { ...((property.fieldSources as Record<string, string>) ?? {}) }
 
   if (property.beds == null && result.bedrooms) {
-    updateData.beds = result.bedrooms; fieldSources.beds = 'ai'
+    updateData.beds = result.bedrooms; fieldSources.beds = 'api'
   }
   if (property.baths == null && result.bathrooms) {
-    updateData.baths = result.bathrooms; fieldSources.baths = 'ai'
+    updateData.baths = result.bathrooms; fieldSources.baths = 'api'
   }
   if (property.sqft == null && result.squareFootage) {
-    updateData.sqft = result.squareFootage; fieldSources.sqft = 'ai'
+    updateData.sqft = result.squareFootage; fieldSources.sqft = 'api'
   }
   if (property.yearBuilt == null && result.yearBuilt) {
-    updateData.yearBuilt = result.yearBuilt; fieldSources.yearBuilt = 'ai'
+    updateData.yearBuilt = result.yearBuilt; fieldSources.yearBuilt = 'api'
   }
   if (!property.lotSize && result.lotSquareFootage) {
     const acres = result.lotSquareFootage / 43560
     updateData.lotSize = acres >= 1 ? `${acres.toFixed(2)} ac` : `${result.lotSquareFootage.toLocaleString()} sqft`
-    fieldSources.lotSize = 'ai'
+    fieldSources.lotSize = 'api'
   }
   if (!property.propertyType && result.propertyType) {
     const typeMap: Record<string, string> = {
@@ -54,7 +54,7 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
       'commercial': 'Commercial',
     }
     updateData.propertyType = typeMap[result.propertyType.toLowerCase()] ?? result.propertyType
-    fieldSources.propertyType = 'ai'
+    fieldSources.propertyType = 'api'
   }
 
   // Store full BatchData for Research tab

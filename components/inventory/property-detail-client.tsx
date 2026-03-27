@@ -367,11 +367,12 @@ function DealProgress({ currentStatus, milestones }: {
 
 // ─── Inline Edit Components ──────────────────────────────────────────────────
 
-// Source-based color styles: null=gray, "ai"=blue, "user"=green
+// Source-based color styles: "api"=purple, "ai"=blue, "user"=green, null=gray
 function sourceStyles(source: string | null) {
-  if (source === 'ai') return { bg: 'bg-blue-50 border-[0.5px] border-blue-300', label: 'text-blue-700', value: 'text-blue-800' }
-  if (source === 'user') return { bg: 'bg-green-50 border-[0.5px] border-green-300', label: 'text-green-700', value: 'text-green-800' }
-  return { bg: 'bg-surface-secondary', label: 'text-txt-muted', value: 'text-txt-primary' }
+  if (source === 'api') return { bg: 'bg-purple-50 border-[0.5px] border-purple-300', label: 'text-purple-700', value: 'text-purple-800', tag: 'API', tagColor: 'text-purple-400' }
+  if (source === 'ai') return { bg: 'bg-blue-50 border-[0.5px] border-blue-300', label: 'text-blue-700', value: 'text-blue-800', tag: 'AI', tagColor: 'text-blue-400' }
+  if (source === 'user') return { bg: 'bg-green-50 border-[0.5px] border-green-300', label: 'text-green-700', value: 'text-green-800', tag: 'EDITED', tagColor: 'text-green-400' }
+  return { bg: 'bg-surface-secondary', label: 'text-txt-muted', value: 'text-txt-primary', tag: '', tagColor: '' }
 }
 
 function InlineEditCard({
@@ -429,7 +430,10 @@ function InlineEditCard({
   }
 
   return (
-    <div onClick={startEdit} className={`${s.bg} rounded-[10px] px-3 py-2.5 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group`}>
+    <div onClick={startEdit} className={`${s.bg} rounded-[10px] px-3 py-2.5 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group relative`}>
+      {s.tag && (
+        <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+      )}
       <p className={`text-[9px] font-semibold uppercase tracking-wider flex items-center justify-between ${s.label}`}>
         {label}
         <Pencil size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -633,8 +637,11 @@ function DetailCell({
     <div className="relative">
       <div
         onClick={startEdit}
-        className={`px-3 py-2.5 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors group ${source ? s.bg : ''}`}
+        className={`px-3 py-2.5 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors group relative ${source ? s.bg : ''}`}
       >
+        {source && s.tag && (
+          <span className={`absolute top-0.5 right-1.5 text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+        )}
         <p className={`text-[8px] font-semibold uppercase tracking-wider ${source ? s.label : 'text-txt-muted'}`}>{label}</p>
         {editing ? (
           <input
@@ -1214,9 +1221,14 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
       {/* Property Details — structured grid */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-        {/* Section header */}
-        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+        {/* Section header with source legend */}
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Details</p>
+          <div className="flex items-center gap-2">
+            <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">API</span>
+            <span className="text-[7px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">AI</span>
+            <span className="text-[7px] font-bold text-green-500 bg-green-50 px-1 py-0.5 rounded">EDITED</span>
+          </div>
         </div>
 
         {/* Row 1: Type + Physical attributes (5 cols) */}
