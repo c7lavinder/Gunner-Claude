@@ -1758,16 +1758,24 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-ds-label font-semibold text-txt-primary">Buyers</h3>
+        <div>
+          <h3 className="text-ds-label font-semibold text-txt-primary">Buyers</h3>
+          {syncMsg && <p className="text-[10px] text-txt-muted mt-0.5">{syncMsg}</p>}
+        </div>
         <div className="flex gap-2">
           <button onClick={openAddForm}
             className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors">
-            <Plus size={11} /> Add Buyer
+            <Plus size={11} /> Add
+          </button>
+          <button onClick={async () => { const ok = await runSync(); if (ok) matchBuyers() }} disabled={loading}
+            className="text-ds-fine font-medium text-semantic-purple hover:text-semantic-purple/80 flex items-center gap-1 transition-colors disabled:opacity-50">
+            {loading && syncMsg ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
+            Sync CRM
           </button>
           <button onClick={matchBuyers} disabled={loading}
             className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
-            {loading ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
-            {loading ? 'Matching...' : fetched ? 'Rematch' : 'Match from CRM'}
+            {loading && !syncMsg ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
+            {fetched ? 'Rematch' : 'Match'}
           </button>
         </div>
       </div>
