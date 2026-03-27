@@ -10,7 +10,8 @@ interface KpiProperty {
   id: string
   status: string
   leadSource: string | null
-  propertyMarkets: string[]
+  zip: string
+  market: string // derived from zip → 'Nashville' | 'Columbia' | 'Knoxville' | 'Chattanooga' | 'Global'
   projectType: string[]
   assignmentFee: number | null
   finalProfit: number | null
@@ -43,7 +44,7 @@ const FUNNEL_COLORS = ['blue', 'orange', 'purple', 'green', 'red']
 const INBOUND_SOURCES = ['PPL', 'PPC', 'SEO', 'Form', 'Texts']
 const OUTBOUND_SOURCES = ['Cold Calling', 'Cold SMS', 'Direct Mail', 'JV', 'Dialer']
 
-const MARKETS = ['Nashville', 'Global', 'Columbia', 'Knoxville', 'Chattanooga']
+const MARKETS = ['Nashville', 'Chattanooga', 'Knoxville', 'Columbia', 'Global']
 
 const TIME_PERIODS = [
   { key: 'month', label: 'This Month' },
@@ -109,8 +110,7 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
     return properties.filter(p => {
       const d = new Date(p.createdAt)
       if (d < start || d > end) return false
-      if (marketFilter !== 'all' && !p.propertyMarkets.includes(marketFilter)) return false
-      // Source filter only for acquisition
+      if (marketFilter !== 'all' && p.market !== marketFilter) return false
       return true
     })
   }, [properties, timePeriod, marketFilter])
@@ -130,7 +130,7 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
 
   // ── Data Quality ────────────────────────────────────────────────────────────
   const missingSource = properties.filter(p => !p.leadSource && ACQ_ALL_STATUSES.includes(p.status)).length
-  const missingMarket = properties.filter(p => p.propertyMarkets.length === 0).length
+  const missingMarket = properties.filter(p => p.market === 'Global').length
 
   // ── Acquisition Counts (cumulative: Offer Made also counts in Lead + Apt Set)
   const acqCounts = useMemo(() => cumulativeCounts(acqFiltered, ACQ_STAGES), [acqFiltered])
@@ -188,9 +188,8 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
   }, [acqFiltered])
 
   const acqByMarketTab = useMemo((): TableTab => {
-    const mkts = [...new Set(acqFiltered.flatMap(p => p.propertyMarkets.length > 0 ? p.propertyMarkets : ['Unassigned']))]
-    const rows = mkts.map(mkt => {
-      const group = acqFiltered.filter(p => mkt === 'Unassigned' ? p.propertyMarkets.length === 0 : p.propertyMarkets.includes(mkt))
+    const rows = MARKETS.map(mkt => {
+      const group = acqFiltered.filter(p => p.market === mkt)
       const total = group.length
       const rev = sumRevenue(group.filter(p => p.status === 'SOLD'))
       const cc = cumulativeCounts(group, ACQ_STAGES)
@@ -237,7 +236,7 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
       const row: Record<string, string | number> = { source: src }
       for (const mkt of MARKETS) {
         const group = acqFiltered.filter(p =>
-          (src === 'Unassigned' ? !p.leadSource : p.leadSource === src) && p.propertyMarkets.includes(mkt)
+          (src === 'Unassigned' ? !p.leadSource : p.leadSource === src) && p.market === mkt
         )
         row[`${mkt}_lead`] = group.filter(p => ACQ_STAGES[0].statuses.includes(p.status)).length
         row[`${mkt}_closed`] = group.filter(p => p.status === 'SOLD').length
@@ -252,9 +251,8 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
 
   // ── Disposition Breakdown Tables ────────────────────────────────────────────
   const dispoByMarketTab = useMemo((): TableTab => {
-    const mkts = [...new Set(dispoFiltered.flatMap(p => p.propertyMarkets.length > 0 ? p.propertyMarkets : ['Unassigned']))]
-    const rows = mkts.map(mkt => {
-      const group = dispoFiltered.filter(p => mkt === 'Unassigned' ? p.propertyMarkets.length === 0 : p.propertyMarkets.includes(mkt))
+    const rows = MARKETS.map(mkt => {
+      const group = dispoFiltered.filter(p => p.market === mkt)
       const rev = sumRevenue(group.filter(p => p.status === 'DISPO_CLOSED'))
       return {
         market: mkt,
@@ -323,7 +321,7 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
       const row: Record<string, string | number> = { projectType: pt }
       for (const mkt of MARKETS) {
         const group = dispoFiltered.filter(p =>
-          (pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt)) && p.propertyMarkets.includes(mkt)
+          (pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt)) && p.market === mkt
         )
         row[`${mkt}_newDeal`] = group.filter(p => DISPO_STAGES[0].statuses.includes(p.status)).length
         row[`${mkt}_closed`] = group.filter(p => p.status === 'DISPO_CLOSED').length

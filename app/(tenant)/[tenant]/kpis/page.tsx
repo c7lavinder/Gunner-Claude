@@ -5,6 +5,7 @@ import { db } from '@/lib/db/client'
 import { redirect } from 'next/navigation'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
+import { getMarketsForZip } from '@/lib/config/crm.config'
 import { KpiDashboard } from './KpiDashboard'
 
 export default async function KpisPage({ params }: { params: { tenant: string } }) {
@@ -22,7 +23,7 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
       id: true,
       status: true,
       leadSource: true,
-      propertyMarkets: true,
+      zip: true,
       projectType: true,
       assignmentFee: true,
       finalProfit: true,
@@ -33,16 +34,22 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
   return (
     <KpiDashboard
       tenantSlug={params.tenant}
-      properties={properties.map(p => ({
-        id: p.id,
-        status: p.status,
-        leadSource: p.leadSource,
-        propertyMarkets: (Array.isArray(p.propertyMarkets) ? p.propertyMarkets : []) as string[],
-        projectType: (Array.isArray(p.projectType) ? p.projectType : []) as string[],
-        assignmentFee: p.assignmentFee ? Number(p.assignmentFee) : null,
-        finalProfit: p.finalProfit ? Number(p.finalProfit) : null,
-        createdAt: p.createdAt.toISOString(),
-      }))}
+      properties={properties.map(p => {
+        // Derive market from zip code — source of truth
+        const zipMarkets = getMarketsForZip(p.zip)
+        const market = zipMarkets.length > 0 ? zipMarkets[0] : 'Global'
+        return {
+          id: p.id,
+          status: p.status,
+          leadSource: p.leadSource,
+          zip: p.zip,
+          market,
+          projectType: (Array.isArray(p.projectType) ? p.projectType : []) as string[],
+          assignmentFee: p.assignmentFee ? Number(p.assignmentFee) : null,
+          finalProfit: p.finalProfit ? Number(p.finalProfit) : null,
+          createdAt: p.createdAt.toISOString(),
+        }
+      })}
     />
   )
 }
