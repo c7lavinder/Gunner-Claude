@@ -380,8 +380,9 @@ function InlineEditCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: newVal, fieldSources: newVal ? { [field]: 'user' } : { [field]: '' } }),
       })
-      if (res.ok) onSaved(field, newVal, newSource)
-    } catch {}
+      if (res.ok) { onSaved(field, newVal, newSource) }
+      else { console.error('[InlineEdit] Save failed:', field, await res.text()) }
+    } catch (e) { console.error('[InlineEdit] Error:', e) }
     setSaving(false)
     setEditing(false)
   }

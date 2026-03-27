@@ -25,8 +25,8 @@ const updateSchema = z.object({
   highestOffer: z.string().nullable().optional(),
   acceptedPrice: z.string().nullable().optional(),
   finalProfit: z.string().nullable().optional(),
-  // Source tracking: { fieldName: "ai" | "user" }
-  fieldSources: z.record(z.string(), z.enum(['ai', 'user'])).optional(),
+  // Source tracking: { fieldName: "ai" | "user" | "" (clear) }
+  fieldSources: z.record(z.string(), z.string()).optional(),
   assignedToId: z.string().nullable().optional(),
   sellerName: z.string().nullable().optional(),
   sellerPhone: z.string().nullable().optional(),
@@ -64,7 +64,8 @@ export async function PATCH(
   const body = await request.json()
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    console.error('[Properties] Validation failed:', JSON.stringify(parsed.error.issues))
+    return NextResponse.json({ error: 'Invalid input', details: parsed.error.issues }, { status: 400 })
   }
 
   // Standardize address fields on save
