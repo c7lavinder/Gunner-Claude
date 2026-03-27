@@ -218,102 +218,74 @@ export async function GET(
     }
     console.log(`[Buyers] Property markets (source: ${customMarkets.length > 0 ? 'property page' : 'zip fallback'}): [${allPropertyMarkets}]`)
 
-    // Pull ALL contacts from the Buyer Pipeline — not a broad search
+    // ── Always fetch live from GHL — data changes constantly ────────────
     const ghl = await getGHLClient(tenantId)
-    let ghlBuyers: ReturnType<typeof parseBuyerFields>[] = []
+    let allBuyers: ReturnType<typeof parseBuyerFields>[] = []
 
     try {
-      // Find the Buyer Pipeline
       const pipelines = await ghl.getPipelines()
-      const buyerPipeline = pipelines.pipelines?.find(p =>
-        p.name.toLowerCase().includes('buyer')
-      )
-
+      const buyerPipeline = pipelines.pipelines?.find(p => p.name.toLowerCase().includes('buyer'))
       if (!buyerPipeline) {
         console.warn('[Buyers] No buyer pipeline found')
       } else {
         console.log(`[Buyers] Using pipeline: ${buyerPipeline.name} (${buyerPipeline.id})`)
-
-        // Get ALL contact IDs from the Buyer Pipeline (paginated)
         const contactIds = await ghl.getAllPipelineContacts(buyerPipeline.id)
         console.log(`[Buyers] Found ${contactIds.length} contacts in buyer pipeline`)
 
-        // Fetch each contact's full details (with custom fields)
-        // Process in batches of 10 to avoid rate limits
-        for (let i = 0; i < contactIds.length; i += 10) {
-          const batch = contactIds.slice(i, i + 10)
-          const contacts = await Promise.all(
-            batch.map(id => ghl.getContact(id).catch(() => null))
-          )
+        // Fetch in parallel batches of 20 (GHL rate limit ~100/min)
+        for (let i = 0; i < contactIds.length; i += 20) {
+          const batch = contactIds.slice(i, i + 20)
+          const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
           for (const c of contacts) {
             if (!c) continue
-            ghlBuyers.push(parseBuyerFields({
-              id: c.id,
-              firstName: c.firstName,
-              lastName: c.lastName,
-              phone: c.phone,
-              email: c.email,
-              city: c.city,
-              state: c.state,
-              tags: c.tags ?? [],
-              customFields: c.customFields ?? [],
+            allBuyers.push(parseBuyerFields({
+              id: c.id, firstName: c.firstName, lastName: c.lastName,
+              phone: c.phone, email: c.email, city: c.city, state: c.state,
+              tags: c.tags ?? [], customFields: c.customFields ?? [],
             }))
           }
         }
-        console.log(`[Buyers] Parsed ${ghlBuyers.length} buyers with data`)
-        // Log sample of buyer markets for debugging
-        const withMarkets = ghlBuyers.filter(b => b.markets.length > 0)
+        console.log(`[Buyers] Parsed ${allBuyers.length} buyers`)
+        const withMarkets = allBuyers.filter(b => b.markets.length > 0)
         console.log(`[Buyers] ${withMarkets.length} have market data. Sample:`, withMarkets.slice(0, 3).map(b => `${b.name}: [${b.markets}]`))
       }
     } catch (err) {
-      console.error('[Buyers] GHL pipeline fetch failed:', err instanceof Error ? err.message : err)
+      console.error('[Buyers] GHL fetch failed:', err instanceof Error ? err.message : err)
     }
 
-    // Also include local buyers
-    const localBuyers = await db.buyer.findMany({
-      where: { tenantId, isActive: true },
-    })
-
-    // Merge local buyers (dedup by phone/email)
-    const seenPhones = new Set(ghlBuyers.map(b => b.phone).filter(Boolean))
-    const seenEmails = new Set(ghlBuyers.map(b => b.email?.toLowerCase()).filter(Boolean))
-
+    // Also include local buyers (dedup by phone/email)
+    const localBuyers = await db.buyer.findMany({ where: { tenantId, isActive: true } })
+    const seenPhones = new Set(allBuyers.map(b => b.phone).filter(Boolean))
+    const seenEmails = new Set(allBuyers.map(b => b.email?.toLowerCase()).filter(Boolean))
     for (const lb of localBuyers) {
       if (lb.phone && seenPhones.has(lb.phone)) continue
       if (lb.email && seenEmails.has(lb.email.toLowerCase())) continue
-
+      const markets = Array.isArray(lb.markets) ? lb.markets as string[] : []
+      const criteria = (lb.criteria ?? {}) as Record<string, unknown>
       const tags = Array.isArray(lb.tags) ? lb.tags as string[] : []
       const tagsLower = tags.map(t => t.toLowerCase())
-      let tier: 'priority' | 'qualified' | 'jv' | 'unqualified' = 'unqualified'
-      if (tagsLower.some(t => t.includes('priority') || t === 'a')) tier = 'priority'
-      else if (tagsLower.some(t => t.includes('qualified') || t === 'b')) tier = 'qualified'
-      else if (tagsLower.some(t => t.includes('jv') || t === 'c')) tier = 'jv'
-
-      const markets = Array.isArray(lb.markets) ? lb.markets as string[] : []
-
-      ghlBuyers.push({
-        id: lb.id,
-        name: lb.name,
-        phone: lb.phone ?? '',
-        email: lb.email ?? '',
-        tier,
-        markets,
-        secondaryMarkets: [],
-        buybox: '',
-        verifiedFunding: false,
-        hasPurchased: false,
-        responseSpeed: '',
-        buyerNotes: lb.notes ?? '',
-        tags: Array.isArray(lb.tags) ? lb.tags as string[] : [],
+      let tier: string = (criteria.tier as string) ?? 'unqualified'
+      if (!criteria.tier) {
+        if (tagsLower.some(t => t.includes('priority') || t === 'a')) tier = 'priority'
+        else if (tagsLower.some(t => t.includes('qualified') || t === 'b')) tier = 'qualified'
+        else if (tagsLower.some(t => t.includes('jv') || t === 'c')) tier = 'jv'
+      }
+      allBuyers.push({
+        id: lb.id, name: lb.name, phone: lb.phone ?? '', email: lb.email ?? '',
+        tier: tier as 'priority' | 'qualified' | 'jv' | 'unqualified', markets,
+        secondaryMarkets: (criteria.secondaryMarkets as string[]) ?? [],
+        buybox: (criteria.buybox as string) ?? '', verifiedFunding: false,
+        hasPurchased: false, responseSpeed: '', buyerNotes: lb.notes ?? '',
+        tags,
       })
     }
 
     // Step 1: Market is the BASE filter — no market match = not shown
-    const marketMatched = ghlBuyers.filter(b => buyerMatchesMarket(b, allPropertyMarkets))
-    console.log(`[Buyers] Market filter: ${ghlBuyers.length} total → ${marketMatched.length} in market`)
-    if (marketMatched.length === 0 && ghlBuyers.length > 0) {
+    const marketMatched = allBuyers.filter(b => buyerMatchesMarket(b, allPropertyMarkets))
+    console.log(`[Buyers] Market filter: ${allBuyers.length} total → ${marketMatched.length} in market`)
+    if (marketMatched.length === 0 && allBuyers.length > 0) {
       // Debug: log first 5 buyers' markets for troubleshooting
-      const sample = ghlBuyers.slice(0, 5).map(b => `${b.name}: markets=[${b.markets}] secondary=[${b.secondaryMarkets}]`)
+      const sample = allBuyers.slice(0, 5).map(b => `${b.name}: markets=[${b.markets}] secondary=[${b.secondaryMarkets}]`)
       console.log(`[Buyers] No matches! Property targets: [${allPropertyMarkets}]. Sample buyers:`, sample)
     }
 
