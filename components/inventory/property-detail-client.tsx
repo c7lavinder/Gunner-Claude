@@ -3,6 +3,7 @@
 // Full property detail page with 7 tabs
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink,
@@ -59,6 +60,7 @@ export function PropertyDetailClient({
   ghlContactId: string | null
   ghlLocationId?: string
 }) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [sending, setSending] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
@@ -88,9 +90,9 @@ export function PropertyDetailClient({
   return (
     <div className="max-w-5xl space-y-4">
       {/* Back to inventory */}
-      <Link href={`/${tenantSlug}/inventory`} className="inline-flex items-center gap-1.5 text-ds-body font-medium text-gunner-red hover:text-gunner-red-dark transition-colors">
+      <button onClick={() => router.back()} className="inline-flex items-center gap-1.5 text-ds-body font-medium text-gunner-red hover:text-gunner-red-dark transition-colors">
         <ArrowLeft size={14} /> Back to Inventory
-      </Link>
+      </button>
 
       {/* Header card */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
