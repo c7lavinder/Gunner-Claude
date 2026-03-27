@@ -634,6 +634,8 @@ function InlineAI({ propertyId }: { propertyId: string }) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([])
   const [loading, setLoading] = useState(false)
+  const [pendingAction, setPendingAction] = useState<Record<string, string> | null>(null)
+  const [executing, setExecuting] = useState(false)
 
   async function send() {
     const text = input.trim()
@@ -641,24 +643,87 @@ function InlineAI({ propertyId }: { propertyId: string }) {
     setMessages(prev => [...prev, { role: 'user', text }])
     setInput('')
     setLoading(true)
+
     try {
-      const res = await fetch('/api/ai/coach', {
+      // First try outreach action parsing
+      const actionRes = await fetch('/api/ai/outreach-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: text }].map(m => ({
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: 'text' in m ? m.text : (m as { content: string }).content,
-          })),
-          propertyId,
-        }),
+        body: JSON.stringify({ message: text, propertyId }),
       })
-      const data = await res.json()
-      setMessages(prev => [...prev, { role: 'assistant', text: data.reply ?? 'No response' }])
+      const actionData = await actionRes.json()
+      const action = actionData.action
+
+      if (action && action.type !== 'none') {
+        // Outreach action detected — show confirmation
+        setPendingAction(action)
+        const labels: Record<string, string> = { offer: 'Record Offer', offer_update: 'Update Offer', showing: 'Schedule Showing', send: 'Log Send' }
+        setMessages(prev => [...prev, { role: 'assistant', text: `I'll ${labels[action.type] ?? action.type}. Review and confirm below.` }])
+      } else {
+        // Fall back to regular AI Coach
+        const coachRes = await fetch('/api/ai/coach', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [...messages, { role: 'user', content: text }].map(m => ({
+              role: m.role === 'assistant' ? 'assistant' : 'user',
+              content: 'text' in m ? m.text : (m as { content: string }).content,
+            })),
+            propertyId,
+          }),
+        })
+        const coachData = await coachRes.json()
+        setMessages(prev => [...prev, { role: 'assistant', text: action?.reply ?? coachData.reply ?? 'No response' }])
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', text: 'Failed to connect' }])
     }
     setLoading(false)
+  }
+
+  async function confirmAction() {
+    if (!pendingAction) return
+    setExecuting(true)
+    try {
+      const a = pendingAction
+      const payload: Record<string, unknown> = {
+        recipientName: a.recipientName ?? 'Unknown',
+        recipientContact: '',
+        source: 'AI',
+        notes: a.notes ?? null,
+      }
+
+      if (a.type === 'offer') {
+        payload.type = 'offer'
+        payload.offerAmount = a.offerAmount
+        payload.channel = a.channel ?? 'offer'
+      } else if (a.type === 'offer_update') {
+        payload.action = 'update'
+        payload.offerStatus = a.offerStatus
+        payload.offerAmount = a.offerAmount
+        // TODO: find logId by recipientName — for now just log new
+        payload.type = 'offer'
+      } else if (a.type === 'showing') {
+        payload.type = 'showing'
+        if (a.showingDate) {
+          payload.showingDate = a.showingTime ? `${a.showingDate}T${a.showingTime}:00` : `${a.showingDate}T09:00:00`
+        }
+      } else if (a.type === 'send') {
+        payload.type = 'send'
+        payload.channel = a.channel ?? 'sms'
+      }
+
+      await fetch(`/api/properties/${propertyId}/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Done!' }])
+      setPendingAction(null)
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Failed to execute' }])
+    }
+    setExecuting(false)
   }
 
   return (
@@ -669,7 +734,7 @@ function InlineAI({ propertyId }: { propertyId: string }) {
 
       {/* Chat history */}
       {messages.length > 0 && (
-        <div className="space-y-2 mb-2 max-h-[200px] overflow-y-auto">
+        <div className="space-y-2 mb-2 max-h-[250px] overflow-y-auto">
           {messages.map((m, i) => (
             <div key={i} className={`text-ds-fine px-2.5 py-1.5 rounded-[8px] ${
               m.role === 'user'
@@ -687,13 +752,83 @@ function InlineAI({ propertyId }: { propertyId: string }) {
         </div>
       )}
 
+      {/* Pending action confirmation card */}
+      {pendingAction && (
+        <div className="bg-purple-50 border-[0.5px] border-purple-300 rounded-[8px] px-3 py-2.5 mb-2 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">AI</span>
+            <span className="text-[10px] font-semibold text-purple-700 uppercase">{pendingAction.type?.replace('_', ' ')}</span>
+          </div>
+          <div className="space-y-1">
+            {pendingAction.recipientName && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-purple-600">To:</span>
+                <input value={pendingAction.recipientName} onChange={e => setPendingAction(p => p ? { ...p, recipientName: e.target.value } : p)}
+                  className="flex-1 bg-white rounded px-1.5 py-0.5 text-[10px] border-[0.5px] border-purple-200 focus:outline-none" />
+              </div>
+            )}
+            {pendingAction.offerAmount && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-purple-600">Amount:</span>
+                <input value={pendingAction.offerAmount} onChange={e => setPendingAction(p => p ? { ...p, offerAmount: e.target.value } : p)}
+                  className="flex-1 bg-white rounded px-1.5 py-0.5 text-[10px] border-[0.5px] border-purple-200 focus:outline-none" type="number" />
+              </div>
+            )}
+            {pendingAction.offerStatus && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-purple-600">Status:</span>
+                <select value={pendingAction.offerStatus} onChange={e => setPendingAction(p => p ? { ...p, offerStatus: e.target.value } : p)}
+                  className="flex-1 bg-white rounded px-1.5 py-0.5 text-[10px] border-[0.5px] border-purple-200 focus:outline-none">
+                  {['Pending', 'Accepted', 'Rejected', 'Countered', 'Expired'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+            {pendingAction.showingDate && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-purple-600">When:</span>
+                <input type="date" value={pendingAction.showingDate} onChange={e => setPendingAction(p => p ? { ...p, showingDate: e.target.value } : p)}
+                  className="bg-white rounded px-1.5 py-0.5 text-[10px] border-[0.5px] border-purple-200 focus:outline-none" />
+                <input type="time" value={pendingAction.showingTime ?? '09:00'} onChange={e => setPendingAction(p => p ? { ...p, showingTime: e.target.value } : p)}
+                  className="bg-white rounded px-1.5 py-0.5 text-[10px] border-[0.5px] border-purple-200 focus:outline-none" />
+              </div>
+            )}
+            {pendingAction.channel && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-purple-600">Via:</span>
+                <select value={pendingAction.channel} onChange={e => setPendingAction(p => p ? { ...p, channel: e.target.value } : p)}
+                  className="flex-1 bg-white rounded px-1.5 py-0.5 text-[10px] border-[0.5px] border-purple-200 focus:outline-none">
+                  {['sms', 'email', 'call', 'offer', 'in_person'].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            )}
+            {pendingAction.notes && (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] text-purple-600">Notes:</span>
+                <input value={pendingAction.notes} onChange={e => setPendingAction(p => p ? { ...p, notes: e.target.value } : p)}
+                  className="flex-1 bg-white rounded px-1.5 py-0.5 text-[10px] border-[0.5px] border-purple-200 focus:outline-none" />
+              </div>
+            )}
+          </div>
+          <div className="flex gap-1.5 pt-1">
+            <button onClick={confirmAction} disabled={executing}
+              className="flex-1 bg-semantic-purple hover:bg-semantic-purple/90 disabled:opacity-50 text-white text-[10px] font-semibold py-1.5 rounded-[6px] transition-colors">
+              {executing ? 'Executing...' : 'Confirm'}
+            </button>
+            <button onClick={() => setPendingAction(null)}
+              className="flex-1 bg-surface-secondary text-txt-secondary text-[10px] font-medium py-1.5 rounded-[6px] hover:bg-surface-tertiary transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="flex gap-1.5">
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          placeholder="Send SMS, email, analyze deal..."
+          placeholder="Record offer, schedule showing, analyze..."
           className="flex-1 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none"
         />
         <button onClick={send} disabled={!input.trim() || loading}
@@ -1841,8 +1976,8 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
     setEditing(false)
   }
 
-  const sourceLabel = l.source === 'Blast' ? 'Blast' : l.source === 'Auto' ? 'Auto' : 'Manual'
-  const sourceColor = l.source === 'Blast' ? 'bg-purple-100 text-purple-700' : l.source === 'Auto' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+  const sourceLabel = l.source === 'AI' ? 'AI' : l.source === 'Blast' ? 'Blast' : l.source === 'Auto' ? 'Auto' : 'Manual'
+  const sourceColor = l.source === 'AI' ? 'bg-purple-100 text-purple-700' : l.source === 'Blast' ? 'bg-fuchsia-100 text-fuchsia-700' : l.source === 'Auto' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
 
   return (
     <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5 group">
