@@ -2,12 +2,12 @@
 // components/inventory/property-detail-client.tsx
 // Full property detail page with 7 tabs
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink,
-  MessageSquare, FileText, ChevronRight, Zap, Pencil, Check,
+  MessageSquare, FileText, ChevronRight, ChevronLeft, Zap, Pencil, Check,
   DollarSign, Bot, Send, Clock, Plus, Loader2,
   Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X,
 } from 'lucide-react'
@@ -1710,14 +1710,19 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
 // ─── Buyers Tab ──────────────────────────────────────────────────────────────
 
 function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug: string }) {
-  const [buyers, setBuyers] = useState<Array<{
+  // ── Buyer data type ────────────────────────────────────────────────
+  type BuyerItem = {
     id: string; name: string; phone: string | null; email: string | null
     company: string | null; tier: string; markets: string[]; tags: string[]
     notes: string | null; matchScore: number; scoreBreakdown?: string
-  }>>([])
+    ghlContactId?: string | null; maxBuyPrice?: number | null; verifiedFunding?: boolean
+  }
+  type KanbanStage = 'matched' | 'responded' | 'interested'
+
+  const [buyers, setBuyers] = useState<BuyerItem[]>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
-  const [addedBuyers, setAddedBuyers] = useState<typeof buyers>([])
+  const [addedBuyers, setAddedBuyers] = useState<BuyerItem[]>([])
   const [addedLoaded, setAddedLoaded] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [stages, setStages] = useState<Array<{ id: string; name: string }>>([])
@@ -1731,6 +1736,19 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
     verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '',
   })
 
+  // Kanban stage tracking: buyerId -> column
+  const [buyerStages, setBuyerStages] = useState<Record<string, KanbanStage>>({})
+
+  // Edit buyer slide-over
+  const [editTarget, setEditTarget] = useState<BuyerItem | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', phone: '', email: '', tier: '', markets: '', maxBuyPrice: '', verifiedFunding: false, notes: '' })
+  const [editSaving, setEditSaving] = useState(false)
+
+  // SMS compose modal
+  const [smsTarget, setSmsTarget] = useState<{ name: string; phone: string; ghlContactId: string | null } | null>(null)
+  const [smsMessage, setSmsMessage] = useState('')
+  const [smsSending, setSmsSending] = useState(false)
+
   const tierColors: Record<string, string> = {
     priority: 'bg-amber-100 text-amber-700',
     qualified: 'bg-green-100 text-green-700',
@@ -1738,7 +1756,6 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
     unqualified: 'bg-gray-100 text-gray-500',
     halted: 'bg-red-100 text-red-500',
   }
-  const tierEmoji: Record<string, string> = { priority: '👑', qualified: '⭐', jv: '🤝', unqualified: '👤', halted: '⛔' }
 
   async function loadAddedBuyers() {
     if (addedLoaded) return
@@ -1788,13 +1805,13 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
       const res = await fetch(`/api/properties/${property.id}/buyers`)
       const data = await res.json()
       if (data.needsSync) {
-        // DB empty — run batched sync, then retry match
         const ok = await runSync()
         if (ok) {
           setSyncMsg('Matching buyers...')
           const r2 = await fetch(`/api/properties/${property.id}/buyers`)
           const d2 = await r2.json()
           setBuyers(d2.buyers ?? [])
+          if (d2.buyerStages) setBuyerStages(d2.buyerStages)
           setSyncMsg('')
         }
         setFetched(true)
@@ -1802,6 +1819,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         return
       }
       setBuyers(data.buyers ?? [])
+      if (data.buyerStages) setBuyerStages(data.buyerStages)
       setSyncMsg('')
       setFetched(true)
     } catch { setBuyers([]) }
@@ -1853,6 +1871,108 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
     }))
   }
 
+  // ─── Kanban helpers ────────────────────────────────────────────────
+  const allBuyers: BuyerItem[] = [...addedBuyers, ...buyers.filter(b => !addedBuyers.some(a => a.id === b.id))]
+
+  const COLUMNS: { key: KanbanStage; label: string }[] = [
+    { key: 'matched', label: 'Matched' },
+    { key: 'responded', label: 'Responded' },
+    { key: 'interested', label: 'Interested' },
+  ]
+
+  function getBuyerStage(buyerId: string): KanbanStage {
+    return (buyerStages[buyerId] as KanbanStage) ?? 'matched'
+  }
+
+  function buyersInColumn(col: KanbanStage) {
+    return allBuyers.filter(b => getBuyerStage(b.id) === col)
+  }
+
+  function moveBuyerStage(buyerId: string, newStage: KanbanStage) {
+    setBuyerStages(prev => ({ ...prev, [buyerId]: newStage }))
+    fetch(`/api/properties/${property.id}/buyer-stage`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ buyerId, stage: newStage }),
+    }).catch(() => {})
+  }
+
+  const prevStageMap: Record<KanbanStage, KanbanStage | null> = { matched: null, responded: 'matched', interested: 'responded' }
+  const nextStageMap: Record<KanbanStage, KanbanStage | null> = { matched: 'responded', responded: 'interested', interested: null }
+
+  // Score badge colors
+  function scoreBadgeColor(score: number): string {
+    if (score >= 90) return 'bg-red-100 text-red-700'
+    if (score >= 75) return 'bg-amber-100 text-amber-700'
+    if (score >= 50) return 'bg-blue-100 text-blue-700'
+    return 'bg-gray-100 text-gray-600'
+  }
+
+  // Open edit slide-over
+  function openEditModal(b: BuyerItem) {
+    setEditTarget(b)
+    setEditForm({
+      name: b.name ?? '',
+      phone: b.phone ?? '',
+      email: b.email ?? '',
+      tier: b.tier ?? 'unqualified',
+      markets: (b.markets ?? []).join(', '),
+      maxBuyPrice: b.maxBuyPrice ? String(b.maxBuyPrice) : '',
+      verifiedFunding: b.verifiedFunding ?? false,
+      notes: b.notes ?? '',
+    })
+  }
+
+  async function saveEditBuyer() {
+    if (!editTarget) return
+    setEditSaving(true)
+    try {
+      await fetch(`/api/buyers/${editTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editForm.name,
+          phone: editForm.phone,
+          email: editForm.email || null,
+          tier: editForm.tier,
+          markets: editForm.markets.split(',').map(m => m.trim()).filter(Boolean),
+          maxBuyPrice: editForm.maxBuyPrice ? Number(editForm.maxBuyPrice) : null,
+          verifiedFunding: editForm.verifiedFunding,
+          notes: editForm.notes || null,
+        }),
+      })
+      const updater = (list: BuyerItem[]) => list.map(b => b.id === editTarget.id ? {
+        ...b,
+        name: editForm.name,
+        phone: editForm.phone,
+        email: editForm.email || null,
+        tier: editForm.tier,
+        markets: editForm.markets.split(',').map(m => m.trim()).filter(Boolean),
+        notes: editForm.notes || null,
+      } : b)
+      setBuyers(updater)
+      setAddedBuyers(updater)
+      setEditTarget(null)
+    } catch {}
+    setEditSaving(false)
+  }
+
+  // SMS send
+  async function sendSms() {
+    if (!smsTarget?.phone || !smsMessage.trim()) return
+    setSmsSending(true)
+    try {
+      await fetch('/api/ghl/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'send_sms', contactId: smsTarget.ghlContactId ?? smsTarget.phone, message: smsMessage }),
+      })
+      setSmsTarget(null)
+      setSmsMessage('')
+    } catch {}
+    setSmsSending(false)
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -1862,10 +1982,6 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
           {syncMsg && <p className="text-[10px] text-txt-muted mt-0.5">{syncMsg}</p>}
         </div>
         <div className="flex gap-2">
-          <button onClick={openAddForm}
-            className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors">
-            <Plus size={11} /> Add
-          </button>
           <button onClick={async () => { const ok = await runSync(); if (ok) matchBuyers() }} disabled={loading}
             className="text-ds-fine font-medium text-semantic-purple hover:text-semantic-purple/80 flex items-center gap-1 transition-colors disabled:opacity-50">
             {loading && syncMsg ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
@@ -1928,7 +2044,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
               className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
           </div>
 
-          {/* Buybox — multi-select pills */}
+          {/* Buybox multi-select pills */}
           <div>
             <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Buybox * (select all that apply)</label>
             <div className="flex flex-wrap gap-1.5">
@@ -1941,7 +2057,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
             </div>
           </div>
 
-          {/* Markets — multi-select pills */}
+          {/* Markets multi-select pills */}
           <div>
             <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Market(s) * (select all that apply)</label>
             <div className="flex flex-wrap gap-1.5">
@@ -1954,7 +2070,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
             </div>
           </div>
 
-          {/* Optional fields — collapsible */}
+          {/* Optional fields */}
           <details className="text-ds-fine">
             <summary className="text-[9px] text-txt-muted uppercase cursor-pointer hover:text-txt-secondary">Optional Fields</summary>
             <div className="mt-2 space-y-2">
@@ -1975,7 +2091,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
                   <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Response Speed</label>
                   <select value={addForm.responseSpeed} onChange={e => setAddForm(f => ({ ...f, responseSpeed: e.target.value }))}
                     className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine">
-                    <option value="">—</option>
+                    <option value="">---</option>
                     {(formOptions?.speeds ?? []).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -2018,53 +2134,233 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         </div>
       )}
 
-      {/* Added + Matched side by side */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* Added buyers */}
-        <div>
-          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">
-            Added ({addedBuyers.length})
-          </p>
-          {addedBuyers.length === 0 ? (
-            <div className="bg-surface-secondary rounded-[10px] p-4 text-center">
-              <p className="text-ds-fine text-txt-muted">No buyers added yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {addedBuyers.map(b => (
-                <BuyerRow key={b.id} buyer={b} tierColors={tierColors} />
-              ))}
-            </div>
-          )}
+      {/* ─── 3-Column Kanban Board ─── */}
+      {loading && !fetched ? (
+        <div className="py-10 text-center">
+          <Loader2 size={18} className="animate-spin text-txt-muted mx-auto" />
+          {syncMsg && <p className="text-ds-fine text-txt-muted mt-2">{syncMsg}</p>}
+          <p className="text-ds-fine text-txt-muted mt-1">Loading buyers...</p>
         </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          {COLUMNS.map(col => {
+            const colBuyers = buyersInColumn(col.key)
+            return (
+              <div key={col.key} className="min-w-[280px] flex-1 rounded-xl border border-[rgba(0,0,0,0.06)] bg-surface-secondary/50 p-3">
+                {/* Column header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-txt-muted">{col.label}</span>
+                    <span className="text-[10px] font-medium bg-surface-tertiary text-txt-muted px-1.5 py-0.5 rounded-full">{colBuyers.length}</span>
+                  </div>
+                  {col.key === 'matched' && (
+                    <button onClick={openAddForm}
+                      className="text-[10px] font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-0.5 transition-colors">
+                      <Plus size={10} /> Add
+                    </button>
+                  )}
+                </div>
 
-        {/* Matched buyers */}
-        <div>
-          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">
-            Matched {fetched ? `(${buyers.length})` : ''}
-          </p>
-          {!fetched && !loading ? (
-            <div className="bg-surface-secondary rounded-[10px] p-4 text-center">
-              <p className="text-ds-fine text-txt-muted">Click &ldquo;Match from CRM&rdquo; to find buyers</p>
-            </div>
-          ) : loading ? (
-            <div className="py-6 text-center">
-              <Loader2 size={14} className="animate-spin text-txt-muted mx-auto" />
-              {syncMsg && <p className="text-ds-fine text-txt-muted mt-2">{syncMsg}</p>}
-            </div>
-          ) : buyers.length === 0 ? (
-            <div className="bg-surface-secondary rounded-[10px] p-4 text-center">
-              <p className="text-ds-fine text-txt-muted">No matching buyers for this market</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {buyers.map(b => (
-                <BuyerRow key={b.id} buyer={b} tierColors={tierColors} />
-              ))}
-            </div>
-          )}
+                {/* Cards */}
+                <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-400px)]">
+                  {colBuyers.length === 0 ? (
+                    <div className="py-6 text-center">
+                      <p className="text-[10px] text-txt-muted">
+                        {col.key === 'matched' && !fetched ? 'Click Match to find buyers' : 'No buyers yet'}
+                      </p>
+                      {col.key !== 'matched' && (
+                        <p className="text-[9px] text-txt-muted mt-0.5">Move buyers here with arrow buttons</p>
+                      )}
+                    </div>
+                  ) : (
+                    colBuyers.map(b => {
+                      const currentStage = getBuyerStage(b.id)
+                      const prev = prevStageMap[currentStage]
+                      const next = nextStageMap[currentStage]
+                      return (
+                        <div key={b.id} className="bg-white rounded-lg border-[0.5px] border-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow">
+                          {/* Top row: Score badge + tier pill + name + market */}
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${scoreBadgeColor(b.matchScore)}`}>
+                              {b.matchScore}
+                            </span>
+                            <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 capitalize ${tierColors[b.tier] ?? tierColors.unqualified}`}>
+                              {b.tier}
+                            </span>
+                            <span className="text-ds-fine font-semibold text-txt-primary truncate flex-1">{titleCase(b.name)}</span>
+                            <span className="text-[9px] text-txt-muted shrink-0 truncate max-w-[70px]">{(b.markets ?? []).slice(0, 2).join(', ')}</span>
+                          </div>
+                          {/* Phone */}
+                          {b.phone && (
+                            <p className="text-[10px] text-txt-muted mb-2 pl-0.5">{formatPhone(b.phone)}</p>
+                          )}
+                          {/* Action row */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => { if (b.phone) setSmsTarget({ name: b.name, phone: b.phone, ghlContactId: b.ghlContactId ?? null }) }}
+                              disabled={!b.phone}
+                              className="flex items-center gap-1 text-[9px] font-medium text-semantic-blue hover:text-semantic-blue/80 bg-blue-50 hover:bg-blue-100 disabled:opacity-40 px-2 py-1 rounded-md transition-colors"
+                              title="Send SMS"
+                            >
+                              <MessageSquare size={10} /> Text
+                            </button>
+                            <button
+                              onClick={() => openEditModal(b)}
+                              className="flex items-center gap-1 text-[9px] font-medium text-txt-muted hover:text-txt-secondary bg-surface-tertiary hover:bg-surface-secondary px-2 py-1 rounded-md transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil size={9} /> Edit
+                            </button>
+                            <div className="flex-1" />
+                            {prev && (
+                              <button
+                                onClick={() => moveBuyerStage(b.id, prev)}
+                                className="text-[10px] font-bold text-txt-muted hover:text-txt-primary bg-surface-tertiary hover:bg-surface-secondary w-6 h-6 rounded flex items-center justify-center transition-colors"
+                                title={`Move to ${prev}`}
+                              >
+                                <ChevronLeft size={14} />
+                              </button>
+                            )}
+                            {next && (
+                              <button
+                                onClick={() => moveBuyerStage(b.id, next)}
+                                className="text-[10px] font-bold text-txt-muted hover:text-txt-primary bg-surface-tertiary hover:bg-surface-secondary w-6 h-6 rounded flex items-center justify-center transition-colors"
+                                title={`Move to ${next}`}
+                              >
+                                <ChevronRight size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
+      )}
+
+      {/* ─── Edit Buyer Slide-Over ─── */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setEditTarget(null)} />
+          <div className="relative w-full max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right">
+            <div className="sticky top-0 bg-white border-b border-[rgba(0,0,0,0.06)] px-5 py-4 flex items-center justify-between">
+              <h3 className="text-ds-label font-semibold text-txt-primary">Edit Buyer &mdash; {titleCase(editTarget.name)}</h3>
+              <button onClick={() => setEditTarget(null)} className="text-txt-muted hover:text-txt-secondary"><X size={16} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-[9px] text-txt-muted uppercase block mb-1">Name</label>
+                <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] text-txt-muted uppercase block mb-1">Phone</label>
+                  <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                    className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
+                </div>
+                <div>
+                  <label className="text-[9px] text-txt-muted uppercase block mb-1">Email</label>
+                  <input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[9px] text-txt-muted uppercase block mb-1">Tier</label>
+                <select value={editForm.tier} onChange={e => setEditForm(f => ({ ...f, tier: e.target.value }))}
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none">
+                  <option value="priority">Priority</option>
+                  <option value="qualified">Qualified</option>
+                  <option value="jv">JV Partner</option>
+                  <option value="unqualified">Unqualified</option>
+                  <option value="halted">Halted</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-txt-muted uppercase block mb-1">Markets (comma separated)</label>
+                <input value={editForm.markets} onChange={e => setEditForm(f => ({ ...f, markets: e.target.value }))}
+                  placeholder="Nashville, Chattanooga"
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
+              </div>
+              <div>
+                <label className="text-[9px] text-txt-muted uppercase block mb-1">Max Buy Price</label>
+                <input value={editForm.maxBuyPrice} onChange={e => setEditForm(f => ({ ...f, maxBuyPrice: e.target.value }))}
+                  type="number" placeholder="250000"
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={editForm.verifiedFunding}
+                    onChange={e => setEditForm(f => ({ ...f, verifiedFunding: e.target.checked }))}
+                    className="accent-gunner-red" />
+                  <span className="text-ds-fine text-txt-secondary">Verified Funding</span>
+                </label>
+              </div>
+              <div>
+                <label className="text-[9px] text-txt-muted uppercase block mb-1">Notes</label>
+                <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={3}
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30 resize-none" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setEditTarget(null)}
+                  className="flex-1 border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary text-ds-fine font-medium py-2.5 rounded-[8px] hover:bg-surface-secondary transition-colors">
+                  Cancel
+                </button>
+                <button onClick={saveEditBuyer} disabled={editSaving}
+                  className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2.5 rounded-[8px] transition-colors">
+                  {editSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SMS Compose Modal ─── */}
+      {smsTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => { setSmsTarget(null); setSmsMessage('') }} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-5 space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <h3 className="text-ds-label font-semibold text-txt-primary">Send SMS</h3>
+              <button onClick={() => { setSmsTarget(null); setSmsMessage('') }} className="text-txt-muted hover:text-txt-secondary"><X size={16} /></button>
+            </div>
+            <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-1">To</label>
+              <p className="text-ds-fine text-txt-primary font-medium">
+                {titleCase(smsTarget.name)} &mdash; {formatPhone(smsTarget.phone)}
+              </p>
+            </div>
+            <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-1">Message</label>
+              <textarea
+                value={smsMessage}
+                onChange={e => setSmsMessage(e.target.value)}
+                rows={4}
+                placeholder={`Hi ${smsTarget.name.split(' ')[0]}, I have a deal at ${property.address}...`}
+                className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30 resize-none"
+              />
+              <p className="text-[9px] text-txt-muted mt-1 text-right">{smsMessage.length} chars</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setSmsTarget(null); setSmsMessage('') }}
+                className="flex-1 border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary text-ds-fine font-medium py-2 rounded-[8px] hover:bg-surface-secondary transition-colors">
+                Cancel
+              </button>
+              <button onClick={sendSms} disabled={smsSending || !smsMessage.trim()}
+                className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors flex items-center justify-center gap-1.5">
+                {smsSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                {smsSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2829,11 +3125,15 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
   const [selectedBuyerIds, setSelectedBuyerIds] = useState<Set<string>>(new Set())
   const [showRecipients, setShowRecipients] = useState(false)
   const [sendChannel, setSendChannel] = useState<'sms' | 'email'>('sms')
+  const [teamMembers, setTeamMembers] = useState<Array<{name: string; phone: string}>>([])
+  const [selectedFrom, setSelectedFrom] = useState<{name: string; phone: string} | null>(null)
+  const [fromDropdownOpen, setFromDropdownOpen] = useState(false)
 
-  // Fetch blast history + buyer list on mount
+  // Fetch blast history + buyer list + team members on mount
   useEffect(() => {
     fetchBuyers()
     fetchBlastHistory()
+    fetchTeamMembers()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -2862,6 +3162,20 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       for (const b of buyers) { counts[b.tier] = (counts[b.tier] ?? 0) + 1 }
       setRecipientCounts(counts)
     } catch {}
+  }
+
+  async function fetchTeamMembers() {
+    try {
+      const res = await fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
+      if (res.ok) {
+        const data = await res.json()
+        const members: Array<{name: string; phone: string}> = data.numbers ?? []
+        setTeamMembers(members)
+        if (members.length > 0 && !selectedFrom) {
+          setSelectedFrom(members[0])
+        }
+      }
+    } catch { /* silently fail */ }
   }
 
   function toggleBuyer(id: string) {
@@ -2972,22 +3286,30 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       <div className="bg-surface-secondary rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.06)] p-4">
         <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Deal Summary</p>
         <div className="grid grid-cols-4 gap-3">
-          <div>
-            <p className="text-[9px] text-txt-muted">Asking</p>
-            <p className="text-ds-fine font-semibold text-txt-primary">{fmt(property.askingPrice)}</p>
-          </div>
-          <div>
-            <p className="text-[9px] text-txt-muted">ARV</p>
-            <p className="text-ds-fine font-semibold text-semantic-green">{fmt(property.arv)}</p>
-          </div>
-          <div>
-            <p className="text-[9px] text-txt-muted">Contract</p>
-            <p className="text-ds-fine font-semibold text-txt-primary">{fmt(property.contractPrice)}</p>
-          </div>
-          <div>
-            <p className="text-[9px] text-txt-muted">Assignment Fee</p>
-            <p className="text-ds-fine font-semibold text-semantic-amber">{fmt(property.assignmentFee)}</p>
-          </div>
+          {([
+            { key: 'askingPrice', label: 'Asking', value: property.askingPrice, color: 'text-txt-primary' },
+            { key: 'arv', label: 'ARV', value: property.arv, color: 'text-semantic-green' },
+            { key: 'contractPrice', label: 'Contract', value: property.contractPrice, color: 'text-txt-primary' },
+            { key: 'assignmentFee', label: 'Assignment Fee', value: property.assignmentFee, color: 'text-semantic-amber' },
+          ] as const).map(field => {
+            const source = property.fieldSources?.[field.key]
+            const borderClass = source === 'api' ? 'border-l-2 border-purple-400 pl-2' : source === 'ai' ? 'border-l-2 border-blue-400 pl-2' : source === 'user' ? 'border-l-2 border-green-400 pl-2' : ''
+            const badgeEl = source === 'api'
+              ? <span className="text-[7px] font-bold text-purple-600 bg-purple-100 px-1 py-px rounded ml-1">API</span>
+              : source === 'ai'
+              ? <span className="text-[7px] font-bold text-blue-600 bg-blue-100 px-1 py-px rounded ml-1">AI</span>
+              : source === 'user'
+              ? <span className="text-[7px] font-bold text-green-600 bg-green-100 px-1 py-px rounded ml-1">EDITED</span>
+              : null
+            return (
+              <div key={field.key} className={borderClass}>
+                <p className="text-[9px] text-txt-muted">{field.label}</p>
+                <p className={`text-ds-fine font-semibold ${field.color} flex items-center`}>
+                  {fmt(field.value)}{badgeEl}
+                </p>
+              </div>
+            )
+          })}
         </div>
         {(property.beds || property.baths || property.sqft) && (
           <div className="flex items-center gap-3 mt-2 text-[10px] text-txt-secondary">
@@ -3039,7 +3361,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">
-              Recipients ({selectedBuyerIds.size} of {filteredBuyers.length} selected)
+              Recipients ({filteredBuyers.filter(b => selectedBuyerIds.has(b.id)).length} of {allBuyers.length} selected)
             </p>
             <div className="flex items-center gap-2">
               <button onClick={selectAllBuyers} className="text-[9px] font-medium text-semantic-blue hover:underline">Select All</button>
@@ -3079,7 +3401,30 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
               className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors ${sendChannel === 'email' ? 'bg-blue-600 text-white' : 'bg-surface-tertiary text-txt-secondary'}`}>
               Email
             </button>
-            <span className="text-[9px] text-txt-muted ml-auto">From: {property.sellers?.[0]?.name ?? tenantSlug}</span>
+            <div className="relative ml-auto">
+              <button
+                onClick={() => setFromDropdownOpen(p => !p)}
+                className="text-[9px] text-txt-muted hover:text-txt-primary flex items-center gap-1 transition-colors"
+              >
+                FROM: <span className="font-semibold text-txt-secondary">{selectedFrom ? `${selectedFrom.name} — ${formatPhone(selectedFrom.phone)}` : 'Select...'}</span>
+                <ChevronRight size={8} className={`transition-transform ${fromDropdownOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {fromDropdownOpen && teamMembers.length > 0 && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-[8px] border-[0.5px] border-[rgba(0,0,0,0.1)] shadow-lg py-1 min-w-[200px]">
+                  {teamMembers.map((m, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setSelectedFrom(m); setFromDropdownOpen(false) }}
+                      className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-surface-secondary transition-colors ${
+                        selectedFrom?.phone === m.phone ? 'bg-gunner-red-light text-txt-primary font-semibold' : 'text-txt-secondary'
+                      }`}
+                    >
+                      {m.name} — {formatPhone(m.phone)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

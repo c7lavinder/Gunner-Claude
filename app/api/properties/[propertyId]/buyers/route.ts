@@ -266,6 +266,7 @@ export async function GET(
       const tags = Array.isArray(lb.tags) ? lb.tags as string[] : []
       return {
         id: lb.id, name: lb.name, phone: lb.phone ?? '', email: lb.email ?? '',
+        ghlContactId: lb.ghlContactId ?? null,
         tier: (criteria.tier as string) ?? 'unqualified',
         markets,
         secondaryMarkets: (criteria.secondaryMarkets as string[]) ?? [],
@@ -273,6 +274,7 @@ export async function GET(
         verifiedFunding: (criteria.verifiedFunding as boolean) ?? false,
         hasPurchased: (criteria.hasPurchased as boolean) ?? false,
         responseSpeed: (criteria.responseSpeed as string) ?? '',
+        maxBuyPrice: (criteria.maxBuyPrice as number) ?? null,
         buyerNotes: lb.notes ?? '',
         tags,
       }
@@ -310,7 +312,15 @@ export async function GET(
         return b.matchScore - a.matchScore
       })
 
-    return NextResponse.json({ buyers: matched, total: matched.length })
+    // Fetch buyer pipeline stages for this property
+    const buyerStages = await db.propertyBuyerStage.findMany({
+      where: { propertyId: params.propertyId, tenantId },
+      select: { buyerId: true, stage: true },
+    })
+    const stageMap: Record<string, string> = {}
+    for (const bs of buyerStages) { stageMap[bs.buyerId] = bs.stage }
+
+    return NextResponse.json({ buyers: matched, total: matched.length, buyerStages: stageMap })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to match buyers' }, { status: 500 })
   }

@@ -84,6 +84,7 @@ model Tenant {
   outreachLogs        OutreachLog[]
   dealBlasts          DealBlast[]
   milestones          PropertyMilestone[]
+  propertyBuyerStages PropertyBuyerStage[]
 
   @@map("tenants")
 }
@@ -253,6 +254,7 @@ model Property {
   dealBlasts DealBlast[]
   milestones PropertyMilestone[]
   outreachLogs OutreachLog[]
+  buyerStages PropertyBuyerStage[]
 
   @@map("properties")
 }
@@ -760,8 +762,30 @@ model Buyer {
   isActive Boolean  @default(true) @map("is_active")
 
   blastRecipients DealBlastRecipient[]
+  propertyStages  PropertyBuyerStage[]
 
   @@map("buyers")
+}
+
+// ─────────────────────────────────────────
+// PROPERTY BUYER STAGES — Kanban pipeline per property
+// ─────────────────────────────────────────
+
+model PropertyBuyerStage {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  propertyId String   @map("property_id")
+  buyerId    String   @map("buyer_id")
+  stage      String   @default("matched") // matched | responded | interested
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  buyer    Buyer    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, buyerId])
+  @@map("property_buyer_stages")
 }
 
 // ─────────────────────────────────────────
