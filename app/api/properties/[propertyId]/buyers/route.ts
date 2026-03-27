@@ -195,26 +195,52 @@ export async function GET(
       ? getMarketsForZip(property.zip).map(String)
       : property.city ? [property.city] : []
 
-    // Search GHL for buyer contacts
+    // Pull ALL contacts from the Buyer Pipeline — not a broad search
     const ghl = await getGHLClient(tenantId)
     let ghlBuyers: ReturnType<typeof parseBuyerFields>[] = []
 
     try {
-      // Search for contacts — get a broad set, then filter by those with buyer fields
-      const result = await ghl.searchContacts({ limit: 100 })
-      ghlBuyers = (result.contacts ?? []).map(c => parseBuyerFields({
-        id: c.id,
-        firstName: c.firstName,
-        lastName: c.lastName,
-        phone: c.phone,
-        email: c.email,
-        city: c.city,
-        state: c.state,
-        tags: c.tags ?? [],
-        customFields: c.customFields ?? [],
-      })).filter(b => b.name && (b.tier !== 'unqualified' || b.buybox || b.verifiedFunding || b.markets.length > 0))
+      // Find the Buyer Pipeline
+      const pipelines = await ghl.getPipelines()
+      const buyerPipeline = pipelines.pipelines?.find(p =>
+        p.name.toLowerCase().includes('buyer')
+      )
+
+      if (!buyerPipeline) {
+        console.warn('[Buyers] No buyer pipeline found')
+      } else {
+        console.log(`[Buyers] Using pipeline: ${buyerPipeline.name} (${buyerPipeline.id})`)
+
+        // Get ALL contact IDs from the Buyer Pipeline (paginated)
+        const contactIds = await ghl.getAllPipelineContacts(buyerPipeline.id)
+        console.log(`[Buyers] Found ${contactIds.length} contacts in buyer pipeline`)
+
+        // Fetch each contact's full details (with custom fields)
+        // Process in batches of 10 to avoid rate limits
+        for (let i = 0; i < contactIds.length; i += 10) {
+          const batch = contactIds.slice(i, i + 10)
+          const contacts = await Promise.all(
+            batch.map(id => ghl.getContact(id).catch(() => null))
+          )
+          for (const c of contacts) {
+            if (!c) continue
+            ghlBuyers.push(parseBuyerFields({
+              id: c.id,
+              firstName: c.firstName,
+              lastName: c.lastName,
+              phone: c.phone,
+              email: c.email,
+              city: c.city,
+              state: c.state,
+              tags: c.tags ?? [],
+              customFields: c.customFields ?? [],
+            }))
+          }
+        }
+        console.log(`[Buyers] Parsed ${ghlBuyers.length} buyers with data`)
+      }
     } catch (err) {
-      console.error('[Buyers] GHL search failed:', err instanceof Error ? err.message : err)
+      console.error('[Buyers] GHL pipeline fetch failed:', err instanceof Error ? err.message : err)
     }
 
     // Also include local buyers

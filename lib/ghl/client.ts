@@ -278,6 +278,33 @@ export class GHLClient {
     return this.request<GHLPipelineList>('GET', `/opportunities/pipelines?locationId=${this.locationId}`)
   }
 
+  async searchOpportunities(pipelineId: string, limit = 100, startAfter?: string) {
+    let url = `/opportunities/search?location_id=${this.locationId}&pipeline_id=${pipelineId}&limit=${limit}`
+    if (startAfter) url += `&startAfter=${startAfter}&startAfterId=${startAfter}`
+    return this.request<{ opportunities: Array<{ id: string; contactId: string; name: string; stageId: string; status: string }>; meta?: { total?: number; nextPageUrl?: string; startAfter?: string; startAfterId?: string } }>('GET', url)
+  }
+
+  async getAllPipelineContacts(pipelineId: string): Promise<string[]> {
+    const contactIds: string[] = []
+    let startAfter: string | undefined
+    let page = 0
+    // Paginate through all opportunities in the pipeline
+    while (page < 50) { // safety limit: 50 pages × 100 = 5000 contacts
+      const result = await this.searchOpportunities(pipelineId, 100, startAfter)
+      const opps = result.opportunities ?? []
+      if (opps.length === 0) break
+      for (const opp of opps) {
+        if (opp.contactId && !contactIds.includes(opp.contactId)) {
+          contactIds.push(opp.contactId)
+        }
+      }
+      startAfter = result.meta?.startAfterId ?? opps[opps.length - 1]?.id
+      if (!startAfter || opps.length < 100) break
+      page++
+    }
+    return contactIds
+  }
+
   async updateOpportunityStage(opportunityId: string, stageId: string) {
     return this.request('PUT', `/opportunities/${opportunityId}`, {
       stageId,
