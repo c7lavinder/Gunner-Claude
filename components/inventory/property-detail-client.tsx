@@ -1538,30 +1538,48 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
 
   const [syncMsg, setSyncMsg] = useState('')
 
+  async function runSync() {
+    let offset = 0
+    let done = false
+    while (!done) {
+      setSyncMsg(`Syncing buyers from GHL... (${offset} processed)`)
+      try {
+        const res = await fetch('/api/buyers/sync', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offset }),
+        })
+        const data = await res.json()
+        if (!res.ok) { setSyncMsg('Sync failed'); return false }
+        offset = data.offset
+        done = data.done
+        setSyncMsg(data.message)
+      } catch { setSyncMsg('Sync failed — network error'); return false }
+    }
+    return true
+  }
+
   async function matchBuyers() {
     setLoading(true)
     setSyncMsg('')
     try {
       const res = await fetch(`/api/properties/${property.id}/buyers`)
       const data = await res.json()
-      if (data.message && (data.buyers ?? []).length === 0) {
-        // DB is empty, sync triggered — wait and retry
-        setSyncMsg(data.message)
-        // Auto-retry after sync completes
-        setTimeout(async () => {
-          setSyncMsg('Retrying...')
-          try {
-            const r2 = await fetch(`/api/properties/${property.id}/buyers`)
-            const d2 = await r2.json()
-            setBuyers(d2.buyers ?? [])
-            setSyncMsg(d2.buyers?.length ? '' : 'Sync still in progress — try again in a minute')
-          } catch {}
-          setFetched(true)
-          setLoading(false)
-        }, 90000) // retry after 90 seconds
+      if (data.needsSync) {
+        // DB empty — run batched sync, then retry match
+        const ok = await runSync()
+        if (ok) {
+          setSyncMsg('Matching buyers...')
+          const r2 = await fetch(`/api/properties/${property.id}/buyers`)
+          const d2 = await r2.json()
+          setBuyers(d2.buyers ?? [])
+          setSyncMsg('')
+        }
+        setFetched(true)
+        setLoading(false)
         return
       }
       setBuyers(data.buyers ?? [])
+      setSyncMsg('')
       setFetched(true)
     } catch { setBuyers([]) }
     setLoading(false)
@@ -1799,7 +1817,10 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
               <p className="text-ds-fine text-txt-muted">Click &ldquo;Match from CRM&rdquo; to find buyers</p>
             </div>
           ) : loading ? (
-            <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+            <div className="py-6 text-center">
+              <Loader2 size={14} className="animate-spin text-txt-muted mx-auto" />
+              {syncMsg && <p className="text-ds-fine text-txt-muted mt-2">{syncMsg}</p>}
+            </div>
           ) : buyers.length === 0 ? (
             <div className="bg-surface-secondary rounded-[10px] p-4 text-center">
               <p className="text-ds-fine text-txt-muted">No matching buyers for this market</p>

@@ -222,19 +222,13 @@ export async function GET(
     let dbBuyers = await db.buyer.findMany({ where: { tenantId, isActive: true } })
     console.log(`[Buyers] Loaded ${dbBuyers.length} buyers from DB`)
 
-    // If DB is empty, sync from GHL now (first time setup)
+    // If DB is empty, tell client to trigger sync first
     if (dbBuyers.length === 0) {
-      console.log('[Buyers] DB empty — running first-time sync from GHL')
-      try {
-        const { syncAllBuyersFromGHL } = await import('@/lib/buyers/sync')
-        const synced = await syncAllBuyersFromGHL(tenantId)
-        console.log(`[Buyers] First-time sync complete: ${synced} buyers`)
-        // Re-query after sync
-        dbBuyers = await db.buyer.findMany({ where: { tenantId, isActive: true } })
-      } catch (err) {
-        console.error('[Buyers] First-time sync failed:', err)
-        return NextResponse.json({ buyers: [], total: 0, message: 'Buyer sync from GHL failed. Check Railway logs.' })
-      }
+      return NextResponse.json({
+        buyers: [], total: 0,
+        needsSync: true,
+        message: 'Buyer database is empty. Syncing from GHL...',
+      })
     }
 
     const allBuyers = dbBuyers.map(lb => {
