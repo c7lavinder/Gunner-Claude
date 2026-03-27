@@ -15,8 +15,7 @@ const GHL_FIELD_MAP: Record<string, string> = {
   'IZdG26j5rw0yiU1jvDEo': 'verified_funding',
   'FRyMcgqWes9BuWqo97HF': 'last_contact_date',
   '4qyjtjm5DWVgFgMCHdqQ': 'notes',
-  // secondary_market — field ID TBD, will auto-map once created in GHL
-  // Add the GHL field ID here when you create it: 'FIELD_ID_HERE': 'secondary_market',
+  'DOGXpCgOc2jMoWwY4dpc': 'secondary_market',
 }
 
 // Parse GHL custom fields into structured buyer data
