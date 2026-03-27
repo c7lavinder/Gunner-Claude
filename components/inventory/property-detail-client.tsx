@@ -733,9 +733,8 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   }
 
   // Computed: Est. Spread = Accepted (or Contract) - Asking
-  const spreadBase = vals.acceptedPrice ?? vals.contractPrice
-  const spread = spreadBase && vals.askingPrice
-    ? Number(spreadBase) - Number(vals.askingPrice)
+  const spread = vals.acceptedPrice && vals.contractPrice
+    ? Number(vals.acceptedPrice) - Number(vals.contractPrice)
     : null
 
   return (

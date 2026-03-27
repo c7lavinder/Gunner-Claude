@@ -498,9 +498,8 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
     setSources(prev => ({ ...prev, [field]: src }))
   }
 
-  const spreadBase = vals.acceptedPrice ?? vals.contractPrice
-  const spread = spreadBase && vals.askingPrice
-    ? Number(spreadBase) - Number(vals.askingPrice) : null
+  const spread = vals.acceptedPrice && vals.contractPrice
+    ? Number(vals.acceptedPrice) - Number(vals.contractPrice) : null
 
   return (
     <div className="w-[420px] shrink-0 bg-white border-l border-[rgba(0,0,0,0.08)] shadow-sm flex flex-col max-h-[calc(100vh-120px)] sticky top-[60px]">
