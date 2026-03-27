@@ -1386,11 +1386,69 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
   const fmtPct = (v: unknown) => v != null ? `${Number(v).toFixed(1)}%` : '—'
   const fmtBool = (v: unknown) => v === true ? 'Yes' : v === false ? 'No' : '—'
 
-  function DataCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  // Research data is stored in zillowData.batchData — editable fields stored separately
+  const [editedFields, setEditedFields] = useState<Record<string, string>>({})
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+
+  function getResearchSource(key: string): 'api' | 'user' | null {
+    if (editedFields[key] !== undefined) return 'user'
+    if (bd[key] != null && bd[key] !== '' && bd[key] !== false) return 'api'
+    return null
+  }
+
+  function getDisplayValue(key: string, formatted: string): string {
+    if (editedFields[key] !== undefined) return editedFields[key]
+    return formatted
+  }
+
+  function startEdit(key: string, currentValue: string) {
+    setEditingField(key)
+    setEditValue(currentValue === '—' ? '' : currentValue)
+  }
+
+  function saveEdit(key: string) {
+    setEditedFields(prev => ({ ...prev, [key]: editValue }))
+    setEditingField(null)
+  }
+
+  // Source-based styling: purple=API, blue=AI, green=user
+  function DataCard({ label, value, fieldKey, highlight }: { label: string; value: string; fieldKey?: string; highlight?: boolean }) {
+    const source = fieldKey ? getResearchSource(fieldKey) : (highlight ? 'api' : null)
+    const displayVal = fieldKey ? getDisplayValue(fieldKey, value) : value
+    const isEditing = editingField === fieldKey
+
+    const bgColor = source === 'api' ? 'bg-purple-50 border-[0.5px] border-purple-200'
+      : source === 'user' ? 'bg-green-50 border-[0.5px] border-green-200'
+      : 'bg-surface-secondary'
+    const labelColor = source === 'api' ? 'text-purple-600' : source === 'user' ? 'text-green-600' : 'text-txt-muted'
+    const valueColor = source === 'api' ? 'text-purple-800' : source === 'user' ? 'text-green-800' : displayVal !== '—' ? 'text-txt-primary' : 'text-txt-muted'
+
+    if (isEditing && fieldKey) {
+      return (
+        <div className={`rounded-[8px] px-3 py-2 ${bgColor}`}>
+          <p className={`text-[8px] font-semibold uppercase tracking-wider ${labelColor}`}>{label}</p>
+          <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+            onBlur={() => saveEdit(fieldKey)}
+            onKeyDown={e => { if (e.key === 'Enter') saveEdit(fieldKey); if (e.key === 'Escape') setEditingField(null) }}
+            className="w-full bg-white border-[0.5px] border-green-300 rounded px-1.5 py-0.5 text-ds-fine font-semibold mt-0.5 focus:outline-none" />
+        </div>
+      )
+    }
+
     return (
-      <div className={`rounded-[8px] px-3 py-2 ${highlight ? 'bg-blue-50 border-[0.5px] border-blue-200' : 'bg-surface-secondary'}`}>
-        <p className={`text-[8px] font-semibold uppercase tracking-wider ${highlight ? 'text-blue-600' : 'text-txt-muted'}`}>{label}</p>
-        <p className={`text-ds-fine font-semibold mt-0.5 ${value !== '—' ? (highlight ? 'text-blue-800' : 'text-txt-primary') : 'text-txt-muted'}`}>{value}</p>
+      <div onClick={() => fieldKey && startEdit(fieldKey, displayVal)}
+        className={`rounded-[8px] px-3 py-2 ${bgColor} ${fieldKey ? 'cursor-pointer hover:ring-1 hover:ring-gunner-red/20' : ''} transition-all group relative`}>
+        {source && (
+          <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${source === 'api' ? 'text-purple-400' : 'text-green-400'}`}>
+            {source === 'api' ? 'API' : 'EDITED'}
+          </span>
+        )}
+        <p className={`text-[8px] font-semibold uppercase tracking-wider ${labelColor}`}>{label}</p>
+        <p className={`text-ds-fine font-semibold mt-0.5 ${valueColor}`}>
+          {displayVal}
+          {fieldKey && <Pencil size={7} className="inline ml-1 opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />}
+        </p>
       </div>
     )
   }
@@ -1405,7 +1463,7 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
             {error ? <span className="text-semantic-red">{error}</span>
               : researchedAt ? `Last updated: ${format(new Date(researchedAt), 'MMM d, yyyy h:mm a')}`
               : loaded ? 'Not yet researched' : 'Loading...'}
-            {hasBatchData && <span className="ml-2 text-[9px] text-blue-600 font-medium">BatchData enriched</span>}
+            {hasBatchData && <span className="ml-2 text-[9px] text-purple-600 font-medium">BatchData enriched</span>}
           </p>
         </div>
         <button onClick={handleReResearch} disabled={researching}
@@ -1422,15 +1480,29 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         </div>
       )}
 
+      {/* Source legend */}
+      <div className="flex items-center gap-3">
+        <span className="text-[9px] text-txt-muted">Sources:</span>
+        <span className="text-[9px] font-semibold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">API</span>
+        <span className="text-[9px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">AI</span>
+        <span className="text-[9px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Edited</span>
+        <span className="text-[9px] text-txt-muted">Click any field to edit</span>
+      </div>
+
       {/* Valuation */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Valuation</p>
         </div>
         <div className="grid grid-cols-3 gap-3 p-3">
-          <DataCard label="Estimated Value" value={fmt$(bd.estimatedValue)} highlight={bd.estimatedValue != null} />
-          <DataCard label="Assessed Value" value={fmt$(bd.assessedValue)} highlight={bd.assessedValue != null} />
-          <DataCard label="Land Value" value={fmt$(bd.assessedLandValue)} />
+          <DataCard label="Estimated Value" value={fmt$(bd.estimatedValue)} fieldKey="estimatedValue" />
+          <DataCard label="Assessed Value" value={fmt$(bd.assessedValue)} fieldKey="assessedValue" />
+          <DataCard label="APN" value={fmtStr(bd.apn)} fieldKey="apn" />
+        </div>
+        <div className="grid grid-cols-3 gap-3 px-3 pb-3">
+          <DataCard label="Price Range" value={bd.priceRangeMin != null ? `${fmt$(bd.priceRangeMin)} – ${fmt$(bd.priceRangeMax)}` : '—'} fieldKey="priceRangeMin" />
+          <DataCard label="Confidence" value={bd.confidenceScore != null ? `${bd.confidenceScore}%` : '—'} fieldKey="confidenceScore" />
+          <DataCard label="As Of" value={bd.enrichedAt ? format(new Date(String(bd.enrichedAt)), 'MMM d, yyyy') : '—'} />
         </div>
       </div>
 
@@ -1440,14 +1512,14 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Owner Intelligence</p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
-          <DataCard label="Owner" value={fmtStr(bd.ownerName)} />
-          <DataCard label="Absentee" value={fmtBool(bd.absenteeOwner)} highlight={Boolean(bd.absenteeOwner)} />
-          <DataCard label="Owner Occupied" value={fmtBool(bd.ownerOccupied)} />
-          <DataCard label="County" value={fmtStr(bd.county)} />
+          <DataCard label="Owner" value={fmtStr(bd.ownerName)} fieldKey="ownerName" />
+          <DataCard label="Absentee" value={fmtBool(bd.absenteeOwner)} fieldKey="absenteeOwner" />
+          <DataCard label="Owner Occupied" value={fmtBool(bd.ownerOccupied)} fieldKey="ownerOccupied" />
+          <DataCard label="County" value={fmtStr(bd.county)} fieldKey="county" />
         </div>
-        {bd.ownerMailingAddress != null && (
+        {(bd.ownerMailingAddress != null || editedFields.ownerMailingAddress) && (
           <div className="px-3 pb-3">
-            <DataCard label="Owner Mailing Address" value={fmtStr(bd.ownerMailingAddress)} />
+            <DataCard label="Owner Mailing Address" value={fmtStr(bd.ownerMailingAddress)} fieldKey="ownerMailingAddress" />
           </div>
         )}
       </div>
@@ -1482,10 +1554,10 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Equity & Financial</p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
-          <DataCard label="Equity" value={fmtPct(bd.equityPercent)} highlight={Number(bd.equityPercent ?? 0) > 40} />
-          <DataCard label="LTV" value={fmtPct(bd.ltv)} />
-          <DataCard label="Open Liens" value={bd.totalOpenLienCount != null ? String(bd.totalOpenLienCount) : '—'} highlight={Number(bd.totalOpenLienCount ?? 0) > 0} />
-          <DataCard label="Confidence" value={bd.confidenceScore != null ? `${bd.confidenceScore}%` : '—'} />
+          <DataCard label="Equity" value={fmtPct(bd.equityPercent)} fieldKey="equityPercent" />
+          <DataCard label="LTV" value={fmtPct(bd.ltv)} fieldKey="ltv" />
+          <DataCard label="Open Liens" value={bd.totalOpenLienCount != null ? String(bd.totalOpenLienCount) : '—'} fieldKey="totalOpenLienCount" />
+          <div />
         </div>
       </div>
 
@@ -1495,9 +1567,9 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Sale History</p>
         </div>
         <div className="grid grid-cols-3 gap-3 p-3">
-          <DataCard label="Last Sale Price" value={fmt$(bd.lastSalePrice)} />
-          <DataCard label="Last Sale Date" value={bd.lastSaleDate ? format(new Date(String(bd.lastSaleDate)), 'MMM d, yyyy') : '—'} />
-          <DataCard label="Sale Type" value={fmtStr(bd.lastSaleType)} />
+          <DataCard label="Last Sale Price" value={fmt$(bd.lastSalePrice)} fieldKey="lastSalePrice" />
+          <DataCard label="Last Sale Date" value={bd.lastSaleDate ? format(new Date(String(bd.lastSaleDate)), 'MMM d, yyyy') : '—'} fieldKey="lastSaleDate" />
+          <DataCard label="Sale Type" value={fmtStr(bd.lastSaleType)} fieldKey="lastSaleType" />
         </div>
       </div>
 

@@ -13,11 +13,13 @@ function getApiKey(): string {
 export interface BatchDataPropertyResult {
   // Valuation
   estimatedValue?: number
+  assessedValue?: number
   priceRangeMin?: number
   priceRangeMax?: number
   confidenceScore?: number
   equityPercent?: number
   ltv?: number
+  apn?: string
 
   // Building (from listing section)
   bedrooms?: number
@@ -102,6 +104,7 @@ export async function lookupProperty(
     const permit = (p.permit ?? {}) as Record<string, unknown>
     const deedHistory = (p.deedHistory ?? []) as Array<Record<string, unknown>>
     const ownerProfile = (p.propertyOwnerProfile ?? {}) as Record<string, unknown>
+    const ids = (p.ids ?? {}) as Record<string, unknown>
 
     // Get most recent deed with a sale price > 0
     const lastSale = deedHistory.find(d => (d.salePrice as number) > 0)
@@ -115,11 +118,13 @@ export async function lookupProperty(
     return {
       // Valuation
       estimatedValue: num(valuation.estimatedValue),
+      assessedValue: num(ownerProfile.averageAssessedValue),
       priceRangeMin: num(valuation.priceRangeMin),
       priceRangeMax: num(valuation.priceRangeMax),
       confidenceScore: num(valuation.confidenceScore),
       equityPercent: num(valuation.equityPercent),
       ltv: num(valuation.ltv),
+      apn: str(ids.apn),
 
       // Building
       bedrooms: num(listing.bedroomCount ?? listing.bedrooms),

@@ -64,11 +64,13 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
     batchData: {
       // Valuation
       estimatedValue: result.estimatedValue,
+      assessedValue: result.assessedValue,
       priceRangeMin: result.priceRangeMin,
       priceRangeMax: result.priceRangeMax,
       confidenceScore: result.confidenceScore,
       equityPercent: result.equityPercent,
       ltv: result.ltv,
+      apn: result.apn,
       // Owner
       ownerName: result.ownerName,
       ownerMailingAddress: result.ownerMailingAddress,
