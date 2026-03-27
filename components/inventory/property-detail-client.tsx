@@ -1174,7 +1174,39 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   }
 
   function handleSaved(field: string, val: string | number | null, src?: string) {
-    setVals(prev => ({ ...prev, [field]: val }))
+    setVals(prev => {
+      const next = { ...prev, [field]: val }
+
+      // Auto-calculate assignment fee when accepted price is set and contract price exists
+      if (field === 'acceptedPrice' && val && next.contractPrice) {
+        const fee = Number(val) - Number(next.contractPrice)
+        if (fee > 0) {
+          next.assignmentFee = String(fee)
+          // Persist to DB
+          fetch(`/api/properties/${property.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
+          }).catch(() => {})
+          setSources(p => ({ ...p, assignmentFee: 'ai' }))
+        }
+      }
+      // Also recalculate if contract price changes and accepted price exists
+      if (field === 'contractPrice' && val && next.acceptedPrice) {
+        const fee = Number(next.acceptedPrice) - Number(val)
+        if (fee > 0) {
+          next.assignmentFee = String(fee)
+          fetch(`/api/properties/${property.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
+          }).catch(() => {})
+          setSources(p => ({ ...p, assignmentFee: 'ai' }))
+        }
+      }
+
+      return next
+    })
     if (src !== undefined) {
       setSources(prev => {
         const next = { ...prev }
