@@ -1441,33 +1441,51 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
           <DataCard label="Owner" value={fmtStr(bd.ownerName)} />
-          <DataCard label="Owner Type" value={fmtStr(bd.ownerType)} />
           <DataCard label="Absentee" value={fmtBool(bd.absenteeOwner)} highlight={Boolean(bd.absenteeOwner)} />
-          <DataCard label="Years Owned" value={bd.ownershipLength != null ? `${bd.ownershipLength} yrs` : '—'} />
+          <DataCard label="Owner Occupied" value={fmtBool(bd.ownerOccupied)} />
+          <DataCard label="County" value={fmtStr(bd.county)} />
         </div>
-        {bd.mailingAddress != null && (
+        {bd.ownerMailingAddress != null && (
           <div className="px-3 pb-3">
-            <DataCard label="Mailing Address" value={fmtStr(bd.mailingAddress)} />
+            <DataCard label="Owner Mailing Address" value={fmtStr(bd.ownerMailingAddress)} />
           </div>
         )}
       </div>
 
-      {/* Financial / Mortgage */}
+      {/* Quick Flags — wholesale signals */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Mortgage & Equity</p>
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Signals</p>
+        </div>
+        <div className="flex flex-wrap gap-2 p-3">
+          {[
+            { k: 'highEquity', l: 'High Equity', c: 'bg-green-100 text-green-700' },
+            { k: 'freeAndClear', l: 'Free & Clear', c: 'bg-green-100 text-green-700' },
+            { k: 'cashBuyer', l: 'Cash Buyer', c: 'bg-blue-100 text-blue-700' },
+            { k: 'taxDefault', l: 'Tax Default', c: 'bg-red-100 text-red-700' },
+            { k: 'preforeclosure', l: 'Pre-Foreclosure', c: 'bg-red-100 text-red-700' },
+            { k: 'vacant', l: 'Vacant', c: 'bg-amber-100 text-amber-700' },
+            { k: 'absenteeOwner', l: 'Absentee Owner', c: 'bg-purple-100 text-purple-700' },
+            { k: 'corporateOwned', l: 'Corporate', c: 'bg-gray-100 text-gray-600' },
+            { k: 'trustOwned', l: 'Trust', c: 'bg-gray-100 text-gray-600' },
+          ].map(flag => (
+            <span key={flag.k} className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${bd[flag.k] === true ? flag.c : 'bg-surface-secondary text-txt-muted'}`}>
+              {bd[flag.k] === true ? '✓' : '—'} {flag.l}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Equity & Financial */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Equity & Financial</p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
-          <DataCard label="Loan Amount" value={fmt$(bd.loanAmount)} />
-          <DataCard label="Lender" value={fmtStr(bd.lenderName)} />
-          <DataCard label="LTV" value={fmtPct(bd.loanToValue)} />
           <DataCard label="Equity" value={fmtPct(bd.equityPercent)} highlight={Number(bd.equityPercent ?? 0) > 40} />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-3 pb-3">
-          <DataCard label="Loan Type" value={fmtStr(bd.loanType)} />
-          <DataCard label="Loan Date" value={bd.loanDate ? format(new Date(String(bd.loanDate)), 'MMM yyyy') : '—'} />
-          <DataCard label="Open Liens" value={bd.openLienCount != null ? String(bd.openLienCount) : '—'} highlight={Number(bd.openLienCount ?? 0) > 1} />
-          <div />
+          <DataCard label="LTV" value={fmtPct(bd.ltv)} />
+          <DataCard label="Open Liens" value={bd.totalOpenLienCount != null ? String(bd.totalOpenLienCount) : '—'} highlight={Number(bd.totalOpenLienCount ?? 0) > 0} />
+          <DataCard label="Confidence" value={bd.confidenceScore != null ? `${bd.confidenceScore}%` : '—'} />
         </div>
       </div>
 
@@ -1476,40 +1494,26 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Sale History</p>
         </div>
-        <div className="grid grid-cols-2 gap-3 p-3">
+        <div className="grid grid-cols-3 gap-3 p-3">
           <DataCard label="Last Sale Price" value={fmt$(bd.lastSalePrice)} />
           <DataCard label="Last Sale Date" value={bd.lastSaleDate ? format(new Date(String(bd.lastSaleDate)), 'MMM d, yyyy') : '—'} />
+          <DataCard label="Sale Type" value={fmtStr(bd.lastSaleType)} />
         </div>
       </div>
 
-      {/* Distress Signals */}
-      {(bd.preForeclosure != null || bd.foreclosureDate != null || bd.defaultAmount != null) && (
-        <div className="bg-red-50 border-[0.5px] border-red-200 rounded-[12px] overflow-hidden">
-          <div className="px-4 py-2 bg-red-100 border-b border-red-200">
-            <p className="text-[9px] font-semibold text-red-700 uppercase tracking-wider">Distress Signals</p>
+      {/* Permits */}
+      {bd.permitCount != null && Number(bd.permitCount) > 0 && (
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Permits ({String(bd.permitCount)})</p>
           </div>
-          <div className="grid grid-cols-3 gap-3 p-3">
-            <DataCard label="Pre-Foreclosure" value={fmtBool(bd.preForeclosure)} />
-            <DataCard label="Filing Date" value={bd.foreclosureDate ? format(new Date(String(bd.foreclosureDate)), 'MMM d, yyyy') : '—'} />
-            <DataCard label="Default Amount" value={fmt$(bd.defaultAmount)} />
+          <div className="flex flex-wrap gap-1.5 p-3">
+            {Array.isArray(bd.permitTags) && (bd.permitTags as string[]).map(tag => (
+              <span key={tag} className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-surface-secondary text-txt-secondary">{tag}</span>
+            ))}
           </div>
         </div>
       )}
-
-      {/* Building Extras */}
-      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Building Details</p>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
-          <DataCard label="Stories" value={bd.stories != null ? String(bd.stories) : '—'} />
-          <DataCard label="Construction" value={fmtStr(bd.constructionType)} />
-          <DataCard label="Heating" value={fmtStr(bd.heatingType)} />
-          <DataCard label="Cooling" value={fmtStr(bd.coolingType)} />
-          <DataCard label="Pool" value={fmtBool(bd.pool)} />
-          <DataCard label="Garage" value={bd.garage ? `Yes${bd.garageSpaces ? ` (${bd.garageSpaces})` : ''}` : bd.garage === false ? 'No' : '—'} />
-        </div>
-      </div>
 
       {/* External links */}
       <div className="flex gap-3">
