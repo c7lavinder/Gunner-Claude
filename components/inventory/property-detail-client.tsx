@@ -551,7 +551,117 @@ function InlineTextArea({
 const PROJECT_TYPE_OPTIONS = ['Flipper', 'Rental', 'Builder', 'Landlord', 'Wholesale', 'Land', 'Commercial', 'Multi-Family', 'New Construction', 'Buy & Hold']
 const PROPERTY_TYPE_OPTIONS = ['House', 'Land', 'Multi-Family', 'Commercial', 'Condo', 'Townhome', 'Mobile Home', 'Other']
 
-function MultiSelectField({ label, values, options, field, propertyId, allowCustom, onSaved }: {
+// ─── Grid Detail Cell ──────────────────────────────────────────────────────
+// Used inside the property details grid — click to edit in-place
+
+function DetailCell({
+  label, value, field, propertyId, type = 'text', source, onSaved, options,
+}: {
+  label: string; value: string | number | null; field: string; propertyId: string
+  type?: 'number' | 'text' | 'select'; source?: string | null; options?: string[]
+  onSaved: (field: string, val: string | number | null, src: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const s = sourceStyles(source ?? null)
+
+  function startEdit() {
+    if (type === 'select') { setDropdownOpen(!dropdownOpen); setSearch(''); return }
+    setEditValue(value != null ? String(value) : '')
+    setEditing(true)
+  }
+
+  async function save() {
+    if (saving) return
+    const raw = editValue.trim()
+    const current = value != null ? String(value) : ''
+    if (raw === current) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const payload: Record<string, unknown> = {}
+      payload[field] = type === 'number' ? (raw ? Number(raw) : null) : (raw || null)
+      payload.fieldSources = { [field]: raw ? 'user' : '' }
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) onSaved(field, type === 'number' ? (raw ? Number(raw) : null) : (raw || null), raw ? 'user' : '')
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+  }
+
+  async function selectOption(val: string | null) {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: val, fieldSources: val ? { [field]: 'user' } : { [field]: '' } }),
+      })
+      if (res.ok) onSaved(field, val, val ? 'user' : '')
+    } catch {}
+    setSaving(false)
+    setDropdownOpen(false)
+    setSearch('')
+  }
+
+  const display = value != null ? (typeof value === 'number' ? value.toLocaleString() : value) : null
+  const filteredOpts = (options ?? []).filter(o => o.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <div className="relative">
+      <div
+        onClick={startEdit}
+        className={`px-3 py-2.5 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors group ${source ? s.bg : ''}`}
+      >
+        <p className={`text-[8px] font-semibold uppercase tracking-wider ${source ? s.label : 'text-txt-muted'}`}>{label}</p>
+        {editing ? (
+          <input
+            autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={save}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
+            className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded-[4px] px-1.5 py-0.5 text-ds-fine font-semibold text-txt-primary mt-0.5 focus:outline-none"
+            disabled={saving}
+          />
+        ) : (
+          <p className={`text-ds-fine font-semibold mt-0.5 flex items-center gap-1 ${display ? (source ? s.value : 'text-txt-primary') : 'text-txt-muted'}`}>
+            {display ?? '—'}
+            <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity shrink-0" />
+          </p>
+        )}
+      </div>
+
+      {/* Select dropdown */}
+      {dropdownOpen && type === 'select' && (
+        <div className="absolute top-full left-0 z-30 mt-0.5 w-44 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-1.5">
+          <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search..."
+            className="w-full bg-surface-secondary rounded-[4px] px-2 py-1 text-[10px] placeholder-txt-muted focus:outline-none mb-1" />
+          <div className="max-h-36 overflow-y-auto space-y-0.5">
+            {value && (
+              <button onClick={() => selectOption(null)} disabled={saving}
+                className="w-full text-left text-[10px] text-semantic-red px-2 py-1 rounded hover:bg-surface-secondary transition-colors">Clear</button>
+            )}
+            {filteredOpts.map(o => (
+              <button key={o} onClick={() => selectOption(o)} disabled={saving}
+                className={`w-full text-left text-[10px] px-2 py-1 rounded hover:bg-surface-secondary transition-colors ${
+                  o === value ? 'text-gunner-red font-semibold bg-gunner-red-light' : 'text-txt-primary'
+                }`}>{o}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Tag Row (for Market / Project Type multi-select) ───────────────────────
+
+function TagRow({ label, values, options, field, propertyId, allowCustom, onSaved }: {
   label: string; values: string[]; options: string[]; field: string; propertyId: string
   allowCustom?: boolean; onSaved: (field: string, vals: string[]) => void
 }) {
@@ -560,7 +670,6 @@ function MultiSelectField({ label, values, options, field, propertyId, allowCust
   const [saving, setSaving] = useState(false)
   const [localValues, setLocalValues] = useState(values)
 
-  // Keep in sync with parent
   useEffect(() => { setLocalValues(values) }, [values])
 
   const filtered = options.filter(o =>
@@ -570,132 +679,55 @@ function MultiSelectField({ label, values, options, field, propertyId, allowCust
 
   async function toggle(val: string) {
     const newVals = localValues.includes(val) ? localValues.filter(v => v !== val) : [...localValues, val]
-    setLocalValues(newVals) // optimistic update
+    setLocalValues(newVals)
     setSaving(true)
     try {
       const res = await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: newVals }),
       })
       if (res.ok) { onSaved(field, newVals) }
-      else { setLocalValues(values) } // revert on failure
+      else { setLocalValues(values) }
     } catch { setLocalValues(values) }
     setSaving(false)
     setSearch('')
   }
 
   return (
-    <div className="relative inline-flex items-center gap-1">
-      <div onClick={() => setOpen(!open)} className="cursor-pointer group inline-flex items-center gap-1">
-        <span className="text-txt-muted">{label}:</span>
-        {localValues.length > 0 ? (
-          <span className="inline-flex items-center gap-1 flex-wrap">
-            {localValues.map(v => (
-              <span key={v} className="inline-flex items-center gap-0.5 bg-gunner-red-light text-gunner-red text-[10px] font-medium px-1.5 py-0.5 rounded-full">
-                {v}
-                <button onClick={e => { e.stopPropagation(); toggle(v) }} className="hover:text-gunner-red-dark">
-                  <X size={8} />
-                </button>
-              </span>
-            ))}
-            <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+    <div className="flex items-center gap-3 px-3 py-2.5 relative">
+      <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider shrink-0 w-[70px]">{label}</span>
+      <div className="flex items-center gap-1.5 flex-wrap flex-1 min-h-[20px]">
+        {localValues.map(v => (
+          <span key={v} className="inline-flex items-center gap-1 bg-gunner-red-light text-gunner-red text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            {v}
+            <button onClick={() => toggle(v)} className="hover:text-gunner-red-dark transition-colors"><X size={8} /></button>
           </span>
-        ) : (
-          <span className="text-txt-muted group-hover:underline">—</span>
-        )}
+        ))}
+        <button onClick={() => setOpen(!open)}
+          className="inline-flex items-center gap-0.5 text-[10px] text-txt-muted hover:text-gunner-red px-1.5 py-0.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] hover:border-gunner-red/30 transition-all">
+          <Plus size={8} /> Add
+        </button>
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 z-20 mt-1 w-56 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-2">
+        <div className="absolute top-full left-[70px] z-30 mt-0.5 w-52 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-1.5">
           <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search or type custom..."
-            className="w-full bg-surface-secondary rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none mb-1.5" />
+            placeholder={allowCustom ? 'Search or type custom...' : 'Search...'}
+            className="w-full bg-surface-secondary rounded-[4px] px-2 py-1 text-[10px] placeholder-txt-muted focus:outline-none mb-1" />
           <div className="max-h-36 overflow-y-auto space-y-0.5">
             {filtered.map(o => (
               <button key={o} onClick={() => toggle(o)} disabled={saving}
-                className="w-full text-left text-[10px] text-txt-primary px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
-                {o}
-              </button>
+                className="w-full text-left text-[10px] text-txt-primary px-2 py-1 rounded hover:bg-surface-secondary transition-colors">{o}</button>
             ))}
             {showCustom && (
               <button onClick={() => toggle(search)} disabled={saving}
-                className="w-full text-left text-[10px] text-gunner-red font-medium px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
+                className="w-full text-left text-[10px] text-gunner-red font-semibold px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
                 + Add &ldquo;{search}&rdquo;
               </button>
             )}
-          </div>
-          <button onClick={() => { setOpen(false); setSearch('') }}
-            className="w-full text-[9px] text-txt-muted mt-1.5 hover:text-txt-secondary">
-            Done
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Searchable Property Type Dropdown ──────────────────────────────────────
-
-function PropertyTypeSelect({ value, propertyId, source, onSaved }: {
-  value: string | null; propertyId: string; source?: string | null
-  onSaved: (field: string, val: string | null, src: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [saving, setSaving] = useState(false)
-  const s = sourceStyles(source ?? null)
-
-  const filtered = PROPERTY_TYPE_OPTIONS.filter(o =>
-    o.toLowerCase().includes(search.toLowerCase())
-  )
-
-  async function select(val: string | null) {
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyType: val, fieldSources: val ? { propertyType: 'user' } : { propertyType: '' } }),
-      })
-      if (res.ok) onSaved('propertyType', val, val ? 'user' : '')
-    } catch {}
-    setSaving(false)
-    setOpen(false)
-    setSearch('')
-  }
-
-  return (
-    <div className="relative inline-flex items-center gap-1">
-      <span
-        className={`cursor-pointer hover:text-gunner-red transition-colors group inline-flex items-center gap-1 ${source ? `px-1.5 py-0.5 rounded ${s.bg}` : ''}`}
-        onClick={() => setOpen(!open)}
-      >
-        <span className={s.label}>Prop Type:</span>
-        <span className={`font-medium group-hover:underline ${value ? s.value : 'text-txt-muted'}`}>{value ?? '—'}</span>
-        <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
-      </span>
-
-      {open && (
-        <div className="absolute top-full left-0 z-20 mt-1 w-48 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-2">
-          <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search type..."
-            className="w-full bg-surface-secondary rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none mb-1.5" />
-          <div className="max-h-40 overflow-y-auto space-y-0.5">
-            {value && (
-              <button onClick={() => select(null)} disabled={saving}
-                className="w-full text-left text-[10px] text-semantic-red px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
-                Clear
-              </button>
+            {filtered.length === 0 && !showCustom && (
+              <p className="text-[10px] text-txt-muted px-2 py-1">No options</p>
             )}
-            {filtered.map(o => (
-              <button key={o} onClick={() => select(o)} disabled={saving}
-                className={`w-full text-left text-[10px] px-2 py-1 rounded hover:bg-surface-secondary transition-colors ${
-                  o === value ? 'text-gunner-red font-semibold' : 'text-txt-primary'
-                }`}>
-                {o === value ? `${o} ✓` : o}
-              </button>
-            ))}
           </div>
         </div>
       )}
@@ -1161,21 +1193,39 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         </div>
       </div>
 
-      {/* Property details — single line flow */}
-      <div className="bg-surface-secondary rounded-[10px] px-4 py-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-ds-fine">
-          <MultiSelectField label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
+      {/* Property Details — structured grid */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        {/* Section header */}
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Details</p>
+        </div>
+
+        {/* Row 1: Type + Physical attributes (5 cols) */}
+        <div className="grid grid-cols-5 divide-x divide-[rgba(0,0,0,0.04)]">
+          <DetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={handleSaved} />
+          <DetailCell label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
+          <DetailCell label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
+          <DetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} onSaved={handleSaved} />
+          <DetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
+        </div>
+
+        {/* Row 2: Lot, Occupancy, Lockbox (3 cols) */}
+        <div className="grid grid-cols-3 divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)]">
+          <DetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
+          <DetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} source={sources.occupancy} onSaved={handleSaved} />
+          <DetailCell label="Lockbox" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
+        </div>
+
+        {/* Row 3: Market tags */}
+        <div className="border-t border-[rgba(0,0,0,0.04)]">
+          <TagRow label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
             field="propertyMarkets" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
-          <MultiSelectField label="Project Type" values={vals.projectType} options={PROJECT_TYPE_OPTIONS}
+        </div>
+
+        {/* Row 4: Project Type tags */}
+        <div className="border-t border-[rgba(0,0,0,0.04)]">
+          <TagRow label="Project Type" values={vals.projectType} options={PROJECT_TYPE_OPTIONS}
             field="projectType" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
-          <PropertyTypeSelect value={vals.propertyType} propertyId={property.id} source={sources.propertyType} onSaved={handleSaved} />
-          <InlineDetailItem label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
-          <InlineDetailItem label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
-          <InlineDetailItem label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} onSaved={handleSaved} />
-          <InlineDetailItem label="Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
-          <InlineDetailItem label="Lot" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
-          <InlineDetailItem label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} source={sources.occupancy} onSaved={handleSaved} />
-          <InlineDetailItem label="Lockbox" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
         </div>
       </div>
 
