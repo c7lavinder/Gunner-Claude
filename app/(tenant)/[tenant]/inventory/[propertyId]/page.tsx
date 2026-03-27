@@ -48,12 +48,26 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound()
 
-  // Fetch audit logs for activity tab
-  const auditLogs = await db.auditLog.findMany({
-    where: { tenantId, resourceId: params.propertyId, resource: 'property' },
+  // Fetch milestones for pipeline display
+  const milestones = await db.propertyMilestone.findMany({
+    where: { propertyId: params.propertyId, tenantId },
+    orderBy: { createdAt: 'asc' },
+    select: { type: true, createdAt: true, notes: true },
+  })
+
+  // Fetch team members for @mentions in messaging
+  const teamMembers = await db.user.findMany({
+    where: { tenantId },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+
+  // Fetch messages (audit logs with action 'property.message')
+  const messages = await db.auditLog.findMany({
+    where: { tenantId, resourceId: params.propertyId, action: 'property.message' },
     orderBy: { createdAt: 'desc' },
-    take: 50,
-    select: { id: true, action: true, payload: true, createdAt: true, userId: true, source: true, user: { select: { name: true } } },
+    take: 100,
+    select: { id: true, payload: true, createdAt: true, userId: true, user: { select: { name: true } } },
   })
 
   const tenant = await db.tenant.findUnique({
@@ -122,12 +136,18 @@ export default async function PropertyDetailPage({
           status: t.status,
           dueAt: t.dueAt?.toISOString() ?? null,
         })),
-        auditLogs: auditLogs.map((a) => ({
-          id: a.id,
-          action: a.action,
-          payload: a.payload as Record<string, unknown> | null,
-          createdAt: a.createdAt.toISOString(),
-          userName: a.user?.name ?? (a.source === 'GHL_WEBHOOK' || a.source === 'SYSTEM' ? 'System' : 'Unknown'),
+        auditLogs: [],
+        leadSource: property.leadSource,
+        ghlStageName: property.ghlPipelineStage,
+        milestones: milestones.map(m => ({ type: m.type, date: m.createdAt.toISOString(), notes: m.notes })),
+        teamMembers: teamMembers.map(u => ({ id: u.id, name: u.name })),
+        messages: messages.map(m => ({
+          id: m.id,
+          text: ((m.payload as Record<string, unknown>)?.text as string) ?? '',
+          mentions: ((m.payload as Record<string, unknown>)?.mentions as Array<{ id: string; name: string }>) ?? [],
+          userId: m.userId,
+          userName: m.user?.name ?? 'Unknown',
+          createdAt: m.createdAt.toISOString(),
         })),
       }}
       tenantSlug={params.tenant}

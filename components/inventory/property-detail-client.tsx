@@ -39,6 +39,11 @@ interface PropertyDetail {
   }>
   tasks: Array<{ id: string; title: string; category: string | null; priority: string; status: string; dueAt: string | null }>
   auditLogs: Array<{ id: string; action: string; payload: Record<string, unknown> | null; createdAt: string; userName: string }>
+  leadSource: string | null
+  ghlStageName: string | null
+  milestones: Array<{ type: string; date: string; notes: string | null }>
+  teamMembers: Array<{ id: string; name: string }>
+  messages: Array<{ id: string; text: string; mentions: Array<{ id: string; name: string }>; userId: string | null; userName: string; createdAt: string }>
 }
 
 // Timezone abbreviation for display (e.g. "CST", "EST")
@@ -100,14 +105,31 @@ export function PropertyDetailClient({
 
       {/* Header card */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
+        {/* Labels row — same as inventory list */}
+        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+          <span className={`text-[10px] font-semibold px-2 py-[2px] rounded-full ${badgeColor}`}>
+            {APP_STAGE_LABELS[appStage]}
+          </span>
+          {property.ghlStageName && (
+            <span className="text-[10px] font-medium px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border-[0.5px] border-blue-200">
+              {property.ghlStageName}
+            </span>
+          )}
+          {property.leadSource && (
+            <span className="text-[10px] font-medium px-2 py-[2px] rounded-full bg-purple-50 text-purple-700 border-[0.5px] border-purple-200">
+              {property.leadSource}
+            </span>
+          )}
+          {property.propertyMarkets.map(m => (
+            <span key={m} className="text-[10px] font-medium px-2 py-[2px] rounded-full bg-emerald-50 text-emerald-700 border-[0.5px] border-emerald-200">
+              {m}
+            </span>
+          ))}
+          <span className={`text-ds-fine font-semibold ${domColor}`}>{dom}d</span>
+        </div>
+
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full ${badgeColor}`}>
-                {APP_STAGE_LABELS[appStage]}
-              </span>
-              <span className={`text-ds-fine font-medium ${domColor}`}>{dom}d</span>
-            </div>
             <h1 className="text-ds-section font-semibold text-txt-primary">{property.address}</h1>
             <p className="text-ds-body text-txt-secondary flex items-center gap-1">
               <MapPin size={11} /> {property.city}, {property.state} {property.zip}
@@ -123,21 +145,11 @@ export function PropertyDetailClient({
                 <ExternalLink size={11} /> GHL
               </a>
             )}
-            {canEdit && (
-              <Link
-                href={`/${tenantSlug}/inventory/${property.id}/edit`}
-                className="flex items-center gap-1 text-ds-fine text-txt-secondary hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
-              >
-                <Pencil size={11} /> Edit
-              </Link>
-            )}
           </div>
         </div>
 
-        {/* Deal progress — click to change stage */}
-        <DealProgress currentStatus={property.status} propertyId={property.id} canEdit={canEdit} />
-
-        {/* Quick actions removed — use Outreach tab for offers, Deal Blast tab directly */}
+        {/* Deal progress — view only, click for milestone details */}
+        <DealProgress currentStatus={property.status} milestones={property.milestones} />
       </div>
 
       {/* Tab bar */}
@@ -262,60 +274,85 @@ const DISPO_STEPS = [
   { key: 'DISPO_CLOSED', label: 'Closed' },
 ]
 
-function DealProgress({ currentStatus, propertyId, canEdit }: { currentStatus: string; propertyId: string; canEdit: boolean }) {
-  const [updating, setUpdating] = useState(false)
+function DealProgress({ currentStatus, milestones }: {
+  currentStatus: string
+  milestones: Array<{ type: string; date: string; notes: string | null }>
+}) {
+  const [expandedStep, setExpandedStep] = useState<string | null>(null)
   const acqKeys = ACQ_STEPS.map(s => s.key)
   const dispoKeys = DISPO_STEPS.map(s => s.key)
   const acqIdx = acqKeys.indexOf(currentStatus)
   const dispoIdx = dispoKeys.indexOf(currentStatus)
 
-  async function changeStage(statusKey: string) {
-    if (!canEdit || updating || statusKey === currentStatus) return
-    setUpdating(true)
-    try {
-      await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: statusKey }),
-      })
-      window.location.reload()
-    } catch {}
-    setUpdating(false)
+  // Map milestone types to step keys
+  const milestoneMap: Record<string, { date: string; notes: string | null }> = {}
+  for (const m of milestones) {
+    milestoneMap[m.type] = { date: m.date, notes: m.notes }
+  }
+
+  // Map step keys to milestone types
+  const stepToMilestone: Record<string, string> = {
+    NEW_LEAD: 'LEAD', APPOINTMENT_SET: 'APPOINTMENT_SET',
+    OFFER_MADE: 'OFFER_MADE', UNDER_CONTRACT: 'UNDER_CONTRACT',
+    SOLD: 'CLOSED', IN_DISPOSITION: 'LEAD', DISPO_CONTRACTED: 'UNDER_CONTRACT',
+    DISPO_CLOSED: 'CLOSED',
   }
 
   function ProgressRow({ steps, activeIdx, color }: { steps: typeof ACQ_STEPS; activeIdx: number; color: string }) {
     return (
-      <div className="flex items-center">
-        {steps.map((step, i) => {
-          const isHit = activeIdx >= 0 && i <= activeIdx
-          const isCurrent = i === activeIdx
+      <div>
+        <div className="flex items-center">
+          {steps.map((step, i) => {
+            const isHit = activeIdx >= 0 && i <= activeIdx
+            const isCurrent = i === activeIdx
+            const milestone = milestoneMap[stepToMilestone[step.key] ?? '']
+            const isExpanded = expandedStep === step.key
+            return (
+              <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                <button
+                  onClick={() => setExpandedStep(isExpanded ? null : step.key)}
+                  className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform"
+                  title={`View ${step.label} details`}
+                >
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-colors ${
+                    isCurrent ? `${color} text-white ring-2 ring-offset-1 ${color.replace('bg-', 'ring-')}/30` : isHit ? `${color}/20 ${color.replace('bg-', 'text-')}` : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
+                  }`}>
+                    {isHit ? <Check size={8} /> : i + 1}
+                  </div>
+                  <span className={`text-[7px] mt-0.5 ${isCurrent ? `${color.replace('bg-', 'text-')} font-semibold` : isHit ? 'text-txt-primary' : 'text-txt-muted'}`}>{step.label}</span>
+                </button>
+                {i < steps.length - 1 && (
+                  <div className={`flex-1 h-px mx-0.5 ${activeIdx >= 0 && i < activeIdx ? `${color}/30` : 'bg-[rgba(0,0,0,0.06)]'}`} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {/* Milestone detail popover */}
+        {expandedStep && steps.some(s => s.key === expandedStep) && (() => {
+          const step = steps.find(s => s.key === expandedStep)!
+          const milestone = milestoneMap[stepToMilestone[step.key] ?? '']
+          const isHit = activeIdx >= 0 && steps.indexOf(step) <= activeIdx
           return (
-            <div key={step.key} className="flex items-center flex-1 last:flex-none">
-              <button
-                onClick={() => changeStage(step.key)}
-                disabled={!canEdit || updating}
-                className={`flex flex-col items-center ${canEdit ? 'cursor-pointer hover:scale-110' : 'cursor-default'} transition-transform`}
-                title={canEdit ? `Move to ${step.label}` : step.label}
-              >
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-colors ${
-                  isCurrent ? `${color} text-white` : isHit ? `${color}/20 ${color.replace('bg-', 'text-')}` : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
-                }`}>
-                  {isHit ? <Check size={8} /> : i + 1}
-                </div>
-                <span className={`text-[7px] mt-0.5 ${isCurrent ? `${color.replace('bg-', 'text-')} font-semibold` : isHit ? 'text-txt-primary' : 'text-txt-muted'}`}>{step.label}</span>
-              </button>
-              {i < steps.length - 1 && (
-                <div className={`flex-1 h-px mx-0.5 ${activeIdx >= 0 && i < activeIdx ? `${color}/30` : 'bg-[rgba(0,0,0,0.06)]'}`} />
-              )}
+            <div className={`mt-2 rounded-[8px] px-3 py-2 border-[0.5px] ${
+              isHit ? `${color.replace('bg-', 'bg-')}/5 ${color.replace('bg-', 'border-')}/20` : 'bg-surface-secondary border-[rgba(0,0,0,0.06)]'
+            }`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-[10px] font-semibold ${isHit ? color.replace('bg-', 'text-') : 'text-txt-muted'}`}>{step.label}</p>
+                {milestone && <p className="text-[9px] text-txt-muted">{format(new Date(milestone.date), 'MMM d, yyyy')}</p>}
+              </div>
+              {milestone?.notes && <p className="text-[9px] text-txt-secondary mt-0.5">{milestone.notes}</p>}
+              {!milestone && isHit && <p className="text-[9px] text-txt-muted">Reached — no milestone recorded</p>}
+              {!isHit && <p className="text-[9px] text-txt-muted">Not yet reached</p>}
             </div>
           )
-        })}
+        })()}
       </div>
     )
   }
 
   return (
-    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[8px] px-3 py-2 mt-3 space-y-2">
+    <div className="bg-surface-secondary/50 border-[0.5px] border-[rgba(0,0,0,0.04)] rounded-[8px] px-3 py-2 mt-3 space-y-2">
       <div>
         <p className="text-[7px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Acquisition</p>
         <ProgressRow steps={ACQ_STEPS} activeIdx={acqIdx} color="bg-gunner-red" />
@@ -2245,141 +2282,165 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
   )
 }
 
-// ─── Activity Tab ────────────────────────────────────────────────────────────
+// ─── Activity / Messaging Tab ────────────────────────────────────────────────
 
-function ActivityTab({ property, tenantSlug, runGhlAction, sending, ghlContactId }: {
-  property: PropertyDetail; tenantSlug: string
+function ActivityTab({ property }: {
+  property: PropertyDetail
+  tenantSlug: string
   runGhlAction: (type: string, payload: Record<string, string>) => void
   sending: boolean; ghlContactId: string | null
 }) {
-  const [note, setNote] = useState('')
-  const [outreachLogs, setOutreachLogs] = useState<Array<{
-    id: string; type: string; channel: string; recipientName: string; notes: string | null
-    offerAmount: number | null; offerStatus: string | null; showingDate: string | null
-    showingStatus: string | null; source: string; loggedAt: string; loggedByName: string
-  }>>([])
-  const [loaded, setLoaded] = useState(false)
+  const [messages, setMessages] = useState(property.messages)
+  const [input, setInput] = useState('')
+  const [mentionSearch, setMentionSearch] = useState('')
+  const [showMentions, setShowMentions] = useState(false)
+  const [pendingMentions, setPendingMentions] = useState<Array<{ id: string; name: string }>>([])
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    fetch(`/api/properties/${property.id}/outreach`)
-      .then(r => r.json())
-      .then(d => { setOutreachLogs(d.logs ?? []); setLoaded(true) })
-      .catch(() => setLoaded(true))
-  }, [property.id])
+  const team = property.teamMembers
 
-  // Build unified timeline
-  type TimelineEvent = { id: string; date: string; type: string; icon: string; color: string; title: string; detail?: string }
-  const events: TimelineEvent[] = []
-
-  // Property created
-  events.push({ id: 'created', date: property.createdAt, type: 'system', icon: 'plus', color: 'bg-semantic-green', title: 'Property created', detail: '' })
-
-  // Calls
-  for (const c of property.calls) {
-    if (!c.calledAt) continue
-    const dir = c.direction === 'OUTBOUND' ? 'Outbound' : 'Inbound'
-    const score = c.score ? ` — Score: ${Math.round(c.score)}` : ''
-    events.push({
-      id: `call-${c.id}`, date: c.calledAt, type: 'call', icon: 'phone', color: 'bg-gunner-red',
-      title: `${dir} call${c.assignedToName ? ` by ${c.assignedToName}` : ''}${score}`,
-      detail: c.aiSummary ?? undefined,
-    })
+  // Detect @mention in input
+  function handleInput(val: string) {
+    setInput(val)
+    const atMatch = val.match(/@(\w*)$/)
+    if (atMatch) {
+      setMentionSearch(atMatch[1])
+      setShowMentions(true)
+    } else {
+      setShowMentions(false)
+    }
   }
 
-  // Outreach logs
-  for (const l of outreachLogs) {
-    const typeLabel = l.type === 'offer' ? 'Offer' : l.type === 'showing' ? 'Showing' : 'Send'
-    const color = l.type === 'offer' ? 'bg-semantic-green' : l.type === 'showing' ? 'bg-semantic-blue' : 'bg-semantic-purple'
-    let detail = l.recipientName
-    if (l.type === 'offer' && l.offerAmount) detail += ` — $${l.offerAmount.toLocaleString()}${l.offerStatus ? ` (${l.offerStatus})` : ''}`
-    if (l.type === 'showing' && l.showingDate) detail += ` — ${format(new Date(l.showingDate), 'MMM d, h:mm a')} ${TZ_ABBR}${l.showingStatus ? ` (${l.showingStatus})` : ''}`
-    if (l.type === 'send') detail += ` via ${l.channel}`
-    if (l.notes) detail += ` — ${l.notes}`
-    events.push({
-      id: `outreach-${l.id}`, date: l.loggedAt, type: 'outreach', icon: l.type, color,
-      title: `${typeLabel} logged by ${l.loggedByName}`,
-      detail,
-    })
+  function insertMention(member: { id: string; name: string }) {
+    const before = input.replace(/@\w*$/, '')
+    setInput(`${before}@${member.name} `)
+    if (!pendingMentions.some(m => m.id === member.id)) {
+      setPendingMentions(prev => [...prev, member])
+    }
+    setShowMentions(false)
   }
 
-  // Audit logs (field changes, status changes)
-  for (const a of property.auditLogs) {
-    const payload = a.payload ?? {}
-    const fields = Object.keys(payload).filter(k => k !== 'fieldSources')
-    if (fields.length === 0) continue
-    const changes = fields.map(f => {
-      const val = payload[f]
-      if (f === 'status') return `Status → ${String(val).replace(/_/g, ' ')}`
-      if (Array.isArray(val)) return `${f} → ${val.join(', ')}`
-      if (val === null) return `${f} cleared`
-      return `${f} updated`
-    }).join(', ')
-    events.push({
-      id: `audit-${a.id}`, date: a.createdAt, type: 'edit', icon: 'edit', color: 'bg-semantic-amber',
-      title: `${a.userName} edited: ${changes}`,
-    })
+  async function sendMessage() {
+    if (!input.trim() || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${property.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: input.trim(), mentions: pendingMentions }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMessages(prev => [data.message, ...prev])
+        setInput('')
+        setPendingMentions([])
+      }
+    } catch {}
+    setSaving(false)
   }
 
-  // Sort by date, newest first
-  events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const filteredTeam = team.filter(m =>
+    m.name.toLowerCase().includes(mentionSearch.toLowerCase())
+  )
 
-  const iconMap: Record<string, typeof Activity> = {
-    phone: Phone, offer: DollarSign, showing: Clock, send: Send, edit: Pencil, plus: Zap,
+  // Render message text with @mentions highlighted
+  function renderText(text: string, mentions: Array<{ name: string }>) {
+    if (mentions.length === 0) return text
+    const parts: Array<{ type: 'text' | 'mention'; value: string }> = []
+    let remaining = text
+    for (const m of mentions) {
+      const idx = remaining.indexOf(`@${m.name}`)
+      if (idx >= 0) {
+        if (idx > 0) parts.push({ type: 'text', value: remaining.slice(0, idx) })
+        parts.push({ type: 'mention', value: `@${m.name}` })
+        remaining = remaining.slice(idx + m.name.length + 1)
+      }
+    }
+    if (remaining) parts.push({ type: 'text', value: remaining })
+    if (parts.length === 0) return text
+    return (
+      <>{parts.map((p, i) => p.type === 'mention'
+        ? <span key={i} className="text-semantic-blue font-semibold">{p.value}</span>
+        : <span key={i}>{p.value}</span>
+      )}</>
+    )
   }
 
   return (
     <div className="space-y-4">
-      {/* Add note */}
-      {ghlContactId && (
+      {/* Message input with @mention */}
+      <div className="relative">
         <div className="flex gap-2">
-          <input
-            value={note} onChange={e => setNote(e.target.value)}
-            placeholder="Add a note..."
-            className="flex-1 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none"
-          />
-          <button
-            onClick={() => { runGhlAction('add_note', { note }); setNote('') }}
-            disabled={!note.trim() || sending}
-            className="bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold px-4 rounded-[8px] transition-colors"
-          >
-            Add
+          <div className="flex-1 relative">
+            <textarea
+              value={input}
+              onChange={e => handleInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+              placeholder="Type a message... use @ to tag someone"
+              rows={2}
+              className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2.5 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red/20 resize-none"
+            />
+            {/* @mention dropdown */}
+            {showMentions && filteredTeam.length > 0 && (
+              <div className="absolute bottom-full left-0 mb-1 w-56 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-1 z-20">
+                {filteredTeam.slice(0, 6).map(m => (
+                  <button key={m.id} onClick={() => insertMention(m)}
+                    className="w-full text-left px-3 py-1.5 rounded-[6px] hover:bg-surface-secondary text-ds-fine transition-colors">
+                    <span className="font-medium text-txt-primary">{m.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={sendMessage} disabled={!input.trim() || saving}
+            className="self-end bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white px-4 py-2.5 rounded-[10px] transition-colors shrink-0">
+            <Send size={14} />
           </button>
         </div>
-      )}
-
-      {/* Timeline */}
-      <div>
-        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-3">
-          Activity Log ({events.length})
-        </p>
-        {!loaded ? (
-          <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
-        ) : events.length === 0 ? (
-          <p className="text-ds-fine text-txt-muted">No activity yet</p>
-        ) : (
-          <div className="space-y-0">
-            {events.map((e, i) => {
-              const Icon = iconMap[e.icon] ?? Activity
-              return (
-                <div key={e.id} className="flex gap-3 relative">
-                  {/* Vertical line */}
-                  {i < events.length - 1 && (
-                    <div className="absolute left-[7px] top-5 bottom-0 w-px bg-[rgba(0,0,0,0.06)]" />
-                  )}
-                  {/* Dot */}
-                  <div className={`w-[15px] h-[15px] rounded-full flex items-center justify-center shrink-0 mt-0.5 ${e.color}`}>
-                    <Icon size={8} className="text-white" />
-                  </div>
-                  {/* Content */}
-                  <div className="pb-4 min-w-0 flex-1">
-                    <p className="text-ds-fine text-txt-primary font-medium leading-tight">{e.title}</p>
-                    {e.detail && <p className="text-ds-fine text-txt-muted mt-0.5 truncate">{e.detail}</p>}
-                    <p className="text-[10px] text-txt-muted mt-0.5">{format(new Date(e.date), 'MMM d, yyyy · h:mm a')}</p>
-                  </div>
-                </div>
-              )
-            })}
+        {pendingMentions.length > 0 && (
+          <div className="flex items-center gap-1 mt-1.5">
+            <span className="text-[9px] text-txt-muted">Tagging:</span>
+            {pendingMentions.map(m => (
+              <span key={m.id} className="text-[9px] font-semibold text-semantic-blue bg-blue-50 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                @{m.name}
+                <button onClick={() => setPendingMentions(prev => prev.filter(p => p.id !== m.id))} className="hover:text-semantic-red"><X size={7} /></button>
+              </span>
+            ))}
           </div>
+        )}
+      </div>
+
+      {/* Messages thread */}
+      <div className="space-y-0">
+        {messages.length === 0 ? (
+          <div className="bg-surface-secondary rounded-[12px] p-8 text-center">
+            <MessageSquare size={20} className="text-txt-muted mx-auto mb-2 opacity-40" />
+            <p className="text-ds-body text-txt-muted">No messages yet</p>
+            <p className="text-[10px] text-txt-muted mt-1">Start a conversation — use @ to tag team members</p>
+          </div>
+        ) : (
+          messages.map((m, i) => (
+            <div key={m.id} className="flex gap-3 relative py-3">
+              {/* Vertical line */}
+              {i < messages.length - 1 && (
+                <div className="absolute left-[13px] top-[40px] bottom-0 w-px bg-[rgba(0,0,0,0.06)]" />
+              )}
+              {/* Avatar */}
+              <div className="w-7 h-7 rounded-full bg-gunner-red-light flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-gunner-red text-[10px] font-semibold">{m.userName?.[0]?.toUpperCase() ?? '?'}</span>
+              </div>
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-ds-fine font-semibold text-txt-primary">{m.userName}</p>
+                  <p className="text-[10px] text-txt-muted">{formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}</p>
+                </div>
+                <p className="text-ds-fine text-txt-secondary mt-0.5 whitespace-pre-wrap">
+                  {renderText(m.text, m.mentions)}
+                </p>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
