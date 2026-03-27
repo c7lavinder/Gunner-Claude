@@ -541,6 +541,83 @@ function InlineTextArea({
   )
 }
 
+// ─── Inline AI Actions ───────────────────────────────────────────────────────
+
+function InlineAI({ propertyId }: { propertyId: string }) {
+  const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([])
+  const [loading, setLoading] = useState(false)
+
+  async function send() {
+    const text = input.trim()
+    if (!text || loading) return
+    setMessages(prev => [...prev, { role: 'user', text }])
+    setInput('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/ai/coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...messages, { role: 'user', content: text }].map(m => ({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: 'text' in m ? m.text : (m as { content: string }).content,
+          })),
+          propertyId,
+        }),
+      })
+      const data = await res.json()
+      setMessages(prev => [...prev, { role: 'assistant', text: data.reply ?? 'No response' }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Failed to connect' }])
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">
+        <Sparkles size={10} className="inline -mt-0.5 text-semantic-purple" /> AI Actions
+      </p>
+
+      {/* Chat history */}
+      {messages.length > 0 && (
+        <div className="space-y-2 mb-2 max-h-[200px] overflow-y-auto">
+          {messages.map((m, i) => (
+            <div key={i} className={`text-ds-fine px-2.5 py-1.5 rounded-[8px] ${
+              m.role === 'user'
+                ? 'bg-gunner-red text-white ml-4'
+                : 'bg-surface-secondary text-txt-primary mr-4'
+            }`}>
+              {m.text}
+            </div>
+          ))}
+          {loading && (
+            <div className="bg-surface-secondary rounded-[8px] px-2.5 py-1.5 mr-4">
+              <Loader2 size={12} className="animate-spin text-txt-muted" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="flex gap-1.5">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder="Send SMS, email, analyze deal..."
+          className="flex-1 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none"
+        />
+        <button onClick={send} disabled={!input.trim() || loading}
+          className="bg-semantic-purple hover:bg-semantic-purple/90 disabled:opacity-40 text-white px-3 rounded-[8px] transition-colors">
+          <Send size={12} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Contacts Section ────────────────────────────────────────────────────────
 
 const CONTACT_ROLES = ['Primary Seller', 'Co-Seller', 'Spouse', 'Buyer', 'Buyer Agent', 'Attorney', 'Agent', 'Other']
@@ -703,9 +780,6 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   tenantSlug: string; runGhlAction: (type: string, payload: Record<string, string>) => void
   sending: boolean; actionMsg: string; ghlContactId: string | null
 }) {
-  const [smsText, setSmsText] = useState('')
-  const [noteText, setNoteText] = useState('')
-
   // Local editable state — updates on save without page reload
   const [vals, setVals] = useState({
     askingPrice: property.askingPrice,
@@ -820,48 +894,8 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
             </div>
           )}
 
-          {/* Quick actions */}
-          {ghlContactId && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Quick Actions</p>
-              <div className="space-y-1.5">
-                <textarea
-                  value={smsText} onChange={e => setSmsText(e.target.value)}
-                  placeholder="Send SMS..." rows={2}
-                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none resize-none"
-                />
-                <button
-                  onClick={() => { runGhlAction('send_sms', { message: smsText }); setSmsText('') }}
-                  disabled={!smsText.trim() || sending}
-                  className="w-full bg-semantic-green hover:bg-semantic-green/90 disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <MessageSquare size={11} /> {sending ? 'Sending...' : 'Send SMS'}
-                </button>
-                <textarea
-                  value={noteText} onChange={e => setNoteText(e.target.value)}
-                  placeholder="Send email or add note..." rows={2}
-                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none resize-none"
-                />
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => { runGhlAction('send_email', { message: noteText }); setNoteText('') }}
-                    disabled={!noteText.trim() || sending}
-                    className="flex-1 bg-semantic-blue hover:bg-semantic-blue/90 disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Send size={11} /> Email
-                  </button>
-                  <button
-                    onClick={() => { runGhlAction('add_note', { note: noteText }); setNoteText('') }}
-                    disabled={!noteText.trim() || sending}
-                    className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold rounded-[8px] py-1.5 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <FileText size={11} /> Save Note
-                  </button>
-                </div>
-              </div>
-              {actionMsg && <p className="text-ds-fine text-gunner-red">{actionMsg}</p>}
-            </div>
-          )}
+          {/* AI Actions */}
+          <InlineAI propertyId={property.id} />
         </div>
 
         {/* Right: calls + tasks */}

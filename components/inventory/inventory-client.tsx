@@ -5,7 +5,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
-  ExternalLink, X, MessageSquare, Send, FileText, User, Users,
+  ExternalLink, X, Send, Users,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { formatPhone } from '@/lib/format'
@@ -580,8 +580,8 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
           </div>
         )}
 
-        {/* Quick actions — SMS + Email */}
-        {p.ghlContactId && <DrawerQuickActions ghlContactId={p.ghlContactId} />}
+        {/* AI Actions */}
+        <DrawerInlineAI propertyId={p.id} />
 
         {/* Links */}
         <div className="flex gap-2 pt-1">
@@ -725,50 +725,68 @@ function DrawerContacts({ propertyId, initialSellers }: {
   )
 }
 
-// ─── Drawer Quick Actions ───────────────────────────────────────────────────
+// ─── Drawer Inline AI ───────────────────────────────────────────────────────
 
-function DrawerQuickActions({ ghlContactId }: { ghlContactId: string }) {
-  const [smsText, setSmsText] = useState('')
-  const [emailText, setEmailText] = useState('')
-  const [sending, setSending] = useState(false)
-  const [msg, setMsg] = useState('')
+function DrawerInlineAI({ propertyId }: { propertyId: string }) {
+  const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([])
+  const [loading, setLoading] = useState(false)
 
-  async function sendAction(type: string, payload: Record<string, string>) {
-    setSending(true)
+  async function send() {
+    const text = input.trim()
+    if (!text || loading) return
+    setMessages(prev => [...prev, { role: 'user', text }])
+    setInput('')
+    setLoading(true)
     try {
-      const res = await fetch('/api/ghl/actions', {
+      const res = await fetch('/api/ai/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, contactId: ghlContactId, ...payload }),
+        body: JSON.stringify({
+          messages: [...messages, { role: 'user', content: text }].map(m => ({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: 'text' in m ? m.text : (m as { content: string }).content,
+          })),
+          propertyId,
+        }),
       })
-      setMsg(res.ok ? 'Sent!' : 'Failed')
-    } catch { setMsg('Error') }
-    setSending(false)
-    setTimeout(() => setMsg(''), 3000)
+      const data = await res.json()
+      setMessages(prev => [...prev, { role: 'assistant', text: data.reply ?? 'No response' }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Failed to connect' }])
+    }
+    setLoading(false)
   }
 
   return (
-    <div className="space-y-2">
-      <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Quick Actions</p>
-      <div className="space-y-1.5">
-        <textarea value={smsText} onChange={e => setSmsText(e.target.value)}
-          placeholder="Send SMS..." rows={2}
-          className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none resize-none" />
-        <button onClick={() => { sendAction('send_sms', { message: smsText }); setSmsText('') }}
-          disabled={!smsText.trim() || sending}
-          className="w-full bg-semantic-green hover:bg-semantic-green/90 disabled:opacity-40 text-white text-[10px] font-semibold rounded-[6px] py-1.5 transition-colors flex items-center justify-center gap-1">
-          <MessageSquare size={10} /> {sending ? 'Sending...' : 'Send SMS'}
-        </button>
-        <textarea value={emailText} onChange={e => setEmailText(e.target.value)}
-          placeholder="Send email..." rows={2}
-          className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none resize-none" />
-        <button onClick={() => { sendAction('send_email', { message: emailText }); setEmailText('') }}
-          disabled={!emailText.trim() || sending}
-          className="w-full bg-semantic-blue hover:bg-semantic-blue/90 disabled:opacity-40 text-white text-[10px] font-semibold rounded-[6px] py-1.5 transition-colors flex items-center justify-center gap-1">
-          <Send size={10} /> {sending ? 'Sending...' : 'Send Email'}
+    <div>
+      <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">AI Actions</p>
+
+      {messages.length > 0 && (
+        <div className="space-y-1.5 mb-1.5 max-h-[150px] overflow-y-auto">
+          {messages.map((m, i) => (
+            <div key={i} className={`text-[10px] px-2 py-1.5 rounded-[6px] ${
+              m.role === 'user' ? 'bg-gunner-red text-white ml-3' : 'bg-surface-secondary text-txt-primary mr-3'
+            }`}>{m.text}</div>
+          ))}
+          {loading && (
+            <div className="bg-surface-secondary rounded-[6px] px-2 py-1.5 mr-3">
+              <span className="text-[10px] text-txt-muted">Thinking...</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-1">
+        <input value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send() } }}
+          placeholder="Send SMS, email, analyze..."
+          className="flex-1 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none" />
+        <button onClick={send} disabled={!input.trim() || loading}
+          className="bg-semantic-purple hover:bg-semantic-purple/90 disabled:opacity-40 text-white px-2.5 rounded-[6px] transition-colors">
+          <Send size={10} />
         </button>
       </div>
-      {msg && <p className="text-[10px] text-gunner-red text-center">{msg}</p>}
     </div>
   )
 }
