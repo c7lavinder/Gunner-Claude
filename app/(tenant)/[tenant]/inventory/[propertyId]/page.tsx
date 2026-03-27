@@ -48,6 +48,14 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound()
 
+  // Fetch audit logs for activity tab
+  const auditLogs = await db.auditLog.findMany({
+    where: { tenantId, resourceId: params.propertyId, resource: 'property' },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+    select: { id: true, action: true, payload: true, createdAt: true, userId: true, source: true, user: { select: { name: true } } },
+  })
+
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
     select: { ghlLocationId: true },
@@ -113,6 +121,13 @@ export default async function PropertyDetailPage({
           priority: t.priority,
           status: t.status,
           dueAt: t.dueAt?.toISOString() ?? null,
+        })),
+        auditLogs: auditLogs.map((a) => ({
+          id: a.id,
+          action: a.action,
+          payload: a.payload as Record<string, unknown> | null,
+          createdAt: a.createdAt.toISOString(),
+          userName: a.user?.name ?? (a.source === 'GHL_WEBHOOK' || a.source === 'SYSTEM' ? 'System' : 'Unknown'),
         })),
       }}
       tenantSlug={params.tenant}

@@ -43,6 +43,37 @@ export async function GET(
   }
 }
 
+// Helper: sync highestOffer + acceptedPrice on property from all offer logs
+async function syncOfferFields(propertyId: string) {
+  const offers = await db.outreachLog.findMany({
+    where: { propertyId, type: 'offer', offerAmount: { not: null } },
+    select: { offerAmount: true, offerStatus: true },
+    orderBy: { loggedAt: 'desc' },
+  })
+  const highest = offers.length > 0
+    ? Math.max(...offers.map(o => Number(o.offerAmount ?? 0)))
+    : null
+  const accepted = offers.find(o => o.offerStatus === 'Accepted')
+  const acceptedAmount = accepted ? Number(accepted.offerAmount) : null
+
+  const prop = await db.property.findUnique({
+    where: { id: propertyId },
+    select: { fieldSources: true },
+  })
+  const sources = { ...((prop?.fieldSources as Record<string, string>) ?? {}) }
+  if (highest !== null) sources.highestOffer = 'ai'; else delete sources.highestOffer
+  if (acceptedAmount !== null) sources.acceptedPrice = 'ai'
+
+  await db.property.update({
+    where: { id: propertyId },
+    data: {
+      highestOffer: highest,
+      ...(acceptedAmount !== null ? { acceptedPrice: acceptedAmount } : {}),
+      fieldSources: sources,
+    },
+  })
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { propertyId: string } }
@@ -69,43 +100,8 @@ export async function POST(
         data: updateData,
       })
 
-      // If offer is accepted → update property's acceptedPrice + fieldSources
-      if (body.offerStatus === 'Accepted' && body.offerAmount) {
-        const amount = parseFloat(body.offerAmount)
-        const property = await db.property.findUnique({
-          where: { id: params.propertyId },
-          select: { fieldSources: true },
-        })
-        await db.property.update({
-          where: { id: params.propertyId },
-          data: {
-            acceptedPrice: amount,
-            fieldSources: { ...((property?.fieldSources as Record<string, string>) ?? {}), acceptedPrice: 'ai' },
-          },
-        })
-      }
-
-      // Update highestOffer on property if this is the highest
-      if (body.offerAmount && type !== undefined) {
-        const allOffers = await db.outreachLog.findMany({
-          where: { propertyId: params.propertyId, type: 'offer', offerAmount: { not: null } },
-          select: { offerAmount: true },
-        })
-        const highest = Math.max(...allOffers.map(o => o.offerAmount ?? 0))
-        if (highest > 0) {
-          const property = await db.property.findUnique({
-            where: { id: params.propertyId },
-            select: { fieldSources: true },
-          })
-          await db.property.update({
-            where: { id: params.propertyId },
-            data: {
-              highestOffer: highest,
-              fieldSources: { ...((property?.fieldSources as Record<string, string>) ?? {}), highestOffer: 'ai' },
-            },
-          })
-        }
-      }
+      // Sync offer fields on property (highestOffer, acceptedPrice)
+      await syncOfferFields(params.propertyId)
 
       return NextResponse.json({ success: true })
     }
@@ -133,23 +129,9 @@ export async function POST(
       },
     })
 
-    // If offer, update highestOffer on property
-    if (type === 'offer' && offerAmount) {
-      const amount = parseFloat(offerAmount)
-      const property = await db.property.findUnique({
-        where: { id: params.propertyId },
-        select: { highestOffer: true, fieldSources: true },
-      })
-      const currentHighest = property?.highestOffer ? Number(property.highestOffer) : 0
-      if (amount > currentHighest) {
-        await db.property.update({
-          where: { id: params.propertyId },
-          data: {
-            highestOffer: amount,
-            fieldSources: { ...((property?.fieldSources as Record<string, string>) ?? {}), highestOffer: 'ai' },
-          },
-        })
-      }
+    // Sync offer fields on property (highestOffer, acceptedPrice)
+    if (type === 'offer') {
+      await syncOfferFields(params.propertyId)
     }
 
     return NextResponse.json({ id: log.id, status: 'success' })

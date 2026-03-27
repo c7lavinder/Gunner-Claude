@@ -38,6 +38,7 @@ interface PropertyDetail {
     aiSummary: string | null; assignedToName: string | null
   }>
   tasks: Array<{ id: string; title: string; category: string | null; priority: string; status: string; dueAt: string | null }>
+  auditLogs: Array<{ id: string; action: string; payload: Record<string, unknown> | null; createdAt: string; userName: string }>
 }
 
 type TabKey = 'overview' | 'research' | 'buyers' | 'outreach' | 'activity' | 'ai' | 'blast'
@@ -557,14 +558,19 @@ function MultiSelectField({ label, values, options, field, propertyId, allowCust
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [localValues, setLocalValues] = useState(values)
+
+  // Keep in sync with parent
+  useEffect(() => { setLocalValues(values) }, [values])
 
   const filtered = options.filter(o =>
-    !values.includes(o) && o.toLowerCase().includes(search.toLowerCase())
+    !localValues.includes(o) && o.toLowerCase().includes(search.toLowerCase())
   )
-  const showCustom = allowCustom && search.length >= 2 && !options.some(o => o.toLowerCase() === search.toLowerCase()) && !values.some(v => v.toLowerCase() === search.toLowerCase())
+  const showCustom = allowCustom && search.length >= 2 && !options.some(o => o.toLowerCase() === search.toLowerCase()) && !localValues.some(v => v.toLowerCase() === search.toLowerCase())
 
   async function toggle(val: string) {
-    const newVals = values.includes(val) ? values.filter(v => v !== val) : [...values, val]
+    const newVals = localValues.includes(val) ? localValues.filter(v => v !== val) : [...localValues, val]
+    setLocalValues(newVals) // optimistic update
     setSaving(true)
     try {
       const res = await fetch(`/api/properties/${propertyId}`, {
@@ -572,19 +578,20 @@ function MultiSelectField({ label, values, options, field, propertyId, allowCust
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: newVals }),
       })
-      if (res.ok) onSaved(field, newVals)
-    } catch {}
+      if (res.ok) { onSaved(field, newVals) }
+      else { setLocalValues(values) } // revert on failure
+    } catch { setLocalValues(values) }
     setSaving(false)
     setSearch('')
   }
 
   return (
-    <div className="relative">
-      <div onClick={() => setOpen(!open)} className="cursor-pointer group">
-        <span className="text-txt-muted">{label}:</span>{' '}
-        {values.length > 0 ? (
+    <div className="relative inline-flex items-center gap-1">
+      <div onClick={() => setOpen(!open)} className="cursor-pointer group inline-flex items-center gap-1">
+        <span className="text-txt-muted">{label}:</span>
+        {localValues.length > 0 ? (
           <span className="inline-flex items-center gap-1 flex-wrap">
-            {values.map(v => (
+            {localValues.map(v => (
               <span key={v} className="inline-flex items-center gap-0.5 bg-gunner-red-light text-gunner-red text-[10px] font-medium px-1.5 py-0.5 rounded-full">
                 {v}
                 <button onClick={e => { e.stopPropagation(); toggle(v) }} className="hover:text-gunner-red-dark">
@@ -622,6 +629,74 @@ function MultiSelectField({ label, values, options, field, propertyId, allowCust
             className="w-full text-[9px] text-txt-muted mt-1.5 hover:text-txt-secondary">
             Done
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Searchable Property Type Dropdown ──────────────────────────────────────
+
+function PropertyTypeSelect({ value, propertyId, source, onSaved }: {
+  value: string | null; propertyId: string; source?: string | null
+  onSaved: (field: string, val: string | null, src: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+  const s = sourceStyles(source ?? null)
+
+  const filtered = PROPERTY_TYPE_OPTIONS.filter(o =>
+    o.toLowerCase().includes(search.toLowerCase())
+  )
+
+  async function select(val: string | null) {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyType: val, fieldSources: val ? { propertyType: 'user' } : { propertyType: '' } }),
+      })
+      if (res.ok) onSaved('propertyType', val, val ? 'user' : '')
+    } catch {}
+    setSaving(false)
+    setOpen(false)
+    setSearch('')
+  }
+
+  return (
+    <div className="relative inline-flex items-center gap-1">
+      <span
+        className={`cursor-pointer hover:text-gunner-red transition-colors group inline-flex items-center gap-1 ${source ? `px-1.5 py-0.5 rounded ${s.bg}` : ''}`}
+        onClick={() => setOpen(!open)}
+      >
+        <span className={s.label}>Prop Type:</span>
+        <span className={`font-medium group-hover:underline ${value ? s.value : 'text-txt-muted'}`}>{value ?? '—'}</span>
+        <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+      </span>
+
+      {open && (
+        <div className="absolute top-full left-0 z-20 mt-1 w-48 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-2">
+          <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search type..."
+            className="w-full bg-surface-secondary rounded-[6px] px-2.5 py-1.5 text-[10px] placeholder-txt-muted focus:outline-none mb-1.5" />
+          <div className="max-h-40 overflow-y-auto space-y-0.5">
+            {value && (
+              <button onClick={() => select(null)} disabled={saving}
+                className="w-full text-left text-[10px] text-semantic-red px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
+                Clear
+              </button>
+            )}
+            {filtered.map(o => (
+              <button key={o} onClick={() => select(o)} disabled={saving}
+                className={`w-full text-left text-[10px] px-2 py-1 rounded hover:bg-surface-secondary transition-colors ${
+                  o === value ? 'text-gunner-red font-semibold' : 'text-txt-primary'
+                }`}>
+                {o === value ? `${o} ✓` : o}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1086,18 +1161,14 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         </div>
       </div>
 
-      {/* Property details strip */}
-      <div className="bg-surface-secondary rounded-[10px] px-4 py-3 space-y-2">
-        {/* Multi-select fields */}
-        <div className="flex flex-wrap gap-4 text-ds-fine">
+      {/* Property details — single line flow */}
+      <div className="bg-surface-secondary rounded-[10px] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-ds-fine">
           <MultiSelectField label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
             field="propertyMarkets" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
           <MultiSelectField label="Project Type" values={vals.projectType} options={PROJECT_TYPE_OPTIONS}
             field="projectType" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
-        </div>
-        {/* Inline detail fields */}
-        <div className="flex flex-wrap gap-4 text-ds-fine">
-          <InlineDetailItem label="Prop Type" value={vals.propertyType} field="propertyType" propertyId={property.id} source={sources.propertyType} onSaved={handleSaved} />
+          <PropertyTypeSelect value={vals.propertyType} propertyId={property.id} source={sources.propertyType} onSaved={handleSaved} />
           <InlineDetailItem label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
           <InlineDetailItem label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
           <InlineDetailItem label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} onSaved={handleSaved} />
@@ -1609,40 +1680,49 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         </div>
       )}
 
-      {/* Added buyers */}
-      {addedBuyers.length > 0 && (
+      {/* Added + Matched side by side */}
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* Added buyers */}
         <div>
-          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Added ({addedBuyers.length})</p>
-          <div className="space-y-2">
-            {addedBuyers.map(b => (
-              <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
-            ))}
-          </div>
+          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">
+            Added ({addedBuyers.length})
+          </p>
+          {addedBuyers.length === 0 ? (
+            <div className="bg-surface-secondary rounded-[10px] p-4 text-center">
+              <p className="text-ds-fine text-txt-muted">No buyers added yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {addedBuyers.map(b => (
+                <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
+              ))}
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Matched buyers */}
-      <div>
-        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">
-          Matched {fetched ? `(${buyers.length})` : ''}
-        </p>
-        {!fetched && !loading ? (
-          <div className="bg-surface-secondary rounded-[10px] p-6 text-center">
-            <p className="text-ds-fine text-txt-muted">Click &ldquo;Match from CRM&rdquo; to find buyers</p>
-          </div>
-        ) : loading ? (
-          <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
-        ) : buyers.length === 0 ? (
-          <div className="bg-surface-secondary rounded-[10px] p-6 text-center">
-            <p className="text-ds-fine text-txt-muted">No matching buyers for this market</p>
-          </div>
-        ) : (
-        <div className="space-y-2">
-          {buyers.map(b => (
-            <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
-          ))}
+        {/* Matched buyers */}
+        <div>
+          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">
+            Matched {fetched ? `(${buyers.length})` : ''}
+          </p>
+          {!fetched && !loading ? (
+            <div className="bg-surface-secondary rounded-[10px] p-4 text-center">
+              <p className="text-ds-fine text-txt-muted">Click &ldquo;Match from CRM&rdquo; to find buyers</p>
+            </div>
+          ) : loading ? (
+            <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+          ) : buyers.length === 0 ? (
+            <div className="bg-surface-secondary rounded-[10px] p-4 text-center">
+              <p className="text-ds-fine text-txt-muted">No matching buyers for this market</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {buyers.map(b => (
+                <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
+              ))}
+            </div>
+          )}
         </div>
-        )}
       </div>
     </div>
   )
@@ -1690,7 +1770,7 @@ function BuyerCard({ buyer: b, tierColors, tierEmoji }: {
 // ─── Outreach Tab ────────────────────────────────────────────────────────────
 
 function OutreachTab({ property }: { property: PropertyDetail }) {
-  const [subTab, setSubTab] = useState<'send' | 'offer' | 'showing'>('send')
+  const [subTab, setSubTab] = useState<'all' | 'send' | 'offer' | 'showing'>('all')
   const [logs, setLogs] = useState<Array<{
     id: string; type: string; channel: string; recipientName: string; recipientContact: string
     ghlContactId: string | null; notes: string | null; offerAmount: number | null
@@ -1700,6 +1780,7 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
   const [loaded, setLoaded] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [formType, setFormType] = useState<'send' | 'offer' | 'showing'>('send')
 
   // GHL contact search state
   const [contactQuery, setContactQuery] = useState('')
@@ -1718,8 +1799,8 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
     fetch(`/api/properties/${property.id}/outreach`).then(r => r.json()).then(d => { setLogs(d.logs ?? []); setLoaded(true) }).catch(() => setLoaded(true))
   }, [property.id])
 
-  const filtered = logs.filter(l => l.type === subTab)
-  const counts = { send: logs.filter(l => l.type === 'send').length, offer: logs.filter(l => l.type === 'offer').length, showing: logs.filter(l => l.type === 'showing').length }
+  const filtered = subTab === 'all' ? logs : logs.filter(l => l.type === subTab)
+  const counts = { all: logs.length, send: logs.filter(l => l.type === 'send').length, offer: logs.filter(l => l.type === 'offer').length, showing: logs.filter(l => l.type === 'showing').length }
 
   async function searchGhlContacts(q: string) {
     setContactQuery(q)
@@ -1731,12 +1812,6 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
       setContactResults(data.contacts ?? [])
     } catch { setContactResults([]) }
     setContactSearching(false)
-  }
-
-  function selectContact(c: { id: string; name: string; phone: string | null; email: string | null }) {
-    setSelectedContact(c)
-    setContactQuery('')
-    setContactResults([])
   }
 
   function resetForm() {
@@ -1756,23 +1831,21 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
     setSaving(true)
     try {
       const payload: Record<string, unknown> = {
-        type: subTab,
+        type: formType,
         recipientName: selectedContact.name,
         recipientContact: selectedContact.phone ?? selectedContact.email ?? '',
         ghlContactId: selectedContact.id,
         notes: notes || null,
       }
-      if (subTab === 'send') payload.channel = channel
-      if (subTab === 'offer') {
+      if (formType === 'send') payload.channel = channel
+      if (formType === 'offer') {
         payload.channel = 'offer'
         payload.offerAmount = offerAmount || null
       }
-      if (subTab === 'showing') {
+      if (formType === 'showing') {
         payload.channel = 'in_person'
         if (showingDate) {
-          payload.showingDate = showingTime
-            ? `${showingDate}T${showingTime}:00`
-            : `${showingDate}T09:00:00`
+          payload.showingDate = showingTime ? `${showingDate}T${showingTime}:00` : `${showingDate}T09:00:00`
         }
       }
 
@@ -1789,121 +1862,166 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
     setSaving(false)
   }
 
+  async function refreshLogs() {
+    const res = await fetch(`/api/properties/${property.id}/outreach`)
+    const d = await res.json()
+    setLogs(d.logs ?? [])
+  }
+
+  const typeIcons: Record<string, typeof Send> = { send: Send, offer: DollarSign, showing: Clock }
+  const typeColors: Record<string, string> = { send: 'text-semantic-purple', offer: 'text-semantic-green', showing: 'text-semantic-blue' }
+
   return (
     <div className="space-y-4">
+      {/* Header with pill filters */}
       <div className="flex items-center justify-between">
-        <div className="flex gap-0 border-b border-[rgba(0,0,0,0.06)]">
-          {(['send', 'offer', 'showing'] as const).map(t => (
+        <div className="flex items-center gap-1.5">
+          {(['all', 'send', 'offer', 'showing'] as const).map(t => (
             <button key={t} onClick={() => { setSubTab(t); setShowForm(false) }}
-              className={`px-3 py-1.5 text-ds-fine font-medium border-b-2 capitalize transition-colors ${
-                subTab === t ? 'border-gunner-red text-gunner-red' : 'border-transparent text-txt-muted hover:text-txt-secondary'
-              }`}
-            >{t}s ({counts[t]})</button>
+              className={`px-3 py-1 text-[10px] font-semibold rounded-full transition-all capitalize ${
+                subTab === t
+                  ? 'bg-gunner-red text-white shadow-sm'
+                  : 'bg-surface-secondary text-txt-muted hover:text-txt-secondary hover:bg-surface-tertiary'
+              }`}>
+              {t === 'all' ? 'All' : `${t}s`} ({counts[t]})
+            </button>
           ))}
         </div>
         <button onClick={() => { setShowForm(!showForm); if (showForm) resetForm() }}
-          className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors">
-          {showForm ? <X size={11} /> : <Plus size={11} />}
-          {showForm ? 'Cancel' : `Log ${subTab}`}
+          className={`flex items-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-[8px] transition-colors ${
+            showForm ? 'bg-surface-secondary text-txt-secondary hover:bg-surface-tertiary' : 'bg-gunner-red text-white hover:bg-gunner-red-dark'
+          }`}>
+          {showForm ? <X size={10} /> : <Plus size={10} />}
+          {showForm ? 'Cancel' : 'Log Activity'}
         </button>
       </div>
 
-      {/* Distinct form per sub-tab */}
+      {/* New log form */}
       {showForm && (
-        <div className="bg-surface-secondary rounded-[10px] p-4 space-y-2">
-          {/* GHL Contact search — shared across all sub-tabs */}
-          {!selectedContact ? (
-            <div>
-              <input autoFocus value={contactQuery} onChange={e => searchGhlContacts(e.target.value)}
-                placeholder="Search GHL contacts..."
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
-              {contactSearching && <p className="text-ds-fine text-txt-muted mt-1">Searching...</p>}
-              {contactResults.length > 0 && (
-                <div className="max-h-32 overflow-y-auto space-y-1 mt-1">
-                  {contactResults.map(c => (
-                    <button key={c.id} onClick={() => selectContact(c)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-[6px] bg-white hover:bg-surface-tertiary text-ds-fine transition-colors">
-                      <p className="font-medium text-txt-primary">{c.name}</p>
-                      <p className="text-txt-muted">{c.phone ?? c.email ?? '—'}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 bg-white rounded-[8px] px-3 py-1.5 border-[0.5px] border-[rgba(0,0,0,0.1)]">
-              <User size={12} className="text-gunner-red shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-ds-fine font-medium text-txt-primary">{selectedContact.name}</p>
-                <p className="text-ds-fine text-txt-muted">{selectedContact.phone ?? selectedContact.email ?? '—'}</p>
-              </div>
-              <button onClick={() => setSelectedContact(null)} className="text-txt-muted hover:text-semantic-red"><X size={12} /></button>
-            </div>
-          )}
-
-          {/* Send-specific: channel dropdown */}
-          {subTab === 'send' && (
-            <select value={channel} onChange={e => setChannel(e.target.value)}
-              className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine">
-              <option value="sms">SMS</option><option value="email">Email</option>
-              <option value="call">Call</option><option value="in_person">In Person</option>
-            </select>
-          )}
-
-          {/* Offer-specific: amount */}
-          {subTab === 'offer' && (
-            <div>
-              <label className="text-[9px] font-semibold text-txt-muted uppercase mb-0.5 block">Offer Amount</label>
-              <input type="number" value={offerAmount} onChange={e => setOfferAmount(e.target.value)}
-                placeholder="150000"
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
-            </div>
-          )}
-
-          {/* Showing-specific: date + time */}
-          {subTab === 'showing' && (
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] p-4 space-y-3 shadow-sm">
+          {/* Type selector */}
+          <div>
+            <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Type</label>
             <div className="flex gap-2">
-              <div className="flex-1">
-                <label className="text-[9px] font-semibold text-txt-muted uppercase mb-0.5 block">Date</label>
-                <input type="date" value={showingDate} onChange={e => setShowingDate(e.target.value)}
-                  className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine focus:outline-none" />
+              {(['send', 'offer', 'showing'] as const).map(t => {
+                const Icon = typeIcons[t]
+                return (
+                  <button key={t} onClick={() => setFormType(t)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold rounded-[8px] border-[0.5px] transition-all capitalize ${
+                      formType === t ? 'border-gunner-red bg-gunner-red-light text-gunner-red' : 'border-[rgba(0,0,0,0.08)] bg-surface-secondary text-txt-muted hover:text-txt-secondary'
+                    }`}>
+                    <Icon size={10} /> {t}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Contact search */}
+          <div>
+            <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Contact</label>
+            {!selectedContact ? (
+              <div>
+                <input autoFocus value={contactQuery} onChange={e => { setContactQuery(e.target.value); searchGhlContacts(e.target.value) }}
+                  placeholder="Search GHL contacts..."
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-2 text-ds-fine placeholder-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red/20" />
+                {contactSearching && <p className="text-[10px] text-txt-muted mt-1.5">Searching...</p>}
+                {contactResults.length > 0 && (
+                  <div className="max-h-36 overflow-y-auto space-y-1 mt-1.5 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] p-1">
+                    {contactResults.map(c => (
+                      <button key={c.id} onClick={() => { setSelectedContact(c); setContactQuery(''); setContactResults([]) }}
+                        className="w-full text-left px-3 py-2 rounded-[6px] hover:bg-surface-secondary text-ds-fine transition-colors">
+                        <p className="font-medium text-txt-primary">{c.name}</p>
+                        <p className="text-txt-muted text-[10px]">{c.phone ?? c.email ?? '—'}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="flex-1">
-                <label className="text-[9px] font-semibold text-txt-muted uppercase mb-0.5 block">Time</label>
-                <input type="time" value={showingTime} onChange={e => setShowingTime(e.target.value)}
-                  className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine focus:outline-none" />
+            ) : (
+              <div className="flex items-center gap-2 bg-surface-secondary rounded-[8px] px-3 py-2 border-[0.5px] border-[rgba(0,0,0,0.06)]">
+                <div className="w-6 h-6 rounded-full bg-gunner-red flex items-center justify-center shrink-0">
+                  <User size={10} className="text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-ds-fine font-semibold text-txt-primary">{selectedContact.name}</p>
+                  <p className="text-[10px] text-txt-muted">{selectedContact.phone ?? selectedContact.email ?? '—'}</p>
+                </div>
+                <button onClick={() => setSelectedContact(null)} className="text-txt-muted hover:text-semantic-red transition-colors"><X size={14} /></button>
+              </div>
+            )}
+          </div>
+
+          {/* Type-specific fields */}
+          {formType === 'send' && (
+            <div>
+              <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Channel</label>
+              <div className="flex gap-2">
+                {[{ v: 'sms', l: 'SMS' }, { v: 'email', l: 'Email' }, { v: 'call', l: 'Call' }, { v: 'in_person', l: 'In Person' }].map(o => (
+                  <button key={o.v} onClick={() => setChannel(o.v)}
+                    className={`px-3 py-1.5 text-[10px] font-medium rounded-[6px] border-[0.5px] transition-all ${
+                      channel === o.v ? 'border-gunner-red bg-gunner-red-light text-gunner-red' : 'border-[rgba(0,0,0,0.08)] text-txt-muted hover:text-txt-secondary'
+                    }`}>{o.l}</button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Notes — shared */}
-          <textarea value={notes} onChange={e => setNotes(e.target.value)}
-            placeholder="Notes (optional)" rows={2}
-            className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-1.5 text-ds-fine resize-none placeholder-txt-muted focus:outline-none" />
+          {formType === 'offer' && (
+            <div>
+              <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Offer Amount</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ds-fine text-txt-muted">$</span>
+                <input type="number" value={offerAmount} onChange={e => setOfferAmount(e.target.value)}
+                  placeholder="150,000"
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] pl-7 pr-3 py-2 text-ds-fine font-semibold placeholder-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red/20" />
+              </div>
+            </div>
+          )}
+
+          {formType === 'showing' && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Date</label>
+                <input type="date" value={showingDate} onChange={e => setShowingDate(e.target.value)}
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/20" />
+              </div>
+              <div>
+                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Time</label>
+                <input type="time" value={showingTime} onChange={e => setShowingTime(e.target.value)}
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/20" />
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="Optional details..." rows={2}
+              className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-2 text-ds-fine resize-none placeholder-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red/20" />
+          </div>
 
           <button onClick={saveLog} disabled={!selectedContact || saving}
-            className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
-            {saving ? 'Saving...' : `Save ${subTab}`}
+            className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2.5 rounded-[8px] transition-colors">
+            {saving ? 'Saving...' : `Log ${formType === 'send' ? 'Send' : formType === 'offer' ? 'Offer' : 'Showing'}`}
           </button>
         </div>
       )}
 
-      {/* List */}
+      {/* Log list */}
       {!loaded ? (
-        <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+        <div className="py-8 text-center"><Loader2 size={16} className="animate-spin text-txt-muted mx-auto" /></div>
       ) : filtered.length === 0 ? (
-        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
-          <Send size={20} className="text-txt-muted mx-auto mb-2" />
-          <p className="text-ds-body text-txt-muted">No {subTab}s logged yet</p>
+        <div className="bg-surface-secondary rounded-[12px] p-8 text-center">
+          <Send size={20} className="text-txt-muted mx-auto mb-2 opacity-40" />
+          <p className="text-ds-body text-txt-muted">No {subTab === 'all' ? '' : subTab + ' '}activity yet</p>
+          <p className="text-[10px] text-txt-muted mt-1">Click &ldquo;Log Activity&rdquo; to record outreach</p>
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {filtered.map(l => (
-            <OutreachLogCard key={l.id} log={l} propertyId={property.id} onUpdated={async () => {
-              const res = await fetch(`/api/properties/${property.id}/outreach`)
-              const d = await res.json()
-              setLogs(d.logs ?? [])
-            }} />
+            <OutreachLogCard key={l.id} log={l} propertyId={property.id} onUpdated={refreshLogs} />
           ))}
         </div>
       )}
@@ -1923,6 +2041,11 @@ const OFFER_STATUS_COLORS: Record<string, string> = {
 const SHOWING_STATUS_COLORS: Record<string, string> = {
   Scheduled: 'bg-blue-100 text-blue-700', Completed: 'bg-green-100 text-green-700',
   Cancelled: 'bg-red-100 text-red-700', 'No Show': 'bg-amber-100 text-amber-700',
+}
+const LOG_TYPE_ICONS: Record<string, { icon: typeof Send; bg: string }> = {
+  send: { icon: Send, bg: 'bg-purple-500' },
+  offer: { icon: DollarSign, bg: 'bg-green-500' },
+  showing: { icon: Clock, bg: 'bg-blue-500' },
 }
 
 function OutreachLogCard({ log: l, propertyId, onUpdated }: {
@@ -1961,36 +2084,42 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
     setEditing(false)
   }
 
+  const { icon: TypeIcon, bg: typeBg } = LOG_TYPE_ICONS[l.type] ?? LOG_TYPE_ICONS.send
   const sourceLabel = l.source === 'AI' ? 'AI' : l.source === 'Blast' ? 'Blast' : l.source === 'Auto' ? 'Auto' : 'Manual'
   const sourceColor = l.source === 'AI' ? 'bg-purple-100 text-purple-700' : l.source === 'Blast' ? 'bg-fuchsia-100 text-fuchsia-700' : l.source === 'Auto' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
 
   return (
-    <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5 group">
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-3 group hover:border-[rgba(0,0,0,0.12)] transition-colors">
       <div className="flex items-start gap-3">
-        {/* Left: source badge */}
-        <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 mt-0.5 ${sourceColor}`}>
-          {sourceLabel}
-        </span>
+        {/* Type icon */}
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${typeBg}`}>
+          <TypeIcon size={12} className="text-white" />
+        </div>
 
-        {/* Center: details */}
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-ds-fine text-txt-primary font-medium">{l.recipientName}</p>
-            <span className="text-[9px] text-txt-muted">{l.channel}</span>
+          {/* Header row: name + source + channel */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-ds-body font-semibold text-txt-primary">{l.recipientName}</p>
+            <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${sourceColor}`}>{sourceLabel}</span>
+            {l.type === 'send' && <span className="text-[9px] text-txt-muted capitalize">{l.channel}</span>}
           </div>
 
           {/* Offer details */}
           {l.type === 'offer' && (
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-1.5">
               {editing ? (
-                <input type="number" value={editAmount} onChange={e => setEditAmount(e.target.value)}
-                  className="w-24 bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-ds-fine font-medium focus:outline-none" />
+                <div className="flex items-center gap-1">
+                  <span className="text-ds-fine text-txt-muted">$</span>
+                  <input type="number" value={editAmount} onChange={e => setEditAmount(e.target.value)}
+                    className="w-28 bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-ds-fine font-semibold focus:outline-none" />
+                </div>
               ) : (
-                l.offerAmount && <span className="text-ds-fine font-semibold text-semantic-green">${l.offerAmount.toLocaleString()}</span>
+                l.offerAmount && <span className="text-ds-body font-bold text-semantic-green">${l.offerAmount.toLocaleString()}</span>
               )}
               <select value={l.offerStatus ?? 'Pending'} onChange={e => updateField({ offerStatus: e.target.value, offerAmount: l.offerAmount })}
                 disabled={saving}
-                className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border-none cursor-pointer ${OFFER_STATUS_COLORS[l.offerStatus ?? 'Pending'] ?? OFFER_STATUS_COLORS.Pending}`}>
+                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border-none cursor-pointer ${OFFER_STATUS_COLORS[l.offerStatus ?? 'Pending'] ?? OFFER_STATUS_COLORS.Pending}`}>
                 {OFFER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -1998,20 +2127,24 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
 
           {/* Showing details */}
           {l.type === 'showing' && (
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-1.5">
               {editing ? (
-                <div className="flex gap-1">
+                <div className="flex gap-1.5">
                   <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
-                    className="bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" />
+                    className="bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-[10px] focus:outline-none" />
                   <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)}
-                    className="bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" />
+                    className="bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-[10px] focus:outline-none" />
                 </div>
               ) : (
-                l.showingDate && <span className="text-ds-fine text-semantic-blue">{format(new Date(l.showingDate), 'EEE, MMM d · h:mm a')}</span>
+                l.showingDate && (
+                  <span className="text-ds-fine font-medium text-semantic-blue flex items-center gap-1">
+                    <Clock size={10} /> {format(new Date(l.showingDate), 'EEE, MMM d · h:mm a')}
+                  </span>
+                )
               )}
               <select value={l.showingStatus ?? 'Scheduled'} onChange={e => updateField({ showingStatus: e.target.value })}
                 disabled={saving}
-                className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full border-none cursor-pointer ${SHOWING_STATUS_COLORS[l.showingStatus ?? 'Scheduled'] ?? SHOWING_STATUS_COLORS.Scheduled}`}>
+                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border-none cursor-pointer ${SHOWING_STATUS_COLORS[l.showingStatus ?? 'Scheduled'] ?? SHOWING_STATUS_COLORS.Scheduled}`}>
                 {SHOWING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -2020,27 +2153,33 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
           {/* Notes */}
           {editing ? (
             <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2}
-              className="w-full mt-1 bg-white border-[0.5px] border-gunner-red/30 rounded px-2 py-1 text-ds-fine focus:outline-none resize-none" />
+              className="w-full mt-1.5 bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none resize-none" />
           ) : (
-            l.notes && <p className="text-ds-fine text-txt-muted mt-0.5 truncate">{l.notes}</p>
+            l.notes && <p className="text-ds-fine text-txt-muted mt-1">{l.notes}</p>
           )}
         </div>
 
-        {/* Right: date + edit */}
-        <div className="text-right shrink-0">
-          <span className="text-[10px] text-txt-muted">{format(new Date(l.loggedAt), 'MMM d')}</span>
-          <div className="mt-0.5">
-            {editing ? (
-              <div className="flex gap-1">
-                <button onClick={saveEdits} disabled={saving} className="text-[9px] text-semantic-green hover:underline">Save</button>
-                <button onClick={() => setEditing(false)} className="text-[9px] text-txt-muted hover:underline">Cancel</button>
-              </div>
-            ) : (
-              <button onClick={() => setEditing(true)} className="text-[9px] text-txt-muted opacity-0 group-hover:opacity-100 hover:text-gunner-red transition-all">
-                Edit
+        {/* Right: timestamp + actions */}
+        <div className="text-right shrink-0 space-y-1">
+          <p className="text-[10px] text-txt-muted">{format(new Date(l.loggedAt), 'MMM d')}</p>
+          <p className="text-[9px] text-txt-muted">{l.loggedByName}</p>
+          {editing ? (
+            <div className="flex gap-1.5 mt-1">
+              <button onClick={saveEdits} disabled={saving}
+                className="text-[9px] font-semibold text-white bg-semantic-green hover:bg-semantic-green/90 px-2 py-0.5 rounded transition-colors">
+                Save
               </button>
-            )}
-          </div>
+              <button onClick={() => setEditing(false)}
+                className="text-[9px] font-medium text-txt-muted hover:text-txt-secondary transition-colors">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setEditing(true)}
+              className="text-[9px] font-medium text-txt-muted opacity-0 group-hover:opacity-100 hover:text-gunner-red transition-all mt-1">
+              <Pencil size={10} />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -2055,6 +2194,79 @@ function ActivityTab({ property, tenantSlug, runGhlAction, sending, ghlContactId
   sending: boolean; ghlContactId: string | null
 }) {
   const [note, setNote] = useState('')
+  const [outreachLogs, setOutreachLogs] = useState<Array<{
+    id: string; type: string; channel: string; recipientName: string; notes: string | null
+    offerAmount: number | null; offerStatus: string | null; showingDate: string | null
+    showingStatus: string | null; source: string; loggedAt: string; loggedByName: string
+  }>>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/properties/${property.id}/outreach`)
+      .then(r => r.json())
+      .then(d => { setOutreachLogs(d.logs ?? []); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [property.id])
+
+  // Build unified timeline
+  type TimelineEvent = { id: string; date: string; type: string; icon: string; color: string; title: string; detail?: string }
+  const events: TimelineEvent[] = []
+
+  // Property created
+  events.push({ id: 'created', date: property.createdAt, type: 'system', icon: 'plus', color: 'bg-semantic-green', title: 'Property created', detail: '' })
+
+  // Calls
+  for (const c of property.calls) {
+    if (!c.calledAt) continue
+    const dir = c.direction === 'OUTBOUND' ? 'Outbound' : 'Inbound'
+    const score = c.score ? ` — Score: ${Math.round(c.score)}` : ''
+    events.push({
+      id: `call-${c.id}`, date: c.calledAt, type: 'call', icon: 'phone', color: 'bg-gunner-red',
+      title: `${dir} call${c.assignedToName ? ` by ${c.assignedToName}` : ''}${score}`,
+      detail: c.aiSummary ?? undefined,
+    })
+  }
+
+  // Outreach logs
+  for (const l of outreachLogs) {
+    const typeLabel = l.type === 'offer' ? 'Offer' : l.type === 'showing' ? 'Showing' : 'Send'
+    const color = l.type === 'offer' ? 'bg-semantic-green' : l.type === 'showing' ? 'bg-semantic-blue' : 'bg-semantic-purple'
+    let detail = l.recipientName
+    if (l.type === 'offer' && l.offerAmount) detail += ` — $${l.offerAmount.toLocaleString()}${l.offerStatus ? ` (${l.offerStatus})` : ''}`
+    if (l.type === 'showing' && l.showingDate) detail += ` — ${format(new Date(l.showingDate), 'MMM d, h:mm a')}${l.showingStatus ? ` (${l.showingStatus})` : ''}`
+    if (l.type === 'send') detail += ` via ${l.channel}`
+    if (l.notes) detail += ` — ${l.notes}`
+    events.push({
+      id: `outreach-${l.id}`, date: l.loggedAt, type: 'outreach', icon: l.type, color,
+      title: `${typeLabel} logged by ${l.loggedByName}`,
+      detail,
+    })
+  }
+
+  // Audit logs (field changes, status changes)
+  for (const a of property.auditLogs) {
+    const payload = a.payload ?? {}
+    const fields = Object.keys(payload).filter(k => k !== 'fieldSources')
+    if (fields.length === 0) continue
+    const changes = fields.map(f => {
+      const val = payload[f]
+      if (f === 'status') return `Status → ${String(val).replace(/_/g, ' ')}`
+      if (Array.isArray(val)) return `${f} → ${val.join(', ')}`
+      if (val === null) return `${f} cleared`
+      return `${f} updated`
+    }).join(', ')
+    events.push({
+      id: `audit-${a.id}`, date: a.createdAt, type: 'edit', icon: 'edit', color: 'bg-semantic-amber',
+      title: `${a.userName} edited: ${changes}`,
+    })
+  }
+
+  // Sort by date, newest first
+  events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  const iconMap: Record<string, typeof Activity> = {
+    phone: Phone, offer: DollarSign, showing: Clock, send: Send, edit: Pencil, plus: Zap,
+  }
 
   return (
     <div className="space-y-4">
@@ -2078,30 +2290,38 @@ function ActivityTab({ property, tenantSlug, runGhlAction, sending, ghlContactId
 
       {/* Timeline */}
       <div>
-        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-3">Activity Log</p>
-        <div className="space-y-3">
-          {/* Property created event */}
-          <div className="flex gap-3">
-            <div className="w-2 h-2 rounded-full bg-semantic-green mt-1.5 shrink-0" />
-            <div>
-              <p className="text-ds-fine text-txt-primary">Property created</p>
-              <p className="text-ds-fine text-txt-muted">{format(new Date(property.createdAt), 'MMM d, yyyy h:mm a')}</p>
-            </div>
+        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-3">
+          Activity Log ({events.length})
+        </p>
+        {!loaded ? (
+          <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+        ) : events.length === 0 ? (
+          <p className="text-ds-fine text-txt-muted">No activity yet</p>
+        ) : (
+          <div className="space-y-0">
+            {events.map((e, i) => {
+              const Icon = iconMap[e.icon] ?? Activity
+              return (
+                <div key={e.id} className="flex gap-3 relative">
+                  {/* Vertical line */}
+                  {i < events.length - 1 && (
+                    <div className="absolute left-[7px] top-5 bottom-0 w-px bg-[rgba(0,0,0,0.06)]" />
+                  )}
+                  {/* Dot */}
+                  <div className={`w-[15px] h-[15px] rounded-full flex items-center justify-center shrink-0 mt-0.5 ${e.color}`}>
+                    <Icon size={8} className="text-white" />
+                  </div>
+                  {/* Content */}
+                  <div className="pb-4 min-w-0 flex-1">
+                    <p className="text-ds-fine text-txt-primary font-medium leading-tight">{e.title}</p>
+                    {e.detail && <p className="text-ds-fine text-txt-muted mt-0.5 truncate">{e.detail}</p>}
+                    <p className="text-[10px] text-txt-muted mt-0.5">{format(new Date(e.date), 'MMM d, yyyy · h:mm a')}</p>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-          {/* Calls as activity */}
-          {property.calls.map(c => (
-            <div key={c.id} className="flex gap-3">
-              <div className="w-2 h-2 rounded-full bg-gunner-red mt-1.5 shrink-0" />
-              <div>
-                <p className="text-ds-fine text-txt-primary">
-                  {c.direction === 'OUTBOUND' ? 'Outbound' : 'Inbound'} call{c.assignedToName ? ` by ${c.assignedToName}` : ''}
-                  {c.score ? ` — Score: ${Math.round(c.score)}` : ''}
-                </p>
-                <p className="text-ds-fine text-txt-muted">{c.calledAt ? format(new Date(c.calledAt), 'MMM d, yyyy h:mm a') : '—'}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        )}
       </div>
     </div>
   )

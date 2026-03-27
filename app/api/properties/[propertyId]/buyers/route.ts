@@ -438,8 +438,7 @@ export async function POST(
               if (fieldName === 'response_speed') vals.forEach(v => speedValues.add(v))
             }
           }
-          // Stop early if we've found a good set (at least 3 of each)
-          if (tierValues.size >= 3 && buyboxValues.size >= 3 && marketValues.size >= 3 && speedValues.size >= 2) break
+          // Scan ALL contacts — no early stop, options must be complete
         }
       }
 
