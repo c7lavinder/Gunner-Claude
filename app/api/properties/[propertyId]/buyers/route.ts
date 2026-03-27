@@ -117,7 +117,7 @@ function buyerMatchesMarket(
 async function llmScoreBuyers(
   projectTypes: string[],
   buyers: Array<{ id: string; tier: string; buybox: string; verifiedFunding: boolean; hasPurchased: boolean; responseSpeed: string }>,
-): Promise<Record<string, number>> {
+): Promise<Record<string, { score: number; breakdown: string }>> {
   if (buyers.length === 0) return {}
   try {
     const Anthropic = (await import('@anthropic-ai/sdk')).default
@@ -155,19 +155,26 @@ SCORING RULES (max 50 points, added to a base of 50):
 BUYERS:
 ${buyerSummaries}
 
-Return ONLY a JSON object mapping buyer ID to their score (0-50, before the base 50 is added).
-Example: {"abc123": 35, "def456": 10}`,
+Return ONLY a JSON object mapping buyer ID to an object with "score" (0-50, before base 50) and "breakdown" (short string showing the math).
+Example: {"abc123": {"score": 35, "breakdown": "Buybox +20, Tier +15, Funding +5"}, "def456": {"score": 10, "breakdown": "Tier +10"}}
+Only include factors that contributed points (positive or negative). Keep breakdown concise.`,
       }],
     })
 
     const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {
-      const scores = JSON.parse(match[0]) as Record<string, number>
-      // Add base 50 to each score
-      const result: Record<string, number> = {}
-      for (const [id, s] of Object.entries(scores)) {
-        result[id] = Math.max(0, Math.min(100, 50 + s))
+      const raw = JSON.parse(match[0]) as Record<string, { score: number; breakdown: string } | number>
+      const result: Record<string, { score: number; breakdown: string }> = {}
+      for (const [id, val] of Object.entries(raw)) {
+        if (typeof val === 'number') {
+          result[id] = { score: Math.max(0, Math.min(100, 50 + val)), breakdown: 'Market +50' }
+        } else {
+          result[id] = {
+            score: Math.max(0, Math.min(100, 50 + val.score)),
+            breakdown: `Market +50, ${val.breakdown}`,
+          }
+        }
       }
       return result
     }
@@ -175,7 +182,7 @@ Example: {"abc123": 35, "def456": 10}`,
     console.error('[Buyers] LLM scoring failed:', err)
   }
   // Fallback: everyone gets base 50
-  return Object.fromEntries(buyers.map(b => [b.id, 50]))
+  return Object.fromEntries(buyers.map(b => [b.id, { score: 50, breakdown: 'Market +50' }]))
 }
 
 export async function GET(
@@ -310,7 +317,8 @@ export async function GET(
     const matched = marketMatched
       .map(b => ({
         ...b,
-        matchScore: scores[b.id] ?? 50,
+        matchScore: scores[b.id]?.score ?? 50,
+        scoreBreakdown: scores[b.id]?.breakdown ?? 'Market +50',
       }))
       .sort((a, b) => {
         return b.matchScore - a.matchScore

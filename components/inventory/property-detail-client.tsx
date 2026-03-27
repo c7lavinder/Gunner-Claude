@@ -1218,7 +1218,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   const [buyers, setBuyers] = useState<Array<{
     id: string; name: string; phone: string | null; email: string | null
     company: string | null; tier: string; markets: string[]; tags: string[]
-    notes: string | null; matchScore: number
+    notes: string | null; matchScore: number; scoreBreakdown?: string
   }>>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
@@ -1279,18 +1279,25 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
                   <span className="text-ds-body font-medium text-txt-primary">{b.name}</span>
                 </div>
                 <div className="flex gap-3 text-ds-fine text-txt-secondary">
-                  {b.phone && <span>{b.phone}</span>}
+                  {b.phone && <span>{formatPhone(b.phone)}</span>}
                   {b.email && <span>{b.email}</span>}
                 </div>
                 {b.markets.length > 0 && (
                   <p className="text-ds-fine text-txt-muted mt-0.5">Markets: {b.markets.join(', ')}</p>
                 )}
               </div>
-              <div className="text-right shrink-0">
-                <span className={`text-ds-label font-bold ${b.matchScore >= 60 ? 'text-semantic-green' : b.matchScore >= 30 ? 'text-semantic-amber' : 'text-txt-muted'}`}>
+              <div className="text-right shrink-0 relative group cursor-default">
+                <span className={`text-ds-label font-bold ${b.matchScore >= 75 ? 'text-semantic-green' : b.matchScore >= 60 ? 'text-semantic-amber' : 'text-txt-muted'}`}>
                   {b.matchScore}
                 </span>
-                <p className="text-[8px] text-txt-muted">match</p>
+                <p className="text-[8px] text-txt-muted">score</p>
+                {b.scoreBreakdown && (
+                  <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-[10px] px-3 py-2 rounded-[8px] shadow-lg whitespace-nowrap">
+                    {b.scoreBreakdown.split(', ').map((part, i) => (
+                      <div key={i}>{part}</div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}
