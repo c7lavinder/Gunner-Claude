@@ -1357,7 +1357,6 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   }>>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
-  const [buyerTab, setBuyerTab] = useState<'added' | 'matched'>('added')
   const [addedBuyers, setAddedBuyers] = useState<typeof buyers>([])
   const [addedLoaded, setAddedLoaded] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -1440,7 +1439,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         if (data.buyer) setAddedBuyers(prev => [...prev, data.buyer])
         setShowAddForm(false)
         setAddForm({ firstName: '', lastName: '', phone: '', email: '', buyerTier: '', buybox: [], markets: [], secondaryMarket: '', source: '', stageId: stages[0]?.id ?? '', verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '' })
-        setBuyerTab('added')
+        // buyer added
       }
     } catch {}
     setSaving(false)
@@ -1455,34 +1454,19 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
 
   return (
     <div className="space-y-4">
-      {/* Header with sub-tabs */}
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex gap-0 border-b border-[rgba(0,0,0,0.06)]">
-          <button onClick={() => setBuyerTab('added')}
-            className={`px-3 py-1.5 text-ds-fine font-medium border-b-2 transition-colors ${
-              buyerTab === 'added' ? 'border-gunner-red text-gunner-red' : 'border-transparent text-txt-muted hover:text-txt-secondary'
-            }`}>
-            Added ({addedBuyers.length})
-          </button>
-          <button onClick={() => { setBuyerTab('matched'); if (!fetched) matchBuyers() }}
-            className={`px-3 py-1.5 text-ds-fine font-medium border-b-2 transition-colors ${
-              buyerTab === 'matched' ? 'border-gunner-red text-gunner-red' : 'border-transparent text-txt-muted hover:text-txt-secondary'
-            }`}>
-            Matched {fetched ? `(${buyers.length})` : ''}
-          </button>
-        </div>
+        <h3 className="text-ds-label font-semibold text-txt-primary">Buyers</h3>
         <div className="flex gap-2">
           <button onClick={openAddForm}
             className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors">
             <Plus size={11} /> Add Buyer
           </button>
-          {buyerTab === 'matched' && (
-            <button onClick={matchBuyers} disabled={loading}
-              className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
-              {loading ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
-              {loading ? 'Matching...' : fetched ? 'Rematch' : 'Match'}
-            </button>
-          )}
+          <button onClick={matchBuyers} disabled={loading}
+            className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
+            {loading ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
+            {loading ? 'Matching...' : fetched ? 'Rematch' : 'Match from CRM'}
+          </button>
         </div>
       </div>
 
@@ -1625,40 +1609,41 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         </div>
       )}
 
-      {/* Added tab */}
-      {buyerTab === 'added' && (addedBuyers.length === 0 ? (
-        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
-          <Users size={20} className="text-txt-muted mx-auto mb-2" />
-          <p className="text-ds-body text-txt-muted">No buyers added for this property</p>
-          <p className="text-ds-fine text-txt-muted mt-1">Click &ldquo;Add Buyer&rdquo; to create one in GHL</p>
+      {/* Added buyers */}
+      {addedBuyers.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Added ({addedBuyers.length})</p>
+          <div className="space-y-2">
+            {addedBuyers.map(b => (
+              <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
+            ))}
+          </div>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {addedBuyers.map(b => (
-            <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
-          ))}
-        </div>
-      ))}
+      )}
 
-      {/* Matched tab */}
-      {buyerTab === 'matched' && (!fetched && !loading ? (
-        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
-          <Users size={20} className="text-txt-muted mx-auto mb-2" />
-          <p className="text-ds-body text-txt-muted">Click &ldquo;Match&rdquo; to find buyers from CRM</p>
-        </div>
-      ) : loading ? (
-        <div className="py-8 text-center"><Loader2 size={16} className="animate-spin text-txt-muted mx-auto" /></div>
-      ) : buyers.length === 0 ? (
-        <div className="bg-surface-secondary rounded-[10px] p-8 text-center">
-          <p className="text-ds-body text-txt-muted">No matching buyers found for this market</p>
-        </div>
-      ) : (
+      {/* Matched buyers */}
+      <div>
+        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">
+          Matched {fetched ? `(${buyers.length})` : ''}
+        </p>
+        {!fetched && !loading ? (
+          <div className="bg-surface-secondary rounded-[10px] p-6 text-center">
+            <p className="text-ds-fine text-txt-muted">Click &ldquo;Match from CRM&rdquo; to find buyers</p>
+          </div>
+        ) : loading ? (
+          <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+        ) : buyers.length === 0 ? (
+          <div className="bg-surface-secondary rounded-[10px] p-6 text-center">
+            <p className="text-ds-fine text-txt-muted">No matching buyers for this market</p>
+          </div>
+        ) : (
         <div className="space-y-2">
           {buyers.map(b => (
             <BuyerCard key={b.id} buyer={b} tierColors={tierColors} tierEmoji={tierEmoji} />
           ))}
         </div>
-      ))}
+        )}
+      </div>
     </div>
   )
 }

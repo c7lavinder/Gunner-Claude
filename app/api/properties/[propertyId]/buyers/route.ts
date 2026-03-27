@@ -398,15 +398,13 @@ export async function POST(
       const buyerPipeline = pipelines.pipelines?.find(p => p.name.toLowerCase().includes('buyer'))
       if (!buyerPipeline) return NextResponse.json({ error: 'No buyer pipeline found' }, { status: 404 })
 
-      // Pull unique field values from existing buyers in the pipeline
-      const contactIds = await ghl.getAllPipelineContacts(buyerPipeline.id)
-      const sampleSize = Math.min(contactIds.length, 50) // sample up to 50 for speed
+      // Pull unique field values by sampling first 20 contacts from the pipeline
+      const firstPage = await ghl.searchOpportunities(buyerPipeline.id, 20)
+      const sampleIds = [...new Set((firstPage.opportunities ?? []).map(o => o.contactId).filter(Boolean))].slice(0, 20)
       const tierValues = new Set<string>()
       const buyboxValues = new Set<string>()
       const marketValues = new Set<string>()
       const speedValues = new Set<string>()
-
-      const sampleIds = contactIds.slice(0, sampleSize)
       for (let i = 0; i < sampleIds.length; i += 10) {
         const batch = sampleIds.slice(i, i + 10)
         const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
