@@ -151,29 +151,26 @@ function scoreBuyer(
 ): number {
   let score = 0
 
-  // Buyer Tier — heaviest weight (+30/+20/+10)
-  if (buyer.tier === 'priority') score += 30
-  else if (buyer.tier === 'qualified') score += 20
-  else if (buyer.tier === 'jv') score += 10
-
-  // Buybox matches project type — LLM-verified (+25)
+  // Buybox matches project type — LLM-verified (+30, heaviest)
   if (buyer.buybox) {
     const buyerTypes = buyer.buybox.split(',').map(b => b.trim().toLowerCase())
-    if (buyerTypes.some(bt => buyboxMatches.has(bt))) score += 25
+    if (buyerTypes.some(bt => buyboxMatches.has(bt))) score += 30
   }
 
-  // Has purchased before (+15)
-  if (buyer.hasPurchased) score += 15
+  // Buyer Tier (+25/+15/+10)
+  if (buyer.tier === 'priority') score += 25
+  else if (buyer.tier === 'qualified') score += 15
+  else if (buyer.tier === 'jv') score += 10
 
-  // Response speed (+10 for same day/fast)
+  // Has purchased before (+5)
+  if (buyer.hasPurchased) score += 5
+
+  // Response speed (+5)
   const speed = buyer.responseSpeed?.toLowerCase() ?? ''
-  if (speed === 'same day' || speed === 'fast') score += 10
+  if (speed === 'same day' || speed === 'fast') score += 5
 
-  // Verified funding (+10)
-  if (buyer.verifiedFunding) score += 10
-
-  // Last contact date — recent = +5 (within 30 days)
-  // TODO: check last_contact_date field when available
+  // Verified funding (+5)
+  if (buyer.verifiedFunding) score += 5
 
   return Math.min(score, 100)
 }
@@ -307,9 +304,6 @@ export async function GET(
         matchScore: scoreBuyer(b, buyboxMatches),
       }))
       .sort((a, b) => {
-        const tierOrder = { priority: 0, qualified: 1, jv: 2, unqualified: 3 }
-        const tierDiff = tierOrder[a.tier] - tierOrder[b.tier]
-        if (tierDiff !== 0) return tierDiff
         return b.matchScore - a.matchScore
       })
 
