@@ -8,6 +8,9 @@ import { KpiTable, type TableTab } from './KpiTable'
 
 interface KpiProperty {
   id: string
+  address: string
+  city: string
+  state: string
   status: string
   leadSource: string | null
   zip: string
@@ -16,6 +19,13 @@ interface KpiProperty {
   assignmentFee: number | null
   finalProfit: number | null
   createdAt: string
+}
+
+// Tenant config for editable KPI data (spend, volume, source types)
+interface KpiConfig {
+  sourceTypes?: Record<string, string>       // { "PPL": "Inbound", ... }
+  monthlySpend?: Record<string, Record<string, number>>  // { "2026-03": { "PPL": 5000 } }
+  monthlyVolume?: Record<string, Record<string, number>> // { "2026-03": { "PPL": 100 } }
 }
 
 // ─── Stage Groupings ──────────────────────────────────────────────────────────
@@ -99,10 +109,64 @@ function cumulativeCounts(
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProperty[]; tenantSlug: string }) {
+export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
+  properties: KpiProperty[]; tenantSlug: string; initialConfig: KpiConfig
+}) {
   const [timePeriod, setTimePeriod] = useState('all')
   const [marketFilter, setMarketFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
+
+  // Editable config state
+  const [kpiConfig, setKpiConfig] = useState<KpiConfig>(initialConfig)
+  const sourceTypes = kpiConfig.sourceTypes ?? {}
+  const monthlySpend = kpiConfig.monthlySpend ?? {}
+  const monthlyVolume = kpiConfig.monthlyVolume ?? {}
+
+  // Property list modal
+  const [listProps, setListProps] = useState<KpiProperty[] | null>(null)
+  const [listTitle, setListTitle] = useState('')
+  const [listSearch, setListSearch] = useState('')
+
+  // Ledger modal (spend/volume per month for a source)
+  const [ledgerSource, setLedgerSource] = useState<string | null>(null)
+  const [ledgerType, setLedgerType] = useState<'spend' | 'volume'>('spend')
+
+  function showPropertyList(title: string, props: KpiProperty[]) {
+    setListTitle(title); setListProps(props); setListSearch('')
+  }
+
+  async function saveConfig(update: Partial<KpiConfig>) {
+    const merged = { ...kpiConfig, ...update }
+    setKpiConfig(merged)
+    try {
+      await fetch('/api/tenants/config', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: { ...merged } }),
+      })
+    } catch {}
+  }
+
+  function getSourceType(src: string): string {
+    if (sourceTypes[src]) return sourceTypes[src]
+    if (INBOUND_SOURCES.includes(src)) return 'Inbound'
+    if (OUTBOUND_SOURCES.includes(src)) return 'Outbound'
+    return 'Unknown'
+  }
+
+  function getMonthKey(): string {
+    const { start } = getTimeRange(timePeriod)
+    return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  function getSpend(source: string): number {
+    const mk = getMonthKey()
+    return monthlySpend[mk]?.[source] ?? 0
+  }
+
+  function getVolume(source: string): number {
+    const mk = getMonthKey()
+    return monthlyVolume[mk]?.[source] ?? 0
+  }
 
   // ── Filter ──────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -158,12 +222,14 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
     const rows = sources.map(src => {
       const group = acqFiltered.filter(p => src === 'Unassigned' ? !p.leadSource : p.leadSource === src)
       const total = group.length
-      const type = INBOUND_SOURCES.includes(src) ? 'Inbound' : OUTBOUND_SOURCES.includes(src) ? 'Outbound' : 'Unknown'
+      const type = getSourceType(src)
       const rev = sumRevenue(group.filter(p => p.status === 'SOLD'))
       const cc = cumulativeCounts(group, ACQ_STAGES)
+      const spend = getSpend(src)
+      const vol = getVolume(src) || total
 
       return {
-        source: src, type, spend: '—', vol: total,
+        source: src, type, spend: spend > 0 ? fmt$(spend) : '—', vol,
         lead: countPct(cc.lead, total),
         aptSet: countPct(cc.aptSet, total),
         offerMade: countPct(cc.offerMade, total),
@@ -254,13 +320,11 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
     const rows = MARKETS.map(mkt => {
       const group = dispoFiltered.filter(p => p.market === mkt)
       const rev = sumRevenue(group.filter(p => p.status === 'DISPO_CLOSED'))
+      const cc = cumulativeCounts(group, DISPO_STAGES)
       return {
         market: mkt,
-        newDeal: group.filter(p => DISPO_STAGES[0].statuses.includes(p.status)).length,
-        pushedOut: group.filter(p => DISPO_STAGES[1].statuses.includes(p.status)).length,
-        offers: group.filter(p => DISPO_STAGES[2].statuses.includes(p.status)).length,
-        contracted: group.filter(p => DISPO_STAGES[3].statuses.includes(p.status)).length,
-        closed: group.filter(p => DISPO_STAGES[4].statuses.includes(p.status)).length,
+        newDeal: cc.newDeal, pushedOut: cc.pushedOut, offers: cc.offers,
+        contracted: cc.contracted, closed: cc.closed,
         revenue: fmt$(rev),
       }
     })
@@ -281,13 +345,11 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
     const rows = types.map(pt => {
       const group = dispoFiltered.filter(p => pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt))
       const rev = sumRevenue(group.filter(p => p.status === 'DISPO_CLOSED'))
+      const cc = cumulativeCounts(group, DISPO_STAGES)
       return {
         projectType: pt,
-        newDeal: group.filter(p => DISPO_STAGES[0].statuses.includes(p.status)).length,
-        pushedOut: group.filter(p => DISPO_STAGES[1].statuses.includes(p.status)).length,
-        offers: group.filter(p => DISPO_STAGES[2].statuses.includes(p.status)).length,
-        contracted: group.filter(p => DISPO_STAGES[3].statuses.includes(p.status)).length,
-        closed: group.filter(p => DISPO_STAGES[4].statuses.includes(p.status)).length,
+        newDeal: cc.newDeal, pushedOut: cc.pushedOut, offers: cc.offers,
+        contracted: cc.contracted, closed: cc.closed,
         revenue: fmt$(rev),
       }
     })
@@ -323,8 +385,9 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
         const group = dispoFiltered.filter(p =>
           (pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt)) && p.market === mkt
         )
-        row[`${mkt}_newDeal`] = group.filter(p => DISPO_STAGES[0].statuses.includes(p.status)).length
-        row[`${mkt}_closed`] = group.filter(p => p.status === 'DISPO_CLOSED').length
+        const cc = cumulativeCounts(group, DISPO_STAGES)
+        row[`${mkt}_newDeal`] = cc.newDeal
+        row[`${mkt}_closed`] = cc.closed
         row[`${mkt}_revenue`] = fmt$(sumRevenue(group.filter(p => p.status === 'DISPO_CLOSED')))
       }
       return row
@@ -396,7 +459,59 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
         <KpiFunnel stages={acqFunnelStages} />
 
         {/* Breakdown Tables */}
-        <KpiTable tabs={[acqBySourceTab, acqByMarketTab, acqCrossTab]} />
+        <KpiTable tabs={[acqBySourceTab, acqByMarketTab, acqCrossTab]} onCellClick={(tabKey, rowIdx, colKey, val) => {
+          const tab = [acqBySourceTab, acqByMarketTab, acqCrossTab].find(t => t.key === tabKey)
+          if (!tab) return
+          const row = tab.rows[rowIdx]
+          if (!row) return
+
+          // Type badge click → toggle inbound/outbound
+          if (colKey === 'type') {
+            const src = String(row.source)
+            const current = getSourceType(src)
+            const next = current === 'Inbound' ? 'Outbound' : current === 'Outbound' ? 'Unknown' : 'Inbound'
+            saveConfig({ sourceTypes: { ...sourceTypes, [src]: next } })
+            return
+          }
+
+          // Spend click → open ledger
+          if (colKey === 'spend') {
+            const src = String(row.source ?? row.market ?? '')
+            setLedgerSource(src); setLedgerType('spend')
+            return
+          }
+
+          // Volume click → open ledger
+          if (colKey === 'vol') {
+            const src = String(row.source ?? row.market ?? '')
+            setLedgerSource(src); setLedgerType('volume')
+            return
+          }
+
+          // Count click → show property list
+          const stageMap: Record<string, typeof ACQ_STAGES[number]> = {
+            lead: ACQ_STAGES[0], aptSet: ACQ_STAGES[1], offerMade: ACQ_STAGES[2],
+            underContract: ACQ_STAGES[3], closed: ACQ_STAGES[4],
+          }
+          const stage = stageMap[colKey]
+          if (stage) {
+            const stageIdx = ACQ_STAGES.indexOf(stage)
+            let group = acqFiltered
+            // Filter by source or market depending on tab
+            if (tabKey === 'bySource') {
+              const src = String(row.source)
+              group = group.filter(p => src === 'Unassigned' ? !p.leadSource : p.leadSource === src)
+            } else if (tabKey === 'byMarket') {
+              group = group.filter(p => p.market === String(row.market))
+            }
+            // Cumulative: include properties at this stage or later
+            const props = group.filter(p => {
+              const pIdx = ACQ_STAGES.findIndex(s => s.statuses.includes(p.status))
+              return pIdx >= 0 && pIdx >= stageIdx
+            })
+            showPropertyList(`${stage.label} — ${String(row.source ?? row.market ?? 'All')}`, props)
+          }
+        }} />
       </div>
 
       {/* ═══ DISPOSITION ═══ */}
@@ -417,7 +532,147 @@ export function KpiDashboard({ properties, tenantSlug }: { properties: KpiProper
         <KpiFunnel stages={dispoFunnelStages} />
 
         {/* Breakdown Tables */}
-        <KpiTable tabs={[dispoByMarketTab, dispoByTypeTab, dispoCrossTab]} />
+        <KpiTable tabs={[dispoByMarketTab, dispoByTypeTab, dispoCrossTab]} onCellClick={(tabKey, rowIdx, colKey) => {
+          const tab = [dispoByMarketTab, dispoByTypeTab, dispoCrossTab].find(t => t.key === tabKey)
+          if (!tab) return
+          const row = tab.rows[rowIdx]
+          if (!row) return
+
+          const stageMap: Record<string, typeof DISPO_STAGES[number]> = {
+            newDeal: DISPO_STAGES[0], pushedOut: DISPO_STAGES[1], offers: DISPO_STAGES[2],
+            contracted: DISPO_STAGES[3], closed: DISPO_STAGES[4],
+          }
+          const stage = stageMap[colKey]
+          if (stage) {
+            const stageIdx = DISPO_STAGES.indexOf(stage)
+            let group = dispoFiltered
+            if (tabKey === 'dispoByMarket') group = group.filter(p => p.market === String(row.market))
+            else if (tabKey === 'dispoByType') {
+              const pt = String(row.projectType)
+              group = group.filter(p => pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt))
+            }
+            const props = group.filter(p => {
+              const pIdx = DISPO_STAGES.findIndex(s => s.statuses.includes(p.status))
+              return pIdx >= 0 && pIdx >= stageIdx
+            })
+            showPropertyList(`${stage.label} — ${String(row.market ?? row.projectType ?? 'All')}`, props)
+          }
+        }} />
+      </div>
+
+      {/* ═══ Property List Modal ═══ */}
+      {listProps && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setListProps(null)}>
+          <div className="bg-white rounded-[14px] w-full max-w-lg mx-4 max-h-[70vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-3 border-b border-[rgba(0,0,0,0.06)] flex items-center justify-between shrink-0">
+              <div>
+                <p className="text-ds-label font-semibold text-txt-primary">{listTitle}</p>
+                <p className="text-ds-fine text-txt-muted">{listProps.length} properties</p>
+              </div>
+              <button onClick={() => setListProps(null)} className="text-txt-muted hover:text-txt-primary text-lg">&times;</button>
+            </div>
+            <div className="px-5 py-2 border-b border-[rgba(0,0,0,0.04)] shrink-0">
+              <input value={listSearch} onChange={e => setListSearch(e.target.value)} placeholder="Search..."
+                className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {listProps
+                .filter(p => !listSearch || p.address.toLowerCase().includes(listSearch.toLowerCase()) || p.city.toLowerCase().includes(listSearch.toLowerCase()))
+                .map(p => (
+                  <Link key={p.id} href={`/${tenantSlug}/inventory/${p.id}`}
+                    className="block px-5 py-2.5 hover:bg-surface-secondary border-b border-[rgba(0,0,0,0.03)] transition-colors">
+                    <p className="text-ds-fine font-medium text-txt-primary">{p.address}</p>
+                    <p className="text-[10px] text-txt-muted">{p.city}, {p.state} · {p.status.replace(/_/g, ' ')} · {p.leadSource ?? 'No source'}</p>
+                  </Link>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Spend/Volume Ledger Modal ═══ */}
+      {ledgerSource && (
+        <LedgerModal
+          source={ledgerSource}
+          type={ledgerType}
+          data={ledgerType === 'spend' ? monthlySpend : monthlyVolume}
+          onSave={(updated) => {
+            if (ledgerType === 'spend') saveConfig({ monthlySpend: updated })
+            else saveConfig({ monthlyVolume: updated })
+          }}
+          onClose={() => setLedgerSource(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Ledger Modal ─────────────────────────────────────────────────────────────
+
+function LedgerModal({ source, type, data, onSave, onClose }: {
+  source: string; type: 'spend' | 'volume'
+  data: Record<string, Record<string, number>>
+  onSave: (updated: Record<string, Record<string, number>>) => void
+  onClose: () => void
+}) {
+  // Show last 6 months
+  const months: string[] = []
+  const now = new Date()
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const v: Record<string, string> = {}
+    for (const m of months) v[m] = String(data[m]?.[source] ?? '')
+    return v
+  })
+
+  function save() {
+    const updated = { ...data }
+    for (const m of months) {
+      const val = parseInt(values[m])
+      if (!isNaN(val) && val > 0) {
+        if (!updated[m]) updated[m] = {}
+        updated[m][source] = val
+      } else if (updated[m]?.[source]) {
+        delete updated[m][source]
+      }
+    }
+    onSave(updated)
+    onClose()
+  }
+
+  const monthLabel = (mk: string) => {
+    const [y, m] = mk.split('-')
+    return new Date(Number(y), Number(m) - 1).toLocaleString('en-US', { month: 'short', year: 'numeric' })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-white rounded-[14px] w-full max-w-sm mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-3 border-b border-[rgba(0,0,0,0.06)]">
+          <p className="text-ds-label font-semibold text-txt-primary">{type === 'spend' ? 'Monthly Spend' : 'Monthly Volume'}</p>
+          <p className="text-ds-fine text-txt-muted">{source}</p>
+        </div>
+        <div className="px-5 py-3 space-y-2">
+          {months.map(m => (
+            <div key={m} className="flex items-center justify-between gap-3">
+              <span className="text-ds-fine text-txt-secondary w-20">{monthLabel(m)}</span>
+              <div className="flex items-center gap-1 flex-1">
+                {type === 'spend' && <span className="text-ds-fine text-txt-muted">$</span>}
+                <input type="number" value={values[m]} onChange={e => setValues(v => ({ ...v, [m]: e.target.value }))}
+                  placeholder="0"
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary focus:outline-none" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="px-5 py-3 border-t border-[rgba(0,0,0,0.06)] flex gap-2">
+          <button onClick={onClose} className="flex-1 text-ds-fine font-medium text-txt-secondary bg-surface-secondary rounded-[8px] py-2 hover:bg-surface-tertiary transition-colors">Cancel</button>
+          <button onClick={save} className="flex-1 text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark rounded-[8px] py-2 transition-colors">Save</button>
+        </div>
       </div>
     </div>
   )

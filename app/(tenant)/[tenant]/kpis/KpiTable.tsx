@@ -6,17 +6,25 @@ export interface TableTab {
   key: string
   label: string
   columns: Array<{ key: string; label: string; align?: 'left' | 'right'; span?: number }>
-  subColumns?: Array<{ key: string; label: string }> // for cross-tab sub-headers
+  subColumns?: Array<{ key: string; label: string }>
   rows: Array<Record<string, string | number>>
-  groupHeaders?: Array<{ label: string; span: number }> // for cross-tab group headers
+  groupHeaders?: Array<{ label: string; span: number }>
 }
 
-export function KpiTable({ tabs }: { tabs: TableTab[] }) {
+export function KpiTable({ tabs, onCellClick }: {
+  tabs: TableTab[]
+  onCellClick?: (tabKey: string, rowIdx: number, colKey: string, value: string | number) => void
+}) {
   const [activeTab, setActiveTab] = useState(tabs[0]?.key ?? '')
   const tab = tabs.find(t => t.key === activeTab) ?? tabs[0]
   if (!tab) return null
 
   const hasCrossTab = !!tab.groupHeaders
+
+  // Columns that are clickable (contain counts)
+  const clickableCols = new Set(['lead', 'aptSet', 'offerMade', 'underContract', 'closed',
+    'newDeal', 'pushedOut', 'offers', 'contracted', 'vol',
+    'spend', 'type'])
 
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
@@ -37,11 +45,9 @@ export function KpiTable({ tabs }: { tabs: TableTab[] }) {
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-[11px]">
-          {/* Group headers for cross-tab */}
           {hasCrossTab && tab.groupHeaders && (
             <thead>
               <tr className="border-b border-[rgba(0,0,0,0.06)]">
-                {/* First column: empty (for row labels) */}
                 <th className="px-4 py-2 text-left text-[9px] font-semibold text-txt-muted uppercase tracking-wider sticky left-0 bg-white z-10" />
                 {tab.groupHeaders.map((g, i) => (
                   <th key={i} colSpan={g.span}
@@ -53,7 +59,6 @@ export function KpiTable({ tabs }: { tabs: TableTab[] }) {
             </thead>
           )}
 
-          {/* Column headers */}
           <thead>
             <tr className="border-b border-[rgba(0,0,0,0.06)] bg-surface-secondary/50">
               {tab.columns.map(col => (
@@ -81,19 +86,23 @@ export function KpiTable({ tabs }: { tabs: TableTab[] }) {
                   {tab.columns.map(col => {
                     const val = row[col.key]
                     const isFirst = col.key === tab.columns[0].key
-                    // Check for special badges
                     const isBadge = col.key === 'type'
                     const badgeColor = val === 'Inbound' ? 'bg-green-100 text-green-700' : val === 'Outbound' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-700'
+                    const isClickable = onCellClick && (clickableCols.has(col.key) || col.key.includes('_lead') || col.key.includes('_closed') || col.key.includes('_newDeal'))
 
                     return (
                       <td key={col.key}
+                        onClick={() => isClickable && onCellClick(tab.key, i, col.key, val)}
                         className={`px-4 py-2.5 whitespace-nowrap ${
                           isFirst ? 'sticky left-0 bg-white z-10 font-semibold text-txt-primary' : 'text-txt-secondary'
-                        } ${col.align === 'right' ? 'text-right' : 'text-left'}`}>
+                        } ${col.align === 'right' ? 'text-right' : 'text-left'} ${
+                          isClickable ? 'cursor-pointer hover:text-gunner-red hover:underline' : ''
+                        }`}>
                         {isBadge ? (
-                          <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full ${badgeColor}`}>
+                          <button onClick={() => onCellClick?.(tab.key, i, col.key, val)}
+                            className={`text-[9px] font-semibold px-2 py-0.5 rounded-full cursor-pointer hover:ring-1 hover:ring-offset-1 hover:ring-current ${badgeColor}`}>
                             {String(val)}
-                          </span>
+                          </button>
                         ) : (
                           String(val ?? '—')
                         )}

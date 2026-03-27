@@ -16,17 +16,19 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
 
   if (!hasPermission(role, 'kpis.view.own')) redirect(`/${params.tenant}/dashboard`)
 
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { config: true },
+  })
+  const tenantConfig = (tenant?.config ?? {}) as Record<string, unknown>
+
   // Fetch ALL properties for client-side aggregation
   const properties = await db.property.findMany({
     where: { tenantId },
     select: {
-      id: true,
-      status: true,
-      leadSource: true,
-      zip: true,
-      projectType: true,
-      assignmentFee: true,
-      finalProfit: true,
+      id: true, address: true, city: true, state: true,
+      status: true, leadSource: true, zip: true,
+      projectType: true, assignmentFee: true, finalProfit: true,
       createdAt: true,
     },
   })
@@ -39,17 +41,19 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
         const zipMarkets = getMarketsForZip(p.zip)
         const market = zipMarkets.length > 0 ? zipMarkets[0] : 'Global'
         return {
-          id: p.id,
-          status: p.status,
-          leadSource: p.leadSource,
-          zip: p.zip,
-          market,
+          id: p.id, address: p.address, city: p.city, state: p.state,
+          status: p.status, leadSource: p.leadSource, zip: p.zip, market,
           projectType: (Array.isArray(p.projectType) ? p.projectType : []) as string[],
           assignmentFee: p.assignmentFee ? Number(p.assignmentFee) : null,
           finalProfit: p.finalProfit ? Number(p.finalProfit) : null,
           createdAt: p.createdAt.toISOString(),
         }
       })}
+      initialConfig={{
+        sourceTypes: (tenantConfig.sourceTypes ?? {}) as Record<string, string>,
+        monthlySpend: (tenantConfig.monthlySpend ?? {}) as Record<string, Record<string, number>>,
+        monthlyVolume: (tenantConfig.monthlyVolume ?? {}) as Record<string, Record<string, number>>,
+      }}
     />
   )
 }
