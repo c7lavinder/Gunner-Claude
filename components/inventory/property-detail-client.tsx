@@ -570,7 +570,7 @@ function InlineTextArea({
 
 // ─── Multi-Select Tag Fields ─────────────────────────────────────────────────
 
-const PROJECT_TYPE_OPTIONS = ['Flipper', 'Rental', 'Builder', 'Landlord', 'Wholesale', 'Land', 'Commercial', 'Multi-Family', 'New Construction', 'Buy & Hold']
+const PROJECT_TYPE_OPTIONS = ['Fix and Flip', 'Rental', 'Retail', 'Land', 'New Build', 'Commercial']
 const PROPERTY_TYPE_OPTIONS = ['House', 'Land', 'Multi-Family', 'Commercial', 'Condo', 'Townhome', 'Mobile Home', 'Other']
 
 // ─── Grid Detail Cell ──────────────────────────────────────────────────────
