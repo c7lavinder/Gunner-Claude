@@ -43,10 +43,10 @@ type TabKey = 'overview' | 'research' | 'buyers' | 'outreach' | 'activity' | 'ai
 
 const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
   { key: 'overview', label: 'Overview',      icon: Home },
+  { key: 'activity', label: 'Activity',      icon: Activity },
   { key: 'research', label: 'Research',      icon: SearchIcon },
   { key: 'buyers',   label: 'Buyers',        icon: Users },
   { key: 'outreach', label: 'Outreach',      icon: Send },
-  { key: 'activity', label: 'Activity',      icon: Activity },
   { key: 'blast',    label: 'Deal Blast',    icon: Megaphone },
 ]
 
