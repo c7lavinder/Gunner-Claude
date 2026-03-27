@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { format, formatDistanceToNow, differenceInDays, addDays, isToday } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
+import { KpiLedgerModal } from './KpiLedgerModal'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
+
+  // KPI Ledger
+  const [openLedger, setOpenLedger] = useState<string | null>(null)
 
   // Data state
   const [kpis, setKpis] = useState<KPIData | null>(null)
@@ -515,16 +519,17 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
           </div>
         </div>
 
-        {/* KPI STAT CARDS */}
+        {/* KPI STAT CARDS — clickable to open ledger */}
         <div className="grid grid-cols-5 gap-3">
           {[
-            { icon: <Phone size={16} />, label: 'CALLS', data: kpis?.calls },
-            { icon: <MessageSquare size={16} />, label: 'CONVOS', data: kpis?.convos },
-            { icon: <Calendar size={16} />, label: 'APTS', data: kpis?.apts },
-            { icon: <Target size={16} />, label: 'OFFERS', data: kpis?.offers },
-            { icon: <FileText size={16} />, label: 'CONTRACTS', data: kpis?.contracts },
+            { icon: <Phone size={16} />, label: 'CALLS', key: 'calls', data: kpis?.calls },
+            { icon: <MessageSquare size={16} />, label: 'CONVOS', key: 'convos', data: kpis?.convos },
+            { icon: <Calendar size={16} />, label: 'APTS', key: 'apts', data: kpis?.apts },
+            { icon: <Target size={16} />, label: 'OFFERS', key: 'offers', data: kpis?.offers },
+            { icon: <FileText size={16} />, label: 'CONTRACTS', key: 'contracts', data: kpis?.contracts },
           ].map(kpi => (
-            <div key={kpi.label} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4 transition-all hover:shadow-ds-float" style={{ borderColor: 'var(--border-light)' }}>
+            <div key={kpi.label} onClick={() => setOpenLedger(kpi.key)}
+              className="bg-surface-primary border-[0.5px] rounded-[14px] p-4 transition-all hover:shadow-ds-float cursor-pointer" style={{ borderColor: 'var(--border-light)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-gunner-red">{kpi.icon}</span>
                 <span className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase">{kpi.label}</span>
@@ -922,6 +927,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             </button>
           )}
         </div>
+
+      {/* KPI Ledger Modal */}
+      <KpiLedgerModal type={openLedger} isOpen={!!openLedger} onClose={() => setOpenLedger(null)} tenantSlug={tenantSlug} />
     </div>
   )
 }
@@ -1248,6 +1256,7 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
           )}
         </div>
       )}
+
     </div>
   )
 }
