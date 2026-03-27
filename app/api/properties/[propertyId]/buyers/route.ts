@@ -473,15 +473,54 @@ export async function POST(
       })
     }
 
+    // Also write to local Buyer DB so they're immediately available for matching
+    const tierNorm = TIER_MAP[d.buyerTier] ?? d.buyerTier.toLowerCase()
+    await db.buyer.upsert({
+      where: { id: `ghl_${contactId}` },
+      create: {
+        id: `ghl_${contactId}`,
+        tenantId: session.tenantId,
+        name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
+        phone, email: d.email ?? null,
+        ghlContactId: contactId,
+        markets: d.markets,
+        criteria: JSON.parse(JSON.stringify({
+          tier: tierNorm, buybox: d.buybox.join(', '),
+          secondaryMarkets: d.secondaryMarket ? [d.secondaryMarket] : [],
+          verifiedFunding: d.verifiedFunding ?? false,
+          hasPurchased: d.hasPurchased ?? false,
+          responseSpeed: d.responseSpeed ?? '',
+        })),
+        tags,
+        notes: d.notes ?? null,
+        isActive: true,
+      },
+      update: {
+        name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
+        phone, email: d.email ?? null,
+        markets: d.markets,
+        criteria: JSON.parse(JSON.stringify({
+          tier: tierNorm, buybox: d.buybox.join(', '),
+          secondaryMarkets: d.secondaryMarket ? [d.secondaryMarket] : [],
+          verifiedFunding: d.verifiedFunding ?? false,
+          hasPurchased: d.hasPurchased ?? false,
+          responseSpeed: d.responseSpeed ?? '',
+        })),
+        tags,
+        notes: d.notes ?? null,
+        isActive: true,
+      },
+    }).catch(err => console.error('[Buyers] DB upsert failed:', err))
+
     return NextResponse.json({
       success: true,
       contactId,
       buyer: {
-        id: contactId,
+        id: `ghl_${contactId}`,
         name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
         phone: d.phone,
         email: d.email ?? null,
-        tier: d.buyerTier.toLowerCase(),
+        tier: tierNorm,
         markets: d.markets,
         buybox: d.buybox.join(', '),
         matchScore: 0,
