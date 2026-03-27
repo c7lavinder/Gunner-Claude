@@ -27,6 +27,9 @@ interface TenantInfo {
   // WRITES TO: tenants.grading_materials (String?)
   // READ BY: lib/ai/grading.ts → buildGradingSystemPrompt()
   gradingMaterials: string
+  // WRITES TO: tenants.config (Json) → { projectTypes: string[] }
+  // READ BY: property detail page → Project Type tag row options
+  config: Record<string, unknown>
 }
 interface TeamMember {
   id: string; name: string; email: string; phone: string | null; role: string
@@ -39,7 +42,7 @@ interface Rubric {
   id: string; name: string; role: string; callType: string | null; isDefault: boolean
 }
 
-type Tab = 'team' | 'integrations' | 'pipeline' | 'calls' | 'workflows' | 'markets'
+type Tab = 'team' | 'integrations' | 'pipeline' | 'calls' | 'workflows' | 'markets' | 'inventory'
 
 export function SettingsClient({
   tenant, teamMembers, rubrics, callTypes, currentUserId, currentUserRole, canManage,
@@ -218,6 +221,7 @@ export function SettingsClient({
     { id: 'calls', label: 'Call config', icon: <Phone size={14} /> },
     { id: 'workflows', label: 'Workflows', icon: <Workflow size={14} /> },
     { id: 'markets', label: 'Markets', icon: <MapPin size={14} /> },
+    { id: 'inventory', label: 'Inventory', icon: <CheckCircle size={14} /> },
   ]
 
   return (
@@ -557,6 +561,9 @@ export function SettingsClient({
 
       {/* Markets */}
       {tab === 'markets' && <MarketsTab />}
+
+      {/* Inventory — Project Types */}
+      {tab === 'inventory' && <ProjectTypesTab tenantConfig={tenant.config} />}
     </div>
   )
 }
@@ -1202,6 +1209,88 @@ function BulkRegradeButton({ tenantSlug }: { tenantSlug: string }) {
         {result && (
           <span className="text-ds-body text-semantic-green font-medium">{result}</span>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Project Types Tab ──────────────────────────────────────────────────────
+// WRITES TO: tenants.config → { projectTypes: string[] }
+// API ENDPOINT: PATCH /api/tenants/config
+// READ BY: property detail page → Project Type tag row options
+
+const DEFAULT_PROJECT_TYPES = ['Fix and Flip', 'Rental', 'Retail', 'Land', 'New Build', 'Commercial', 'Multi-Family']
+
+function ProjectTypesTab({ tenantConfig }: { tenantConfig: Record<string, unknown> }) {
+  const saved = Array.isArray(tenantConfig.projectTypes) ? tenantConfig.projectTypes as string[] : DEFAULT_PROJECT_TYPES
+  const [types, setTypes] = useState<string[]>(saved)
+  const [newType, setNewType] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  async function saveTypes(updated: string[]) {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/tenants/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: { ...tenantConfig, projectTypes: updated } }),
+      })
+      if (res.ok) { setTypes(updated); setMsg('Saved!') }
+      else setMsg('Failed to save')
+    } catch { setMsg('Network error') }
+    setSaving(false)
+    setTimeout(() => setMsg(''), 2000)
+  }
+
+  function addType() {
+    const val = newType.trim()
+    if (!val || types.includes(val)) return
+    const updated = [...types, val]
+    setNewType('')
+    saveTypes(updated)
+  }
+
+  function removeType(t: string) {
+    saveTypes(types.filter(v => v !== t))
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5 space-y-4">
+        <div>
+          <h3 className="text-ds-label font-semibold text-txt-primary">Project Types</h3>
+          <p className="text-ds-fine text-txt-muted mt-0.5">
+            These options appear in the Property Details grid on each property page.
+          </p>
+        </div>
+
+        {/* Current types */}
+        <div className="flex flex-wrap gap-2">
+          {types.map(t => (
+            <span key={t} className="inline-flex items-center gap-1.5 bg-surface-secondary text-txt-primary text-ds-fine font-medium px-3 py-1.5 rounded-full border-[0.5px] border-[rgba(0,0,0,0.08)]">
+              {t}
+              <button onClick={() => removeType(t)} disabled={saving}
+                className="text-txt-muted hover:text-semantic-red transition-colors">
+                <Trash2 size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+
+        {/* Add new */}
+        <div className="flex gap-2">
+          <input value={newType} onChange={e => setNewType(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') addType() }}
+            placeholder="New project type..."
+            className="flex-1 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[10px] px-4 py-[9px] text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none" />
+          <button onClick={addType} disabled={!newType.trim() || saving}
+            className="bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-4 py-[9px] rounded-[10px] transition-colors flex items-center gap-1.5">
+            <Plus size={14} /> Add
+          </button>
+        </div>
+
+        {msg && <p className={`text-ds-fine font-medium ${msg === 'Saved!' ? 'text-semantic-green' : 'text-semantic-red'}`}>{msg}</p>}
       </div>
     </div>
   )

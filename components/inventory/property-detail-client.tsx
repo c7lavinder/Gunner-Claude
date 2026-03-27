@@ -61,7 +61,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
 ]
 
 export function PropertyDetailClient({
-  property, tenantSlug, canEdit, canManage, ghlContactId, ghlLocationId,
+  property, tenantSlug, canEdit, canManage, ghlContactId, ghlLocationId, projectTypeOptions,
 }: {
   property: PropertyDetail
   tenantSlug: string
@@ -69,6 +69,7 @@ export function PropertyDetailClient({
   canManage: boolean
   ghlContactId: string | null
   ghlLocationId?: string
+  projectTypeOptions?: string[]
 }) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
@@ -177,7 +178,7 @@ export function PropertyDetailClient({
         {/* Tab content */}
         <div className="p-5">
           {activeTab === 'overview' && (
-            <OverviewTab property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg} ghlContactId={ghlContactId} />
+            <OverviewTab property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg} ghlContactId={ghlContactId} projectTypeOptions={projectTypeOptions} />
           )}
           {activeTab === 'research' && <ResearchTab property={property} />}
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
@@ -1130,10 +1131,11 @@ function ContactsSection({ propertyId, initialSellers }: {
 
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
-function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId }: {
+function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId, projectTypeOptions }: {
   property: PropertyDetail; dom: number; domColor: string
   tenantSlug: string; runGhlAction: (type: string, payload: Record<string, string>) => void
   sending: boolean; actionMsg: string; ghlContactId: string | null
+  projectTypeOptions?: string[]
 }) {
   // Local editable state — updates on save without page reload
   const [vals, setVals] = useState({
@@ -1255,7 +1257,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
         {/* Row 4: Project Type tags */}
         <div className="border-t border-[rgba(0,0,0,0.04)]">
-          <TagRow label="Project Type" values={vals.projectType} options={PROJECT_TYPE_OPTIONS}
+          <TagRow label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
             field="projectType" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
         </div>
       </div>

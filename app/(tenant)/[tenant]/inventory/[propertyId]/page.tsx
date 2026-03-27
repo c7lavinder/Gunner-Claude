@@ -72,8 +72,13 @@ export default async function PropertyDetailPage({
 
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
-    select: { ghlLocationId: true },
+    select: { ghlLocationId: true, config: true },
   })
+
+  const tenantConfig = (tenant?.config ?? {}) as Record<string, unknown>
+  const projectTypeOptions = Array.isArray(tenantConfig.projectTypes)
+    ? tenantConfig.projectTypes as string[]
+    : ['Fix and Flip', 'Rental', 'Retail', 'Land', 'New Build', 'Commercial', 'Multi-Family']
 
   return (
     <PropertyDetailClient
@@ -155,6 +160,7 @@ export default async function PropertyDetailPage({
       canManage={hasPermission(role, 'inventory.manage')}
       ghlContactId={property.ghlContactId}
       ghlLocationId={tenant?.ghlLocationId ?? undefined}
+      projectTypeOptions={projectTypeOptions}
     />
   )
 }

@@ -22,6 +22,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         callTypes: true, callResults: true, gradingMaterials: true,
         propertyPipelineId: true, propertyTriggerStage: true,
         dispoPipelineId: true, dispoTriggerStage: true,
+        config: true,
       },
     }),
     db.user.findMany({
@@ -55,6 +56,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         dispoPipelineId: tenant.dispoPipelineId ?? '',
         dispoTriggerStage: tenant.dispoTriggerStage ?? '',
         gradingMaterials: tenant.gradingMaterials ?? '',
+        config: (tenant.config ?? {}) as Record<string, unknown>,
       }}
       teamMembers={teamMembers.map((u) => ({
         id: u.id,
