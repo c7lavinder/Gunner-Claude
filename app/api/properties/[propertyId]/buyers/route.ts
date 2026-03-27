@@ -113,66 +113,69 @@ function buyerMatchesMarket(
   return false
 }
 
-// Use LLM to match property project types against buyer buybox values
-async function llmMatchBuybox(projectTypes: string[], uniqueBuyboxValues: string[]): Promise<Set<string>> {
-  if (projectTypes.length === 0 || uniqueBuyboxValues.length === 0) return new Set()
+// LLM-powered buyer scoring — one call scores all market-matched buyers
+async function llmScoreBuyers(
+  projectTypes: string[],
+  buyers: Array<{ id: string; tier: string; buybox: string; verifiedFunding: boolean; hasPurchased: boolean; responseSpeed: string }>,
+): Promise<Record<string, number>> {
+  if (buyers.length === 0) return {}
   try {
     const Anthropic = (await import('@anthropic-ai/sdk')).default
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+    const buyerSummaries = buyers.map(b =>
+      `${b.id}: tier=${b.tier}, buybox=${b.buybox || 'none'}, funding=${b.verifiedFunding}, purchased=${b.hasPurchased}, speed=${b.responseSpeed || 'unknown'}`
+    ).join('\n')
+
     const res = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 256,
+      max_tokens: 2048,
       messages: [{
         role: 'user',
-        content: `Property project types: ${JSON.stringify(projectTypes)}
-Buyer buybox values: ${JSON.stringify(uniqueBuyboxValues)}
+        content: `Score these buyers for a property with project types: ${JSON.stringify(projectTypes)}
 
-Which buybox values match or are synonymous with the property project types?
-For example: "Flipper" matches "Fix and Flip", "Rental" matches "Buy and Hold" or "Landlord".
-Return ONLY a JSON array of matching buybox values. If none match, return [].`,
+SCORING RULES (max 50 points, added to a base of 50):
+
+1. BUYBOX MATCH (+20): Does the buyer's buybox match or relate to the property's project types?
+   Use real estate knowledge — "Flipper" matches "Fix and Flip", "Landlord" matches "Rental", "Builder" matches "New Construction", etc.
+   If no project types set on property, skip this factor.
+
+2. BUYER TIER (+15/+10/+5/0/-25):
+   Priority = +15, Qualified = +10, JV = +5, Unqualified = +0, Halted = -25
+   Interpret similar terms naturally (e.g. "A" = Priority, "B" = Qualified, "C" = JV, "Cold" = Unqualified)
+
+3. PURCHASED BEFORE (+5): Has the buyer purchased from us before? true = +5
+
+4. RESPONSE SPEED (+5/+3/0/-5):
+   Lightning = +5, Same Day = +3, Slow = +0, Ghost = -5
+   Interpret similar terms naturally.
+
+5. VERIFIED FUNDING (+5): true = +5
+
+BUYERS:
+${buyerSummaries}
+
+Return ONLY a JSON object mapping buyer ID to their score (0-50, before the base 50 is added).
+Example: {"abc123": 35, "def456": 10}`,
       }],
     })
-    const text = res.content[0].type === 'text' ? res.content[0].text : '[]'
-    const match = text.match(/\[[\s\S]*\]/)
+
+    const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
+    const match = text.match(/\{[\s\S]*\}/)
     if (match) {
-      const arr = JSON.parse(match[0]) as string[]
-      return new Set(arr.map(v => v.toLowerCase()))
+      const scores = JSON.parse(match[0]) as Record<string, number>
+      // Add base 50 to each score
+      const result: Record<string, number> = {}
+      for (const [id, s] of Object.entries(scores)) {
+        result[id] = Math.max(0, Math.min(100, 50 + s))
+      }
+      return result
     }
   } catch (err) {
-    console.error('[Buyers] LLM buybox match failed:', err)
+    console.error('[Buyers] LLM scoring failed:', err)
   }
-  return new Set()
-}
-
-// Score a market-matched buyer (0-100)
-function scoreBuyer(
-  buyer: ReturnType<typeof parseBuyerFields>,
-  buyboxMatches: Set<string>,
-): number {
-  let score = 0
-
-  // Buybox matches project type — LLM-verified (+30, heaviest)
-  if (buyer.buybox) {
-    const buyerTypes = buyer.buybox.split(',').map(b => b.trim().toLowerCase())
-    if (buyerTypes.some(bt => buyboxMatches.has(bt))) score += 30
-  }
-
-  // Buyer Tier (+25/+15/+10)
-  if (buyer.tier === 'priority') score += 25
-  else if (buyer.tier === 'qualified') score += 15
-  else if (buyer.tier === 'jv') score += 10
-
-  // Has purchased before (+5)
-  if (buyer.hasPurchased) score += 5
-
-  // Response speed (+5)
-  const speed = buyer.responseSpeed?.toLowerCase() ?? ''
-  if (speed === 'same day' || speed === 'fast') score += 5
-
-  // Verified funding (+5)
-  if (buyer.verifiedFunding) score += 5
-
-  return Math.min(score, 100)
+  // Fallback: everyone gets base 50
+  return Object.fromEntries(buyers.map(b => [b.id, 50]))
 }
 
 export async function GET(
@@ -291,17 +294,23 @@ export async function GET(
     const marketMatched = ghlBuyers.filter(b => buyerMatchesMarket(b, allPropertyMarkets))
     console.log(`[Buyers] Market filter: ${ghlBuyers.length} total → ${marketMatched.length} in market`)
 
-    // Step 2: LLM-assisted buybox matching (one call for all unique buybox values)
+    // Step 2: LLM scores all market-matched buyers (one call)
     const projectTypes = (property.projectType ?? []) as string[]
-    const uniqueBuybox = [...new Set(marketMatched.map(b => b.buybox).filter(Boolean))]
-    const buyboxMatches = await llmMatchBuybox(projectTypes, uniqueBuybox)
-    console.log(`[Buyers] Buybox LLM: projectTypes=${JSON.stringify(projectTypes)}, matched=${JSON.stringify([...buyboxMatches])}`)
+    const scores = await llmScoreBuyers(
+      projectTypes,
+      marketMatched.map(b => ({
+        id: b.id, tier: b.tier, buybox: b.buybox,
+        verifiedFunding: b.verifiedFunding, hasPurchased: b.hasPurchased,
+        responseSpeed: b.responseSpeed,
+      })),
+    )
+    console.log(`[Buyers] LLM scored ${Object.keys(scores).length} buyers`)
 
-    // Step 3: Score within market-matched buyers
+    // Step 3: Apply scores and sort
     const matched = marketMatched
       .map(b => ({
         ...b,
-        matchScore: scoreBuyer(b, buyboxMatches),
+        matchScore: scores[b.id] ?? 50,
       }))
       .sort((a, b) => {
         return b.matchScore - a.matchScore
