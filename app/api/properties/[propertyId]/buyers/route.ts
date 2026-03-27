@@ -103,6 +103,10 @@ function buyerMatchesMarket(
       pm.toLowerCase().includes(m.toLowerCase()) || m.toLowerCase().includes(pm.toLowerCase())
     )
   )
+  // "Nationwide" matches everything
+  const allMarkets = [...buyer.markets, ...buyer.secondaryMarkets]
+  if (allMarkets.some(m => m.toLowerCase() === 'nationwide')) return true
+
   const primaryMarkets = buyer.markets.filter(m => m.toLowerCase() !== 'other')
   if (check(primaryMarkets)) return true
   if (buyer.secondaryMarkets.length > 0 && check(buyer.secondaryMarkets)) return true
