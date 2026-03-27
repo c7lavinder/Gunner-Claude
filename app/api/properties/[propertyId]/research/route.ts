@@ -99,17 +99,34 @@ export async function POST(
       researchedAt: new Date().toISOString(),
     }
 
-    // Store in property
+    // Store Google research in property
+    // Merge with any existing batchData
+    const existingData = await db.property.findUnique({
+      where: { id: params.propertyId },
+      select: { zillowData: true },
+    })
+    const existing = (existingData?.zillowData ?? {}) as Record<string, unknown>
+    const merged = { ...existing, ...researchData }
+
     await db.property.update({
       where: { id: params.propertyId },
       data: {
-        zillowData: researchData as unknown as import('@prisma/client').Prisma.InputJsonValue,
+        zillowData: merged as unknown as import('@prisma/client').Prisma.InputJsonValue,
       },
     })
 
+    // Also trigger BatchData enrichment (non-blocking)
+    if (process.env.BATCHDATA_API_KEY) {
+      import('@/lib/batchdata/enrich').then(({ enrichPropertyFromBatchData }) =>
+        enrichPropertyFromBatchData(params.propertyId).catch(err =>
+          console.warn('[Research] BatchData enrich failed:', err)
+        )
+      )
+    }
+
     return NextResponse.json({
       status: 'success',
-      research: researchData,
+      research: merged,
     })
   } catch (err) {
     console.error('[Research] Error:', err instanceof Error ? err.message : err)

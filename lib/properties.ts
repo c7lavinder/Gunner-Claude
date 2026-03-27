@@ -229,6 +229,15 @@ export async function createPropertyFromContact(
       )
     }
 
+    // Auto-enrich from BatchData (non-blocking — backfills beds, baths, sqft, etc.)
+    if (address && process.env.BATCHDATA_API_KEY) {
+      import('@/lib/batchdata/enrich').then(({ enrichPropertyFromBatchData }) =>
+        enrichPropertyFromBatchData(property.id).catch(err =>
+          console.warn('[Property] BatchData enrich failed:', err instanceof Error ? err.message : err)
+        )
+      )
+    }
+
     return property.id
   } catch (err) {
     console.error(`[Property] Failed to create from contact ${ghlContactId}:`, err)

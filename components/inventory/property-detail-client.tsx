@@ -1348,7 +1348,6 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
 
-  // Load existing research on mount
   useEffect(() => {
     fetch(`/api/properties/${property.id}/research`)
       .then(r => r.json())
@@ -1357,16 +1356,19 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
   }, [property.id])
 
   async function handleReResearch() {
-    setResearching(true)
-    setError('')
+    setResearching(true); setError('')
     try {
       const res = await fetch(`/api/properties/${property.id}/research`, { method: 'POST' })
       const data = await res.json()
       if (res.ok) {
         setResearch(data.research)
-      } else {
-        setError(data.error ?? 'Research failed')
-      }
+        // BatchData enrichment runs in background — reload after a few seconds
+        setTimeout(async () => {
+          const r = await fetch(`/api/properties/${property.id}/research`)
+          const d = await r.json()
+          if (d.research) setResearch(d.research as Record<string, unknown>)
+        }, 5000)
+      } else { setError(data.error ?? 'Research failed') }
     } catch { setError('Network error') }
     setResearching(false)
   }
@@ -1375,11 +1377,27 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
   const coords = research?.coordinates as { lat: number; lng: number } | null
   const streetViewUrl = research?.streetViewUrl as string | null
   const researchedAt = research?.researchedAt as string | null
-
+  const bd = (research?.batchData ?? {}) as Record<string, unknown>
+  const hasBatchData = bd.enrichedAt != null
   const fullAddr = `${property.address}, ${property.city}, ${property.state} ${property.zip}`
+
+  const fmt$ = (v: unknown) => v != null ? `$${Number(v).toLocaleString()}` : '—'
+  const fmtStr = (v: unknown) => v != null && v !== '' ? String(v) : '—'
+  const fmtPct = (v: unknown) => v != null ? `${Number(v).toFixed(1)}%` : '—'
+  const fmtBool = (v: unknown) => v === true ? 'Yes' : v === false ? 'No' : '—'
+
+  function DataCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+    return (
+      <div className={`rounded-[8px] px-3 py-2 ${highlight ? 'bg-blue-50 border-[0.5px] border-blue-200' : 'bg-surface-secondary'}`}>
+        <p className={`text-[8px] font-semibold uppercase tracking-wider ${highlight ? 'text-blue-600' : 'text-txt-muted'}`}>{label}</p>
+        <p className={`text-ds-fine font-semibold mt-0.5 ${value !== '—' ? (highlight ? 'text-blue-800' : 'text-txt-primary') : 'text-txt-muted'}`}>{value}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-ds-label font-semibold text-txt-primary">Property Research</h3>
@@ -1387,76 +1405,110 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
             {error ? <span className="text-semantic-red">{error}</span>
               : researchedAt ? `Last updated: ${format(new Date(researchedAt), 'MMM d, yyyy h:mm a')}`
               : loaded ? 'Not yet researched' : 'Loading...'}
+            {hasBatchData && <span className="ml-2 text-[9px] text-blue-600 font-medium">BatchData enriched</span>}
           </p>
         </div>
-        <button
-          onClick={handleReResearch}
-          disabled={researching}
-          className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark transition-colors disabled:opacity-50 flex items-center gap-1"
-        >
+        <button onClick={handleReResearch} disabled={researching}
+          className="text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-50 px-3 py-1.5 rounded-[8px] flex items-center gap-1 transition-colors">
           {researching && <Loader2 size={11} className="animate-spin" />}
           {researching ? 'Researching...' : researchedAt ? 'Re-Research' : 'Research Now'}
         </button>
       </div>
 
-      {/* Street View image */}
+      {/* Street View */}
       {streetViewUrl && (
         <div className="rounded-[10px] overflow-hidden border-[0.5px] border-[rgba(0,0,0,0.08)]">
           <img src={streetViewUrl} alt="Street view" className="w-full h-48 object-cover" />
         </div>
       )}
 
-      {/* Google Place data */}
-      {googleData && (
-        <div className="space-y-3">
-          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Google Places Data</p>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {googleData.formattedAddress ? (
-              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-                <p className="text-[9px] font-semibold text-txt-muted uppercase">Verified Address</p>
-                <p className="text-ds-fine text-txt-primary mt-0.5">{String(googleData.formattedAddress)}</p>
-              </div>
-            ) : null}
-            {Array.isArray(googleData.types) ? (
-              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-                <p className="text-[9px] font-semibold text-txt-muted uppercase">Property Types</p>
-                <p className="text-ds-fine text-txt-primary mt-0.5">{googleData.types.map(String).join(', ')}</p>
-              </div>
-            ) : null}
-            {coords ? (
-              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-                <p className="text-[9px] font-semibold text-txt-muted uppercase">Coordinates</p>
-                <p className="text-ds-fine text-txt-primary mt-0.5">{coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}</p>
-              </div>
-            ) : null}
-            {googleData.photoCount ? (
-              <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-                <p className="text-[9px] font-semibold text-txt-muted uppercase">Photos Available</p>
-                <p className="text-ds-fine text-txt-primary mt-0.5">{String(googleData.photoCount)} photos</p>
-              </div>
-            ) : null}
+      {/* Valuation */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Valuation</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3 p-3">
+          <DataCard label="Estimated Value" value={fmt$(bd.estimatedValue)} highlight={bd.estimatedValue != null} />
+          <DataCard label="Assessed Value" value={fmt$(bd.assessedValue)} highlight={bd.assessedValue != null} />
+          <DataCard label="Land Value" value={fmt$(bd.assessedLandValue)} />
+        </div>
+      </div>
+
+      {/* Owner Intel */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Owner Intelligence</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
+          <DataCard label="Owner" value={fmtStr(bd.ownerName)} />
+          <DataCard label="Owner Type" value={fmtStr(bd.ownerType)} />
+          <DataCard label="Absentee" value={fmtBool(bd.absenteeOwner)} highlight={Boolean(bd.absenteeOwner)} />
+          <DataCard label="Years Owned" value={bd.ownershipLength != null ? `${bd.ownershipLength} yrs` : '—'} />
+        </div>
+        {bd.mailingAddress != null && (
+          <div className="px-3 pb-3">
+            <DataCard label="Mailing Address" value={fmtStr(bd.mailingAddress)} />
+          </div>
+        )}
+      </div>
+
+      {/* Financial / Mortgage */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Mortgage & Equity</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
+          <DataCard label="Loan Amount" value={fmt$(bd.loanAmount)} />
+          <DataCard label="Lender" value={fmtStr(bd.lenderName)} />
+          <DataCard label="LTV" value={fmtPct(bd.loanToValue)} />
+          <DataCard label="Equity" value={fmtPct(bd.equityPercent)} highlight={Number(bd.equityPercent ?? 0) > 40} />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-3 pb-3">
+          <DataCard label="Loan Type" value={fmtStr(bd.loanType)} />
+          <DataCard label="Loan Date" value={bd.loanDate ? format(new Date(String(bd.loanDate)), 'MMM yyyy') : '—'} />
+          <DataCard label="Open Liens" value={bd.openLienCount != null ? String(bd.openLienCount) : '—'} highlight={Number(bd.openLienCount ?? 0) > 1} />
+          <div />
+        </div>
+      </div>
+
+      {/* Sale History */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Sale History</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 p-3">
+          <DataCard label="Last Sale Price" value={fmt$(bd.lastSalePrice)} />
+          <DataCard label="Last Sale Date" value={bd.lastSaleDate ? format(new Date(String(bd.lastSaleDate)), 'MMM d, yyyy') : '—'} />
+        </div>
+      </div>
+
+      {/* Distress Signals */}
+      {(bd.preForeclosure != null || bd.foreclosureDate != null || bd.defaultAmount != null) && (
+        <div className="bg-red-50 border-[0.5px] border-red-200 rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-red-100 border-b border-red-200">
+            <p className="text-[9px] font-semibold text-red-700 uppercase tracking-wider">Distress Signals</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 p-3">
+            <DataCard label="Pre-Foreclosure" value={fmtBool(bd.preForeclosure)} />
+            <DataCard label="Filing Date" value={bd.foreclosureDate ? format(new Date(String(bd.foreclosureDate)), 'MMM d, yyyy') : '—'} />
+            <DataCard label="Default Amount" value={fmt$(bd.defaultAmount)} />
           </div>
         </div>
       )}
 
-      {/* Valuation placeholders — will populate with paid provider */}
-      <div>
-        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Valuation & Tax</p>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase">Zestimate</p>
-            <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
-          </div>
-          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase">Tax Assessment</p>
-            <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
-          </div>
-          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase">Annual Tax</p>
-            <p className="text-ds-card font-semibold text-txt-muted mt-0.5">—</p>
-          </div>
+      {/* Building Extras */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Building Details</p>
         </div>
-        <p className="text-[9px] text-txt-muted mt-1">Valuation data requires a paid data provider (BatchData, ATTOM, etc.)</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
+          <DataCard label="Stories" value={bd.stories != null ? String(bd.stories) : '—'} />
+          <DataCard label="Construction" value={fmtStr(bd.constructionType)} />
+          <DataCard label="Heating" value={fmtStr(bd.heatingType)} />
+          <DataCard label="Cooling" value={fmtStr(bd.coolingType)} />
+          <DataCard label="Pool" value={fmtBool(bd.pool)} />
+          <DataCard label="Garage" value={bd.garage ? `Yes${bd.garageSpaces ? ` (${bd.garageSpaces})` : ''}` : bd.garage === false ? 'No' : '—'} />
+        </div>
       </div>
 
       {/* External links */}
@@ -1465,17 +1517,10 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
           <ExternalLink size={10} /> Zillow
         </a>
-        {googleData?.googleMapsUrl ? (
-          <a href={String(googleData.googleMapsUrl)} target="_blank" rel="noopener noreferrer"
-            className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
-            <ExternalLink size={10} /> Google Maps
-          </a>
-        ) : (
-          <a href={`https://www.google.com/maps/place/${encodeURIComponent(fullAddr)}`} target="_blank" rel="noopener noreferrer"
-            className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
-            <ExternalLink size={10} /> Google Maps
-          </a>
-        )}
+        <a href={`https://www.google.com/maps/place/${encodeURIComponent(fullAddr)}`} target="_blank" rel="noopener noreferrer"
+          className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
+          <ExternalLink size={10} /> Google Maps
+        </a>
         {coords && (
           <a href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${coords.lat},${coords.lng}`} target="_blank" rel="noopener noreferrer"
             className="text-ds-fine font-medium text-semantic-blue hover:underline flex items-center gap-1">
