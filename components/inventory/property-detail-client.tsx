@@ -1536,11 +1536,31 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   // Load added buyers on mount
   useEffect(() => { loadAddedBuyers() }, [property.id])
 
+  const [syncMsg, setSyncMsg] = useState('')
+
   async function matchBuyers() {
     setLoading(true)
+    setSyncMsg('')
     try {
       const res = await fetch(`/api/properties/${property.id}/buyers`)
       const data = await res.json()
+      if (data.message && (data.buyers ?? []).length === 0) {
+        // DB is empty, sync triggered — wait and retry
+        setSyncMsg(data.message)
+        // Auto-retry after sync completes
+        setTimeout(async () => {
+          setSyncMsg('Retrying...')
+          try {
+            const r2 = await fetch(`/api/properties/${property.id}/buyers`)
+            const d2 = await r2.json()
+            setBuyers(d2.buyers ?? [])
+            setSyncMsg(d2.buyers?.length ? '' : 'Sync still in progress — try again in a minute')
+          } catch {}
+          setFetched(true)
+          setLoading(false)
+        }, 90000) // retry after 90 seconds
+        return
+      }
       setBuyers(data.buyers ?? [])
       setFetched(true)
     } catch { setBuyers([]) }

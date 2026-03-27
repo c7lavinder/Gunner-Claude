@@ -219,19 +219,22 @@ export async function GET(
     console.log(`[Buyers] Property markets (source: ${customMarkets.length > 0 ? 'property page' : 'zip fallback'}): [${allPropertyMarkets}]`)
 
     // ── Load buyers from DB (synced from GHL via webhook) ────────────
-    const dbBuyers = await db.buyer.findMany({ where: { tenantId, isActive: true } })
+    let dbBuyers = await db.buyer.findMany({ where: { tenantId, isActive: true } })
     console.log(`[Buyers] Loaded ${dbBuyers.length} buyers from DB`)
 
-    // If DB is empty, trigger a background sync and tell user to retry
+    // If DB is empty, sync from GHL now (first time setup)
     if (dbBuyers.length === 0) {
-      // Kick off sync in background (don't await — return immediately)
-      import('@/lib/buyers/sync').then(({ syncAllBuyersFromGHL }) =>
-        syncAllBuyersFromGHL(tenantId).catch(e => console.error('[Buyers] Background sync failed:', e))
-      )
-      return NextResponse.json({
-        buyers: [], total: 0,
-        message: 'Buyer database is syncing from GHL for the first time. This takes 1-2 minutes. Please try again shortly.',
-      })
+      console.log('[Buyers] DB empty — running first-time sync from GHL')
+      try {
+        const { syncAllBuyersFromGHL } = await import('@/lib/buyers/sync')
+        const synced = await syncAllBuyersFromGHL(tenantId)
+        console.log(`[Buyers] First-time sync complete: ${synced} buyers`)
+        // Re-query after sync
+        dbBuyers = await db.buyer.findMany({ where: { tenantId, isActive: true } })
+      } catch (err) {
+        console.error('[Buyers] First-time sync failed:', err)
+        return NextResponse.json({ buyers: [], total: 0, message: 'Buyer sync from GHL failed. Check Railway logs.' })
+      }
     }
 
     const allBuyers = dbBuyers.map(lb => {
