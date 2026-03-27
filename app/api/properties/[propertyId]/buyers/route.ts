@@ -202,10 +202,21 @@ export async function GET(
     })
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
 
-    // Determine which markets this property is in
-    const propertyMarkets = property.zip
-      ? getMarketsForZip(property.zip).map(String)
-      : property.city ? [property.city] : []
+    // Markets come from the property details page (propertyMarkets field) — NOT zip code lookup
+    // Zip/city/state are only fallbacks if propertyMarkets is empty
+    const customMarkets = (property.propertyMarkets ?? []) as string[]
+    let allPropertyMarkets: string[]
+    if (customMarkets.length > 0) {
+      // Use the markets set on the property page — this is the source of truth
+      allPropertyMarkets = [...customMarkets]
+      // Also include city for broader matching
+      if (property.city) allPropertyMarkets.push(property.city)
+    } else {
+      // Fallback: derive from zip code + city + state
+      const zipMarkets = property.zip ? getMarketsForZip(property.zip).map(String) : []
+      allPropertyMarkets = [...new Set([...zipMarkets, ...(property.city ? [property.city] : []), ...(property.state ? [property.state] : [])])]
+    }
+    console.log(`[Buyers] Property markets (source: ${customMarkets.length > 0 ? 'property page' : 'zip fallback'}): [${allPropertyMarkets}]`)
 
     // Pull ALL contacts from the Buyer Pipeline — not a broad search
     const ghl = await getGHLClient(tenantId)
@@ -250,6 +261,9 @@ export async function GET(
           }
         }
         console.log(`[Buyers] Parsed ${ghlBuyers.length} buyers with data`)
+        // Log sample of buyer markets for debugging
+        const withMarkets = ghlBuyers.filter(b => b.markets.length > 0)
+        console.log(`[Buyers] ${withMarkets.length} have market data. Sample:`, withMarkets.slice(0, 3).map(b => `${b.name}: [${b.markets}]`))
       }
     } catch (err) {
       console.error('[Buyers] GHL pipeline fetch failed:', err instanceof Error ? err.message : err)
@@ -295,12 +309,13 @@ export async function GET(
     }
 
     // Step 1: Market is the BASE filter — no market match = not shown
-    const customMarkets = (property.propertyMarkets ?? []) as string[]
-    const allPropertyMarkets = [...propertyMarkets, ...customMarkets]
-    if (property.city) allPropertyMarkets.push(property.city)
-
     const marketMatched = ghlBuyers.filter(b => buyerMatchesMarket(b, allPropertyMarkets))
     console.log(`[Buyers] Market filter: ${ghlBuyers.length} total → ${marketMatched.length} in market`)
+    if (marketMatched.length === 0 && ghlBuyers.length > 0) {
+      // Debug: log first 5 buyers' markets for troubleshooting
+      const sample = ghlBuyers.slice(0, 5).map(b => `${b.name}: markets=[${b.markets}] secondary=[${b.secondaryMarkets}]`)
+      console.log(`[Buyers] No matches! Property targets: [${allPropertyMarkets}]. Sample buyers:`, sample)
+    }
 
     // Step 2: LLM scores all market-matched buyers (one call)
     const projectTypes = (property.projectType ?? []) as string[]
