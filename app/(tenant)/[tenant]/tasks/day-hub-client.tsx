@@ -349,12 +349,18 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
   useEffect(() => { fetchAppts(apptDate) }, [fetchAppts, apptDate])
 
-  // Fetch activity for all task contacts sequentially on page load
-  // One at a time so we don't overwhelm GHL rate limits
-  // Labels light up progressively as each response comes in
+  // Fetch activity for overdue + today task contacts only (limit 10 for speed)
+  // Remaining contacts load on demand when user scrolls or clicks
   useEffect(() => {
     if (tasks.length === 0) return
-    const contactIds = [...new Set(tasks.map(t => t.contactId).filter(Boolean))]
+    // Prioritize: overdue first, then due today — skip upcoming/future
+    const prioritized = [...tasks].sort((a, b) => {
+      if (a.isOverdue && !b.isOverdue) return -1
+      if (!a.isOverdue && b.isOverdue) return 1
+      if (a.isDueToday && !b.isDueToday) return -1
+      return 0
+    })
+    const contactIds = [...new Set(prioritized.map(t => t.contactId).filter(Boolean))].slice(0, 10)
     let cancelled = false
     async function run() {
       for (const cid of contactIds) {
