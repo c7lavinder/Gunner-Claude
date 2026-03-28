@@ -7,6 +7,7 @@
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { triggerWorkflows } from '@/lib/workflows/engine'
+import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
 
 interface PropertyTriggerContext {
   ghlPipelineId?: string
@@ -237,6 +238,11 @@ export async function createPropertyFromContact(
         )
       )
     }
+
+    // AI auto-enrichment (fire-and-forget — estimates ARV, repair, rental, neighborhood)
+    enrichPropertyWithAI(property.id).catch(err =>
+      console.error('[Property] AI enrich failed:', err instanceof Error ? err.message : err)
+    )
 
     return property.id
   } catch (err) {

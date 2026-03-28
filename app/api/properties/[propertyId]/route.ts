@@ -42,11 +42,35 @@ const updateSchema = z.object({
   projectType: z.array(z.string()).optional(),
   propertyMarkets: z.array(z.string()).optional(),
   lockboxCode: z.string().nullable().optional(),
+  // Utilities
+  waterType: z.string().nullable().optional(),
+  waterNotes: z.string().nullable().optional(),
+  sewerType: z.string().nullable().optional(),
+  sewerCondition: z.string().nullable().optional(),
+  sewerNotes: z.string().nullable().optional(),
+  electricType: z.string().nullable().optional(),
+  electricNotes: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   internalNotes: z.string().nullable().optional(),
   // Tracking dates
   lastOfferDate: z.string().nullable().optional(),
   lastContactedDate: z.string().nullable().optional(),
+  // AI enrichment fields
+  repairEstimate: z.string().nullable().optional(),
+  rentalEstimate: z.string().nullable().optional(),
+  neighborhoodSummary: z.string().nullable().optional(),
+  zestimate: z.string().nullable().optional(),
+  ownerName: z.string().nullable().optional(),
+  deedDate: z.string().nullable().optional(),
+  taxAssessment: z.string().nullable().optional(),
+  annualTax: z.string().nullable().optional(),
+  floodZone: z.string().nullable().optional(),
+  aiEnrichmentStatus: z.string().nullable().optional(),
+  // Deal Blast overrides
+  dealBlastAskingOverride: z.string().nullable().optional(),
+  dealBlastArvOverride: z.string().nullable().optional(),
+  dealBlastContractOverride: z.string().nullable().optional(),
+  dealBlastAssignmentFeeOverride: z.string().nullable().optional(),
 })
 
 export async function PATCH(
@@ -80,7 +104,14 @@ export async function PATCH(
     fieldSources,
     assignedToId, sellerName, sellerPhone, sellerEmail,
     beds, baths, sqft, yearBuilt, lotSize, propertyType, occupancy,
-    lockboxCode, projectType, propertyMarkets, description, internalNotes, lastOfferDate, lastContactedDate,
+    lockboxCode, projectType, propertyMarkets,
+    waterType, waterNotes, sewerType, sewerCondition, sewerNotes, electricType, electricNotes,
+    description, internalNotes, lastOfferDate, lastContactedDate,
+    // AI enrichment fields
+    repairEstimate, rentalEstimate, neighborhoodSummary, zestimate, ownerName, deedDate,
+    taxAssessment, annualTax, floodZone, aiEnrichmentStatus,
+    // Deal Blast overrides
+    dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
   } = parsed.data
 
   try {
@@ -115,12 +146,35 @@ export async function PATCH(
           ...(propertyType !== undefined && { propertyType }),
           ...(occupancy !== undefined && { occupancy }),
           ...(lockboxCode !== undefined && { lockboxCode }),
+          ...(waterType !== undefined && { waterType }),
+          ...(waterNotes !== undefined && { waterNotes }),
+          ...(sewerType !== undefined && { sewerType }),
+          ...(sewerCondition !== undefined && { sewerCondition }),
+          ...(sewerNotes !== undefined && { sewerNotes }),
+          ...(electricType !== undefined && { electricType }),
+          ...(electricNotes !== undefined && { electricNotes }),
           ...(projectType !== undefined && { projectType }),
           ...(propertyMarkets !== undefined && { propertyMarkets }),
           ...(description !== undefined && { description }),
           ...(internalNotes !== undefined && { internalNotes }),
           ...(lastOfferDate !== undefined && { lastOfferDate: lastOfferDate ? new Date(lastOfferDate) : null }),
           ...(lastContactedDate !== undefined && { lastContactedDate: lastContactedDate ? new Date(lastContactedDate) : null }),
+          // AI enrichment fields
+          ...(repairEstimate !== undefined && { repairEstimate: repairEstimate ? parseFloat(repairEstimate) : null }),
+          ...(rentalEstimate !== undefined && { rentalEstimate: rentalEstimate ? parseFloat(rentalEstimate) : null }),
+          ...(neighborhoodSummary !== undefined && { neighborhoodSummary }),
+          ...(zestimate !== undefined && { zestimate: zestimate ? parseFloat(zestimate) : null }),
+          ...(ownerName !== undefined && { ownerName }),
+          ...(deedDate !== undefined && { deedDate: deedDate ? new Date(deedDate) : null }),
+          ...(taxAssessment !== undefined && { taxAssessment: taxAssessment ? parseFloat(taxAssessment) : null }),
+          ...(annualTax !== undefined && { annualTax: annualTax ? parseFloat(annualTax) : null }),
+          ...(floodZone !== undefined && { floodZone }),
+          ...(aiEnrichmentStatus !== undefined && { aiEnrichmentStatus }),
+          // Deal Blast overrides
+          ...(dealBlastAskingOverride !== undefined && { dealBlastAskingOverride: dealBlastAskingOverride ? parseFloat(dealBlastAskingOverride) : null }),
+          ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),
+          ...(dealBlastContractOverride !== undefined && { dealBlastContractOverride: dealBlastContractOverride ? parseFloat(dealBlastContractOverride) : null }),
+          ...(dealBlastAssignmentFeeOverride !== undefined && { dealBlastAssignmentFeeOverride: dealBlastAssignmentFeeOverride ? parseFloat(dealBlastAssignmentFeeOverride) : null }),
           // Merge field sources (AI vs user tracking) — empty string removes the key
           ...(fieldSources && {
             fieldSources: (() => {

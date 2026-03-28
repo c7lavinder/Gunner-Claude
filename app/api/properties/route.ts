@@ -5,6 +5,7 @@ import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
 import { PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
+import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
 
 const propertySchema = z.object({
   address: z.string().min(1),
@@ -102,6 +103,11 @@ export async function POST(request: NextRequest) {
         payload: { address: standardizeStreet(rawAddr), city: standardizeCity(rawCity), state: standardizeState(rawState) },
       },
     })
+
+    // AI auto-enrichment (fire-and-forget — non-blocking)
+    enrichPropertyWithAI(property.id).catch(err =>
+      console.error('[AI Enrich] Background error:', err)
+    )
 
     return NextResponse.json({ property: { id: property.id } }, { status: 201 })
   } catch (err) {

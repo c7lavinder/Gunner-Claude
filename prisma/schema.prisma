@@ -244,6 +244,34 @@ model Property {
   countyData   Json? @map("county_data")
   constructionEstimate Decimal? @db.Decimal(12, 2) @map("construction_estimate")
 
+  // Utilities
+  waterType       String? @map("water_type")
+  waterNotes      String? @map("water_notes")
+  sewerType       String? @map("sewer_type")
+  sewerCondition  String? @map("sewer_condition")
+  sewerNotes      String? @map("sewer_notes")
+  electricType    String? @map("electric_type")
+  electricNotes   String? @map("electric_notes")
+
+  // AI enrichment (Fix 4)
+  repairEstimate      Decimal? @db.Decimal(12, 2) @map("repair_estimate")
+  rentalEstimate      Decimal? @db.Decimal(12, 2) @map("rental_estimate")
+  neighborhoodSummary String?  @map("neighborhood_summary") @db.Text
+  zestimate           Decimal? @db.Decimal(12, 2)
+  ownerName           String?  @map("owner_name")
+  deedDate            DateTime? @map("deed_date")
+  taxAssessment       Decimal? @db.Decimal(12, 2) @map("tax_assessment")
+  annualTax           Decimal? @db.Decimal(12, 2) @map("annual_tax")
+  floodZone           String?  @map("flood_zone")
+  aiEnrichmentStatus  String?  @map("ai_enrichment_status") // 'pending' | 'complete' | 'failed'
+  aiEnrichmentError   String?  @map("ai_enrichment_error")
+
+  // Deal Blast overrides (Fix 5) — wholesalers show different numbers to buyers
+  dealBlastAskingOverride        Decimal? @db.Decimal(12, 2) @map("deal_blast_asking_override")
+  dealBlastArvOverride           Decimal? @db.Decimal(12, 2) @map("deal_blast_arv_override")
+  dealBlastContractOverride      Decimal? @db.Decimal(12, 2) @map("deal_blast_contract_override")
+  dealBlastAssignmentFeeOverride Decimal? @db.Decimal(12, 2) @map("deal_blast_assignment_fee_override")
+
   // Flexible custom fields per tenant config
   customFields Json @default("{}") @map("custom_fields")
 
@@ -776,9 +804,16 @@ model PropertyBuyerStage {
   tenantId   String   @map("tenant_id")
   propertyId String   @map("property_id")
   buyerId    String   @map("buyer_id")
-  stage      String   @default("matched") // matched | responded | interested
+  stage      String   @default("matched") // matched | added | responded | interested
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Response tracking (Fix 6B)
+  ghlResponse         String?   @map("ghl_response") @db.Text
+  responseIntent      String?   @map("response_intent") // interested | not_interested | needs_followup | unclear
+  responseAt          DateTime? @map("response_at")
+  movedToRespondedAt  DateTime? @map("moved_to_responded_at")
+  movedToInterestedAt DateTime? @map("moved_to_interested_at")
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)

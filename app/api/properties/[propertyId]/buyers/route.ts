@@ -312,15 +312,19 @@ export async function GET(
         return b.matchScore - a.matchScore
       })
 
-    // Fetch buyer pipeline stages for this property
+    // Fetch buyer pipeline stages for this property (include responseIntent for UI highlighting)
     const buyerStages = await db.propertyBuyerStage.findMany({
       where: { propertyId: params.propertyId, tenantId },
-      select: { buyerId: true, stage: true },
+      select: { buyerId: true, stage: true, responseIntent: true },
     })
     const stageMap: Record<string, string> = {}
-    for (const bs of buyerStages) { stageMap[bs.buyerId] = bs.stage }
+    const intentMap: Record<string, string> = {}
+    for (const bs of buyerStages) {
+      stageMap[bs.buyerId] = bs.stage
+      if (bs.responseIntent) intentMap[bs.buyerId] = bs.responseIntent
+    }
 
-    return NextResponse.json({ buyers: matched, total: matched.length, buyerStages: stageMap })
+    return NextResponse.json({ buyers: matched, total: matched.length, buyerStages: stageMap, buyerIntents: intentMap })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to match buyers' }, { status: 500 })
   }

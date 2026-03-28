@@ -16,6 +16,35 @@ import { formatPhone, titleCase } from '@/lib/format'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
 
+const GHL_STAGE_COLORS: Record<string, string> = {
+  'New Lead (1)': 'bg-sky-100 text-sky-700',
+  'Warm Leads(2)': 'bg-orange-100 text-orange-700',
+  'Hot Leads(2)': 'bg-red-100 text-red-700',
+  'Pending Apt(3)': 'bg-yellow-100 text-yellow-700',
+  'Walkthrough Apt Scheduled': 'bg-amber-100 text-amber-700',
+  'Offer Apt Scheduled (3)': 'bg-lime-100 text-lime-700',
+  'Made Offer (4)': 'bg-purple-100 text-purple-700',
+  'Under Contract (5)': 'bg-emerald-100 text-emerald-700',
+  'Purchased (6)': 'bg-green-100 text-green-700',
+}
+const SOURCE_COLORS: Record<string, string> = {
+  'PPL': 'bg-violet-100 text-violet-700',
+  'PPC': 'bg-sky-100 text-sky-700',
+  'Texts': 'bg-cyan-100 text-cyan-700',
+  'Form': 'bg-rose-100 text-rose-700',
+  'Dialer': 'bg-orange-100 text-orange-700',
+  'Cold Call': 'bg-orange-100 text-orange-700',
+  'Direct Mail': 'bg-pink-100 text-pink-700',
+  'Referral': 'bg-green-100 text-green-700',
+}
+const MARKET_COLORS: Record<string, string> = {
+  'Nashville': 'bg-red-100 text-red-700',
+  'Columbia': 'bg-teal-100 text-teal-700',
+  'Knoxville': 'bg-indigo-100 text-indigo-700',
+  'Chattanooga': 'bg-amber-100 text-amber-700',
+  'Global': 'bg-gray-100 text-gray-600',
+}
+
 interface PropertyDetail {
   id: string; address: string; city: string; state: string; zip: string; status: string
   arv: string | null; askingPrice: string | null; mao: string | null
@@ -27,9 +56,21 @@ interface PropertyDetail {
   beds: number | null; baths: number | null; sqft: number | null
   yearBuilt: number | null; lotSize: string | null
   propertyType: string | null; occupancy: string | null; lockboxCode: string | null
+  waterType: string | null; waterNotes: string | null
+  sewerType: string | null; sewerCondition: string | null; sewerNotes: string | null
+  electricType: string | null; electricNotes: string | null
   projectType: string[]; propertyMarkets: string[]
   description: string | null; internalNotes: string | null
   lastOfferDate: string | null; lastContactedDate: string | null
+  // AI enrichment fields
+  repairEstimate: string | null; rentalEstimate: string | null
+  neighborhoodSummary: string | null; zestimate: string | null
+  ownerName: string | null; floodZone: string | null
+  taxAssessment: string | null; annualTax: string | null
+  aiEnrichmentStatus: string | null
+  // Deal Blast overrides
+  dealBlastAskingOverride: string | null; dealBlastArvOverride: string | null
+  dealBlastContractOverride: string | null; dealBlastAssignmentFeeOverride: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
@@ -112,17 +153,17 @@ export function PropertyDetailClient({
             {APP_STAGE_LABELS[appStage]}
           </span>
           {property.ghlStageName && (
-            <span className="text-[10px] font-medium px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border-[0.5px] border-blue-200">
+            <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${GHL_STAGE_COLORS[property.ghlStageName] ?? 'bg-blue-100 text-blue-700'}`}>
               {property.ghlStageName}
             </span>
           )}
           {property.leadSource && (
-            <span className="text-[10px] font-medium px-2 py-[2px] rounded-full bg-purple-50 text-purple-700 border-[0.5px] border-purple-200">
+            <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${SOURCE_COLORS[property.leadSource] ?? 'bg-violet-100 text-violet-700'}`}>
               {property.leadSource}
             </span>
           )}
           {property.propertyMarkets.map(m => (
-            <span key={m} className="text-[10px] font-medium px-2 py-[2px] rounded-full bg-emerald-50 text-emerald-700 border-[0.5px] border-emerald-200">
+            <span key={m} className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${MARKET_COLORS[m] ?? 'bg-red-100 text-red-700'}`}>
               {m}
             </span>
           ))}
@@ -137,6 +178,37 @@ export function PropertyDetailClient({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* AI Enrichment badge */}
+            {property.aiEnrichmentStatus === 'pending' && (
+              <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full animate-pulse">
+                <Sparkles size={10} /> AI enriching...
+              </span>
+            )}
+            {property.aiEnrichmentStatus === 'complete' && (
+              <span className="flex items-center gap-1 text-[10px] font-medium text-green-600 bg-green-50 px-2.5 py-1 rounded-full">
+                <Sparkles size={10} /> AI enriched
+              </span>
+            )}
+            {property.aiEnrichmentStatus === 'failed' && (
+              <span className="flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                <Sparkles size={10} /> Enrich failed
+              </span>
+            )}
+            {/* Re-enrich button */}
+            {property.aiEnrichmentStatus !== 'pending' && (
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch(`/api/properties/${property.id}/re-enrich`, { method: 'POST' })
+                    router.refresh()
+                  } catch {}
+                }}
+                className="flex items-center gap-1 text-ds-fine text-txt-muted hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
+                title="Re-run AI enrichment"
+              >
+                <Bot size={11} /> Re-enrich
+              </button>
+            )}
             {ghlContactId && ghlLocationId && (
               <a
                 href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${ghlContactId}`}
@@ -572,6 +644,131 @@ function InlineTextArea({
         {value ?? 'Click to add...'}
       </p>
     </div>
+  )
+}
+
+// ─── Inline Select (dropdown) ─────────────────────────────────────────────────
+
+function InlineSelect({
+  label, value, field, propertyId, options, source, onSaved,
+}: {
+  label: string; value: string | null; field: string; propertyId: string
+  options: string[]; source?: string | null
+  onSaved: (field: string, val: string | number | null, src?: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function pick(val: string | null) {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: val, fieldSources: val ? { [field]: 'user' } : { [field]: '' } }),
+      })
+      if (res.ok) onSaved(field, val, val ? 'user' : '')
+    } catch {}
+    setSaving(false)
+    setOpen(false)
+  }
+
+  const tagColor = source === 'ai' ? 'text-blue-400' : source === 'api' ? 'text-purple-400' : source === 'user' ? 'text-green-400' : ''
+  const tagLabel = source === 'ai' ? 'AI' : source === 'api' ? 'API' : source === 'user' ? 'EDITED' : ''
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-1 text-ds-fine font-medium text-txt-primary bg-surface-secondary hover:bg-[rgba(0,0,0,0.06)] px-2 py-1 rounded-[6px] transition-colors whitespace-nowrap"
+      >
+        {value ?? <span className="text-txt-muted">Select</span>}
+        {tagLabel && <span className={`text-[6px] font-bold uppercase ${tagColor}`}>{tagLabel}</span>}
+      </button>
+      {open && (
+        <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-[rgba(0,0,0,0.1)] rounded-[8px] shadow-lg py-1 min-w-[160px]">
+          {options.map(o => (
+            <button key={o} onClick={() => pick(o)}
+              className={`block w-full text-left px-3 py-1.5 text-ds-fine hover:bg-surface-secondary transition-colors ${o === value ? 'font-semibold text-gunner-red' : 'text-txt-primary'}`}>
+              {o}
+            </button>
+          ))}
+          {value && (
+            <button onClick={() => pick(null)}
+              className="block w-full text-left px-3 py-1.5 text-ds-fine text-txt-muted hover:bg-surface-secondary transition-colors border-t border-[rgba(0,0,0,0.06)]">
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Inline Text (click to edit single-line) ──────────────────────────────────
+
+function InlineText({
+  label, value, field, propertyId, placeholder, source, onSaved,
+}: {
+  label: string; value: string | null; field: string; propertyId: string
+  placeholder?: string; source?: string | null
+  onSaved: (field: string, val: string | number | null, src?: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function startEdit() {
+    setEditValue(value ?? '')
+    setEditing(true)
+  }
+
+  async function save() {
+    if (saving) return
+    const raw = editValue.trim()
+    if (raw === (value ?? '')) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const newVal = raw || null
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: newVal, fieldSources: newVal ? { [field]: 'user' } : { [field]: '' } }),
+      })
+      if (res.ok) onSaved(field, newVal, newVal ? 'user' : '')
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+  }
+
+  const tagColor = source === 'ai' ? 'text-blue-400' : source === 'api' ? 'text-purple-400' : source === 'user' ? 'text-green-400' : ''
+  const tagLabel = source === 'ai' ? 'AI' : source === 'api' ? 'API' : source === 'user' ? 'EDITED' : ''
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1 flex-1 min-w-0">
+        <input
+          autoFocus type="text" value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
+          className="flex-1 min-w-0 bg-white border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-ds-fine text-txt-primary focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+          disabled={saving} placeholder={placeholder}
+        />
+      </span>
+    )
+  }
+
+  return (
+    <span
+      onClick={startEdit}
+      className="inline-flex items-center gap-1 cursor-pointer hover:text-gunner-red transition-colors group flex-1 min-w-0"
+    >
+      <span className={`text-ds-fine truncate ${value ? 'text-txt-secondary' : 'text-txt-muted'}`}>
+        {value ?? (placeholder ? <span className="italic">{placeholder}</span> : 'Click to add')}
+      </span>
+      {tagLabel && <span className={`text-[6px] font-bold uppercase shrink-0 ${tagColor}`}>{tagLabel}</span>}
+      <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity shrink-0" />
+    </span>
   )
 }
 
@@ -1163,6 +1360,13 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
     propertyMarkets: property.propertyMarkets,
     occupancy: property.occupancy,
     lockboxCode: property.lockboxCode,
+    waterType: property.waterType,
+    waterNotes: property.waterNotes,
+    sewerType: property.sewerType,
+    sewerCondition: property.sewerCondition,
+    sewerNotes: property.sewerNotes,
+    electricType: property.electricType,
+    electricNotes: property.electricNotes,
     description: property.description,
     internalNotes: property.internalNotes,
   })
@@ -1297,6 +1501,48 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         <div className="border-t border-[rgba(0,0,0,0.04)]">
           <TagRow label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
             field="projectType" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
+        </div>
+      </div>
+
+      {/* Utilities */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Utilities</p>
+        </div>
+        <div className="divide-y divide-[rgba(0,0,0,0.04)]">
+          {/* Water */}
+          <div className="px-4 py-2.5 flex items-start gap-4">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-16 pt-0.5 shrink-0">Water</p>
+            <div className="flex-1 flex items-center gap-3">
+              <InlineSelect label="" value={vals.waterType} field="waterType" propertyId={property.id}
+                options={['Public Water', 'Well']} source={sources.waterType} onSaved={handleSaved} />
+              <InlineText label="" value={vals.waterNotes} field="waterNotes" propertyId={property.id}
+                placeholder="e.g. Well tested 2023, pump replaced" source={sources.waterNotes} onSaved={handleSaved} />
+            </div>
+          </div>
+          {/* Sewer */}
+          <div className="px-4 py-2.5 flex items-start gap-4">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-16 pt-0.5 shrink-0">Sewer</p>
+            <div className="flex-1 flex flex-wrap items-center gap-3">
+              <InlineSelect label="" value={vals.sewerType} field="sewerType" propertyId={property.id}
+                options={['Public Sewer', 'Septic']} source={sources.sewerType} onSaved={handleSaved} />
+              <InlineSelect label="" value={vals.sewerCondition} field="sewerCondition" propertyId={property.id}
+                options={['Good condition', 'Needs inspection', 'Needs repair', 'Needs full replacement', 'Perked (full)', 'Perked for X beds only', 'Not perked', 'Unknown']}
+                source={sources.sewerCondition} onSaved={handleSaved} />
+              <InlineText label="" value={vals.sewerNotes} field="sewerNotes" propertyId={property.id}
+                placeholder="e.g. Perked for 2 beds only" source={sources.sewerNotes} onSaved={handleSaved} />
+            </div>
+          </div>
+          {/* Electric */}
+          <div className="px-4 py-2.5 flex items-start gap-4">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-16 pt-0.5 shrink-0">Electric</p>
+            <div className="flex-1 flex items-center gap-3">
+              <InlineSelect label="" value={vals.electricType} field="electricType" propertyId={property.id}
+                options={['Public', 'Private/Co-op']} source={sources.electricType} onSaved={handleSaved} />
+              <InlineText label="" value={vals.electricNotes} field="electricNotes" propertyId={property.id}
+                placeholder="e.g. Updated panel 2022" source={sources.electricNotes} onSaved={handleSaved} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1738,6 +1984,8 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
 
   // Kanban stage tracking: buyerId -> column
   const [buyerStages, setBuyerStages] = useState<Record<string, KanbanStage>>({})
+  // Intent tracking: buyerId -> responseIntent (interested | not_interested | needs_followup | unclear)
+  const [buyerIntents, setBuyerIntents] = useState<Record<string, string>>({})
   // Left column tab: switch between Added (manual) and Matched (auto)
   const [leftTab, setLeftTab] = useState<'matched' | 'added'>('matched')
 
@@ -1750,6 +1998,10 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   const [smsTarget, setSmsTarget] = useState<{ name: string; phone: string; ghlContactId: string | null } | null>(null)
   const [smsMessage, setSmsMessage] = useState('')
   const [smsSending, setSmsSending] = useState(false)
+
+  // Search + market filter state
+  const [buyerSearch, setBuyerSearch] = useState('')
+  const [activeMarketFilter, setActiveMarketFilter] = useState<string | null>(null)
 
   const tierColors: Record<string, string> = {
     priority: 'bg-amber-100 text-amber-700',
@@ -1814,6 +2066,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
           const d2 = await r2.json()
           setBuyers(d2.buyers ?? [])
           if (d2.buyerStages) setBuyerStages(d2.buyerStages)
+          if (d2.buyerIntents) setBuyerIntents(d2.buyerIntents)
           setSyncMsg('')
         }
         setFetched(true)
@@ -1822,6 +2075,7 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
       }
       setBuyers(data.buyers ?? [])
       if (data.buyerStages) setBuyerStages(data.buyerStages)
+      if (data.buyerIntents) setBuyerIntents(data.buyerIntents)
       setSyncMsg('')
       setFetched(true)
     } catch { setBuyers([]) }
@@ -1876,6 +2130,21 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   // ─── Kanban helpers ────────────────────────────────────────────────
   const allBuyers: BuyerItem[] = [...addedBuyers, ...buyers.filter(b => !addedBuyers.some(a => a.id === b.id))]
 
+  // Unique markets for filter chips
+  const uniqueMarkets = [...new Set(allBuyers.flatMap(b => b.markets ?? []))].sort()
+
+  // Search + market filtered buyers
+  const searchLower = buyerSearch.toLowerCase()
+  const filteredAllBuyers = allBuyers.filter(b => {
+    const matchesSearch = !buyerSearch ||
+      b.name.toLowerCase().includes(searchLower) ||
+      (b.phone ?? '').includes(buyerSearch) ||
+      (b.markets ?? []).some(m => m.toLowerCase().includes(searchLower))
+    const matchesMarket = !activeMarketFilter ||
+      (b.markets ?? []).some(m => m.toLowerCase() === activeMarketFilter.toLowerCase())
+    return matchesSearch && matchesMarket
+  })
+
   const COLUMNS: { key: KanbanStage; label: string }[] = [
     { key: 'matched', label: 'Matched' },
     { key: 'responded', label: 'Responded' },
@@ -1889,11 +2158,11 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   function buyersInColumn(col: KanbanStage) {
     if (col === 'matched') {
       // Left column: filter by Added vs Matched tab
-      const inCol = allBuyers.filter(b => getBuyerStage(b.id) === 'matched')
+      const inCol = filteredAllBuyers.filter(b => getBuyerStage(b.id) === 'matched')
       if (leftTab === 'added') return inCol.filter(b => addedBuyers.some(a => a.id === b.id))
       return inCol.filter(b => !addedBuyers.some(a => a.id === b.id))
     }
-    return allBuyers.filter(b => getBuyerStage(b.id) === col)
+    return filteredAllBuyers.filter(b => getBuyerStage(b.id) === col)
   }
 
   function moveBuyerStage(buyerId: string, newStage: KanbanStage) {
@@ -2142,6 +2411,33 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
         </div>
       )}
 
+      {/* Search + Market filters */}
+      <div className="space-y-2 mb-4">
+        <div className="relative">
+          <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted" />
+          <input
+            type="text"
+            value={buyerSearch}
+            onChange={e => setBuyerSearch(e.target.value)}
+            placeholder="Search buyers by name, phone, or market..."
+            className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] pl-9 pr-4 py-2 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red"
+            style={{ borderColor: 'var(--border-medium)' }}
+          />
+        </div>
+        {uniqueMarkets.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {uniqueMarkets.map(m => (
+              <button key={m} onClick={() => setActiveMarketFilter(activeMarketFilter === m ? null : m)}
+                className={`text-[10px] font-medium px-2.5 py-1 rounded-full transition-colors ${
+                  activeMarketFilter === m ? 'bg-gunner-red text-white' : 'bg-surface-tertiary text-txt-secondary hover:bg-surface-secondary'
+                }`}>
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* ─── 3-Column Kanban Board ─── */}
       {loading && !fetched ? (
         <div className="py-10 text-center">
@@ -2198,8 +2494,24 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
                       const currentStage = getBuyerStage(b.id)
                       const prev = prevStageMap[currentStage]
                       const next = nextStageMap[currentStage]
+                      const intent = buyerIntents[b.id]
+                      const isNotInterested = intent === 'not_interested'
+                      // Intent-based card styling
+                      const cardClasses = isNotInterested
+                        ? 'bg-gray-50 opacity-60 rounded-lg border-[0.5px] border-[rgba(0,0,0,0.08)] shadow-sm p-3 transition-shadow'
+                        : col.key === 'interested'
+                          ? 'bg-green-50/30 border-l-2 border-green-400 rounded-lg border-r-[0.5px] border-t-[0.5px] border-b-[0.5px] border-r-[rgba(0,0,0,0.08)] border-t-[rgba(0,0,0,0.08)] border-b-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow'
+                          : col.key === 'responded' && !intent
+                            ? 'bg-amber-50/30 border-l-2 border-amber-400 rounded-lg border-r-[0.5px] border-t-[0.5px] border-b-[0.5px] border-r-[rgba(0,0,0,0.08)] border-t-[rgba(0,0,0,0.08)] border-b-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow'
+                            : 'bg-white rounded-lg border-[0.5px] border-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow'
                       return (
-                        <div key={b.id} className="bg-white rounded-lg border-[0.5px] border-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow">
+                        <div key={b.id} className={cardClasses}>
+                          {/* Not Interested badge */}
+                          {isNotInterested && (
+                            <div className="mb-1">
+                              <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-500">Not Interested</span>
+                            </div>
+                          )}
                           {/* Top row: Score badge + tier pill + name + market */}
                           <div className="flex items-center gap-1.5 mb-1">
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${scoreBadgeColor(b.matchScore)}`}>
@@ -3150,6 +3462,34 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
   const [selectedFrom, setSelectedFrom] = useState<{name: string; phone: string} | null>(null)
   const [fromDropdownOpen, setFromDropdownOpen] = useState(false)
 
+  // Deal Summary override state — inline editable fields
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [overrides, setOverrides] = useState<Record<string, string | null>>({
+    dealBlastAskingOverride: property.dealBlastAskingOverride,
+    dealBlastArvOverride: property.dealBlastArvOverride,
+    dealBlastContractOverride: property.dealBlastContractOverride,
+    dealBlastAssignmentFeeOverride: property.dealBlastAssignmentFeeOverride,
+  })
+  const [savingOverride, setSavingOverride] = useState(false)
+
+  async function saveDealOverride(overrideKey: string, value: string) {
+    setSavingOverride(true)
+    try {
+      const numericValue = value ? parseFloat(value.replace(/[^0-9.]/g, '')) : null
+      await fetch(`/api/properties/${property.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [overrideKey]: numericValue ? numericValue.toString() : null }),
+      })
+      setOverrides(prev => ({ ...prev, [overrideKey]: numericValue ? numericValue.toString() : null }))
+    } catch {
+      // revert on error
+    }
+    setSavingOverride(false)
+    setEditingField(null)
+  }
+
   // Fetch blast history + buyer list + team members on mount
   useEffect(() => {
     fetchBuyers()
@@ -3303,19 +3643,32 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         </button>
       </div>
 
-      {/* Property summary card — key deal numbers at a glance */}
+      {/* Property summary card — key deal numbers with inline-editable overrides */}
       <div className="bg-surface-secondary rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.06)] p-4">
-        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Deal Summary</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Summary</p>
+          <p className="text-[8px] text-txt-muted">Click a value to set a blast override</p>
+        </div>
         <div className="grid grid-cols-4 gap-3">
           {([
-            { key: 'askingPrice', label: 'Asking', value: property.askingPrice, color: 'text-txt-primary' },
-            { key: 'arv', label: 'ARV', value: property.arv, color: 'text-semantic-green' },
-            { key: 'contractPrice', label: 'Contract', value: property.contractPrice, color: 'text-txt-primary' },
-            { key: 'assignmentFee', label: 'Assignment Fee', value: property.assignmentFee, color: 'text-semantic-amber' },
+            { key: 'askingPrice', overrideKey: 'dealBlastAskingOverride', label: 'Asking', value: property.askingPrice, color: 'text-txt-primary' },
+            { key: 'arv', overrideKey: 'dealBlastArvOverride', label: 'ARV', value: property.arv, color: 'text-semantic-green' },
+            { key: 'contractPrice', overrideKey: 'dealBlastContractOverride', label: 'Contract', value: property.contractPrice, color: 'text-txt-primary' },
+            { key: 'assignmentFee', overrideKey: 'dealBlastAssignmentFeeOverride', label: 'Assignment Fee', value: property.assignmentFee, color: 'text-semantic-amber' },
           ] as const).map(field => {
             const source = property.fieldSources?.[field.key]
-            const borderClass = source === 'api' ? 'border-l-2 border-purple-400 pl-2' : source === 'ai' ? 'border-l-2 border-blue-400 pl-2' : source === 'user' ? 'border-l-2 border-green-400 pl-2' : ''
-            const badgeEl = source === 'api'
+            const overrideValue = overrides[field.overrideKey]
+            const displayValue = overrideValue ?? field.value
+            const hasOverride = overrideValue !== null && overrideValue !== undefined
+            const isEditing = editingField === field.overrideKey
+            const borderClass = hasOverride
+              ? 'border-l-2 border-amber-400 pl-2'
+              : source === 'api' ? 'border-l-2 border-purple-400 pl-2'
+              : source === 'ai' ? 'border-l-2 border-blue-400 pl-2'
+              : source === 'user' ? 'border-l-2 border-green-400 pl-2' : ''
+            const badgeEl = hasOverride
+              ? <span className="text-[7px] font-bold text-amber-600 bg-amber-100 px-1 py-px rounded ml-1">OVERRIDE</span>
+              : source === 'api'
               ? <span className="text-[7px] font-bold text-purple-600 bg-purple-100 px-1 py-px rounded ml-1">API</span>
               : source === 'ai'
               ? <span className="text-[7px] font-bold text-blue-600 bg-blue-100 px-1 py-px rounded ml-1">AI</span>
@@ -3323,11 +3676,49 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
               ? <span className="text-[7px] font-bold text-green-600 bg-green-100 px-1 py-px rounded ml-1">EDITED</span>
               : null
             return (
-              <div key={field.key} className={borderClass}>
-                <p className="text-[9px] text-txt-muted">{field.label}</p>
-                <p className={`text-ds-fine font-semibold ${field.color} flex items-center`}>
-                  {fmt(field.value)}{badgeEl}
+              <div key={field.key} className={`${borderClass} cursor-pointer group`}>
+                <p className="text-[9px] text-txt-muted flex items-center gap-1">
+                  {field.label}
+                  <Pencil size={7} className="opacity-0 group-hover:opacity-50 transition-opacity" />
                 </p>
+                {isEditing ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-ds-fine text-txt-muted">$</span>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editValue}
+                      onChange={e => setEditValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveDealOverride(field.overrideKey, editValue)
+                        if (e.key === 'Escape') setEditingField(null)
+                      }}
+                      onBlur={() => saveDealOverride(field.overrideKey, editValue)}
+                      className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded px-1 py-0.5 text-ds-fine font-semibold text-txt-primary focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+                      disabled={savingOverride}
+                    />
+                    <button
+                      onClick={() => { saveDealOverride(field.overrideKey, '') }}
+                      className="text-[8px] text-txt-muted hover:text-red-500"
+                      title="Clear override"
+                    >
+                      <X size={9} />
+                    </button>
+                  </div>
+                ) : (
+                  <p
+                    className={`text-ds-fine font-semibold ${field.color} flex items-center hover:bg-white/50 rounded px-0.5 -mx-0.5 transition-colors`}
+                    onClick={() => {
+                      setEditingField(field.overrideKey)
+                      setEditValue(overrideValue ?? field.value ?? '')
+                    }}
+                  >
+                    {fmt(displayValue)}{badgeEl}
+                  </p>
+                )}
+                {hasOverride && field.value && (
+                  <p className="text-[8px] text-txt-muted line-through">{fmt(field.value)}</p>
+                )}
               </div>
             )
           })}
@@ -3340,8 +3731,19 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
             {property.yearBuilt && <span>Built {property.yearBuilt}</span>}
           </div>
         )}
+        {property.neighborhoodSummary && (
+          <p className="text-[10px] text-txt-secondary mt-2 italic">{property.neighborhoodSummary}</p>
+        )}
         {property.description && (
-          <p className="text-[10px] text-txt-muted mt-2 line-clamp-2">{property.description}</p>
+          <p className="text-[10px] text-txt-muted mt-1 line-clamp-2">{property.description}</p>
+        )}
+        {/* AI enrichment extras row */}
+        {(property.repairEstimate || property.rentalEstimate || property.floodZone) && (
+          <div className="flex items-center gap-3 mt-2 text-[9px] text-txt-secondary">
+            {property.repairEstimate && <span>Repair Est: <strong>${Number(property.repairEstimate).toLocaleString()}</strong></span>}
+            {property.rentalEstimate && <span>Rental Est: <strong>${Number(property.rentalEstimate).toLocaleString()}/mo</strong></span>}
+            {property.floodZone && <span>Flood: <strong>{property.floodZone}</strong></span>}
+          </div>
         )}
         <div className="flex items-center gap-2 mt-2">
           <span className="text-[9px] font-medium text-txt-muted bg-surface-tertiary px-1.5 py-0.5 rounded-full">{totalRecipients} matched buyers</span>
