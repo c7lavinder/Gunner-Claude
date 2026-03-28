@@ -111,6 +111,12 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
     updateData.lotSize = acres >= 1 ? `${acres.toFixed(2)} ac` : `${result.lotSquareFootage.toLocaleString()} sqft`
     fieldSources.lotSize = 'api'
   }
+  // Auto-derive occupancy from ownerOccupied
+  if (!property.occupancy && result.ownerOccupied != null) {
+    updateData.occupancy = result.ownerOccupied ? 'Owner' : 'Renter'
+    fieldSources.occupancy = 'api'
+  }
+
   if (!property.propertyType && result.propertyType) {
     const typeMap: Record<string, string> = {
       'single family residential': 'House', 'sfr': 'House', 'single family': 'House',

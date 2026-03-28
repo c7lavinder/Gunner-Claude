@@ -568,7 +568,7 @@ function InlineDetailItem({
     )
   }
 
-  const display = value != null ? (typeof value === 'number' ? value.toLocaleString() : value) : null
+  const display = value != null ? (typeof value === 'number' ? (field === 'yearBuilt' ? String(value) : value.toLocaleString()) : value) : null
 
   return (
     <span
@@ -834,7 +834,7 @@ function DetailCell({
     setSearch('')
   }
 
-  const display = value != null ? (typeof value === 'number' ? value.toLocaleString() : value) : null
+  const display = value != null ? (typeof value === 'number' ? (field === 'yearBuilt' ? String(value) : value.toLocaleString()) : value) : null
   const filteredOpts = (options ?? []).filter(o => o.toLowerCase().includes(search.toLowerCase()))
 
   return (
@@ -1373,19 +1373,31 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
 
-  // Auto-compute assignment fee on mount if both prices exist and fee is empty
+  // Auto-compute assignment fee + final profit on mount if inputs exist and values are empty
   useEffect(() => {
+    const updates: Record<string, unknown> = {}
+    const srcUpdates: Record<string, string> = {}
+    // Assignment fee = accepted - contract
     if (!vals.assignmentFee && vals.acceptedPrice && vals.contractPrice) {
       const fee = Number(vals.acceptedPrice) - Number(vals.contractPrice)
-      if (fee > 0) {
-        setVals(prev => ({ ...prev, assignmentFee: String(fee) }))
-        setSources(prev => ({ ...prev, assignmentFee: 'ai' }))
-        fetch(`/api/properties/${property.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
-        }).catch(() => {})
+      if (fee >= 0) {
+        updates.assignmentFee = String(fee); srcUpdates.assignmentFee = 'ai'
       }
+    }
+    // Final profit = ARV - contract - repair (repair optional, default 0)
+    if (!vals.finalProfit && property.arv && vals.contractPrice) {
+      const repair = property.repairEstimate ? Number(property.repairEstimate) : 0
+      const profit = Number(property.arv) - Number(vals.contractPrice) - repair
+      updates.finalProfit = String(profit); srcUpdates.finalProfit = 'ai'
+    }
+    if (Object.keys(updates).length > 0) {
+      setVals(prev => ({ ...prev, ...updates }))
+      setSources(prev => ({ ...prev, ...srcUpdates }))
+      fetch(`/api/properties/${property.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...updates, fieldSources: srcUpdates }),
+      }).catch(() => {})
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -1423,6 +1435,23 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
             body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
           }).catch(() => {})
           setSources(p => ({ ...p, assignmentFee: 'ai' }))
+        }
+      }
+
+      // Auto-calculate final profit: ARV - Contract - Repair
+      if (['contractPrice', 'arv'].includes(field) && sources.finalProfit !== 'user') {
+        const arvVal = field === 'arv' ? val : property.arv
+        const contractVal = field === 'contractPrice' ? val : next.contractPrice
+        if (arvVal && contractVal) {
+          const repair = property.repairEstimate ? Number(property.repairEstimate) : 0
+          const profit = Number(arvVal) - Number(contractVal) - repair
+          next.finalProfit = String(profit)
+          fetch(`/api/properties/${property.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ finalProfit: String(profit), fieldSources: { finalProfit: 'ai' } }),
+          }).catch(() => {})
+          setSources(p => ({ ...p, finalProfit: 'ai' }))
         }
       }
 
@@ -1501,11 +1530,11 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
           <DetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
         </div>
 
-        {/* Row 2: Lot, Occupancy, Lockbox (3 cols) */}
+        {/* Row 2: Lot, Occupancy, Access (3 cols) */}
         <div className="grid grid-cols-3 divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)]">
           <DetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
           <DetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={handleSaved} />
-          <DetailCell label="Lockbox" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
+          <DetailCell label="Access" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
         </div>
 
         {/* Row 3: Market tags */}
