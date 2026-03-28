@@ -15,6 +15,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { formatPhone, titleCase } from '@/lib/format'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
+import { FloatingDropdown } from '@/components/ui/FloatingDropdown'
 
 const GHL_STAGE_COLORS: Record<string, string> = {
   'New Lead (1)': 'bg-sky-100 text-sky-700',
@@ -677,31 +678,35 @@ function InlineSelect({
   const tagLabel = source === 'ai' ? 'AI' : source === 'api' ? 'API' : source === 'user' ? 'EDITED' : ''
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="inline-flex items-center gap-1 text-ds-fine font-medium text-txt-primary bg-surface-secondary hover:bg-[rgba(0,0,0,0.06)] px-2 py-1 rounded-[6px] transition-colors whitespace-nowrap"
-      >
-        {value ?? <span className="text-txt-muted">Select</span>}
-        {tagLabel && <span className={`text-[6px] font-bold uppercase ${tagColor}`}>{tagLabel}</span>}
-      </button>
-      {open && (
-        <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-[rgba(0,0,0,0.1)] rounded-[8px] shadow-lg py-1 min-w-[160px]">
-          {options.map(o => (
-            <button key={o} onClick={() => pick(o)}
-              className={`block w-full text-left px-3 py-1.5 text-ds-fine hover:bg-surface-secondary transition-colors ${o === value ? 'font-semibold text-gunner-red' : 'text-txt-primary'}`}>
-              {o}
-            </button>
-          ))}
-          {value && (
-            <button onClick={() => pick(null)}
-              className="block w-full text-left px-3 py-1.5 text-ds-fine text-txt-muted hover:bg-surface-secondary transition-colors border-t border-[rgba(0,0,0,0.06)]">
-              Clear
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+    <FloatingDropdown
+      open={open}
+      onOpenChange={setOpen}
+      width={176}
+      trigger={
+        <button
+          onClick={() => setOpen(!open)}
+          className="inline-flex items-center gap-1 text-ds-fine font-medium text-txt-primary bg-surface-secondary hover:bg-[rgba(0,0,0,0.06)] px-2 py-1 rounded-[6px] transition-colors whitespace-nowrap"
+        >
+          {value ?? <span className="text-txt-muted">Select</span>}
+          {tagLabel && <span className={`text-[6px] font-bold uppercase ${tagColor}`}>{tagLabel}</span>}
+        </button>
+      }
+    >
+      <div className="py-0.5">
+        {options.map(o => (
+          <button key={o} onClick={() => pick(o)}
+            className={`block w-full text-left px-3 py-1.5 text-ds-fine hover:bg-surface-secondary transition-colors ${o === value ? 'font-semibold text-gunner-red' : 'text-txt-primary'}`}>
+            {o}
+          </button>
+        ))}
+        {value && (
+          <button onClick={() => pick(null)}
+            className="block w-full text-left px-3 py-1.5 text-ds-fine text-txt-muted hover:bg-surface-secondary transition-colors border-t border-[rgba(0,0,0,0.06)]">
+            Clear
+          </button>
+        )}
+      </div>
+    </FloatingDropdown>
   )
 }
 
@@ -837,54 +842,62 @@ function DetailCell({
   const display = value != null ? (typeof value === 'number' ? (field === 'yearBuilt' ? String(value) : value.toLocaleString()) : value) : null
   const filteredOpts = (options ?? []).filter(o => o.toLowerCase().includes(search.toLowerCase()))
 
-  return (
-    <div className="relative">
-      <div
-        onClick={startEdit}
-        className={`px-3 py-2.5 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors group relative ${source ? s.bg : ''}`}
-      >
-        {source && s.tag && (
-          <span className={`absolute top-0.5 right-1.5 text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
-        )}
-        <p className={`text-[8px] font-semibold uppercase tracking-wider ${source ? s.label : 'text-txt-muted'}`}>{label}</p>
-        {editing ? (
-          <input
-            autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
-            onChange={e => setEditValue(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
-            className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded-[4px] px-1.5 py-0.5 text-ds-fine font-semibold text-txt-primary mt-0.5 focus:outline-none"
-            disabled={saving}
-          />
-        ) : (
-          <p className={`text-ds-fine font-semibold mt-0.5 flex items-center gap-1 ${display ? (source ? s.value : 'text-txt-primary') : 'text-txt-muted'}`}>
-            {display ?? '—'}
-            <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity shrink-0" />
-          </p>
-        )}
-      </div>
-
-      {/* Select dropdown */}
-      {dropdownOpen && type === 'select' && (
-        <div className="absolute top-full left-0 z-30 mt-0.5 w-44 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-1.5">
-          <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="w-full bg-surface-secondary rounded-[4px] px-2 py-1 text-[10px] placeholder-txt-muted focus:outline-none mb-1" />
-          <div className="max-h-36 overflow-y-auto space-y-0.5">
-            {value && (
-              <button onClick={() => selectOption(null)} disabled={saving}
-                className="w-full text-left text-[10px] text-semantic-red px-2 py-1 rounded hover:bg-surface-secondary transition-colors">Clear</button>
-            )}
-            {filteredOpts.map(o => (
-              <button key={o} onClick={() => selectOption(o)} disabled={saving}
-                className={`w-full text-left text-[10px] px-2 py-1 rounded hover:bg-surface-secondary transition-colors ${
-                  o === value ? 'text-gunner-red font-semibold bg-gunner-red-light' : 'text-txt-primary'
-                }`}>{o}</button>
-            ))}
-          </div>
-        </div>
+  const cellContent = (
+    <div
+      onClick={startEdit}
+      className={`px-3 py-2.5 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors group relative ${source ? s.bg : ''}`}
+    >
+      {source && s.tag && (
+        <span className={`absolute top-0.5 right-1.5 text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+      )}
+      <p className={`text-[8px] font-semibold uppercase tracking-wider ${source ? s.label : 'text-txt-muted'}`}>{label}</p>
+      {editing ? (
+        <input
+          autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
+          className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded-[4px] px-1.5 py-0.5 text-ds-fine font-semibold text-txt-primary mt-0.5 focus:outline-none"
+          disabled={saving}
+        />
+      ) : (
+        <p className={`text-ds-fine font-semibold mt-0.5 flex items-center gap-1 ${display ? (source ? s.value : 'text-txt-primary') : 'text-txt-muted'}`}>
+          {display ?? '—'}
+          <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity shrink-0" />
+        </p>
       )}
     </div>
+  )
+
+  if (type === 'select') {
+    return (
+      <FloatingDropdown
+        open={dropdownOpen}
+        onOpenChange={(v) => { setDropdownOpen(v); if (!v) setSearch('') }}
+        width={176}
+        trigger={cellContent}
+      >
+        <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search..."
+          className="w-full bg-surface-secondary rounded-[4px] px-2 py-1 text-[10px] placeholder-txt-muted focus:outline-none mb-1" />
+        <div className="max-h-36 overflow-y-auto space-y-0.5">
+          {value && (
+            <button onClick={() => selectOption(null)} disabled={saving}
+              className="w-full text-left text-[10px] text-semantic-red px-2 py-1 rounded hover:bg-surface-secondary transition-colors">Clear</button>
+          )}
+          {filteredOpts.map(o => (
+            <button key={o} onClick={() => selectOption(o)} disabled={saving}
+              className={`w-full text-left text-[10px] px-2 py-1 rounded hover:bg-surface-secondary transition-colors ${
+                o === value ? 'text-gunner-red font-semibold bg-gunner-red-light' : 'text-txt-primary'
+              }`}>{o}</button>
+          ))}
+        </div>
+      </FloatingDropdown>
+    )
+  }
+
+  return (
+    <div>{cellContent}</div>
   )
 }
 
@@ -923,7 +936,7 @@ function TagRow({ label, values, options, field, propertyId, allowCustom, onSave
   }
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 relative">
+    <div className="flex items-center gap-3 px-3 py-2.5">
       <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider shrink-0 w-[70px]">{label}</span>
       <div className="flex items-center gap-1.5 flex-wrap flex-1 min-h-[20px]">
         {localValues.map(v => (
@@ -932,14 +945,17 @@ function TagRow({ label, values, options, field, propertyId, allowCustom, onSave
             <button onClick={() => toggle(v)} className="hover:text-gunner-red-dark transition-colors"><X size={8} /></button>
           </span>
         ))}
-        <button onClick={() => setOpen(!open)}
-          className="inline-flex items-center gap-0.5 text-[10px] text-txt-muted hover:text-gunner-red px-1.5 py-0.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] hover:border-gunner-red/30 transition-all">
-          <Plus size={8} /> Add
-        </button>
-      </div>
-
-      {open && (
-        <div className="absolute top-full left-[70px] z-30 mt-0.5 w-52 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-1.5">
+        <FloatingDropdown
+          open={open}
+          onOpenChange={(v) => { setOpen(v); if (!v) setSearch('') }}
+          width={208}
+          trigger={
+            <button onClick={() => setOpen(!open)}
+              className="inline-flex items-center gap-0.5 text-[10px] text-txt-muted hover:text-gunner-red px-1.5 py-0.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] hover:border-gunner-red/30 transition-all">
+              <Plus size={8} /> Add
+            </button>
+          }
+        >
           <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
             placeholder={allowCustom ? 'Search or type custom...' : 'Search...'}
             className="w-full bg-surface-secondary rounded-[4px] px-2 py-1 text-[10px] placeholder-txt-muted focus:outline-none mb-1" />
@@ -958,8 +974,8 @@ function TagRow({ label, values, options, field, propertyId, allowCustom, onSave
               <p className="text-[10px] text-txt-muted px-2 py-1">No options</p>
             )}
           </div>
-        </div>
-      )}
+        </FloatingDropdown>
+      </div>
     </div>
   )
 }
