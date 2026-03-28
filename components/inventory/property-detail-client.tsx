@@ -149,7 +149,7 @@ export function PropertyDetailClient({
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
         {/* Labels row — same as inventory list */}
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-          <span className={`text-[10px] font-semibold px-2 py-[2px] rounded-full ${badgeColor}`}>
+          <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${badgeColor}`}>
             {APP_STAGE_LABELS[appStage]}
           </span>
           {property.ghlStageName && (
@@ -1373,6 +1373,23 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
 
+  // Auto-compute assignment fee on mount if both prices exist and fee is empty
+  useEffect(() => {
+    if (!vals.assignmentFee && vals.acceptedPrice && vals.contractPrice) {
+      const fee = Number(vals.acceptedPrice) - Number(vals.contractPrice)
+      if (fee > 0) {
+        setVals(prev => ({ ...prev, assignmentFee: String(fee) }))
+        setSources(prev => ({ ...prev, assignmentFee: 'ai' }))
+        fetch(`/api/properties/${property.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
+        }).catch(() => {})
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function handleArraySaved(field: string, vals: string[]) {
     setVals(prev => ({ ...prev, [field]: vals }))
   }
@@ -1382,11 +1399,11 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
       const next = { ...prev, [field]: val }
 
       // Auto-calculate assignment fee when accepted price is set and contract price exists
-      if (field === 'acceptedPrice' && val && next.contractPrice) {
+      // Only auto-calc if assignmentFee wasn't manually set (source !== 'user')
+      if (field === 'acceptedPrice' && val && next.contractPrice && sources.assignmentFee !== 'user') {
         const fee = Number(val) - Number(next.contractPrice)
-        if (fee > 0) {
+        if (fee >= 0) {
           next.assignmentFee = String(fee)
-          // Persist to DB
           fetch(`/api/properties/${property.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -1396,9 +1413,9 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         }
       }
       // Also recalculate if contract price changes and accepted price exists
-      if (field === 'contractPrice' && val && next.acceptedPrice) {
+      if (field === 'contractPrice' && val && next.acceptedPrice && sources.assignmentFee !== 'user') {
         const fee = Number(next.acceptedPrice) - Number(val)
-        if (fee > 0) {
+        if (fee >= 0) {
           next.assignmentFee = String(fee)
           fetch(`/api/properties/${property.id}`, {
             method: 'PATCH',
@@ -3654,7 +3671,9 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
             { key: 'askingPrice', overrideKey: 'dealBlastAskingOverride', label: 'Asking', value: property.askingPrice, color: 'text-txt-primary' },
             { key: 'arv', overrideKey: 'dealBlastArvOverride', label: 'ARV', value: property.arv, color: 'text-semantic-green' },
             { key: 'contractPrice', overrideKey: 'dealBlastContractOverride', label: 'Contract', value: property.contractPrice, color: 'text-txt-primary' },
-            { key: 'assignmentFee', overrideKey: 'dealBlastAssignmentFeeOverride', label: 'Assignment Fee', value: property.assignmentFee, color: 'text-semantic-amber' },
+            { key: 'assignmentFee', overrideKey: 'dealBlastAssignmentFeeOverride', label: 'Assignment Fee',
+              value: property.assignmentFee ?? (property.acceptedPrice && property.contractPrice ? String(Number(property.acceptedPrice) - Number(property.contractPrice)) : null),
+              color: 'text-semantic-amber' },
           ] as const).map(field => {
             const source = property.fieldSources?.[field.key]
             const overrideValue = overrides[field.overrideKey]

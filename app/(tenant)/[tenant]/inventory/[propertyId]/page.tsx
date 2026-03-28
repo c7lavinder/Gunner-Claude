@@ -29,6 +29,7 @@ export default async function PropertyDetailPage({
         orderBy: { isPrimary: 'desc' },
       },
       assignedTo: { select: { id: true, name: true, role: true } },
+      market: { select: { name: true } },
       calls: {
         orderBy: { createdAt: 'desc' },
         take: 10,
@@ -146,7 +147,12 @@ export default async function PropertyDetailPage({
         sewerType: property.sewerType, sewerCondition: property.sewerCondition, sewerNotes: property.sewerNotes,
         electricType: property.electricType, electricNotes: property.electricNotes,
         projectType: (property.projectType ?? []) as string[],
-        propertyMarkets: (property.propertyMarkets ?? []) as string[],
+        propertyMarkets: (() => {
+          const arr = (property.propertyMarkets ?? []) as string[]
+          const marketName = property.market?.name
+          if (marketName && !arr.includes(marketName)) return [marketName, ...arr]
+          return arr.length > 0 ? arr : marketName ? [marketName] : []
+        })(),
         description: property.description, internalNotes: property.internalNotes,
         lastOfferDate: property.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: property.lastContactedDate?.toISOString() ?? null,
