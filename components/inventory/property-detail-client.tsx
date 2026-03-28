@@ -3634,7 +3634,11 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
     setGenerating(false)
   }
 
-  const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : '—'
+  const fmt = (v: string | null | undefined) => {
+    if (v == null || v === '') return '—'
+    const n = Number(v)
+    return isNaN(n) ? '—' : `$${n.toLocaleString()}`
+  }
   const totalRecipients = Object.values(recipientCounts).reduce((a, b) => a + b, 0)
 
   return (
