@@ -395,10 +395,11 @@ function DealProgress({ currentStatus, milestones }: {
   const acqIdx = acqKeys.indexOf(currentStatus)
   const dispoIdx = dispoKeys.indexOf(currentStatus)
 
-  // Map milestone types to step keys
-  const milestoneMap: Record<string, { date: string; notes: string | null }> = {}
+  // Map milestone types → ALL records (not just latest) for showing history
+  const milestonesByType: Record<string, Array<{ date: string; notes: string | null }>> = {}
   for (const m of milestones) {
-    milestoneMap[m.type] = { date: m.date, notes: m.notes }
+    if (!milestonesByType[m.type]) milestonesByType[m.type] = []
+    milestonesByType[m.type].push({ date: m.date, notes: m.notes })
   }
 
   // Map step keys to milestone types
@@ -414,47 +415,78 @@ function DealProgress({ currentStatus, milestones }: {
       <div>
         <div className="flex items-center">
           {steps.map((step, i) => {
-            const isHit = activeIdx >= 0 && i <= activeIdx
             const isCurrent = i === activeIdx
-            const milestone = milestoneMap[stepToMilestone[step.key] ?? '']
+            const milestoneType = stepToMilestone[step.key] ?? ''
+            const stepMilestones = milestonesByType[milestoneType] ?? []
+            const everVisited = stepMilestones.length > 0
             const isExpanded = expandedStep === step.key
+            // Visual: filled = current, outlined = ever visited (history), gray = never
+            const circleClass = isCurrent
+              ? `bg-gunner-red text-white ring-2 ring-offset-1 ring-gunner-red/30`
+              : everVisited
+              ? `bg-gunner-red/10 border-2 border-gunner-red text-gunner-red`
+              : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
+            const labelClass = isCurrent
+              ? 'text-gunner-red font-semibold'
+              : everVisited ? 'text-txt-primary font-medium' : 'text-txt-muted'
             return (
               <div key={step.key} className="flex items-center flex-1 last:flex-none">
                 <button
                   onClick={() => setExpandedStep(isExpanded ? null : step.key)}
-                  className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform"
-                  title={`View ${step.label} details`}
+                  className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform relative"
+                  title={everVisited ? `${step.label} — ${stepMilestones.length} time${stepMilestones.length !== 1 ? 's' : ''}` : step.label}
                 >
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-colors ${
-                    isCurrent ? `${color} text-white ring-2 ring-offset-1 ${color.replace('bg-', 'ring-')}/30` : isHit ? `${color}/20 ${color.replace('bg-', 'text-')}` : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
-                  }`}>
-                    {isHit ? <Check size={8} /> : i + 1}
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-colors ${circleClass}`}>
+                    {isCurrent || everVisited ? <Check size={8} /> : i + 1}
                   </div>
-                  <span className={`text-[7px] mt-0.5 ${isCurrent ? `${color.replace('bg-', 'text-')} font-semibold` : isHit ? 'text-txt-primary' : 'text-txt-muted'}`}>{step.label}</span>
+                  <span className={`text-[7px] mt-0.5 ${labelClass}`}>{step.label}</span>
+                  {/* Count badge for multiple milestones */}
+                  {stepMilestones.length > 1 && (
+                    <span className="absolute -top-1 -right-1.5 text-[6px] font-bold text-white bg-gunner-red w-3 h-3 rounded-full flex items-center justify-center">{stepMilestones.length}</span>
+                  )}
                 </button>
                 {i < steps.length - 1 && (
-                  <div className={`flex-1 h-px mx-0.5 ${activeIdx >= 0 && i < activeIdx ? `${color}/30` : 'bg-[rgba(0,0,0,0.06)]'}`} />
+                  <div className={`flex-1 h-px mx-0.5 ${
+                    isCurrent && i < activeIdx ? 'bg-gunner-red/30'
+                    : everVisited ? 'bg-gunner-red/20'
+                    : 'bg-[rgba(0,0,0,0.06)]'
+                  }`} />
                 )}
               </div>
             )
           })}
         </div>
-        {/* Milestone detail popover */}
+        {/* Milestone detail popover — shows ALL entries for the stage */}
         {expandedStep && steps.some(s => s.key === expandedStep) && (() => {
           const step = steps.find(s => s.key === expandedStep)!
-          const milestone = milestoneMap[stepToMilestone[step.key] ?? '']
-          const isHit = activeIdx >= 0 && steps.indexOf(step) <= activeIdx
+          const milestoneType = stepToMilestone[step.key] ?? ''
+          const stepMilestones = milestonesByType[milestoneType] ?? []
+          const isCurrent = steps.indexOf(step) === activeIdx
+          const everVisited = stepMilestones.length > 0
           return (
             <div className={`mt-2 rounded-[8px] px-3 py-2 border-[0.5px] ${
-              isHit ? `${color.replace('bg-', 'bg-')}/5 ${color.replace('bg-', 'border-')}/20` : 'bg-surface-secondary border-[rgba(0,0,0,0.06)]'
+              isCurrent ? 'bg-gunner-red/5 border-gunner-red/20'
+              : everVisited ? 'bg-surface-secondary border-gunner-red/10'
+              : 'bg-surface-secondary border-[rgba(0,0,0,0.06)]'
             }`}>
-              <div className="flex items-center justify-between">
-                <p className={`text-[10px] font-semibold ${isHit ? color.replace('bg-', 'text-') : 'text-txt-muted'}`}>{step.label}</p>
-                {milestone && <p className="text-[9px] text-txt-muted">{format(new Date(milestone.date), 'MMM d, yyyy')}</p>}
-              </div>
-              {milestone?.notes && <p className="text-[9px] text-txt-secondary mt-0.5">{milestone.notes}</p>}
-              {!milestone && isHit && <p className="text-[9px] text-txt-muted">Reached — no milestone recorded</p>}
-              {!isHit && <p className="text-[9px] text-txt-muted">Not yet reached</p>}
+              <p className={`text-[10px] font-semibold ${isCurrent ? 'text-gunner-red' : everVisited ? 'text-txt-primary' : 'text-txt-muted'}`}>
+                {step.label}
+                {stepMilestones.length > 1 && <span className="text-txt-muted font-normal ml-1">({stepMilestones.length} times)</span>}
+              </p>
+              {stepMilestones.length > 0 ? (
+                <div className="space-y-1 mt-1">
+                  {stepMilestones.map((m, mi) => (
+                    <div key={mi} className="flex items-center gap-2">
+                      <span className="text-[9px] text-txt-muted">{format(new Date(m.date), 'MMM d, yyyy')}</span>
+                      {m.notes && <span className="text-[9px] text-txt-secondary">— {m.notes}</span>}
+                    </div>
+                  ))}
+                </div>
+              ) : isCurrent ? (
+                <p className="text-[9px] text-txt-muted mt-0.5">Currently here — no milestone recorded</p>
+              ) : (
+                <p className="text-[9px] text-txt-muted mt-0.5">Not yet reached</p>
+              )}
             </div>
           )
         })()}
