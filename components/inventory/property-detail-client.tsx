@@ -937,9 +937,9 @@ function DetailCell({
 
 // ─── Tag Row (for Market / Project Type multi-select) ───────────────────────
 
-function TagRow({ label, values, options, field, propertyId, allowCustom, onSaved }: {
+function TagRow({ label, values, options, field, propertyId, allowCustom, source, onSaved }: {
   label: string; values: string[]; options: string[]; field: string; propertyId: string
-  allowCustom?: boolean; onSaved: (field: string, vals: string[]) => void
+  allowCustom?: boolean; source?: string | null; onSaved: (field: string, vals: string[]) => void
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -960,7 +960,7 @@ function TagRow({ label, values, options, field, propertyId, allowCustom, onSave
     try {
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: newVals }),
+        body: JSON.stringify({ [field]: newVals, fieldSources: { [field]: 'user' } }),
       })
       if (res.ok) { onSaved(field, newVals) }
       else { setLocalValues(values) }
@@ -973,12 +973,18 @@ function TagRow({ label, values, options, field, propertyId, allowCustom, onSave
     <div className="flex items-center gap-3 px-3 py-2.5">
       <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider shrink-0 w-[70px]">{label}</span>
       <div className="flex items-center gap-1.5 flex-wrap flex-1 min-h-[20px]">
-        {localValues.map(v => (
-          <span key={v} className="inline-flex items-center gap-1 bg-gunner-red-light text-gunner-red text-[10px] font-semibold px-2 py-0.5 rounded-full">
-            {v}
-            <button onClick={() => toggle(v)} className="hover:text-gunner-red-dark transition-colors"><X size={8} /></button>
-          </span>
-        ))}
+        {localValues.map(v => {
+          const tagStyle = source === 'api' ? 'bg-purple-100 text-purple-700'
+            : source === 'ai' ? 'bg-blue-100 text-blue-700'
+            : source === 'user' ? 'bg-green-100 text-green-700'
+            : 'bg-gunner-red-light text-gunner-red'
+          return (
+            <span key={v} className={`inline-flex items-center gap-1 ${tagStyle} text-[10px] font-semibold px-2 py-0.5 rounded-full`}>
+              {v}
+              <button onClick={() => toggle(v)} className="hover:opacity-60 transition-opacity"><X size={8} /></button>
+            </span>
+          )
+        })}
         <FloatingDropdown
           open={open}
           onOpenChange={(v) => { setOpen(v); if (!v) setSearch('') }}
@@ -1454,6 +1460,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
   function handleArraySaved(field: string, vals: string[]) {
     setVals(prev => ({ ...prev, [field]: vals }))
+    setSources(prev => ({ ...prev, [field]: 'user' }))
   }
 
   function handleSaved(field: string, val: string | number | null, src?: string) {
@@ -1590,13 +1597,13 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         {/* Row 3: Market tags */}
         <div className="border-t border-[rgba(0,0,0,0.04)]">
           <TagRow label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
-            field="propertyMarkets" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
+            field="propertyMarkets" propertyId={property.id} allowCustom source={sources.propertyMarkets} onSaved={handleArraySaved} />
         </div>
 
         {/* Row 4: Project Type tags */}
         <div className="border-t border-[rgba(0,0,0,0.04)]">
           <TagRow label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
-            field="projectType" propertyId={property.id} allowCustom onSaved={handleArraySaved} />
+            field="projectType" propertyId={property.id} allowCustom source={sources.projectType} onSaved={handleArraySaved} />
         </div>
       </div>
 
