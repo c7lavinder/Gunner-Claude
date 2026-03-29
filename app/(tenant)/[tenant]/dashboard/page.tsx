@@ -158,7 +158,7 @@ export default async function DashboardPage({ params }: PageProps) {
       ? Math.round(dayCalls.reduce((sum, c) => sum + (c.score ?? 0), 0) / dayCalls.length)
       : 0
     scoreTrend.push({
-      date: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      date: `${date.getMonth() + 1}/${date.getDate()}`,
       avgScore: dayAvg,
       count: dayCalls.length,
     })

@@ -18,6 +18,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
   const role = ((session?.user as { role?: string })?.role ?? 'LEAD_MANAGER') as UserRole
   const [showMenu, setShowMenu] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [reviewCount, setReviewCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState<Array<{
     id: string; text: string; propertyId: string | null; propertyAddress: string
@@ -27,6 +28,17 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
 
   // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false); setShowNotifications(false) }, [pathname])
+
+  // Fetch review queue count for Training badge
+  useEffect(() => {
+    fetch(`/${tenantSlug}/api/calls-review-count`).catch(() => null)
+    // Lightweight: count calls with score < 50 via calls page data (avoid new endpoint)
+    // Use the existing calls page pattern — fetch from the tenant API
+    fetch(`/api/${tenantSlug}/calls/review-count`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.count) setReviewCount(d.count) })
+      .catch(() => {})
+  }, [tenantSlug])
 
   // Fetch notifications on bell click
   async function loadNotifications() {
@@ -89,6 +101,9 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
                 }`}
               >
                 {item.label}
+                {item.label === 'Training' && reviewCount > 0 && (
+                  <span className="ml-1 text-[9px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{reviewCount}</span>
+                )}
                 {active && (
                   <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gunner-red rounded-full" />
                 )}

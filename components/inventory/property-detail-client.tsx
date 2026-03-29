@@ -12,6 +12,7 @@ import {
   Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
+import { useToast } from '@/components/ui/toaster'
 import { formatPhone, titleCase } from '@/lib/format'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
@@ -117,6 +118,8 @@ export function PropertyDetailClient({
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+  const { toast } = useToast()
   const [actionMsg, setActionMsg] = useState('')
 
   const appStage = STATUS_TO_APP_STAGE[property.status] ?? 'acquisition.new_lead'
@@ -217,16 +220,27 @@ export function PropertyDetailClient({
             {/* Re-enrich button */}
             {property.aiEnrichmentStatus !== 'pending' && (
               <button
+                disabled={enriching}
                 onClick={async () => {
+                  setEnriching(true)
                   try {
-                    await fetch(`/api/properties/${property.id}/re-enrich`, { method: 'POST' })
-                    router.refresh()
-                  } catch {}
+                    const res = await fetch(`/api/properties/${property.id}/re-enrich`, { method: 'POST' })
+                    if (res.ok) {
+                      toast('Property data refreshed', 'success')
+                      router.refresh()
+                    } else {
+                      toast('Re-enrich failed — try again', 'error')
+                    }
+                  } catch {
+                    toast('Re-enrich failed — try again', 'error')
+                  }
+                  setEnriching(false)
                 }}
-                className="flex items-center gap-1 text-ds-fine text-txt-muted hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
+                className="flex items-center gap-1 text-ds-fine text-txt-muted hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors disabled:opacity-50"
                 title="Re-run AI enrichment"
               >
-                <Bot size={11} /> Re-enrich
+                {enriching ? <Loader2 size={11} className="animate-spin" /> : <Bot size={11} />}
+                {enriching ? 'Enriching...' : 'Re-enrich'}
               </button>
             )}
             {ghlContactId && ghlLocationId && (
@@ -254,6 +268,7 @@ export function PropertyDetailClient({
             return (
               <button
                 key={tab.key}
+                data-tab={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-ds-fine font-medium border-b-2 transition-colors whitespace-nowrap ${
                   isActive
@@ -2329,6 +2344,27 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
       setSmsMessage('')
     } catch {}
     setSmsSending(false)
+  }
+
+  // No-market guard — show empty state instead of spinning forever
+  if (property.propertyMarkets.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <MapPin size={32} className="text-txt-muted mb-3" />
+        <h3 className="text-ds-label font-semibold text-txt-primary mb-1">No market assigned</h3>
+        <p className="text-ds-fine text-txt-muted mb-4 max-w-xs">Add a market in the Overview tab to match this property with buyers.</p>
+        <button
+          onClick={() => {
+            // Find parent PropertyDetailClient and switch to overview tab
+            const tabButton = document.querySelector('[data-tab="overview"]') as HTMLButtonElement | null
+            tabButton?.click()
+          }}
+          className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark transition-colors"
+        >
+          Go to Overview
+        </button>
+      </div>
+    )
   }
 
   return (

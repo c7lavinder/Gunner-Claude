@@ -434,7 +434,7 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
             {missingSource > 0 && missingMarket > 0 && <span> | </span>}
             {missingMarket > 0 && <span>{missingMarket} properties missing market</span>}
           </p>
-          <Link href={`/${tenantSlug}/inventory`} className="text-ds-fine font-semibold text-amber-700 hover:text-amber-900">
+          <Link href={`/${tenantSlug}/inventory?filter=missing_market`} className="text-ds-fine font-semibold text-amber-700 hover:text-amber-900">
             View in Inventory &rarr;
           </Link>
         </div>

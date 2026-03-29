@@ -2,6 +2,7 @@
 // components/inventory/inventory-client.tsx
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
@@ -39,12 +40,21 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   canManage: boolean
   ghlLocationId?: string
 }) {
+  const searchParams = useSearchParams()
   const [selectedStage, setSelectedStage] = useState<AppStage | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null)
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
+  const [missingMarketFilter, setMissingMarketFilter] = useState(false)
   const [search, setSearch] = useState('')
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
+
+  // Handle ?filter=missing_market from KPI page deeplink
+  useEffect(() => {
+    if (searchParams?.get('filter') === 'missing_market') {
+      setMissingMarketFilter(true)
+    }
+  }, [searchParams])
 
   // Convert DB status counts to AppStage counts
   const stageCounts: Partial<Record<AppStage, number>> = {}
@@ -57,6 +67,9 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
 
   // Filter properties
   const filtered = properties.filter((p) => {
+    if (missingMarketFilter) {
+      if (p.market && p.market !== 'Global') return false
+    }
     if (selectedStage) {
       const propStage = STATUS_TO_APP_STAGE[p.status]
       if (propStage !== selectedStage) return false
@@ -132,6 +145,15 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
             className="flex items-center gap-1.5 text-ds-fine font-medium bg-amber-50 text-amber-700 border-[0.5px] border-amber-200 px-3 py-[7px] rounded-[10px] hover:bg-amber-100 transition-colors"
           >
             ⚠️ {missingSourceCount} Missing Source
+          </button>
+        )}
+
+        {missingMarketFilter && (
+          <button
+            onClick={() => setMissingMarketFilter(false)}
+            className="flex items-center gap-1.5 text-ds-fine font-medium bg-red-50 text-red-700 border-[0.5px] border-red-200 px-3 py-[7px] rounded-[10px] hover:bg-red-100 transition-colors"
+          >
+            Missing market <X size={10} />
           </button>
         )}
 

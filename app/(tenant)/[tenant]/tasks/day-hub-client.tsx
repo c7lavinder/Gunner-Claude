@@ -494,25 +494,28 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             <span className="text-[20px]">🔥</span> Day Hub
           </h1>
 
-          {/* Role tabs */}
-          <div className="flex gap-1">
-            {(['ADMIN', 'LM', 'AM', 'DISPO'] as RoleTab[]).map(r => (
-              <button
-                key={r}
-                onClick={() => setRoleTab(r)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wide transition-all ${
-                  roleTab === r
-                    ? 'bg-gunner-red text-white'
-                    : 'text-txt-secondary hover:text-txt-primary'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
+          {/* Role tabs — only visible to admin/owner */}
+          {isAdmin && (
+            <div className="flex gap-1">
+              {(['ADMIN', 'LM', 'AM', 'DISPO'] as RoleTab[]).map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRoleTab(r)}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wide transition-all ${
+                    roleTab === r
+                      ? 'bg-gunner-red text-white'
+                      : 'text-txt-secondary hover:text-txt-primary'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
 
           <span className="text-[13px] text-txt-muted hidden md:inline">
-            {roleTab === 'ADMIN' ? 'Full team overview — all tasks, KPIs, and inbox'
+            {!isAdmin ? 'Your tasks and KPIs'
+              : roleTab === 'ADMIN' ? 'Full team overview — all tasks, KPIs, and inbox'
               : roleTab === 'LM' ? 'Land Manager view'
               : roleTab === 'AM' ? 'Acquisitions Manager view'
               : 'Disposition view'}
