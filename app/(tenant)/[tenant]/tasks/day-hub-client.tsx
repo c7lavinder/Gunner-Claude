@@ -1058,14 +1058,14 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[11px] text-txt-secondary truncate">{task.title}</span>
-            {task.contactAddress && (
-              <span className="text-[10px] text-semantic-purple truncate hidden md:inline">
-                <MapPin size={8} className="inline -mt-0.5" /> {task.contactAddress}
-              </span>
-            )}
-          </div>
+          {task.contactAddress && (
+            <p className="text-[11px] text-txt-secondary truncate mt-0.5">
+              <MapPin size={9} className="inline -mt-0.5 text-txt-muted" /> {task.contactAddress}
+            </p>
+          )}
+          {!task.contactAddress && (
+            <p className="text-[11px] text-txt-muted truncate mt-0.5">{task.title}</p>
+          )}
         </div>
 
         {/* AM/PM glow — activity is source of truth, server DB as fallback */}
