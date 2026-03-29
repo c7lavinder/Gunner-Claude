@@ -2005,9 +2005,70 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           <DataCard label="Equity" value={fmtPct(bd.equityPercent)} fieldKey="equityPercent" />
           <DataCard label="LTV" value={fmtPct(bd.ltv)} fieldKey="ltv" />
           <DataCard label="Open Liens" value={bd.totalOpenLienCount != null ? String(bd.totalOpenLienCount) : '—'} fieldKey="totalOpenLienCount" />
-          <div />
+          <DataCard label="Owner Type" value={fmtStr(bd.ownerType)} fieldKey="ownerType" />
         </div>
       </div>
+
+      {/* Tax & Assessment */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Tax & Assessment</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
+          <DataCard label="Tax Assessed Value" value={fmt$(bd.taxAssessedValue)} fieldKey="taxAssessedValue" />
+          <DataCard label="Annual Tax" value={fmt$(bd.annualTaxAmount)} fieldKey="annualTaxAmount" />
+          <DataCard label="Tax Year" value={bd.taxYear != null ? String(bd.taxYear) : '—'} fieldKey="taxYear" />
+          <DataCard label="Ownership Length" value={bd.ownershipLength != null ? `${bd.ownershipLength} yrs` : '—'} fieldKey="ownershipLength" />
+        </div>
+      </div>
+
+      {/* Mortgage */}
+      {(bd.mortgageAmount != null || bd.mortgageLender != null) && (
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Mortgage</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
+            <DataCard label="Mortgage Amount" value={fmt$(bd.mortgageAmount)} fieldKey="mortgageAmount" />
+            <DataCard label="Lender" value={fmtStr(bd.mortgageLender)} fieldKey="mortgageLender" />
+            <DataCard label="Mortgage Date" value={bd.mortgageDate ? format(new Date(String(bd.mortgageDate)), 'MMM d, yyyy') : '—'} fieldKey="mortgageDate" />
+            <DataCard label="Loan Type" value={fmtStr(bd.mortgageType)} fieldKey="mortgageType" />
+          </div>
+        </div>
+      )}
+
+      {/* Building Details */}
+      {(bd.stories != null || bd.foundation != null || bd.roofType != null || bd.heatingType != null) && (
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Building Details</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
+            <DataCard label="Stories" value={bd.stories != null ? String(bd.stories) : '—'} fieldKey="stories" />
+            <DataCard label="Garage" value={bd.garageSpaces != null ? `${bd.garageSpaces} spaces` : '—'} fieldKey="garageSpaces" />
+            <DataCard label="Pool" value={fmtBool(bd.pool)} fieldKey="pool" />
+            <DataCard label="Foundation" value={fmtStr(bd.foundation)} fieldKey="foundation" />
+            <DataCard label="Roof" value={fmtStr(bd.roofType)} fieldKey="roofType" />
+            <DataCard label="Heating" value={fmtStr(bd.heatingType)} fieldKey="heatingType" />
+            <DataCard label="Cooling" value={fmtStr(bd.coolingType)} fieldKey="coolingType" />
+            <DataCard label="Exterior" value={fmtStr(bd.exteriorWalls)} fieldKey="exteriorWalls" />
+          </div>
+        </div>
+      )}
+
+      {/* School & Zoning */}
+      {(bd.schoolDistrict != null || bd.zoning != null) && (
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">School & Zoning</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3">
+            <DataCard label="School District" value={fmtStr(bd.schoolDistrict)} fieldKey="schoolDistrict" />
+            <DataCard label="Zoning" value={fmtStr(bd.zoning)} fieldKey="zoning" />
+            <DataCard label="Zoning Desc." value={fmtStr(bd.zoningDescription)} fieldKey="zoningDescription" />
+          </div>
+        </div>
+      )}
 
       {/* Sale History */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
