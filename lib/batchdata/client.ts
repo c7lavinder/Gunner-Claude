@@ -62,6 +62,38 @@ export interface BatchDataPropertyResult {
   longitude?: number
   county?: string
 
+  // Additional building details
+  stories?: number
+  garageSpaces?: number
+  pool?: boolean
+  foundation?: string
+  roofType?: string
+  heatingType?: string
+  coolingType?: string
+  exteriorWalls?: string
+
+  // Tax info
+  taxAssessedValue?: number
+  taxYear?: number
+  annualTaxAmount?: number
+
+  // School district
+  schoolDistrict?: string
+
+  // Zoning
+  zoning?: string
+  zoningDescription?: string
+
+  // Additional owner info
+  ownerType?: string // individual, corporate, trust
+  ownershipLength?: number // years since last deed
+
+  // Mortgage info
+  mortgageAmount?: number
+  mortgageLender?: string
+  mortgageDate?: string
+  mortgageType?: string
+
   // Raw
   raw?: Record<string, unknown>
 }
@@ -105,6 +137,12 @@ export async function lookupProperty(
     const deedHistory = (p.deedHistory ?? []) as Array<Record<string, unknown>>
     const ownerProfile = (p.propertyOwnerProfile ?? {}) as Record<string, unknown>
     const ids = (p.ids ?? {}) as Record<string, unknown>
+    const tax = (p.tax ?? p.assessor ?? {}) as Record<string, unknown>
+    const mortgage = (p.mortgage ?? {}) as Record<string, unknown>
+    const mortgages = Array.isArray(p.mortgages) ? p.mortgages as Array<Record<string, unknown>> : []
+    const latestMortgage = mortgages[0] ?? mortgage
+    const school = (p.school ?? {}) as Record<string, unknown>
+    const zoning = (p.zoning ?? {}) as Record<string, unknown>
 
     // Get most recent deed with a sale price > 0
     const lastSale = deedHistory.find(d => (d.salePrice as number) > 0)
@@ -166,6 +204,38 @@ export async function lookupProperty(
       latitude: num(address.latitude),
       longitude: num(address.longitude),
       county: str(address.county),
+
+      // Additional building
+      stories: num(listing.stories ?? listing.numberOfStories),
+      garageSpaces: num(listing.garageSpaces ?? listing.garageCount),
+      pool: listing.pool === true || listing.hasPool === true || listing.poolType != null ? true : undefined,
+      foundation: str(listing.foundationType ?? listing.foundation),
+      roofType: str(listing.roofType ?? listing.roofMaterial),
+      heatingType: str(listing.heatingType ?? listing.heating),
+      coolingType: str(listing.coolingType ?? listing.cooling),
+      exteriorWalls: str(listing.exteriorWalls ?? listing.construction),
+
+      // Tax
+      taxAssessedValue: num(tax.totalAssessedValue ?? tax.assessedValue ?? ownerProfile.averageAssessedValue),
+      taxYear: num(tax.assessmentYear ?? tax.taxYear),
+      annualTaxAmount: num(tax.annualTaxAmount ?? tax.taxAmount),
+
+      // School
+      schoolDistrict: str(address.schoolDistrict ?? school.district),
+
+      // Zoning
+      zoning: str(listing.zoning ?? zoning.code),
+      zoningDescription: str(listing.zoningDescription ?? zoning.description),
+
+      // Owner type
+      ownerType: str(owner.ownerType ?? (quickLists.corporateOwned === true ? 'corporate' : quickLists.trustOwned === true ? 'trust' : 'individual')),
+      ownershipLength: lastSale?.saleDate ? Math.floor((Date.now() - new Date(lastSale.saleDate as string).getTime()) / (1000 * 60 * 60 * 24 * 365)) : undefined,
+
+      // Mortgage
+      mortgageAmount: num(latestMortgage.amount ?? latestMortgage.loanAmount),
+      mortgageLender: str(latestMortgage.lender ?? latestMortgage.lenderName),
+      mortgageDate: str(latestMortgage.date ?? latestMortgage.recordingDate),
+      mortgageType: str(latestMortgage.loanType ?? latestMortgage.type),
 
       raw: p,
     }

@@ -77,10 +77,23 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
       beds: true, baths: true, sqft: true, yearBuilt: true,
       lotSize: true, propertyType: true, occupancy: true,
       description: true,
+      ownerName: true, taxAssessment: true, annualTax: true, deedDate: true,
       fieldSources: true, zillowData: true,
     },
   })
   if (!property || !property.address) return false
+
+  // Skip if already enriched in the last 30 days
+  const existingZillow = (property.zillowData ?? {}) as Record<string, unknown>
+  const existingBatch = (existingZillow.batchData ?? {}) as Record<string, unknown>
+  if (existingBatch.enrichedAt) {
+    const enrichedDate = new Date(existingBatch.enrichedAt as string)
+    const daysSince = (Date.now() - enrichedDate.getTime()) / (1000 * 60 * 60 * 24)
+    if (daysSince < 30) {
+      console.log(`[BatchData] Skipping ${property.address} — enriched ${Math.round(daysSince)}d ago`)
+      return true // Already enriched, skip API call
+    }
+  }
 
   console.log(`[BatchData] Enriching: ${property.address}, ${property.city}, ${property.state} ${property.zip}`)
   const result = await lookupProperty(property.address, property.city, property.state, property.zip)
@@ -116,6 +129,20 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
   if (!property.occupancy && result.ownerOccupied != null) {
     updateData.occupancy = result.ownerOccupied ? 'Owner' : 'Renter'
     fieldSources.occupancy = 'api'
+  }
+
+  // Populate dedicated DB fields from BatchData (instead of only from AI)
+  if (!property.ownerName && result.ownerName) {
+    updateData.ownerName = result.ownerName; fieldSources.ownerName = 'api'
+  }
+  if (property.taxAssessment == null && result.taxAssessedValue) {
+    updateData.taxAssessment = result.taxAssessedValue; fieldSources.taxAssessment = 'api'
+  }
+  if (property.annualTax == null && result.annualTaxAmount) {
+    updateData.annualTax = result.annualTaxAmount; fieldSources.annualTax = 'api'
+  }
+  if (!property.deedDate && result.lastSaleDate) {
+    try { updateData.deedDate = new Date(result.lastSaleDate); fieldSources.deedDate = 'api' } catch { /* skip invalid date */ }
   }
 
   if (!property.propertyType && result.propertyType) {
@@ -178,6 +205,31 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
       latitude: result.latitude,
       longitude: result.longitude,
       county: result.county,
+      // Additional building
+      stories: result.stories,
+      garageSpaces: result.garageSpaces,
+      pool: result.pool,
+      foundation: result.foundation,
+      roofType: result.roofType,
+      heatingType: result.heatingType,
+      coolingType: result.coolingType,
+      exteriorWalls: result.exteriorWalls,
+      // Tax
+      taxAssessedValue: result.taxAssessedValue,
+      taxYear: result.taxYear,
+      annualTaxAmount: result.annualTaxAmount,
+      // School + zoning
+      schoolDistrict: result.schoolDistrict,
+      zoning: result.zoning,
+      zoningDescription: result.zoningDescription,
+      // Owner details
+      ownerType: result.ownerType,
+      ownershipLength: result.ownershipLength,
+      // Mortgage
+      mortgageAmount: result.mortgageAmount,
+      mortgageLender: result.mortgageLender,
+      mortgageDate: result.mortgageDate,
+      mortgageType: result.mortgageType,
       // Meta
       enrichedAt: new Date().toISOString(),
     },
