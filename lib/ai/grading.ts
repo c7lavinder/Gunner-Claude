@@ -8,7 +8,7 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
 import { calculateTCP } from '@/lib/ai/scoring'
-import { getCallTypeAIContext, getRubricForCallType, getResultsForCallType, CALL_TYPES } from '@/lib/call-types'
+import { getCallTypeAIContext, getRubricForCallType, getResultsForCallType, getRedFlagsForCallType, getCriticalFailuresForCallType, CALL_TYPES } from '@/lib/call-types'
 import { INDUSTRY_KNOWLEDGE } from '@/lib/ai/industry-knowledge'
 import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
@@ -162,7 +162,7 @@ export async function gradeCall(callId: string): Promise<void> {
     // Build and send the grading prompt (3 layers: rubric + industry + tenant materials + feedback)
     const systemPrompt = isSummaryOnly
       ? buildSummaryOnlySystemPrompt()
-      : buildGradingSystemPrompt(rubricCriteria, tenantMaterials, feedbackContext)
+      : buildGradingSystemPrompt(rubricCriteria, call.callType ?? null, tenantMaterials, feedbackContext)
     const callWithTranscript = { ...call, transcript }
     const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext)
 
@@ -378,103 +378,155 @@ Response format:
 }`
 }
 
-function buildGradingSystemPrompt(criteria: RubricCriteria[], tenantMaterials?: string | null, feedbackCorrections?: string | null): string {
+function buildGradingSystemPrompt(
+  criteria: RubricCriteria[],
+  callType: string | null,
+  tenantMaterials?: string | null,
+  feedbackCorrections?: string | null
+): string {
   const sections: string[] = []
 
-  // Layer 1: Core grading instructions
+  // Layer 1: Core role + grading philosophy
   sections.push(`You are an expert sales call coach and grader for a real estate wholesaling company.
 
 Your job is to analyze sales calls and provide accurate, constructive scoring and feedback.
-You grade based on THREE sources of knowledge:
-1. RUBRIC — the specific scoring criteria for this call type (most important — this determines the score)
-2. INDUSTRY KNOWLEDGE — wholesale real estate best practices and standards
+
+You grade based on FOUR sources of knowledge:
+1. RUBRIC — the specific scoring criteria for this call type (determines the score)
+2. INDUSTRY KNOWLEDGE — wholesale real estate best practices, coaching methodology, and psychology
 3. COMPANY MATERIALS — this specific company's scripts, processes, and standards (if provided)
+4. FEEDBACK CORRECTIONS — calibration from previous grades that users flagged as wrong
 
-You grade based on ALL available information — transcripts, call metadata, contact context, and conversation history.
+GRADING PHILOSOPHY:
+Reps have different communication styles. Some follow scripts closely; others achieve the same goals conversationally. BOTH are valid. Focus on WHETHER the rep accomplished the GOAL of each criterion — not whether they used specific phrases. Award full points when the goal is clearly achieved. Award partial points when partially achieved. Only give zero when the behavior is completely absent.
 
-When a transcript is not available, you MUST still grade meaningfully based on:
-- Call duration (longer completed calls generally indicate better engagement)
-- Call outcome (completed vs no-answer vs voicemail)
-- Contact context (tags, source, conversation history)
-- Direction and patterns
+FEEDBACK MUST BE TRANSCRIPT-SPECIFIC — never generic:
+WRONG: "The rep failed to probe motivation effectively."
+RIGHT: "When the seller said 'I just need to sell fast,' the rep immediately moved to price instead of asking 'What's been making speed the priority? How long has that been going on?'"
 
-A 5-minute completed outbound call to a warm lead is fundamentally different from a 10-second no-answer. Grade accordingly.
+When no transcript is available, grade meaningfully on: call duration, outcome, contact context, and conversation history. A 5-minute completed outbound call to a warm lead is fundamentally different from a 10-second no-answer. Do NOT give a score of 0 unless the call was genuinely a failure.`)
 
-Do NOT give a score of 0 unless the call was genuinely a failure (no-answer, immediate hangup, etc.)
-
-You MUST respond with valid JSON only — no markdown, no preamble, no explanation outside the JSON.`)
-
-  // Layer 2: Industry knowledge
+  // Layer 2: Full industry knowledge (coaching methodology, DQ awareness, etc.)
   sections.push(INDUSTRY_KNOWLEDGE)
 
-  // Layer 3: Tenant-specific materials
+  // Layer 3: Call-type-specific critical instructions
+  if (callType) {
+    const callTypeInstructions = buildCallTypeInstructions(callType)
+    if (callTypeInstructions) sections.push(callTypeInstructions)
+  }
+
+  // Layer 4: Rubric criteria with keyPhrases
+  const criteriaText = criteria.map((c, i) => {
+    let text = `${i + 1}. ${c.category} (max ${c.maxPoints} pts)\n   ${c.description}`
+    if (c.keyPhrases && c.keyPhrases.length > 0) {
+      text += `\n   Positive signals to look for: "${c.keyPhrases.join('", "')}"`
+    }
+    return text
+  }).join('\n\n')
+
+  const callTypeRedFlags = callType ? getRedFlagsForCallType(callType) : []
+
+  sections.push(`GRADING RUBRIC — SCORE EACH CATEGORY:
+
+${criteriaText}
+
+RED FLAGS TO IDENTIFY (call these out explicitly in feedback if observed):
+${callTypeRedFlags.length > 0
+    ? callTypeRedFlags.map(f => `• ${f}`).join('\n')
+    : '• No specific red flags defined — use general wholesale RE best practices'}`)
+
+  // Layer 5: Tenant-specific materials
   if (tenantMaterials) {
     sections.push(`COMPANY-SPECIFIC MATERIALS:
-The following are this company's own scripts, processes, and standards. Use these to inform your grading — if the rep followed the company's specific process, that should positively affect the score. If they deviated from it, note that in feedback.
+The following are this company's own scripts, processes, and standards. Use these to inform grading — if the rep followed the company's specific process, note it positively.
 
 ${tenantMaterials}`)
   }
 
-  // Layer 4: Recent feedback corrections from users
+  // Layer 6: Recent feedback corrections
   if (feedbackCorrections) {
-    sections.push(`RECENT GRADING CORRECTIONS FROM USERS:
-The following feedback was submitted by managers on previous grades. Adjust your grading behavior accordingly:
+    sections.push(`GRADING CORRECTIONS FROM USERS:
+The following feedback was submitted by managers on previous grades. Incorporate these calibrations:
 
-${feedbackCorrections}
-
-Use these corrections to calibrate your scoring. If users said scores were too high, be stricter. If they said criteria were wrong, pay closer attention to those areas.`)
+${feedbackCorrections}`)
   }
 
-  // Rubric criteria
-  sections.push(`GRADING RUBRIC (score each category):
-${criteria.map((c) => `- ${c.category} (max ${c.maxPoints} pts): ${c.description}`).join('\n')}
+  // Response format
+  const validResults = callType ? getResultsForCallType(callType) : []
+  const validOutcomes = validResults.length > 0
+    ? validResults.map(r => `"${r.id}" (${r.name})`).join(', ')
+    : '"interested", "not_interested", "appointment_set", "follow_up_scheduled", "accepted", "rejected", "signed", "not_signed", "solved", "not_solved", "showing_scheduled", "offer_collected"'
 
-Response format:
+  sections.push(`RESPONSE FORMAT — valid JSON only, no markdown, no preamble:
+
 {
   "overallScore": <number 0-100>,
   "rubricScores": {
     "<category>": {
       "score": <number>,
       "maxScore": <number>,
-      "notes": "<brief note>"
+      "notes": "<specific note referencing what was said>"
     }
   },
-  "summary": "<2-3 sentence call summary>",
-  "feedback": "<specific, actionable feedback paragraph>",
-  "coachingTips": ["<tip 1>", "<tip 2>", "<tip 3>"],
-  "callType": "<one of: cold_call, qualification_call, admin_call, follow_up_call, offer_call, purchase_agreement_call, dispo_call — or null if the call type was already set>",
-  "callOutcome": "<MUST be one of the valid outcomes for the call type — see VALID OUTCOMES below>",
-  "followUpScheduled": <boolean — true if a specific follow-up was agreed to, regardless of outcome>,
+  "summary": "<2-3 sentence call summary — specific, not generic>",
+  "feedback": "<specific actionable feedback paragraph — must reference transcript moments>",
+  "coachingTips": ["<tip 1 — specific to this call>", "<tip 2>", "<tip 3>"],
+  "callType": <"cold_call"|"qualification_call"|"admin_call"|"follow_up_call"|"offer_call"|"purchase_agreement_call"|"dispo_call"|null — return null if call type was already provided>,
+  "callOutcome": "<must be one of the valid outcomes listed below>",
+  "followUpScheduled": <boolean — true if any specific future contact was agreed to>,
   "keyMoments": [
     {
-      "timestamp": "<MM:SS format — estimate from conversation flow if no exact timestamp>",
+      "timestamp": "<MM:SS estimated from conversation>",
       "type": "<objection_handled|appointment_set|price_discussion|rapport_building|red_flag|closing_attempt|motivation_revealed>",
-      "description": "<what happened at this moment>",
+      "description": "<what happened>",
       "quote": "<direct quote from transcript if available>"
     }
   ],
-  "sentiment": <number -1.0 to 1.0 — overall seller sentiment. Negative = hostile/frustrated, 0 = neutral, positive = warm/cooperative>,
-  "sellerMotivation": <number 0.0 to 1.0 — how motivated is the seller to sell? 0 = not at all, 1 = desperate to sell immediately. null if not a seller call>
+  "sentiment": <number -1.0 to 1.0>,
+  "sellerMotivation": <number 0.0 to 1.0 or null>
 }
 
-CALL TYPE CLASSIFICATION RULES:
-- If the call type is already set in the metadata, set callType to null (don't override manual classification)
-- If NOT set, determine the type from the conversation content:
-  - cold_call: first contact, outbound, seller doesn't know the caller
-  - qualification_call: inbound lead or first meaningful conversation, qualifying fit
-  - admin_call: scheduling, updates, logistics, problem solving
-  - follow_up_call: re-engaging someone previously contacted
-  - offer_call: presenting a price/offer to buy the property
-  - purchase_agreement_call: walking through contract signing
-  - dispo_call: talking to a buyer/investor about a deal
+VALID OUTCOMES FOR THIS CALL: ${validOutcomes}
 
-VALID OUTCOMES PER CALL TYPE — you MUST pick from the correct list:
-${CALL_TYPES.map(ct => `- ${ct.id}: ${ct.results.map(r => r.id).join(', ')}`).join('\n')}
-
-If you don't know the call type yet, determine it first from the content, THEN pick an outcome from that type's list.
-Pick the HIGHEST priority outcome that actually occurred.`)
+Pick the highest-priority outcome that actually occurred. Set followUpScheduled: true if a future contact was agreed to at any point, regardless of primary outcome.`)
 
   return sections.join('\n\n')
+}
+
+// Call-type-specific critical instructions injected into the system prompt
+function buildCallTypeInstructions(callType: string): string | null {
+  const criticalInfo = getCriticalFailuresForCallType(callType)
+
+  switch (callType) {
+    case 'cold_call':
+      return `COLD CALL INSTRUCTIONS:
+Goal is to gauge interest only — NOT to qualify, set appointments, or close. Do NOT penalize for skipping deep qualification. A 2-minute cold call that correctly identifies an uninterested seller is an efficient call — reward it (70-90% range).`
+
+    case 'follow_up_call':
+      return `FOLLOW-UP CALL INSTRUCTIONS:
+Full qualification already happened. DO NOT penalize for skipping qualification steps. Focus ONLY on: referencing the previous conversation + offer, confirming decision maker, checking situation changes, surfacing roadblocks (and PAUSING), and pushing for a binary yes/no. Talk ratio target: seller talks ≥50%.
+${criticalInfo ? `\n⚠️ CRITICAL FAILURE CAP — Score CANNOT exceed ${criticalInfo.cap}% if ANY of these occurred:\n${criticalInfo.failures.map(f => `• ${f}`).join('\n')}\nState any critical failure clearly in the summary.` : ''}`
+
+    case 'offer_call':
+      return `OFFER CALL INSTRUCTIONS:
+The proposal comes LAST — after motivation is restated. A rep who jumps to price before restating motivation should be penalized. The offer should be delivered with conviction — no apologies, no hedging.`
+
+    case 'dispo_call':
+      return `DISPO CALL INSTRUCTIONS:
+Rep is selling a deal to an investor — peer-to-peer business call. Rep should know the deal numbers cold. Grade on deal knowledge, compelling presentation, urgency creation, and driving toward a commitment.
+${criticalInfo ? `\n⚠️ CRITICAL FAILURE CAP — Score CANNOT exceed ${criticalInfo.cap}% if ANY of these occurred:\n${criticalInfo.failures.map(f => `• ${f}`).join('\n')}\nState any critical failure clearly in the summary.` : ''}`
+
+    case 'admin_call':
+      return `ADMIN CALL INSTRUCTIONS:
+Low-stakes operational call. No critical failures. Grade generously unless rep was clearly unprofessional, failed to accomplish the call's purpose, or ended with vague non-commitments.`
+
+    case 'purchase_agreement_call':
+      return `PURCHASE AGREEMENT INSTRUCTIONS:
+Closing call — seller is about to sign. Last-minute hesitations are common and should be handled with patience, not pressure. Grade on: clear contract explanation, handling cold feet, maintaining momentum, confirming terms, and getting the signature.`
+
+    default:
+      return null
+  }
 }
 
 function buildGradingUserPrompt(
@@ -628,6 +680,7 @@ export interface RubricCriteria {
   category: string
   maxPoints: number
   description: string
+  keyPhrases?: string[]
 }
 
 export interface GradingResult {
