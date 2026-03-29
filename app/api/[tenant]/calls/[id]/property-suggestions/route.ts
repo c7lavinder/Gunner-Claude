@@ -34,6 +34,10 @@ export async function POST(
             occupancy: true,
             propertyType: true,
             description: true,
+            sellerMotivation: true,
+            sellerTimeline: true,
+            propertyCondition: true,
+            sellerAskingReason: true,
             waterType: true,
             sewerType: true,
             sewerCondition: true,
@@ -56,14 +60,14 @@ export async function POST(
         content: `Analyze this real estate call transcript and extract any property data that should update the property record.
 
 Property: ${prop.address}
-Current data: beds=${prop.beds}, baths=${prop.baths}, sqft=${prop.sqft}, year=${prop.yearBuilt}, type=${prop.propertyType}, occupancy=${prop.occupancy}, asking=${prop.askingPrice}, arv=${prop.arv}, water=${prop.waterType}, sewer=${prop.sewerType}, sewerCondition=${prop.sewerCondition}
+Current data: beds=${prop.beds}, baths=${prop.baths}, sqft=${prop.sqft}, year=${prop.yearBuilt}, type=${prop.propertyType}, occupancy=${prop.occupancy}, asking=${prop.askingPrice}, arv=${prop.arv}, water=${prop.waterType}, sewer=${prop.sewerType}, sewerCondition=${prop.sewerCondition}, sellerMotivation=${prop.sellerMotivation}, sellerTimeline=${prop.sellerTimeline}, propertyCondition=${prop.propertyCondition}, sellerAskingReason=${prop.sellerAskingReason}
 
 Transcript:
 ${transcript}
 
 Extract data points the seller mentioned. Only include data that is explicitly stated or strongly implied. Return JSON array:
 [{
-  "field": "<DB field name: askingPrice, beds, baths, sqft, yearBuilt, occupancy, propertyType, waterType, sewerType, sewerCondition, description, internalNotes>",
+  "field": "<DB field name: askingPrice, beds, baths, sqft, yearBuilt, occupancy, propertyType, waterType, sewerType, sewerCondition, description, internalNotes, sellerMotivation, sellerTimeline, propertyCondition, sellerAskingReason>",
   "label": "<human readable label>",
   "currentValue": "<current value or null>",
   "suggestedValue": "<extracted value>",

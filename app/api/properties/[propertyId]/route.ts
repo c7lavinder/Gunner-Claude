@@ -66,6 +66,11 @@ const updateSchema = z.object({
   annualTax: z.string().nullable().optional(),
   floodZone: z.string().nullable().optional(),
   aiEnrichmentStatus: z.string().nullable().optional(),
+  // Seller & Deal Intel
+  sellerMotivation: z.string().nullable().optional(),
+  sellerTimeline: z.string().nullable().optional(),
+  propertyCondition: z.string().nullable().optional(),
+  sellerAskingReason: z.string().nullable().optional(),
   // Deal Blast overrides
   dealBlastAskingOverride: z.string().nullable().optional(),
   dealBlastArvOverride: z.string().nullable().optional(),
@@ -110,6 +115,8 @@ export async function PATCH(
     // AI enrichment fields
     repairEstimate, rentalEstimate, neighborhoodSummary, zestimate, ownerName, deedDate,
     taxAssessment, annualTax, floodZone, aiEnrichmentStatus,
+    // Seller & Deal Intel
+    sellerMotivation, sellerTimeline, propertyCondition, sellerAskingReason,
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
   } = parsed.data
@@ -170,6 +177,11 @@ export async function PATCH(
           ...(annualTax !== undefined && { annualTax: annualTax ? parseFloat(annualTax) : null }),
           ...(floodZone !== undefined && { floodZone }),
           ...(aiEnrichmentStatus !== undefined && { aiEnrichmentStatus }),
+          // Seller & Deal Intel
+          ...(sellerMotivation !== undefined && { sellerMotivation }),
+          ...(sellerTimeline !== undefined && { sellerTimeline }),
+          ...(propertyCondition !== undefined && { propertyCondition }),
+          ...(sellerAskingReason !== undefined && { sellerAskingReason }),
           // Deal Blast overrides
           ...(dealBlastAskingOverride !== undefined && { dealBlastAskingOverride: dealBlastAskingOverride ? parseFloat(dealBlastAskingOverride) : null }),
           ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),

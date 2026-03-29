@@ -164,6 +164,11 @@ export default async function PropertyDetailPage({
           return arr.length > 0 ? arr : marketName ? [marketName] : []
         })(),
         description: property.description, internalNotes: property.internalNotes,
+        // Seller & Deal Intel
+        sellerMotivation: property.sellerMotivation ?? null,
+        sellerTimeline: property.sellerTimeline ?? null,
+        propertyCondition: property.propertyCondition ?? null,
+        sellerAskingReason: property.sellerAskingReason ?? null,
         lastOfferDate: property.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: property.lastContactedDate?.toISOString() ?? null,
         // AI enrichment fields
