@@ -1564,6 +1564,25 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
           <InlineEditCard label="ASSIGNMENT FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={property.id} source={sources.assignmentFee} onSaved={handleSaved} />
           <InlineEditCard label="FINAL PROFIT" value={vals.finalProfit} field="finalProfit" propertyId={property.id} source={sources.finalProfit} onSaved={handleSaved} />
         </div>
+        {/* AI estimates row */}
+        {(property.repairEstimate || property.rentalEstimate) && (
+          <div className="grid grid-cols-3 gap-3 mt-2">
+            {property.repairEstimate && (
+              <div className="bg-blue-50 border-[0.5px] border-blue-300 rounded-[10px] px-3 py-2.5 relative">
+                <span className="absolute top-1 right-1.5 text-[7px] font-bold text-blue-400">AI</span>
+                <p className="text-[9px] font-semibold text-blue-700 uppercase tracking-wider">Repair Estimate</p>
+                <p className="text-ds-card font-semibold text-blue-800 mt-0.5">${Number(property.repairEstimate).toLocaleString()}</p>
+              </div>
+            )}
+            {property.rentalEstimate && (
+              <div className="bg-blue-50 border-[0.5px] border-blue-300 rounded-[10px] px-3 py-2.5 relative">
+                <span className="absolute top-1 right-1.5 text-[7px] font-bold text-blue-400">AI</span>
+                <p className="text-[9px] font-semibold text-blue-700 uppercase tracking-wider">Rental Estimate</p>
+                <p className="text-ds-card font-semibold text-blue-800 mt-0.5">${Number(property.rentalEstimate).toLocaleString()}/mo</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Property Details — structured grid */}
@@ -1900,13 +1919,31 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         <div className="grid grid-cols-3 gap-3 p-3">
           <DataCard label="Estimated Value" value={fmt$(bd.estimatedValue)} fieldKey="estimatedValue" />
           <DataCard label="Assessed Value" value={fmt$(bd.assessedValue)} fieldKey="assessedValue" />
-          <DataCard label="APN" value={fmtStr(bd.apn)} fieldKey="apn" />
+          {property.zestimate && <DataCard label="Zestimate" value={fmt$(property.zestimate)} />}
+          {!property.zestimate && <DataCard label="APN" value={fmtStr(bd.apn)} fieldKey="apn" />}
         </div>
         <div className="grid grid-cols-3 gap-3 px-3 pb-3">
           <DataCard label="Price Range" value={bd.priceRangeMin != null ? `${fmt$(bd.priceRangeMin)} – ${fmt$(bd.priceRangeMax)}` : '—'} fieldKey="priceRangeMin" />
           <DataCard label="Confidence" value={bd.confidenceScore != null ? `${bd.confidenceScore}%` : '—'} fieldKey="confidenceScore" />
-          <DataCard label="As Of" value={bd.enrichedAt ? format(new Date(String(bd.enrichedAt)), 'MMM d, yyyy') : '—'} />
+          <DataCard label="APN" value={fmtStr(bd.apn)} fieldKey="apn" />
         </div>
+        {/* AI Estimates + Flood Zone */}
+        {(property.repairEstimate || property.rentalEstimate || property.floodZone || property.neighborhoodSummary) && (
+          <div className="border-t border-[rgba(0,0,0,0.04)] p-3 space-y-2">
+            <div className="grid grid-cols-3 gap-3">
+              {property.repairEstimate && <DataCard label="Repair Estimate" value={fmt$(property.repairEstimate)} highlight />}
+              {property.rentalEstimate && <DataCard label="Rental Estimate" value={`${fmt$(property.rentalEstimate)}/mo`} highlight />}
+              {property.floodZone && <DataCard label="Flood Zone" value={property.floodZone} highlight />}
+            </div>
+            {property.neighborhoodSummary && (
+              <div className="bg-blue-50 border-[0.5px] border-blue-200 rounded-[8px] px-3 py-2 relative">
+                <span className="absolute top-1 right-1.5 text-[7px] font-bold text-blue-400">AI</span>
+                <p className="text-[8px] font-semibold text-blue-600 uppercase tracking-wider">Neighborhood</p>
+                <p className="text-[11px] text-blue-800 mt-0.5">{property.neighborhoodSummary}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Owner Intel */}
