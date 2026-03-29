@@ -1633,48 +1633,6 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         </div>
       </div>
 
-      {/* Utilities */}
-      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Utilities</p>
-        </div>
-        <div className="divide-y divide-[rgba(0,0,0,0.04)]">
-          {/* Water */}
-          <div className="px-4 py-2.5 flex items-start gap-4">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-16 pt-0.5 shrink-0">Water</p>
-            <div className="flex-1 flex items-center gap-3">
-              <InlineSelect label="" value={vals.waterType} field="waterType" propertyId={property.id}
-                options={['Public Water', 'Well']} source={sources.waterType} onSaved={handleSaved} />
-              <InlineText label="" value={vals.waterNotes} field="waterNotes" propertyId={property.id}
-                placeholder="e.g. Well tested 2023, pump replaced" source={sources.waterNotes} onSaved={handleSaved} />
-            </div>
-          </div>
-          {/* Sewer */}
-          <div className="px-4 py-2.5 flex items-start gap-4">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-16 pt-0.5 shrink-0">Sewer</p>
-            <div className="flex-1 flex flex-wrap items-center gap-3">
-              <InlineSelect label="" value={vals.sewerType} field="sewerType" propertyId={property.id}
-                options={['Public Sewer', 'Septic']} source={sources.sewerType} onSaved={handleSaved} />
-              <InlineSelect label="" value={vals.sewerCondition} field="sewerCondition" propertyId={property.id}
-                options={['Good condition', 'Needs inspection', 'Needs repair', 'Needs full replacement', 'Perked (full)', 'Perked for X beds only', 'Not perked', 'Unknown']}
-                source={sources.sewerCondition} onSaved={handleSaved} />
-              <InlineText label="" value={vals.sewerNotes} field="sewerNotes" propertyId={property.id}
-                placeholder="e.g. Perked for 2 beds only" source={sources.sewerNotes} onSaved={handleSaved} />
-            </div>
-          </div>
-          {/* Electric */}
-          <div className="px-4 py-2.5 flex items-start gap-4">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-16 pt-0.5 shrink-0">Electric</p>
-            <div className="flex-1 flex items-center gap-3">
-              <InlineSelect label="" value={vals.electricType} field="electricType" propertyId={property.id}
-                options={['Public', 'Private/Co-op']} source={sources.electricType} onSaved={handleSaved} />
-              <InlineText label="" value={vals.electricNotes} field="electricNotes" propertyId={property.id}
-                placeholder="e.g. Updated panel 2022" source={sources.electricNotes} onSaved={handleSaved} />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Description — click to edit, blue when AI-generated */}
       <InlineTextArea label="Description" value={vals.description} field="description" propertyId={property.id} onSaved={handleSaved}
         {...(sources.description === 'ai' ? { labelColor: 'text-blue-700', bgColor: 'bg-blue-50 border-[0.5px] border-blue-200', textColor: 'text-blue-900' } : {})}
@@ -2139,6 +2097,21 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           </div>
         </div>
       )}
+
+      {/* Utilities */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Utilities</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3">
+          <DataCard label="Water" value={fmtStr(property.waterType)} fieldKey="waterType" />
+          <DataCard label="Sewer" value={fmtStr(property.sewerType)} fieldKey="sewerType" />
+          <DataCard label="Sewer Condition" value={fmtStr(property.sewerCondition)} fieldKey="sewerCondition" />
+          <DataCard label="Electric" value={fmtStr(property.electricType)} fieldKey="electricType" />
+          <DataCard label="Water Notes" value={fmtStr(property.waterNotes)} fieldKey="waterNotes" />
+          <DataCard label="Sewer Notes" value={fmtStr(property.sewerNotes)} fieldKey="sewerNotes" />
+        </div>
+      </div>
 
       {/* Seller & Deal Intel */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
