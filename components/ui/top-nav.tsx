@@ -55,9 +55,8 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
   const base = `/${tenantSlug}`
 
   const navItems = [
-    { href: `${base}/dashboard`, label: 'Dashboard', always: true },
-    { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as const },
     { href: `${base}/tasks`, label: 'Day Hub', always: true },
+    { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as const },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as const },
     { href: `${base}/kpis`, label: 'KPIs', permission: 'kpis.view.own' as const },
     { href: `${base}/training`, label: 'Training', permission: 'calls.view.own' as const },
@@ -79,15 +78,15 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
         </button>
 
         {/* Logo */}
-        <Link href={`${base}/dashboard`} className="flex items-center gap-2 shrink-0">
+        <Link href={`${base}/tasks`} className="flex items-center gap-2 shrink-0">
           <div className="w-6 h-6 rounded-md bg-gunner-red flex items-center justify-center">
             <span className="text-white font-semibold text-[11px]">G</span>
           </div>
           <span className="text-ds-label font-semibold text-txt-primary">Gunner</span>
         </Link>
 
-        {/* Nav links — desktop */}
-        <nav className="hidden md:flex items-center gap-1 h-[52px]">
+        {/* Nav links — desktop, centered */}
+        <nav className="hidden md:flex items-center justify-center gap-1 h-[52px] flex-1">
           {visibleItems.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             return (

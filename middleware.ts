@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
     const userTenantSlug = token.tenantSlug as string | undefined
     const onboardingCompleted = token.onboardingCompleted as boolean | undefined
     if (userTenantSlug && onboardingCompleted) {
-      return NextResponse.redirect(new URL(`/${userTenantSlug}/dashboard`, request.url))
+      return NextResponse.redirect(new URL(`/${userTenantSlug}/tasks`, request.url))
     }
     return NextResponse.redirect(new URL('/onboarding', request.url))
   }
@@ -64,7 +64,7 @@ export async function middleware(request: NextRequest) {
   // Verify the user belongs to this tenant
   const userTenantSlug = token.tenantSlug as string | undefined
   if (userTenantSlug && tenantSlug !== userTenantSlug) {
-    return NextResponse.redirect(new URL(`/${userTenantSlug}/dashboard`, request.url))
+    return NextResponse.redirect(new URL(`/${userTenantSlug}/tasks`, request.url))
   }
 
   // Inject tenant context into headers for server components
