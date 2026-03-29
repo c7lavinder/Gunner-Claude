@@ -236,6 +236,11 @@ export async function gradeCall(callId: string): Promise<void> {
       score: grading.overallScore,
     }).catch(() => {})
 
+    // Fire-and-forget: generate next steps in background
+    generateAndSaveNextSteps(callId, call.tenantId, grading).catch(err =>
+      console.error('[Grading] Next steps generation failed:', err)
+    )
+
     // Recalculate TCP for the associated property
     if (call.propertyId) {
       calculateTCP(call.propertyId).catch((tcpErr) => {
@@ -672,6 +677,55 @@ function getDefaultRubric(role?: string): RubricCriteria[] {
     { category: 'Knowledge', maxPoints: 25, description: 'Demonstrated knowledge of the process and company' },
     { category: 'Outcome', maxPoints: 25, description: 'Achieved a clear outcome or next step' },
   ]
+}
+
+// ─── Auto-generate next steps after grading ─────────────────────────────────
+
+async function generateAndSaveNextSteps(callId: string, tenantId: string, gradingResult: GradingResult) {
+  try {
+    const call = await db.call.findUnique({
+      where: { id: callId },
+      select: { aiSummary: true, callOutcome: true, callType: true, transcript: true, property: { select: { address: true } } },
+    })
+    if (!call) return
+
+    const transcriptExcerpt = call.transcript ? call.transcript.slice(0, 500) : 'No transcript available'
+
+    const res = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: `You are a real estate wholesaling CRM assistant. Based on this graded call, generate 3-5 specific next step actions the rep should take.
+
+Call summary: ${gradingResult.summary}
+Call outcome: ${call.callOutcome ?? 'Unknown'}
+Call type: ${call.callType ?? 'Unknown'}
+Property: ${call.property?.address ?? 'Unknown'}
+Score: ${gradingResult.overallScore}/100
+Feedback: ${gradingResult.feedback}
+Transcript excerpt: ${transcriptExcerpt}
+
+Return JSON array only:
+[{ "type": "add_note"|"create_task"|"send_sms"|"create_appointment"|"change_stage"|"check_off_task", "label": "specific action description", "reasoning": "why this action matters" }]`,
+      }],
+    })
+
+    const text = res.content[0].type === 'text' ? res.content[0].text : '[]'
+    const jsonMatch = text.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) return
+
+    const steps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>
+    const stepsWithStatus = steps.map(s => ({ ...s, status: 'pending', pushedAt: null }))
+
+    await db.call.update({
+      where: { id: callId },
+      data: { aiNextSteps: stepsWithStatus },
+    })
+    console.log(`[Grading] Generated ${steps.length} next steps for call ${callId}`)
+  } catch (err) {
+    console.error('[Grading] Next steps generation error:', err instanceof Error ? err.message : err)
+  }
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────

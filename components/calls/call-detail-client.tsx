@@ -37,6 +37,7 @@ interface CallDetail {
   contactName: string | null; contactPhone: string | null
   assignedTo: { id: string; name: string; role: string } | null
   property: { id: string; address: string; city: string; state: string; status: string; sellerName: string | null } | null
+  aiNextSteps: Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null
 }
 
 type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps'
@@ -104,7 +105,18 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [showFeedback, setShowFeedback] = useState(false)
   const [reclassifying, setReclassifying] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [generatedSteps, setGeneratedSteps] = useState<NextStep[]>([])
+  const [generatedSteps, setGeneratedSteps] = useState<NextStep[]>(() => {
+    if (call.aiNextSteps && call.aiNextSteps.length > 0) {
+      return call.aiNextSteps.map(s => ({
+        type: s.type,
+        label: s.label,
+        reasoning: s.reasoning,
+        status: s.status as 'pending' | 'pushed' | 'skipped',
+        pushedAt: s.pushedAt ?? undefined,
+      }))
+    }
+    return []
+  })
   const [generatingSteps, setGeneratingSteps] = useState(false)
   const [expandedReasons, setExpandedReasons] = useState<Set<number>>(new Set())
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -179,7 +191,8 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
       if (res.ok) {
         const data = await res.json()
         if (data.steps) {
-          setGeneratedSteps(data.steps.map((s: { type: string; label: string; reasoning: string }) => ({ ...s, status: 'pending' as const })))
+          const newSteps = data.steps.map((s: { type: string; label: string; reasoning: string }) => ({ ...s, status: 'pending' as const }))
+          setGeneratedSteps(newSteps)
           toast('Next steps generated', 'success')
         }
       } else toast('Failed to generate next steps', 'error')
@@ -197,7 +210,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
         body: JSON.stringify({ type: step.type }),
       })
       if (res.ok) {
-        setGeneratedSteps(prev => prev.map((s, i) => i === index ? { ...s, status: 'pushed' as const, pushedAt: new Date().toISOString() } : s))
+        const updatedSteps = generatedSteps.map((s, i) => i === index ? { ...s, status: 'pushed' as const, pushedAt: new Date().toISOString() } : s)
+        setGeneratedSteps(updatedSteps)
+        // Persist step status to DB
+        fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ aiNextSteps: updatedSteps }),
+        }).catch(() => {})
         toast('Action pushed to CRM', 'success')
       } else toast('Failed to push action', 'error')
     } catch { toast('Failed to push action', 'error') }
@@ -205,7 +224,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   }
 
   function skipStep(index: number) {
-    setGeneratedSteps(prev => prev.map((s, i) => i === index ? { ...s, status: 'skipped' as const } : s))
+    const updatedSteps = generatedSteps.map((s, i) => i === index ? { ...s, status: 'skipped' as const } : s)
+    setGeneratedSteps(updatedSteps)
+    // Persist step status to DB
+    fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aiNextSteps: updatedSteps }),
+    }).catch(() => {})
   }
 
   function toggleReason(index: number) {

@@ -31,6 +31,9 @@ export default async function CallDetailPage({
     },
   })
 
+  // Safe-cast aiNextSteps from Json to typed array
+  const aiNextSteps = (call?.aiNextSteps as Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null) ?? null
+
   if (!call) notFound()
 
   const isOwn = call.assignedToId === userId
@@ -80,6 +83,7 @@ export default async function CallDetailPage({
           status: call.property.status,
           sellerName: call.property.sellers[0]?.seller.name ?? null,
         } : null,
+        aiNextSteps,
       }}
       tenantSlug={params.tenant}
       isOwn={isOwn}

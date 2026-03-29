@@ -51,6 +51,13 @@ Transcript excerpt: ${transcriptExcerpt}`,
 
     const steps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>
 
+    // Persist generated steps to DB
+    const stepsWithStatus = steps.map(s => ({ ...s, status: 'pending', pushedAt: null }))
+    await db.call.update({
+      where: { id: params.id },
+      data: { aiNextSteps: stepsWithStatus },
+    })
+
     return NextResponse.json({ steps })
   } catch (err) {
     console.error('[Generate Next Steps] Error:', err instanceof Error ? err.message : err)

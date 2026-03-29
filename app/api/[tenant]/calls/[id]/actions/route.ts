@@ -1,5 +1,6 @@
 // app/api/[tenant]/calls/[id]/actions/route.ts
 // Quick actions: add note, create task, send SMS from call detail page
+// PATCH: persist aiNextSteps status changes (push/skip)
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
@@ -9,6 +10,16 @@ import { addDays, format } from 'date-fns'
 
 const schema = z.object({
   type: z.enum(['add_note', 'create_task', 'send_sms']),
+})
+
+const patchSchema = z.object({
+  aiNextSteps: z.array(z.object({
+    type: z.string(),
+    label: z.string(),
+    reasoning: z.string(),
+    status: z.enum(['pending', 'pushed', 'skipped']),
+    pushedAt: z.string().nullable().optional(),
+  })),
 })
 
 export async function POST(
@@ -81,5 +92,36 @@ export async function POST(
   } catch (err) {
     console.error(`[Call Action] ${parsed.data.type} failed:`, err instanceof Error ? err.message : err)
     return NextResponse.json({ success: false, message: 'GHL action failed' }, { status: 500 })
+  }
+}
+
+// PATCH — persist aiNextSteps status changes (push/skip)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { tenant: string; id: string } },
+) {
+  const session = await getSession()
+  if (!session) return unauthorizedResponse()
+
+  const body = await request.json()
+  const parsed = patchSchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+
+  try {
+    // Verify call belongs to tenant before updating
+    const call = await db.call.findFirst({
+      where: { id: params.id, tenantId: session.tenantId },
+      select: { id: true },
+    })
+    if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
+
+    await db.call.update({
+      where: { id: params.id },
+      data: { aiNextSteps: parsed.data.aiNextSteps },
+    })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('[Call Actions PATCH] Failed to persist next steps:', err instanceof Error ? err.message : err)
+    return NextResponse.json({ error: 'Failed to update next steps' }, { status: 500 })
   }
 }
