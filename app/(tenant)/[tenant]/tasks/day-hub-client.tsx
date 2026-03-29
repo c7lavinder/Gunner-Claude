@@ -254,6 +254,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [roleTab, setRoleTab] = useState<RoleTab>('ADMIN')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
+  const [showOverdueOnly, setShowOverdueOnly] = useState(false)
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
 
   // KPI Ledger
@@ -385,8 +386,10 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   if (categoryFilter) filteredTasks = filteredTasks.filter(t => t.category === categoryFilter)
   if (teamFilter) filteredTasks = filteredTasks.filter(t => t.assignedToName === teamFilter)
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length
-  const visibleTasks = filteredTasks.slice(0, visibleTaskCount)
-  const remaining = filteredTasks.length - visibleTaskCount
+  let displayTasks = filteredTasks
+  if (showOverdueOnly) displayTasks = displayTasks.filter(t => t.isOverdue)
+  const visibleTasks = displayTasks.slice(0, visibleTaskCount)
+  const remaining = displayTasks.length - visibleTaskCount
 
   // Inbox counts
 
@@ -876,12 +879,15 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
               <option value="">Team Members</option>
               {assignedNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
-            <span className="text-[13px] text-txt-muted ml-auto">{filteredTasks.length} tasks</span>
-            {overdueCount > 0 && (
-              <span className="bg-gunner-red text-white text-[11px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1">
-                🔥 {overdueCount} overdue
-              </span>
-            )}
+            <span className="text-[13px] text-txt-muted ml-auto">{displayTasks.length} tasks</span>
+            <button
+              onClick={() => setShowOverdueOnly(prev => !prev)}
+              className={`text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${
+                showOverdueOnly ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'
+              }`}
+            >
+              Overdue {overdueCount > 0 ? `(${overdueCount})` : ''}
+            </button>
           </div>
 
           {/* GHL error */}
@@ -1059,18 +1065,27 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
         </div>
 
         {/* AM/PM glow — activity is source of truth, server DB as fallback */}
-        <div className="flex gap-1 shrink-0">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
-            (activity ? activity.hasAm : task.amDone)
-              ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
-              : 'bg-surface-tertiary text-txt-muted'
-          }`}>AM</span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
-            (activity ? activity.hasPm : task.pmDone)
-              ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
-              : 'bg-surface-tertiary text-txt-muted'
-          }`}>PM</span>
-        </div>
+        {(() => {
+          const amActive = activity ? activity.hasAm : task.amDone
+          const pmActive = activity ? activity.hasPm : task.pmDone
+          return (
+            <div className="flex gap-1 shrink-0 items-center">
+              <span title={amActive ? 'Called in AM' : 'Not yet contacted in AM'} className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
+                amActive
+                  ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
+                  : 'bg-surface-tertiary text-txt-muted'
+              }`}>AM</span>
+              <span title={pmActive ? 'Called in PM' : 'Not yet contacted in PM'} className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
+                pmActive
+                  ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
+                  : 'bg-surface-tertiary text-txt-muted'
+              }`}>PM</span>
+              {task.isOverdue && !amActive && !pmActive && (
+                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Overdue — not contacted today" />
+              )}
+            </div>
+          )
+        })()}
 
         {/* Due status */}
         <span className={`text-[11px] font-semibold shrink-0 w-20 text-right ${

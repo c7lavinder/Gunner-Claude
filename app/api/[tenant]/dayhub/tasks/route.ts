@@ -7,6 +7,8 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { startOfDay, endOfDay, addDays, differenceInDays } from 'date-fns'
 
+const priorityScores: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
+
 export async function GET(
   req: Request,
   { params }: { params: { tenant: string } }
@@ -37,14 +39,14 @@ export async function GET(
     const [tasks, totalCount, overdueCount] = await Promise.all([
       db.task.findMany({
         where,
-        orderBy: [{ dueAt: 'asc' }],
+        orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }],
         take: limit,
         skip: offset,
         include: {
           assignedTo: { select: { id: true, name: true, role: true } },
           property: {
             select: {
-              id: true, address: true, city: true, state: true, zip: true,
+              id: true, address: true, city: true, state: true, zip: true, ghlContactId: true,
               sellers: { include: { seller: { select: { name: true } } }, take: 1 },
             },
           },
@@ -69,11 +71,13 @@ export async function GET(
         category: t.category,
         status: t.status,
         priority: t.priority,
+        priorityScore: priorityScores[t.priority] ?? 1,
         dueAt: t.dueAt?.toISOString() ?? null,
         daysOverdue,
         isDueToday,
         isUpcoming,
         contactName: t.property?.sellers[0]?.seller.name ?? null,
+        contactId: t.property?.ghlContactId ?? null,
         address: t.property
           ? `${t.property.address}, ${t.property.city}, ${t.property.state} ${t.property.zip}`
           : null,
