@@ -119,18 +119,41 @@ export default async function TasksPage({ params }: { params: { tenant: string }
     })
 
     // Cross-reference contactIds → property addresses from inventory
-    // GHL contacts often lack address fields; our Property table is the source of truth
-    const properties = contactIds.length > 0
-      ? await db.property.findMany({
-          where: { tenantId, ghlContactId: { in: contactIds } },
-          select: { ghlContactId: true, address: true, city: true, state: true },
-        })
-      : []
+    // Try 3 sources: 1) property.ghlContactId match, 2) seller.ghlContactId match, 3) GHL contact address
     const propertyMap = new Map<string, string>()
-    for (const p of properties) {
-      if (p.ghlContactId) {
-        const addr = [p.address, p.city, p.state].filter(Boolean).join(', ')
-        if (addr) propertyMap.set(p.ghlContactId, addr)
+    if (contactIds.length > 0) {
+      // Source 1: Direct property → contact link
+      const directProps = await db.property.findMany({
+        where: { tenantId, ghlContactId: { in: contactIds } },
+        select: { ghlContactId: true, address: true, city: true, state: true },
+      })
+      for (const p of directProps) {
+        if (p.ghlContactId) {
+          const addr = [p.address, p.city, p.state].filter(Boolean).join(', ')
+          if (addr) propertyMap.set(p.ghlContactId, addr)
+        }
+      }
+
+      // Source 2: Seller → property link (sellers have ghlContactId from GHL contact)
+      const unmatchedIds = contactIds.filter(id => !propertyMap.has(id))
+      if (unmatchedIds.length > 0) {
+        const sellerProps = await db.seller.findMany({
+          where: { tenantId, ghlContactId: { in: unmatchedIds } },
+          select: {
+            ghlContactId: true,
+            properties: {
+              select: { property: { select: { address: true, city: true, state: true } } },
+              take: 1,
+            },
+          },
+        })
+        for (const s of sellerProps) {
+          if (s.ghlContactId && s.properties[0]?.property) {
+            const p = s.properties[0].property
+            const addr = [p.address, p.city, p.state].filter(Boolean).join(', ')
+            if (addr) propertyMap.set(s.ghlContactId, addr)
+          }
+        }
       }
     }
 
