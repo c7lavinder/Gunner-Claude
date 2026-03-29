@@ -10,7 +10,7 @@ import { z } from 'zod'
 const updateSchema = z.object({
   ghlUserId: z.string().nullable().optional(),
   reportsTo: z.string().nullable().optional(),
-  role: z.enum(['OWNER', 'ADMIN', 'TEAM_LEAD', 'LEAD_MANAGER']).optional(),
+  role: z.enum(['OWNER', 'ADMIN', 'TEAM_LEAD', 'LEAD_MANAGER', 'ACQUISITION_MANAGER', 'DISPOSITION_MANAGER']).optional(),
 })
 
 export async function PATCH(

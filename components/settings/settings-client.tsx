@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power, MapPin } from 'lucide-react'
+import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power, MapPin, ChevronDown } from 'lucide-react'
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
 import { GHLDropdown } from '@/components/ui/ghl-dropdown'
@@ -91,16 +91,21 @@ export function SettingsClient({
   const [ghlUsersLoading, setGhlUsersLoading] = useState(false)
   const [savingGhlMap, setSavingGhlMap] = useState<string | null>(null)
 
-  // Admin toggle state
-  const [confirmAdminToggle, setConfirmAdminToggle] = useState<string | null>(null)
+  // Role change state
+  const [confirmRoleChange, setConfirmRoleChange] = useState<{ memberId: string; newRole: string } | null>(null)
   const [savingRole, setSavingRole] = useState<string | null>(null)
   const [localRoles, setLocalRoles] = useState<Record<string, string>>(() =>
     Object.fromEntries(teamMembers.map(m => [m.id, m.role]))
   )
+  const [localReportsTo, setLocalReportsTo] = useState<Record<string, string | null>>(() =>
+    Object.fromEntries(teamMembers.map(m => [m.id, m.reportsTo]))
+  )
+  const [savingReportsTo, setSavingReportsTo] = useState<string | null>(null)
 
-  async function toggleAdminRole(memberId: string, memberName: string) {
-    const currentRole = localRoles[memberId]
-    const newRole = currentRole === 'ADMIN' ? 'LEAD_MANAGER' : 'ADMIN'
+  // Role guide toggle
+  const [showRoleGuide, setShowRoleGuide] = useState(false)
+
+  async function changeRole(memberId: string, newRole: string) {
     setSavingRole(memberId)
     try {
       const res = await fetch(`/api/users/${memberId}`, {
@@ -113,7 +118,22 @@ export function SettingsClient({
       }
     } catch { /* ignore */ }
     setSavingRole(null)
-    setConfirmAdminToggle(null)
+    setConfirmRoleChange(null)
+  }
+
+  async function changeReportsTo(memberId: string, reportsToId: string | null) {
+    setSavingReportsTo(memberId)
+    try {
+      const res = await fetch(`/api/users/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportsTo: reportsToId }),
+      })
+      if (res.ok) {
+        setLocalReportsTo(prev => ({ ...prev, [memberId]: reportsToId }))
+      }
+    } catch { /* ignore */ }
+    setSavingReportsTo(null)
   }
 
   // Fetch GHL users when team tab is shown
@@ -277,6 +297,33 @@ export function SettingsClient({
       {/* ── Team tab ────────────────────────────────────────────────────── */}
       {tab === 'team' && (
         <div className="space-y-4">
+          {/* Role Guide — collapsible */}
+          <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
+            <button onClick={() => setShowRoleGuide(p => !p)} className="w-full px-5 py-3 flex items-center justify-between hover:bg-surface-secondary transition-colors">
+              <span className="text-ds-body font-medium text-txt-primary">Role Guide</span>
+              <ChevronDown size={14} className={`text-txt-muted transition-transform ${showRoleGuide ? 'rotate-180' : ''}`} />
+            </button>
+            {showRoleGuide && (
+              <div className="px-5 pb-4 space-y-3 border-t border-[rgba(0,0,0,0.06)]">
+                {([
+                  { role: 'OWNER' as UserRole, desc: 'Full access. Billing, team management, all data.', color: '#dc2626' },
+                  { role: 'ADMIN' as UserRole, desc: 'Same as Owner minus billing. Manages team, views all data.', color: '#ea580c' },
+                  { role: 'TEAM_LEAD' as UserRole, desc: 'Manages a team. Sees team calls, KPIs, and properties. Can invite members.', color: '#d97706' },
+                  { role: 'ACQUISITION_MANAGER' as UserRole, desc: 'Acquisition pipeline. Makes calls, sets appointments, manages offers on assigned properties.', color: '#2563eb' },
+                  { role: 'LEAD_MANAGER' as UserRole, desc: 'Handles inbound leads. Makes calls, qualifies sellers, sets appointments.', color: '#7c3aed' },
+                  { role: 'DISPOSITION_MANAGER' as UserRole, desc: 'Manages buyer side. Sends deal blasts, manages buyers, tracks showings and offers.', color: '#059669' },
+                ]).map(({ role, desc, color }) => (
+                  <div key={role} className="flex items-start gap-3 pl-3" style={{ borderLeft: `3px solid ${color}` }}>
+                    <div>
+                      <p className="text-ds-body font-medium text-txt-primary">{ROLE_LABELS[role]}</p>
+                      <p className="text-ds-fine text-txt-secondary">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Invite */}
           {canManage && (
             <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
@@ -312,95 +359,135 @@ export function SettingsClient({
 
           {/* Team list */}
           <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] divide-y divide-[rgba(0,0,0,0.06)]">
-            {teamMembers.map((member) => (
-              <div key={member.id} className="flex items-center gap-3 px-5 py-4">
-                <div className="w-8 h-8 rounded-full bg-gunner-red-light flex items-center justify-center shrink-0">
-                  <span className="text-gunner-red text-ds-fine font-medium">{member.name[0]}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-ds-body text-txt-primary font-medium">{member.name}</p>
-                    {member.id === currentUserId && (
-                      <span className="text-ds-fine text-txt-muted bg-surface-secondary px-1.5 py-0.5 rounded-[6px]">you</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-ds-fine text-txt-muted">{member.email}</p>
-                    {member.phone && (
-                      <span className="text-ds-fine text-txt-muted">
-                        · <Phone size={10} className="inline mb-0.5" /> {member.phone}
-                      </span>
-                    )}
-                  </div>
-                  {/* GHL user mapping */}
-                  {canManage && tenant.ghlConnected && (
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <Link2 size={10} className="text-txt-muted shrink-0" />
-                      {ghlUsersLoading ? (
-                        <span className="text-ds-fine text-txt-muted">Loading GHL users...</span>
-                      ) : ghlUsers.length > 0 ? (
+            {teamMembers.map((member) => {
+              const memberRole = localRoles[member.id] as UserRole
+              const isOwnerMember = memberRole === 'OWNER'
+              const isSelf = member.id === currentUserId
+              const canChangeRole = canManage && (currentUserRole === 'OWNER' || currentUserRole === 'ADMIN') && !isOwnerMember && !isSelf
+              const pendingConfirm = confirmRoleChange?.memberId === member.id
+
+              return (
+                <div key={member.id} className="px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gunner-red-light flex items-center justify-center shrink-0">
+                      <span className="text-gunner-red text-ds-fine font-medium">{member.name[0]}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-ds-body text-txt-primary font-medium">{member.name}</p>
+                        {isSelf && (
+                          <span className="text-ds-fine text-txt-muted bg-surface-secondary px-1.5 py-0.5 rounded-[6px]">you</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-ds-fine text-txt-muted">{member.email}</p>
+                        {member.phone && (
+                          <span className="text-ds-fine text-txt-muted">
+                            · <Phone size={10} className="inline mb-0.5" /> {member.phone}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {/* Role selector dropdown */}
+                      {canChangeRole ? (
                         <select
-                          value={member.ghlUserId ?? ''}
-                          onChange={(e) => saveGhlUserMapping(member.id, e.target.value || null)}
-                          disabled={savingGhlMap === member.id}
-                          className="text-ds-fine bg-transparent border-none text-txt-secondary hover:text-txt-primary focus:outline-none cursor-pointer p-0"
+                          value={memberRole}
+                          onChange={(e) => {
+                            const newRole = e.target.value
+                            if (newRole !== memberRole) {
+                              setConfirmRoleChange({ memberId: member.id, newRole })
+                            }
+                          }}
+                          disabled={savingRole === member.id}
+                          className="text-ds-fine bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-2 py-1 text-txt-secondary focus:outline-none cursor-pointer"
                         >
-                          <option value="">Map to GHL user...</option>
-                          {ghlUsers.map(u => (
-                            <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                          {Object.entries(ROLE_LABELS).filter(([r]) => r !== 'OWNER').map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
                           ))}
                         </select>
                       ) : (
-                        <span className="text-ds-fine text-txt-muted">
-                          {member.ghlUserId ? `GHL: ${member.ghlUserId.slice(0, 8)}...` : 'No GHL mapping'}
+                        <span className="text-ds-fine text-txt-secondary bg-surface-secondary px-2 py-1 rounded-full">
+                          {ROLE_LABELS[memberRole] ?? memberRole}
                         </span>
                       )}
                     </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  {/* Admin toggle — visible to OWNER/ADMIN only, not for OWNER members or self */}
-                  {canManage && (currentUserRole === 'OWNER' || currentUserRole === 'ADMIN') &&
-                   member.role !== 'OWNER' && member.id !== currentUserId && (
-                    <div className="flex items-center gap-2">
-                      {confirmAdminToggle === member.id ? (
-                        <div className="flex items-center gap-1.5 bg-surface-secondary px-2 py-1 rounded-[8px]">
-                          <span className="text-ds-fine text-txt-secondary whitespace-nowrap">
-                            {localRoles[member.id] === 'ADMIN' ? 'Remove' : 'Grant'} admin access to {member.name.split(' ')[0]}?
-                          </span>
-                          <button
-                            onClick={() => toggleAdminRole(member.id, member.name)}
-                            disabled={savingRole === member.id}
-                            className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark"
-                          >
-                            {savingRole === member.id ? '...' : 'Confirm'}
-                          </button>
-                          <button
-                            onClick={() => setConfirmAdminToggle(null)}
-                            className="text-ds-fine font-medium text-txt-muted hover:text-txt-primary"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="flex items-center gap-1.5 cursor-pointer group">
-                          <span className="text-ds-fine text-txt-muted group-hover:text-txt-secondary">Admin access</span>
-                          <button
-                            onClick={() => setConfirmAdminToggle(member.id)}
-                            className={`relative w-8 h-[18px] rounded-full transition-colors ${localRoles[member.id] === 'ADMIN' ? 'bg-gunner-red' : 'bg-surface-tertiary'}`}
-                          >
-                            <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${localRoles[member.id] === 'ADMIN' ? 'left-[16px]' : 'left-[2px]'}`} />
-                          </button>
-                        </label>
-                      )}
+                  </div>
+
+                  {/* Role change confirmation */}
+                  {pendingConfirm && confirmRoleChange && (
+                    <div className="flex items-center gap-2 mt-2 ml-11 bg-surface-secondary px-3 py-2 rounded-[10px]">
+                      <span className="text-ds-fine text-txt-secondary flex-1">
+                        Change {member.name.split(' ')[0]} to <strong>{ROLE_LABELS[confirmRoleChange.newRole as UserRole]}</strong>?
+                      </span>
+                      <button
+                        onClick={() => changeRole(member.id, confirmRoleChange.newRole)}
+                        disabled={savingRole === member.id}
+                        className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark"
+                      >
+                        {savingRole === member.id ? '...' : 'Confirm'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmRoleChange(null)}
+                        className="text-ds-fine font-medium text-txt-muted hover:text-txt-primary"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   )}
-                  <span className="text-ds-fine text-txt-secondary bg-surface-secondary px-2 py-1 rounded-full">
-                    {ROLE_LABELS[localRoles[member.id] as UserRole] ?? localRoles[member.id] ?? member.role}
-                  </span>
+
+                  {/* Reports To + GHL mapping row */}
+                  <div className="flex items-center gap-4 mt-2 ml-11 flex-wrap">
+                    {/* Reports To dropdown */}
+                    {canManage && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-ds-fine text-txt-muted">Reports to:</span>
+                        <select
+                          value={localReportsTo[member.id] ?? ''}
+                          onChange={(e) => changeReportsTo(member.id, e.target.value || null)}
+                          disabled={savingReportsTo === member.id}
+                          className="text-ds-fine bg-transparent text-txt-secondary hover:text-txt-primary focus:outline-none cursor-pointer p-0"
+                        >
+                          <option value="">No manager</option>
+                          {teamMembers.filter(m => m.id !== member.id).map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                        {savingReportsTo === member.id && (
+                          <Loader2 size={10} className="animate-spin text-txt-muted" />
+                        )}
+                      </div>
+                    )}
+
+                    {/* GHL user mapping */}
+                    {canManage && tenant.ghlConnected && (
+                      <div className="flex items-center gap-1.5">
+                        <Link2 size={10} className="text-txt-muted shrink-0" />
+                        {ghlUsersLoading ? (
+                          <span className="text-ds-fine text-txt-muted">Loading GHL users...</span>
+                        ) : ghlUsers.length > 0 ? (
+                          <select
+                            value={member.ghlUserId ?? ''}
+                            onChange={(e) => saveGhlUserMapping(member.id, e.target.value || null)}
+                            disabled={savingGhlMap === member.id}
+                            className="text-ds-fine bg-transparent border-none text-txt-secondary hover:text-txt-primary focus:outline-none cursor-pointer p-0"
+                          >
+                            <option value="">Map to GHL user...</option>
+                            {ghlUsers.map(u => (
+                              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-ds-fine text-txt-muted">
+                            {member.ghlUserId ? `GHL: ${member.ghlUserId.slice(0, 8)}...` : 'No GHL mapping'}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
