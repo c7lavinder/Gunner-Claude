@@ -10,6 +10,7 @@ import { z } from 'zod'
 const updateSchema = z.object({
   ghlUserId: z.string().nullable().optional(),
   reportsTo: z.string().nullable().optional(),
+  role: z.enum(['OWNER', 'ADMIN', 'TEAM_LEAD', 'LEAD_MANAGER']).optional(),
 })
 
 export async function PATCH(
@@ -36,13 +37,25 @@ export async function PATCH(
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
+  // Prevent changing OWNER role
+  if (parsed.data.role) {
+    const targetUser = await db.user.findFirst({
+      where: { id: params.userId, tenantId: session.tenantId },
+      select: { role: true },
+    })
+    if (targetUser?.role === 'OWNER') {
+      return NextResponse.json({ error: 'Cannot change the owner role' }, { status: 403 })
+    }
+  }
+
   const updated = await db.user.update({
     where: { id: params.userId },
     data: {
       ...(parsed.data.ghlUserId !== undefined && { ghlUserId: parsed.data.ghlUserId }),
       ...(parsed.data.reportsTo !== undefined && { reportsTo: parsed.data.reportsTo }),
+      ...(parsed.data.role !== undefined && { role: parsed.data.role }),
     },
-    select: { id: true, ghlUserId: true, reportsTo: true },
+    select: { id: true, ghlUserId: true, reportsTo: true, role: true },
   })
 
   return NextResponse.json({ status: 'success', data: updated })

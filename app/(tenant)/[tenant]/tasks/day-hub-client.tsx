@@ -550,11 +550,12 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
                 <Loader2 size={14} className="animate-spin text-txt-muted" />
               ) : (
                 <>
-                  <p className="text-[24px] font-semibold text-txt-primary leading-tight">
+                  <p className={`text-[24px] font-semibold leading-tight ${(kpi.data?.count ?? 0) === 0 && new Date().getHours() >= 12 ? 'text-red-400' : 'text-txt-primary'}`}>
                     {kpi.data?.count ?? 0}
                     <span className="text-[13px] font-normal text-txt-muted"> / {kpi.data?.goal ?? 0}</span>
                   </p>
-                  <div className="h-[3px] bg-surface-tertiary rounded-full mt-2 overflow-hidden">
+                  {/* Progress bar */}
+                  <div className="mt-2 h-[3px] bg-surface-secondary rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gunner-red rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(((kpi.data?.count ?? 0) / Math.max(kpi.data?.goal ?? 1, 1)) * 100, 100)}%` }}

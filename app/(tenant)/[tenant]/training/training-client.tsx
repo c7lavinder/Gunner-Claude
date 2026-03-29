@@ -106,7 +106,10 @@ export function TrainingClient({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-ds-label font-medium text-txt-primary flex items-center gap-2">
               <AlertTriangle size={14} className="text-semantic-red" />
-              {isManager ? 'Review queue (under 50)' : 'Calls to improve'}
+              <span>{isManager ? 'Review Queue' : 'Calls to improve'}</span>
+              {isManager && reviewQueue.length > 0 && (
+                <span className="ml-2 text-[10px] font-bold text-white bg-red-500 px-2 py-0.5 rounded-full">{reviewQueue.length}</span>
+              )}
             </h2>
             <span className="text-ds-fine text-txt-muted">{reviewQueue.length} calls</span>
           </div>

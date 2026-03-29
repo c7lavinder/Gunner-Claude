@@ -3745,8 +3745,8 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-ds-label font-semibold text-txt-primary">Deal Blast Generator</h3>
-          <p className="text-ds-fine text-txt-muted">Generate, preview, and send property blasts to buyers</p>
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Blast</p>
+          <p className="text-[8px] text-txt-muted italic">Generate, preview, and send property blasts to buyers</p>
         </div>
         <button
           onClick={() => {
@@ -3765,11 +3765,12 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
       </div>
 
       {/* Property summary card — key deal numbers with inline-editable overrides */}
-      <div className="bg-surface-secondary rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.06)] p-4">
-        <div className="flex items-center justify-between mb-2">
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Summary</p>
-          <p className="text-[8px] text-txt-muted">Click a value to set a blast override</p>
+          <p className="text-[8px] text-txt-muted italic">Click a value to set a blast override</p>
         </div>
+        <div className="p-3">
         <div className="grid grid-cols-4 gap-3">
           {([
             { key: 'askingPrice', overrideKey: 'dealBlastAskingOverride', label: 'Asking', value: property.askingPrice, color: 'text-txt-primary' },
@@ -3784,22 +3785,25 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
             const displayValue = overrideValue ?? field.value
             const hasOverride = overrideValue !== null && overrideValue !== undefined
             const isEditing = editingField === field.overrideKey
-            const borderClass = hasOverride
-              ? 'border-l-2 border-amber-400 pl-2'
-              : source === 'api' ? 'border-l-2 border-purple-400 pl-2'
-              : source === 'ai' ? 'border-l-2 border-blue-400 pl-2'
-              : source === 'user' ? 'border-l-2 border-green-400 pl-2' : ''
-            const badgeEl = hasOverride
-              ? <span className="text-[7px] font-bold text-amber-600 bg-amber-100 px-1 py-px rounded ml-1">OVERRIDE</span>
-              : source === 'api'
-              ? <span className="text-[7px] font-bold text-purple-600 bg-purple-100 px-1 py-px rounded ml-1">API</span>
-              : source === 'ai'
-              ? <span className="text-[7px] font-bold text-blue-600 bg-blue-100 px-1 py-px rounded ml-1">AI</span>
-              : source === 'user'
-              ? <span className="text-[7px] font-bold text-green-600 bg-green-100 px-1 py-px rounded ml-1">EDITED</span>
+            const cardClass = hasOverride
+              ? 'bg-amber-50 border-[0.5px] border-amber-300'
+              : source === 'api' ? 'bg-purple-50 border-[0.5px] border-purple-300'
+              : source === 'ai' ? 'bg-blue-50 border-[0.5px] border-blue-300'
+              : source === 'user' ? 'bg-green-50 border-[0.5px] border-green-300'
+              : 'bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)]'
+            const tag = hasOverride ? 'OVERRIDE'
+              : source === 'api' ? 'API'
+              : source === 'ai' ? 'AI'
+              : source === 'user' ? 'EDITED'
               : null
+            const tagColor = hasOverride ? 'text-amber-400'
+              : source === 'api' ? 'text-purple-400'
+              : source === 'ai' ? 'text-blue-400'
+              : source === 'user' ? 'text-green-400'
+              : ''
             return (
-              <div key={field.key} className={`${borderClass} cursor-pointer group`}>
+              <div key={field.key} className={`${cardClass} rounded-[10px] px-3 py-2.5 cursor-pointer group relative`}>
+                {tag && <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${tagColor}`}>{tag}</span>}
                 <p className="text-[9px] text-txt-muted flex items-center gap-1">
                   {field.label}
                   <Pencil size={7} className="opacity-0 group-hover:opacity-50 transition-opacity" />
@@ -3836,7 +3840,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
                       setEditValue(overrideValue ?? field.value ?? '')
                     }}
                   >
-                    {fmt(displayValue)}{badgeEl}
+                    {fmt(displayValue)}
                   </p>
                 )}
                 {hasOverride && field.value && (
@@ -3874,6 +3878,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
             <span className="text-[9px] font-medium text-semantic-blue bg-semantic-blue-bg px-1.5 py-0.5 rounded-full">{property.propertyMarkets.join(', ')}</span>
           )}
         </div>
+        </div>
       </div>
 
       {/* Tier selection */}
@@ -3881,9 +3886,15 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Select Buyer Tiers</p>
         <div className="grid grid-cols-2 gap-2">
           {tierDefs.map(t => (
-            <label key={t.tier} className={`flex items-start gap-2.5 rounded-[10px] p-3 cursor-pointer transition-colors border-[0.5px] ${
-              selectedTiers.has(t.tier) ? 'bg-gunner-red-light border-gunner-red/20' : 'bg-surface-secondary border-[rgba(0,0,0,0.06)] hover:bg-surface-tertiary'
-            }`}>
+            <label
+              key={t.tier}
+              className={`flex items-start gap-2.5 cursor-pointer transition-colors ${
+                selectedTiers.has(t.tier)
+                  ? 'rounded-[10px] px-3 py-2.5 border-[0.5px]'
+                  : 'bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-2.5 hover:bg-surface-tertiary'
+              }`}
+              style={selectedTiers.has(t.tier) ? { backgroundColor: 'rgba(192,57,43,0.05)', borderColor: 'rgba(192,57,43,0.25)' } : undefined}
+            >
               <input type="checkbox" checked={selectedTiers.has(t.tier)} onChange={() => toggleTier(t.tier)} className="mt-0.5 accent-gunner-red" />
               <div>
                 <p className="text-ds-fine font-semibold text-txt-primary">{t.emoji} {t.label}</p>

@@ -91,6 +91,31 @@ export function SettingsClient({
   const [ghlUsersLoading, setGhlUsersLoading] = useState(false)
   const [savingGhlMap, setSavingGhlMap] = useState<string | null>(null)
 
+  // Admin toggle state
+  const [confirmAdminToggle, setConfirmAdminToggle] = useState<string | null>(null)
+  const [savingRole, setSavingRole] = useState<string | null>(null)
+  const [localRoles, setLocalRoles] = useState<Record<string, string>>(() =>
+    Object.fromEntries(teamMembers.map(m => [m.id, m.role]))
+  )
+
+  async function toggleAdminRole(memberId: string, memberName: string) {
+    const currentRole = localRoles[memberId]
+    const newRole = currentRole === 'ADMIN' ? 'LEAD_MANAGER' : 'ADMIN'
+    setSavingRole(memberId)
+    try {
+      const res = await fetch(`/api/users/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      })
+      if (res.ok) {
+        setLocalRoles(prev => ({ ...prev, [memberId]: newRole }))
+      }
+    } catch { /* ignore */ }
+    setSavingRole(null)
+    setConfirmAdminToggle(null)
+  }
+
   // Fetch GHL users when team tab is shown
   useEffect(() => {
     if (tab === 'team' && tenant.ghlConnected && ghlUsers.length === 0) {
@@ -333,9 +358,47 @@ export function SettingsClient({
                     </div>
                   )}
                 </div>
-                <span className="text-ds-fine text-txt-secondary bg-surface-secondary px-2 py-1 rounded-full">
-                  {ROLE_LABELS[member.role as UserRole] ?? member.role}
-                </span>
+                <div className="flex items-center gap-3 shrink-0">
+                  {/* Admin toggle — visible to OWNER/ADMIN only, not for OWNER members or self */}
+                  {canManage && (currentUserRole === 'OWNER' || currentUserRole === 'ADMIN') &&
+                   member.role !== 'OWNER' && member.id !== currentUserId && (
+                    <div className="flex items-center gap-2">
+                      {confirmAdminToggle === member.id ? (
+                        <div className="flex items-center gap-1.5 bg-surface-secondary px-2 py-1 rounded-[8px]">
+                          <span className="text-ds-fine text-txt-secondary whitespace-nowrap">
+                            {localRoles[member.id] === 'ADMIN' ? 'Remove' : 'Grant'} admin access to {member.name.split(' ')[0]}?
+                          </span>
+                          <button
+                            onClick={() => toggleAdminRole(member.id, member.name)}
+                            disabled={savingRole === member.id}
+                            className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark"
+                          >
+                            {savingRole === member.id ? '...' : 'Confirm'}
+                          </button>
+                          <button
+                            onClick={() => setConfirmAdminToggle(null)}
+                            className="text-ds-fine font-medium text-txt-muted hover:text-txt-primary"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-1.5 cursor-pointer group">
+                          <span className="text-ds-fine text-txt-muted group-hover:text-txt-secondary">Admin access</span>
+                          <button
+                            onClick={() => setConfirmAdminToggle(member.id)}
+                            className={`relative w-8 h-[18px] rounded-full transition-colors ${localRoles[member.id] === 'ADMIN' ? 'bg-gunner-red' : 'bg-surface-tertiary'}`}
+                          >
+                            <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${localRoles[member.id] === 'ADMIN' ? 'left-[16px]' : 'left-[2px]'}`} />
+                          </button>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                  <span className="text-ds-fine text-txt-secondary bg-surface-secondary px-2 py-1 rounded-full">
+                    {ROLE_LABELS[localRoles[member.id] as UserRole] ?? localRoles[member.id] ?? member.role}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
