@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink,
+  ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink, Copy,
   MessageSquare, FileText, ChevronRight, ChevronLeft, Zap, Pencil, Check,
   DollarSign, Bot, Send, Clock, Plus, Loader2,
   Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X,
@@ -116,6 +116,7 @@ export function PropertyDetailClient({
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [sending, setSending] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
 
   const appStage = STATUS_TO_APP_STAGE[property.status] ?? 'acquisition.new_lead'
@@ -173,9 +174,27 @@ export function PropertyDetailClient({
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-ds-section font-semibold text-txt-primary">{property.address}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-ds-section font-semibold text-txt-primary">{property.address || <span className="text-txt-muted italic">Address missing</span>}</h1>
+              {property.address && (
+                <button
+                  onClick={() => {
+                    const full = `${property.address}, ${property.city}, ${property.state} ${property.zip}`
+                    navigator.clipboard.writeText(full).then(() => {
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 1500)
+                    })
+                  }}
+                  className="text-txt-muted hover:text-txt-secondary transition-colors relative"
+                  title="Copy address"
+                >
+                  <Copy size={13} />
+                  {copied && <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-medium text-semantic-green bg-green-50 px-1.5 py-0.5 rounded whitespace-nowrap">Copied!</span>}
+                </button>
+              )}
+            </div>
             <p className="text-ds-body text-txt-secondary flex items-center gap-1">
-              <MapPin size={11} /> {property.city}, {property.state} {property.zip}
+              <MapPin size={11} /> {[property.city, property.state].filter(Boolean).join(', ')} {property.zip ?? ''}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

@@ -5,6 +5,7 @@
 
 import { db } from '@/lib/db/client'
 import { lookupProperty } from './client'
+import { formatReadableDate } from '@/lib/format'
 
 /** Build a wholesaler-ready description from property details + research data */
 function generateDescription(
@@ -62,7 +63,7 @@ function generateDescription(
   const lastSaleDate = research.lastSaleDate as string | undefined
   const lastSalePrice = research.lastSalePrice as number | undefined
   if (lastSaleDate && lastSalePrice) {
-    parts.push(`Last sold ${lastSaleDate} for $${lastSalePrice.toLocaleString()}.`)
+    parts.push(`Last sold ${formatReadableDate(lastSaleDate)} for $${lastSalePrice.toLocaleString()}.`)
   }
 
   return parts.join(' ')

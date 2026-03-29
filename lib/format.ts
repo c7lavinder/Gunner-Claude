@@ -25,3 +25,28 @@ export function titleCase(name: string | null | undefined): string {
   if (!name) return ''
   return name.replace(/\b\w/g, c => c.toUpperCase())
 }
+
+/** Convert snake_case field key to Title Case label. e.g. "close_or_follow_up" → "Close Or Follow Up" */
+export function formatFieldLabel(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+/** Format ISO date string to readable: "March 29, 1995" */
+export function formatReadableDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return iso
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  } catch { return iso }
+}
+
+/** Format address safely — returns fallback if address is empty */
+export function formatAddress(address: string | null, city?: string | null, state?: string | null, zip?: string | null): string {
+  if (!address) return ''
+  const parts = [address]
+  if (city) parts.push(city)
+  if (state) parts.push(state)
+  if (zip) parts[parts.length - 1] += ` ${zip}`
+  return parts.join(', ')
+}

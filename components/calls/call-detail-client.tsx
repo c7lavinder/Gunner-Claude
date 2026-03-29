@@ -16,6 +16,7 @@ import {
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
+import { formatFieldLabel } from '@/lib/format'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -426,7 +427,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                     return (
                       <div key={cat} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-[14px] font-medium text-txt-primary">{cat}</span>
+                          <span className="text-[14px] font-medium text-txt-primary">{formatFieldLabel(cat)}</span>
                           <span className={`text-[14px] font-semibold ${pct >= 80 ? 'text-semantic-green' : pct >= 60 ? 'text-semantic-blue' : 'text-semantic-red'}`}>
                             {data.score}/{data.maxScore}
                           </span>

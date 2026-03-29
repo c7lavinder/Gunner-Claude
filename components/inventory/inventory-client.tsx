@@ -372,8 +372,8 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
             </span>
             {/* Address */}
             <div className="min-w-0 shrink-0" style={{ maxWidth: '40%' }}>
-              <p className="text-ds-body font-medium text-txt-primary truncate">{p.address}</p>
-              <p className="text-ds-fine text-txt-muted">{p.city}, {p.state} {p.zip}</p>
+              <p className="text-ds-body font-medium text-txt-primary truncate">{p.address || <span className="text-txt-muted italic">Address missing</span>}</p>
+              <p className="text-ds-fine text-txt-muted">{[p.city, p.state].filter(Boolean).join(', ')} {p.zip ?? ''}</p>
             </div>
             {/* Labels */}
             <div className="flex items-center gap-1.5 flex-1 flex-wrap">

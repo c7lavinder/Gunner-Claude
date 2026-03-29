@@ -104,7 +104,16 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const [typeFilter, setTypeFilter] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
   const [scoreFilter, setScoreFilter] = useState('')
-  const [dateFilter, setDateFilter] = useState('1d')
+  const [dateFilter, setDateFilter] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('gunner_calls_date_filter') ?? '7d'
+    }
+    return '7d'
+  })
+  function updateDateFilter(v: string) {
+    setDateFilter(v)
+    if (typeof window !== 'undefined') localStorage.setItem('gunner_calls_date_filter', v)
+  }
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
@@ -234,7 +243,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
         {/* FILTER BAR */}
         {tab === 'all' && (
           <div className="flex flex-wrap gap-2">
-            <select value={dateFilter} onChange={e => setDateFilter(e.target.value)}
+            <select value={dateFilter} onChange={e => updateDateFilter(e.target.value)}
               className="bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-secondary focus:outline-none"
               style={{ borderColor: 'var(--border-medium)' }}>
               <option value="1d">Today</option>
@@ -417,12 +426,19 @@ function CallCard({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
             <span className="flex items-center gap-1"><Phone size={9} /> {formatDistanceToNow(new Date(call.calledAt), { addSuffix: true })}</span>
           </div>
 
-          {/* Row 3: Address */}
+          {/* Row 3: Address — links to property detail if linked */}
           {(call.property || call.contactAddress) && (
             <div className="mt-1.5">
-              <span className="inline-flex items-center gap-1 text-[11px] text-txt-muted bg-surface-secondary border-[0.5px] px-2 py-0.5 rounded-full" style={{ borderColor: 'var(--border-light)' }}>
-                <MapPin size={9} /> {call.property ? `${call.property.address}, ${call.property.city}, ${call.property.state}` : call.contactAddress}
-              </span>
+              {call.property ? (
+                <Link href={`/${tenantSlug}/inventory/${call.property.id}`}
+                  className="inline-flex items-center gap-1 text-[11px] text-txt-muted hover:text-gunner-red bg-surface-secondary border-[0.5px] px-2 py-0.5 rounded-full transition-colors" style={{ borderColor: 'var(--border-light)' }}>
+                  <MapPin size={9} /> {call.property.address}, {call.property.city}, {call.property.state}
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] text-txt-muted bg-surface-secondary border-[0.5px] px-2 py-0.5 rounded-full" style={{ borderColor: 'var(--border-light)' }}>
+                  <MapPin size={9} /> {call.contactAddress}
+                </span>
+              )}
             </div>
           )}
 
