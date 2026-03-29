@@ -11,7 +11,7 @@ import {
   CheckCircle, Send, ChevronRight, ShieldCheck, CalendarCheck, DollarSign,
   Heart, AlertTriangle, Target, RotateCcw, Tag, MessageSquare, X, Loader2,
   User, MapPin, Clipboard, PhoneOutgoing, PhoneIncoming, Plus, RefreshCw,
-  Play, Pause, SkipBack, SkipForward, Volume2, ChevronDown,
+  Play, Pause, SkipBack, SkipForward, Volume2, ChevronDown, Home, Sparkles,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -40,7 +40,7 @@ interface CallDetail {
   aiNextSteps: Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null
 }
 
-type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps'
+type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps' | 'property'
 
 interface NextStep {
   type: string; label: string; reasoning: string
@@ -136,6 +136,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     { id: 'criteria', label: 'Criteria', icon: <Target size={14} /> },
     { id: 'transcript', label: 'Transcript', icon: <FileText size={14} /> },
     { id: 'next-steps', label: 'Next Steps', icon: <Zap size={14} />, badge: generatedSteps.filter(s => s.status === 'pending').length || undefined },
+    { id: 'property', label: 'Property', icon: <Home size={14} /> },
   ]
 
   function seekTo(timestamp: string) {
@@ -732,6 +733,11 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               )}
             </div>
           )}
+
+          {/* ── PROPERTY TAB ───────────────────────────────────────── */}
+          {tab === 'property' && (
+            <PropertyDataTab call={call} tenantSlug={tenantSlug} />
+          )}
         </div>
       </div>
 
@@ -816,6 +822,133 @@ function FeedbackModal({ callId, tenantSlug, onClose }: { callId: string; tenant
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: string }) {
+  const [suggestions, setSuggestions] = useState<Array<{
+    field: string; label: string; currentValue: string | null
+    suggestedValue: string; confidence: 'high' | 'medium' | 'low'
+    quote: string; applied: boolean
+  }>>([])
+  const [loading, setLoading] = useState(false)
+  const [generated, setGenerated] = useState(false)
+  const [applying, setApplying] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  async function generateSuggestions() {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/property-suggestions`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setSuggestions(data.suggestions ?? [])
+        setGenerated(true)
+      } else {
+        toast('Failed to analyze call', 'error')
+      }
+    } catch {
+      toast('Failed to analyze call', 'error')
+    }
+    setLoading(false)
+  }
+
+  async function applySuggestion(index: number) {
+    const s = suggestions[index]
+    if (!s || !call.property) return
+    setApplying(s.field)
+    try {
+      const res = await fetch(`/api/properties/${call.property.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [s.field]: s.suggestedValue, fieldSources: { [s.field]: 'ai' } }),
+      })
+      if (res.ok) {
+        setSuggestions(prev => prev.map((item, i) => i === index ? { ...item, applied: true } : item))
+        toast(`Updated ${s.label}`, 'success')
+      }
+    } catch { /* swallow */ }
+    setApplying(null)
+  }
+
+  const pendingCount = suggestions.filter(s => !s.applied).length
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[14px] font-medium text-txt-primary">Property Data from Call</p>
+          <p className="text-[12px] text-txt-muted">AI-extracted data points that can update the property record</p>
+        </div>
+        {generated && pendingCount > 0 && (
+          <span className="text-[10px] font-bold text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">{pendingCount} suggestions</span>
+        )}
+      </div>
+
+      {!call.property && (
+        <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-8 text-center" style={{ borderColor: 'var(--border-light)' }}>
+          <p className="text-[13px] text-txt-muted">No property linked to this call</p>
+        </div>
+      )}
+
+      {call.property && !generated && (
+        <button
+          onClick={generateSuggestions}
+          disabled={loading}
+          className="w-full bg-semantic-purple hover:opacity-90 text-white text-[13px] font-semibold py-3 rounded-[10px] transition-colors flex items-center justify-center gap-2"
+        >
+          {loading ? <><Loader2 size={14} className="animate-spin" /> Analyzing transcript...</> : <><Sparkles size={14} /> Extract Property Data from Call</>}
+        </button>
+      )}
+
+      {call.property && generated && suggestions.length === 0 && (
+        <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-8 text-center" style={{ borderColor: 'var(--border-light)' }}>
+          <p className="text-[13px] text-txt-muted">No new data points found in this call</p>
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="space-y-2">
+          {suggestions.map((s, i) => (
+            <div key={i} className={`border-[0.5px] rounded-[14px] p-4 ${s.applied ? 'bg-green-50 border-green-200' : 'bg-surface-primary'}`} style={s.applied ? {} : { borderColor: 'var(--border-light)' }}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[13px] font-medium text-txt-primary">{s.label}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                    s.confidence === 'high' ? 'bg-green-100 text-green-700' : s.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                  }`}>{s.confidence}</span>
+                  {s.applied ? (
+                    <span className="text-[10px] font-medium text-green-600">Applied</span>
+                  ) : (
+                    <button
+                      onClick={() => applySuggestion(i)}
+                      disabled={applying === s.field}
+                      className="text-[10px] font-semibold text-semantic-purple hover:text-semantic-purple/80 bg-semantic-purple-bg px-2.5 py-1 rounded-[8px]"
+                    >
+                      {applying === s.field ? '...' : 'Apply'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {s.currentValue && (
+                <p className="text-[11px] text-txt-muted">Current: {s.currentValue}</p>
+              )}
+              <p className="text-[12px] text-txt-primary font-medium mt-0.5">Suggested: {s.suggestedValue}</p>
+              {s.quote && (
+                <p className="text-[11px] text-txt-muted italic mt-1">&ldquo;{s.quote}&rdquo;</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {generated && (
+        <button onClick={generateSuggestions} disabled={loading}
+          className="text-[12px] text-txt-secondary hover:text-txt-primary">
+          {loading ? 'Analyzing...' : 'Re-analyze'}
+        </button>
+      )}
     </div>
   )
 }
