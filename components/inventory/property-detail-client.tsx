@@ -1684,47 +1684,6 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
       <InlineTextArea label="Internal Notes" value={vals.internalNotes} field="internalNotes" propertyId={property.id}
         labelColor="text-amber-700" bgColor="bg-amber-50 border-[0.5px] border-amber-200" textColor="text-amber-900" onSaved={handleSaved} />
 
-      {/* Seller & Deal Intel */}
-      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Seller & Deal Intel</p>
-        </div>
-        <div className="divide-y divide-[rgba(0,0,0,0.04)]">
-          <div className="px-4 py-2.5 flex items-start gap-4">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-20 pt-0.5 shrink-0">Motivation</p>
-            <div className="flex-1 flex items-center gap-3">
-              <InlineSelect label="" value={vals.sellerMotivation} field="sellerMotivation" propertyId={property.id}
-                options={['Inheritance', 'Divorce', 'Foreclosure', 'Tired Landlord', 'Relocating', 'Financial Distress', 'Health Issues', 'Downsizing', 'Estate/Probate', 'Behind on Payments', 'Tax Issues', 'Other']}
-                source={sources.sellerMotivation} onSaved={handleSaved} />
-            </div>
-          </div>
-          <div className="px-4 py-2.5 flex items-start gap-4">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-20 pt-0.5 shrink-0">Timeline</p>
-            <div className="flex-1 flex items-center gap-3">
-              <InlineSelect label="" value={vals.sellerTimeline} field="sellerTimeline" propertyId={property.id}
-                options={['ASAP', '2 Weeks', '30 Days', '60 Days', '90 Days', 'Flexible', 'No Rush', 'Unknown']}
-                source={sources.sellerTimeline} onSaved={handleSaved} />
-            </div>
-          </div>
-          <div className="px-4 py-2.5 flex items-start gap-4">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-20 pt-0.5 shrink-0">Condition</p>
-            <div className="flex-1 flex items-center gap-3">
-              <InlineSelect label="" value={vals.propertyCondition} field="propertyCondition" propertyId={property.id}
-                options={['Move-In Ready', 'Minor Cosmetic', 'Needs Repairs', 'Major Rehab', 'Teardown', 'Fire Damage', 'Water Damage', 'Hoarder', 'Unknown']}
-                source={sources.propertyCondition} onSaved={handleSaved} />
-            </div>
-          </div>
-          <div className="px-4 py-2.5 flex items-start gap-4">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider w-20 pt-0.5 shrink-0">Price Reason</p>
-            <div className="flex-1">
-              <InlineText label="" value={vals.sellerAskingReason} field="sellerAskingReason" propertyId={property.id}
-                placeholder="Why they want their price (owes X, needs X to move, etc.)"
-                source={sources.sellerAskingReason} onSaved={handleSaved} />
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Left: seller + assigned + actions */}
         <div className="space-y-4">
@@ -2180,6 +2139,19 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           </div>
         </div>
       )}
+
+      {/* Seller & Deal Intel */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Seller & Deal Intel</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
+          <DataCard label="Motivation" value={fmtStr(property.sellerMotivation)} fieldKey="sellerMotivation" />
+          <DataCard label="Timeline" value={fmtStr(property.sellerTimeline)} fieldKey="sellerTimeline" />
+          <DataCard label="Condition" value={fmtStr(property.propertyCondition)} fieldKey="propertyCondition" />
+          <DataCard label="Price Reason" value={fmtStr(property.sellerAskingReason)} fieldKey="sellerAskingReason" />
+        </div>
+      </div>
 
       {/* External links */}
       <div className="flex gap-3">
