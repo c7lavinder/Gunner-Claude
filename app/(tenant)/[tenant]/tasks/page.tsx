@@ -207,7 +207,11 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         ? `${t.contactDetails.firstName ?? ''} ${t.contactDetails.lastName ?? ''}`.trim()
         : null
       const contact = contactMap.get(t.contactId)
-      const contactName = inlineName || (contact?.name ?? null)
+      const resolvedContactName = inlineName || (contact?.name ?? null)
+      const resolvedAddress = propertyMap.get(t.contactId) || contact?.address || null
+      // Fallback: if no contact name AND no address, use the task title as display name
+      const contactName = resolvedContactName
+        || (!resolvedAddress ? (t.title || null) : null)
 
       // Prefer inline assignedToUserDetails, fall back to user map
       const inlineAssigned = t.assignedToUserDetails
