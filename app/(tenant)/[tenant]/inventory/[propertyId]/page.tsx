@@ -137,7 +137,17 @@ export default async function PropertyDetailPage({
         highestOffer: property.highestOffer?.toString() ?? null,
         acceptedPrice: property.acceptedPrice?.toString() ?? null,
         finalProfit: property.finalProfit?.toString() ?? null,
-        fieldSources: (property.fieldSources ?? {}) as Record<string, string>,
+        fieldSources: (() => {
+          const fs = { ...((property.fieldSources ?? {}) as Record<string, string>) }
+          // If propertyMarkets has values but no source tracked, derive from how it was populated
+          const mkts = (property.propertyMarkets ?? []) as string[]
+          if (mkts.length > 0 && !fs.propertyMarkets) fs.propertyMarkets = 'api'
+          if (property.market?.name && !fs.propertyMarkets) fs.propertyMarkets = 'api'
+          // Same for projectType
+          const pts = (property.projectType ?? []) as string[]
+          if (pts.length > 0 && !fs.projectType) fs.projectType = 'user'
+          return fs
+        })(),
         ghlContactId: property.ghlContactId,
         createdAt: property.createdAt.toISOString(),
         beds: property.beds, baths: property.baths, sqft: property.sqft,
