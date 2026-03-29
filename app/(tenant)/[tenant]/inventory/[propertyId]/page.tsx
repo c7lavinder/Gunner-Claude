@@ -160,8 +160,11 @@ export default async function PropertyDetailPage({
         propertyMarkets: (() => {
           const arr = (property.propertyMarkets ?? []) as string[]
           const marketName = property.market?.name
-          if (marketName && !arr.includes(marketName)) return [marketName, ...arr]
-          return arr.length > 0 ? arr : marketName ? [marketName] : []
+          const fs = (property.fieldSources ?? {}) as Record<string, string>
+          // Only inject market relation if user hasn't manually edited propertyMarkets
+          if (fs.propertyMarkets === 'user') return arr
+          if (arr.length > 0) return arr
+          return marketName ? [marketName] : []
         })(),
         description: property.description, internalNotes: property.internalNotes,
         // Seller & Deal Intel
