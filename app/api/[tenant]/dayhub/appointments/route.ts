@@ -1,11 +1,12 @@
 // GET /api/[tenant]/dayhub/appointments?date=2026-03-24
 // Returns appointments from ALL GHL calendars for the given day
 // Enriches with contact phone, address from GHL
+// NOTE: date param is a LOCAL date (Central time). We convert to UTC boundaries
+// so appointments are correctly matched to the user's actual day.
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
-import { startOfDay, endOfDay } from 'date-fns'
 
 export async function GET(
   req: Request,
@@ -29,12 +30,50 @@ export async function GET(
       'Version': '2021-07-28',
     }
 
-    // Support day navigation via ?date= param
+    // Support day navigation via ?date= param (YYYY-MM-DD, local Central date)
+    // GHL returns UTC timestamps, so we must convert the requested local date
+    // to UTC start/end boundaries in Central time (America/Chicago)
     const url = new URL(req.url)
     const dateParam = url.searchParams.get('date')
-    const targetDate = dateParam ? new Date(dateParam) : new Date()
-    const start = startOfDay(targetDate).getTime()
-    const end = endOfDay(targetDate).getTime()
+
+    // Parse as local date components (no timezone shift from Date constructor)
+    let year: number, month: number, day: number
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const parts = dateParam.split('-')
+      year = parseInt(parts[0], 10)
+      month = parseInt(parts[1], 10) - 1 // 0-indexed
+      day = parseInt(parts[2], 10)
+    } else {
+      // Default to "today" in Central time
+      const nowCentral = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+      year = nowCentral.getFullYear()
+      month = nowCentral.getMonth()
+      day = nowCentral.getDate()
+    }
+
+    // Build Central time boundaries: midnight-to-midnight in America/Chicago
+    // We construct ISO strings with explicit timezone then convert to UTC millis
+    const centralDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Use Intl to find the exact UTC offset for this date in Central time
+    const startCentral = new Date(`${centralDateStr}T00:00:00`)
+    const endCentral = new Date(`${centralDateStr}T23:59:59.999`)
+
+    // Get the UTC offset for Central time on this date (handles CST vs CDT)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      timeZoneName: 'shortOffset',
+    })
+    const parts = formatter.formatToParts(startCentral)
+    const tzPart = parts.find(p => p.type === 'timeZoneName')?.value ?? 'GMT-6'
+    // Parse offset like "GMT-5" or "GMT-6"
+    const offsetMatch = tzPart.match(/GMT([+-]?\d+)/)
+    const offsetHours = offsetMatch ? parseInt(offsetMatch[1], 10) : -6
+    // Central is behind UTC, so to get UTC we subtract the offset (which is negative)
+    // e.g. CDT is GMT-5, so midnight Central = 05:00 UTC
+    const offsetMs = offsetHours * 60 * 60 * 1000
+
+    const start = startCentral.getTime() - offsetMs
+    const end = endCentral.getTime() - offsetMs
 
     // Get all calendars
     const calRes = await fetch(

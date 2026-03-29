@@ -11,7 +11,7 @@ import {
   Phone, MessageSquare, Calendar, Star, Target, FileText,
   Settings, RefreshCw, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
   MapPin, User, Clock, Loader2, Send, Circle, CheckCircle,
-  PhoneOff, MessageCircle, Pencil, Plus, Play, ClipboardList,
+  PhoneOff, MessageCircle, Pencil, Plus, Play, ClipboardList, X,
 } from 'lucide-react'
 import { format, formatDistanceToNow, differenceInDays, addDays, isToday } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -257,6 +257,28 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
 
+  // View As — admin-only, client-side filter by assignedToName
+  const [viewAsUser, setViewAsUser] = useState<string | null>(null)
+  const [showViewAsDropdown, setShowViewAsDropdown] = useState(false)
+
+  // Load viewAsUser from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('gunner_view_as_user')
+      if (stored) setViewAsUser(stored)
+    } catch {}
+  }, [])
+
+  // Persist viewAsUser to localStorage
+  function handleViewAs(name: string | null) {
+    setViewAsUser(name)
+    setShowViewAsDropdown(false)
+    try {
+      if (name) localStorage.setItem('gunner_view_as_user', name)
+      else localStorage.removeItem('gunner_view_as_user')
+    } catch {}
+  }
+
   // KPI Ledger
   const [openLedger, setOpenLedger] = useState<string | null>(null)
 
@@ -335,9 +357,10 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   }, [tenantSlug])
 
   // Fetch appointments for selected date
+  // Use local date components (not toISOString which converts to UTC and can shift the date)
   const fetchAppts = useCallback((date: Date) => {
     setLoadingAppts(true)
-    const dateStr = date.toISOString().slice(0, 10)
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     fetch(`/api/${tenantSlug}/dayhub/appointments?date=${dateStr}`)
       .then(r => r.json())
       .then(d => {
@@ -383,6 +406,8 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   // Filter tasks (exclude optimistically completed)
   const assignedNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
   let filteredTasks = tasks.filter(t => !completedTaskIds.has(t.id))
+  // View As filter: when admin is viewing as a specific team member, only show their tasks
+  if (viewAsUser && isAdmin) filteredTasks = filteredTasks.filter(t => t.assignedToName === viewAsUser)
   if (categoryFilter) filteredTasks = filteredTasks.filter(t => t.category === categoryFilter)
   if (teamFilter) filteredTasks = filteredTasks.filter(t => t.assignedToName === teamFilter)
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length
@@ -513,8 +538,59 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             </div>
           )}
 
+          {/* View As dropdown — admin only, filters tasks by team member */}
+          {isAdmin && assignedNames.length > 0 && (
+            <div className="relative">
+              {viewAsUser ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="bg-semantic-blue-bg text-semantic-blue text-[11px] font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <User size={10} />
+                    Viewing as: {viewAsUser}
+                    <button
+                      onClick={() => handleViewAs(null)}
+                      className="ml-0.5 hover:text-semantic-red transition-colors"
+                      title="Exit View As"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowViewAsDropdown(v => !v)}
+                  className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-[rgba(0,0,0,0.08)] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary transition-colors flex items-center gap-1.5"
+                >
+                  <User size={10} /> View As
+                  <ChevronDown size={10} />
+                </button>
+              )}
+              {showViewAsDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowViewAsDropdown(false)} />
+                  <div className="absolute top-full left-0 mt-1 w-52 bg-surface-primary border rounded-[10px] shadow-ds-float z-50 overflow-hidden" style={{ borderColor: 'var(--border-medium)' }}>
+                    <div className="max-h-[220px] overflow-y-auto py-1">
+                      {assignedNames.map(name => (
+                        <button
+                          key={name}
+                          onClick={() => handleViewAs(name)}
+                          className="w-full text-left px-3 py-2 text-[11px] text-txt-primary hover:bg-surface-secondary transition-colors flex items-center gap-2"
+                        >
+                          <div className="w-5 h-5 rounded-full bg-gunner-red-light flex items-center justify-center shrink-0">
+                            <span className="text-gunner-red text-[9px] font-semibold">{name[0]?.toUpperCase()}</span>
+                          </div>
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <span className="text-[13px] text-txt-muted hidden md:inline">
-            {!isAdmin ? 'Your tasks and KPIs'
+            {viewAsUser ? `Showing ${viewAsUser}'s tasks`
+              : !isAdmin ? 'Your tasks and KPIs'
               : roleTab === 'ADMIN' ? 'Full team overview — all tasks, KPIs, and inbox'
               : roleTab === 'LM' ? 'Land Manager view'
               : roleTab === 'AM' ? 'Acquisitions Manager view'

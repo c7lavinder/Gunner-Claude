@@ -1,9 +1,18 @@
 // GET + POST + DELETE /api/kpi-entries — KPI ledger entries
 // Stored in audit_logs with action 'kpi.entry'
+// When type is apts/offers/contracts AND a propertyId is provided,
+// also creates a PropertyMilestone record for deal progress tracking.
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
-import { Prisma } from '@prisma/client'
+import { Prisma, MilestoneType } from '@prisma/client'
+
+// Maps KPI entry types to PropertyMilestone types
+const KPI_TO_MILESTONE: Record<string, MilestoneType> = {
+  apts: 'APPOINTMENT_SET',
+  offers: 'OFFER_MADE',
+  contracts: 'UNDER_CONTRACT',
+}
 
 export async function GET(request: NextRequest) {
   const session = await getSession()
@@ -81,6 +90,36 @@ export async function POST(request: NextRequest) {
     include: { user: { select: { name: true } } },
   })
 
+  // If this KPI type maps to a milestone (apts/offers/contracts) and a propertyId
+  // was provided, also create a PropertyMilestone for deal progress tracking.
+  const milestoneType = KPI_TO_MILESTONE[type]
+  let milestoneCreated = false
+  if (milestoneType && propertyId) {
+    try {
+      // Verify the property exists and belongs to this tenant
+      const property = await db.property.findUnique({
+        where: { id: propertyId, tenantId: session.tenantId },
+        select: { id: true },
+      })
+      if (property) {
+        await db.propertyMilestone.create({
+          data: {
+            tenantId: session.tenantId,
+            propertyId,
+            type: milestoneType,
+            loggedById: session.userId,
+            source: 'MANUAL',
+            notes: notes ?? `Logged via KPI entry (${type})`,
+          },
+        })
+        milestoneCreated = true
+      }
+    } catch (err) {
+      // Non-fatal: log but don't fail the KPI entry
+      console.error('[KPI Entries] Failed to create PropertyMilestone:', err instanceof Error ? err.message : err)
+    }
+  }
+
   return NextResponse.json({
     entry: {
       id: entry.id,
@@ -93,6 +132,7 @@ export async function POST(request: NextRequest) {
       source: 'manual',
       userName: entry.user?.name ?? 'Unknown',
     },
+    milestoneCreated,
   })
 }
 
