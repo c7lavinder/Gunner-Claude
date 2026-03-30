@@ -16,11 +16,15 @@ export async function GET(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const tenantId = session.tenantId
-    const asUserId = new URL(req.url).searchParams.get('asUserId')
+    const url = new URL(req.url)
+    const asUserId = url.searchParams.get('asUserId')
+    const userIdsParam = url.searchParams.get('userIds') // comma-separated, for role tab filtering
     const effective = await resolveEffectiveUser(session, asUserId)
     const { dayStart, dayEnd } = getCentralDayBounds()
 
     const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
+    // Role tab filter: multiple user IDs
+    const roleFilterIds = userIdsParam ? userIdsParam.split(',').filter(Boolean) : null
 
     // Load goals from tenant config
     const tenant = await db.tenant.findUnique({
@@ -38,16 +42,21 @@ export async function GET(
     const goalKey = ROLE_TO_GOAL_KEY[effective.role] ?? 'AM'
     const goals = allGoals[goalKey] ?? {}
 
+    // Scope: role tab filter > view-as > admin (all) > own
+    const userScope = roleFilterIds
+      ? { in: roleFilterIds }
+      : isAdmin ? undefined : effective.userId
+
     const callWhere = {
       tenantId,
       calledAt: { gte: dayStart, lte: dayEnd },
-      ...(isAdmin ? {} : { assignedToId: effective.userId }),
+      ...(userScope ? { assignedToId: userScope } : {}),
     }
     const milestoneWhere = (type: string) => ({
       tenantId,
       type: type as import('@prisma/client').MilestoneType,
       createdAt: { gte: dayStart, lte: dayEnd },
-      ...(isAdmin ? {} : { loggedById: effective.userId }),
+      ...(userScope ? { loggedById: userScope } : {}),
     })
 
     const [callsToday, convosToday, leadsToday, aptsToday, offersToday, contractsToday, sendsToday, dispoOffersToday, dispoContractsToday] = await Promise.all([

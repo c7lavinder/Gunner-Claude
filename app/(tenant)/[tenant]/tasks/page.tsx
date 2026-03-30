@@ -72,11 +72,18 @@ export default async function TasksPage({ params }: { params: { tenant: string }
   const role = session.role as UserRole
   const isAdmin = hasPermission(role, 'tasks.view.team')
 
-  // Get user's GHL mapping for filtering
-  const currentUser = await db.user.findUnique({
-    where: { id: userId },
-    select: { ghlUserId: true },
-  })
+  // Get user's GHL mapping + team members with roles for role tab filtering
+  const [currentUser, teamMembers] = await Promise.all([
+    db.user.findUnique({
+      where: { id: userId },
+      select: { ghlUserId: true },
+    }),
+    db.user.findMany({
+      where: { tenantId },
+      select: { id: true, name: true, role: true, ghlUserId: true },
+      orderBy: { name: 'asc' },
+    }),
+  ])
 
   let enrichedTasks: EnrichedTask[] = []
   let fetchError = false
@@ -259,6 +266,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       isAdmin={isAdmin}
       tenantSlug={params.tenant}
       fetchError={fetchError}
+      teamRoster={teamMembers.map(m => ({ id: m.id, name: m.name, role: m.role, ghlUserId: m.ghlUserId }))}
     />
   )
 }

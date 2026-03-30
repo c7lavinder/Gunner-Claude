@@ -19,6 +19,7 @@ export async function GET(
     const filter = url.searchParams.get('filter') ?? 'all'
 
     const asUserId = url.searchParams.get('asUserId')
+    const ghlUserIdsParam = url.searchParams.get('ghlUserIds') // comma-separated, for role tab
     const effective = await resolveEffectiveUser(session, asUserId)
     const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
 
@@ -28,10 +29,12 @@ export async function GET(
     const locationId = tenantRecord?.ghlLocationId ?? ''
 
     const ghl = await getGHLClient(tenantId)
-    // Non-admins (or View As) only see conversations assigned to their GHL user
+    // Role tab: multiple GHL user IDs to filter by
+    const roleGhlIds = ghlUserIdsParam ? new Set(ghlUserIdsParam.split(',').filter(Boolean)) : null
+    // Fetch conversations — use single assignedTo for View As, fetch all for role tab (filter after)
     const conversations = await ghl.getConversations({
-      limit: 30,
-      ...(isAdmin || !effective.ghlUserId ? {} : { assignedTo: effective.ghlUserId }),
+      limit: 50,
+      ...(roleGhlIds ? {} : isAdmin || !effective.ghlUserId ? {} : { assignedTo: effective.ghlUserId }),
     })
     const rawConversations = conversations.conversations ?? []
 
@@ -60,11 +63,16 @@ export async function GET(
       }
     }
 
-    // Filter to SMS conversations only
-    const smsConversations = rawConversations.filter(conv => {
+    // Filter to SMS conversations only, then by role tab GHL IDs if provided
+    let smsConversations = rawConversations.filter(conv => {
       const msgType = (conv.lastMessageType ?? '').toUpperCase()
       return msgType === 'TYPE_SMS' || msgType === 'SMS' || msgType === ''
     })
+    if (roleGhlIds) {
+      smsConversations = smsConversations.filter(conv =>
+        roleGhlIds.has(conv.userId || conv.assignedTo || '')
+      )
+    }
 
     const items = smsConversations.map(conv => {
       const lastDirection = (conv.lastMessageDirection ?? '').toLowerCase()

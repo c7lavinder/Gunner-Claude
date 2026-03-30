@@ -245,11 +245,16 @@ function ApptList({ appointments, loading, expandedAppt, setExpandedAppt, apptDa
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
+interface TeamMemberInfo {
+  id: string; name: string; role: string; ghlUserId: string | null
+}
+
+export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoster = [] }: {
   tasks: EnrichedTask[]
   isAdmin: boolean
   tenantSlug: string
   fetchError?: boolean
+  teamRoster?: TeamMemberInfo[]
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -261,6 +266,25 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [teamFilter, setTeamFilter] = useState('')
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
+
+  // Map role tabs to team members
+  const ROLE_TAB_TO_ROLES: Record<RoleTab, string[]> = {
+    ADMIN: [], // all users
+    LM: ['LEAD_MANAGER'],
+    AM: ['ACQUISITION_MANAGER'],
+    DISPO: ['DISPOSITION_MANAGER'],
+  }
+  const roleTabMembers = roleTab === 'ADMIN'
+    ? teamRoster
+    : teamRoster.filter(m => ROLE_TAB_TO_ROLES[roleTab].includes(m.role))
+  const roleTabNames = new Set(roleTabMembers.map(m => m.name))
+  const roleTabGhlIds = roleTabMembers.map(m => m.ghlUserId).filter(Boolean) as string[]
+  const roleTabUserIds = roleTabMembers.map(m => m.id)
+
+  // Build API params for role-scoped fetches
+  const roleUserIdsParam = roleTab !== 'ADMIN' && roleTabUserIds.length > 0
+    ? `&userIds=${roleTabUserIds.join(',')}`
+    : ''
 
   // View As — set from Settings > Team, read from localStorage
   const [viewAsUser, setViewAsUser] = useState<string | null>(null)
@@ -330,19 +354,25 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [fromDropdownOpen, setFromDropdownOpen] = useState(false)
 
 
-  // Fetch KPIs (re-fetch when viewAsUserId changes)
+  // Fetch KPIs (re-fetch when viewAsUserId or roleTab changes)
   useEffect(() => {
     setLoadingKpis(true)
-    fetch(`/api/${tenantSlug}/dayhub/kpis${asParamFirst}`)
+    const params = new URLSearchParams()
+    if (viewAsUserId) params.set('asUserId', viewAsUserId)
+    else if (roleTab !== 'ADMIN' && roleTabUserIds.length > 0) params.set('userIds', roleTabUserIds.join(','))
+    fetch(`/api/${tenantSlug}/dayhub/kpis?${params}`)
       .then(r => r.json())
       .then(d => { setKpis(d); setLoadingKpis(false) })
       .catch(() => setLoadingKpis(false))
-  }, [tenantSlug, asParamFirst])
+  }, [tenantSlug, viewAsUserId, roleTab, roleTabUserIds.join(',')])
 
-  // Fetch inbox (scoped to effective user)
+  // Fetch inbox (scoped to effective user or role tab)
   const fetchInbox = useCallback(() => {
     setLoadingInbox(true)
-    fetch(`/api/${tenantSlug}/dayhub/inbox${asParamFirst ? asParamFirst : ''}`)
+    const params = new URLSearchParams()
+    if (viewAsUserId) params.set('asUserId', viewAsUserId)
+    else if (roleTab !== 'ADMIN' && roleTabGhlIds.length > 0) params.set('ghlUserIds', roleTabGhlIds.join(','))
+    fetch(`/api/${tenantSlug}/dayhub/inbox?${params}`)
       .then(r => r.json())
       .then(d => {
         setUnreadInbox(d.unread ?? [])
@@ -351,7 +381,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         setLoadingInbox(false)
       })
       .catch(() => setLoadingInbox(false))
-  }, [tenantSlug, asParamFirst])
+  }, [tenantSlug, viewAsUserId, roleTab, roleTabGhlIds.join(',')])
 
   useEffect(() => { fetchInbox() }, [fetchInbox])
 
@@ -371,7 +401,10 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const fetchAppts = useCallback((date: Date) => {
     setLoadingAppts(true)
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    fetch(`/api/${tenantSlug}/dayhub/appointments?date=${dateStr}${asParam}`)
+    const params = new URLSearchParams({ date: dateStr })
+    if (viewAsUserId) params.set('asUserId', viewAsUserId)
+    else if (roleTab !== 'ADMIN' && roleTabGhlIds.length > 0) params.set('ghlUserIds', roleTabGhlIds.join(','))
+    fetch(`/api/${tenantSlug}/dayhub/appointments?${params}`)
       .then(r => r.json())
       .then(d => {
         setAppointments(d.appointments ?? [])
@@ -379,7 +412,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         setLoadingAppts(false)
       })
       .catch(() => setLoadingAppts(false))
-  }, [tenantSlug, asParam])
+  }, [tenantSlug, viewAsUserId, roleTab, roleTabGhlIds.join(',')])
 
   useEffect(() => { fetchAppts(apptDate) }, [fetchAppts, apptDate])
 
@@ -418,6 +451,8 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   let filteredTasks = tasks.filter(t => !completedTaskIds.has(t.id))
   // View As filter: when admin is viewing as a specific team member, only show their tasks
   if (viewAsUser && isAdmin) filteredTasks = filteredTasks.filter(t => t.assignedToName === viewAsUser)
+  // Role tab filter: when a role tab is selected, only show that team's tasks
+  else if (roleTab !== 'ADMIN' && roleTabNames.size > 0) filteredTasks = filteredTasks.filter(t => roleTabNames.has(t.assignedToName ?? ''))
   if (categoryFilter) filteredTasks = filteredTasks.filter(t => t.category === categoryFilter)
   if (teamFilter) filteredTasks = filteredTasks.filter(t => t.assignedToName === teamFilter)
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length

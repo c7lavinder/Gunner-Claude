@@ -89,9 +89,11 @@ export async function GET(
 
     // Resolve effective user (supports admin View As via ?asUserId=)
     const asUserId = url.searchParams.get('asUserId')
+    const ghlUserIdsParam = url.searchParams.get('ghlUserIds') // comma-separated, for role tab
     const effective = await resolveEffectiveUser(session, asUserId)
     const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
     const userGhlId = effective.ghlUserId
+    const roleGhlIds = ghlUserIdsParam ? new Set(ghlUserIdsParam.split(',').filter(Boolean)) : null
 
     // Resolve user IDs → names
     const ghl = await getGHLClient(tenantId)
@@ -140,8 +142,10 @@ export async function GET(
     // Sort by time
     allAppts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
 
-    // Non-admins only see their own appointments
-    const filteredAppts = (isAdmin || !userGhlId)
+    // Filter appointments: role tab > view-as > admin (all) > own
+    const filteredAppts = roleGhlIds
+      ? allAppts.filter(a => a.assignedUserId && roleGhlIds.has(a.assignedUserId))
+      : (isAdmin || !userGhlId)
       ? allAppts
       : allAppts.filter(a => a.assignedUserId === userGhlId)
 
