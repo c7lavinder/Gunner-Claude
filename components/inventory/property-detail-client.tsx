@@ -413,15 +413,6 @@ function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
   const [saving, setSaving] = useState(false)
   const acqKeys = ACQ_STEPS.map(s => s.key)
   const dispoKeys = DISPO_STEPS.map(s => s.key)
-  const acqIdx = acqKeys.indexOf(currentStatus)
-  const dispoIdx = dispoKeys.indexOf(currentStatus)
-
-  // Map milestone types → ALL records (not just latest) for showing history
-  const milestonesByType: Record<string, Array<{ date: string; notes: string | null }>> = {}
-  for (const m of milestones) {
-    if (!milestonesByType[m.type]) milestonesByType[m.type] = []
-    milestonesByType[m.type].push({ date: m.date, notes: m.notes })
-  }
 
   // Map step keys to milestone types
   const stepToMilestone: Record<string, string> = {
@@ -434,6 +425,29 @@ function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
     DISPO_OFFERS: 'DISPO_OFFER_RECEIVED', DISPO_CONTRACTED: 'DISPO_CONTRACTED',
     DISPO_CLOSED: 'DISPO_CLOSED',
   }
+
+  // Map milestone types → ALL records (not just latest) for showing history
+  const milestonesByType: Record<string, Array<{ date: string; notes: string | null }>> = {}
+  for (const m of milestones) {
+    if (!milestonesByType[m.type]) milestonesByType[m.type] = []
+    milestonesByType[m.type].push({ date: m.date, notes: m.notes })
+  }
+
+  // Derive active index from milestones — highest stage with a milestone, OR currentStatus as fallback.
+  // This lets acq + dispo pipelines be independent (a property can be UNDER_CONTRACT AND in dispo).
+  function highestMilestoneIdx(steps: typeof ACQ_STEPS): number {
+    let highest = -1
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const mt = stepToMilestone[steps[i].key] ?? ''
+      if ((milestonesByType[mt] ?? []).length > 0) { highest = i; break }
+    }
+    return highest
+  }
+  const acqFromMilestones = highestMilestoneIdx(ACQ_STEPS)
+  const dispoFromMilestones = highestMilestoneIdx(DISPO_STEPS)
+  // Use milestone-derived index, falling back to currentStatus for properties without milestones yet
+  const acqIdx = acqFromMilestones >= 0 ? acqFromMilestones : acqKeys.indexOf(currentStatus)
+  const dispoIdx = dispoFromMilestones >= 0 ? dispoFromMilestones : dispoKeys.indexOf(currentStatus)
 
   // Types that can be manually logged — all types allowed so users can fill gaps flagged by caution icons
   const LOGGABLE_TYPES = [

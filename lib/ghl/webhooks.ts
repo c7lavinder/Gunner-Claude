@@ -458,26 +458,39 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     (!tenant.dispoPipelineId || oppData.pipelineId === tenant.dispoPipelineId)
 
   if (isDispoTrigger) {
-    // Update existing property to IN_DISPOSITION, or create if none exists
+    // Entering dispo: keep acquisition status intact, just create DISPO_NEW milestone.
+    // The property stays "UNDER_CONTRACT" (or whatever acq stage) — dispo is a parallel track.
     const existing = await db.property.findFirst({
       where: { tenantId, ghlContactId: oppData.contactId },
+      select: { id: true, address: true, status: true },
     })
     if (existing) {
-      await db.property.update({
-        where: { id: existing.id },
-        data: {
-          status: 'IN_DISPOSITION',
-          ghlPipelineId: oppData.pipelineId,
-          ghlPipelineStage: resolvedStageName ?? stageId,
-        },
-      })
-      console.log(`[GHL Webhook] Dispo trigger: updated property ${existing.address} to IN_DISPOSITION`)
+      console.log(`[GHL Webhook] Dispo trigger: ${existing.address} enters dispo (keeping acq status ${existing.status})`)
     } else {
       await createPropertyFromContact(tenantId, oppData.contactId, {
         ghlPipelineId: oppData.pipelineId,
         ghlPipelineStage: resolvedStageName ?? stageId,
         opportunitySource: oppData.source,
       })
+    }
+    // Milestone creation happens below via the general newStatus path
+    // We'll treat this as newStatus = 'IN_DISPOSITION' for milestone only
+    const propForMilestone = existing ?? await db.property.findFirst({
+      where: { tenantId, ghlContactId: oppData.contactId },
+      select: { id: true },
+    })
+    if (propForMilestone) {
+      const { getCentralDayBounds } = await import('@/lib/dates')
+      const { dayStart, dayEnd } = getCentralDayBounds()
+      const existingMilestone = await db.propertyMilestone.findFirst({
+        where: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', createdAt: { gte: dayStart, lte: dayEnd } },
+      })
+      if (!existingMilestone) {
+        await db.propertyMilestone.create({
+          data: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', source: 'AUTO_WEBHOOK' },
+        }).catch(() => {})
+        console.log(`[GHL Webhook] Created DISPO_NEW milestone for ${propForMilestone.id}`)
+      }
     }
     return
   }
@@ -508,25 +521,16 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
     const isDispoStage = appStage?.startsWith('disposition')
 
-    // Check if property is already in dispo — dispo outweighs acquisition
-    const existingProp = await db.property.findFirst({
-      where: { tenantId, ghlContactId: oppData.contactId },
-      select: { status: true },
-    })
-    const currentlyInDispo = existingProp?.status && ['IN_DISPOSITION', 'DISPO_PUSHED', 'DISPO_OFFERS', 'DISPO_CONTRACTED', 'DISPO_CLOSED'].includes(existingProp.status)
-
+    // Dispo and acquisition are parallel tracks. Dispo stage changes DON'T overwrite
+    // the main status (which tracks acquisition). Both are tracked via milestones.
     const updateData: Record<string, unknown> = {}
 
     if (isDispoStage) {
-      // Dispo stage changes always update everything
-      updateData.ghlPipelineStage = stageName ?? stageId
-      updateData.ghlPipelineId = oppData.pipelineId
-      if (newStatus) updateData.status = newStatus
-    } else if (currentlyInDispo) {
-      // Property is in dispo — don't let acquisition stage overwrite status or stage name
-      console.log(`[GHL Webhook] Skipping acq stage update — property already in dispo (${existingProp.status})`)
+      // Dispo stage: only update ghlPipelineStage for display, do NOT overwrite acq status
+      // Milestones (created below) track dispo progression independently
+      console.log(`[GHL Webhook] Dispo stage change: ${stageName ?? stageId} — milestone only, keeping acq status`)
     } else {
-      // Normal acquisition/longterm update
+      // Acquisition / longterm: update status + pipeline info normally
       updateData.ghlPipelineStage = stageName ?? stageId
       updateData.ghlPipelineId = oppData.pipelineId
       if (newStatus) updateData.status = newStatus
