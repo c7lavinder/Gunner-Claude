@@ -124,19 +124,6 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
 
         {/* Right side */}
         <div className="flex items-center gap-2 md:gap-3 ml-auto">
-          {!isViewingAs && (
-            <Link
-              href={`${base}/settings`}
-              className={`p-2 rounded-[10px] transition-colors ${
-                pathname.startsWith(`${base}/settings`)
-                  ? 'bg-surface-secondary text-txt-primary'
-                  : 'text-txt-muted hover:text-txt-primary hover:bg-surface-secondary'
-              }`}
-            >
-              <Settings size={16} />
-            </Link>
-          )}
-
           <div className="relative">
             <button
               onClick={loadNotifications}
@@ -144,7 +131,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
               title="Notifications"
             >
               <Bell size={16} />
-              {(!notifLoaded || notifications.length > 0) && (
+              {notifLoaded && notifications.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-gunner-red" />
               )}
             </button>

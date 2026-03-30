@@ -606,9 +606,6 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
           </span>
 
           <div className="flex gap-2 ml-auto">
-            <Link href={`/${tenantSlug}/settings`} className="p-2 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors">
-              <Settings size={16} />
-            </Link>
             <button onClick={refresh} className="p-2 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors">
               <RefreshCw size={16} />
             </button>
