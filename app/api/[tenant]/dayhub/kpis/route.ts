@@ -1,9 +1,32 @@
 // GET /api/[tenant]/dayhub/kpis
 // Returns today's KPI counts vs goals for Day Hub stat cards
+// Uses Central time (America/Chicago) for "today" boundaries
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
-import { startOfDay, endOfDay } from 'date-fns'
+
+function getCentralDayBounds(): { dayStart: Date; dayEnd: Date } {
+  // Get today's date string in Central time
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago',
+  }).format(new Date()) // e.g. '2026-03-29'
+
+  // Create UTC dates that represent Central midnight boundaries
+  // Parse the Central date at noon UTC to avoid DST edge cases,
+  // then compute the UTC offset for that moment in Central time
+  const noon = new Date(`${parts}T12:00:00Z`)
+  const centralNoon = new Date(noon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+  const offsetMs = noon.getTime() - centralNoon.getTime()
+
+  // Central midnight = UTC midnight + offset
+  const dayStart = new Date(`${parts}T00:00:00Z`)
+  dayStart.setTime(dayStart.getTime() + offsetMs)
+
+  const dayEnd = new Date(`${parts}T23:59:59.999Z`)
+  dayEnd.setTime(dayEnd.getTime() + offsetMs)
+
+  return { dayStart, dayEnd }
+}
 
 export async function GET(
   _req: Request,
@@ -14,27 +37,23 @@ export async function GET(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const tenantId = session.tenantId
-    const today = new Date()
-    const dayStart = startOfDay(today)
-    const dayEnd = endOfDay(today)
+    const { dayStart, dayEnd } = getCentralDayBounds()
 
     const [callsToday, convosToday, leadsToday, aptsToday, offersToday, contractsToday, pushedToday, dispoOffersToday, dispoContractsToday] = await Promise.all([
-      // Calls made today
       db.call.count({
         where: { tenantId, calledAt: { gte: dayStart, lte: dayEnd } },
       }),
-      // Conversations (graded calls = meaningful convos)
       db.call.count({
         where: { tenantId, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' },
       }),
-      // Milestones — unique properties per type
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'LEAD', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'OFFER_MADE', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'UNDER_CONTRACT', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_PUSHED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_OFFER_RECEIVED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_CONTRACTED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      // Milestones — total entries per type (matches ledger)
+      db.propertyMilestone.count({ where: { tenantId, type: 'LEAD', createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.propertyMilestone.count({ where: { tenantId, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.propertyMilestone.count({ where: { tenantId, type: 'OFFER_MADE', createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.propertyMilestone.count({ where: { tenantId, type: 'UNDER_CONTRACT', createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.propertyMilestone.count({ where: { tenantId, type: 'DISPO_PUSHED', createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.propertyMilestone.count({ where: { tenantId, type: 'DISPO_OFFER_RECEIVED', createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.propertyMilestone.count({ where: { tenantId, type: 'DISPO_CONTRACTED', createdAt: { gte: dayStart, lte: dayEnd } } }),
     ])
 
     return NextResponse.json({

@@ -10,10 +10,11 @@ interface MilestoneEntry {
   time: string; propertyId: string; propertyAddress: string; userName: string
 }
 
+interface TeamMember { id: string; name: string }
+
 // Milestone types that come from PropertyMilestone table
 const MILESTONE_KEYS = ['lead', 'apts', 'offers', 'contracts', 'pushed', 'dispoOffers', 'dispoContracts']
 
-// Map ledger keys → milestone type for API queries
 const KEY_TO_MILESTONE_TYPE: Record<string, string> = {
   lead: 'LEAD', apts: 'APPOINTMENT_SET', offers: 'OFFER_MADE',
   contracts: 'UNDER_CONTRACT', pushed: 'DISPO_PUSHED',
@@ -40,6 +41,7 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
   const [entries, setEntries] = useState<MilestoneEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
 
   // Add form
   const [notes, setNotes] = useState('')
@@ -53,9 +55,24 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editNotes, setEditNotes] = useState('')
   const [editDate, setEditDate] = useState('')
+  const [editUserId, setEditUserId] = useState('')
+  const [editPropSearch, setEditPropSearch] = useState('')
+  const [editPropResults, setEditPropResults] = useState<Array<{ id: string; address: string; city: string; state: string }>>([])
+  const [editSelectedProp, setEditSelectedProp] = useState<{ id: string; address: string } | null>(null)
 
   const dateStr = format(date, 'yyyy-MM-dd')
   const isMilestoneType = type ? MILESTONE_KEYS.includes(type) : false
+
+  // Load team members once (for edit user dropdown)
+  useEffect(() => {
+    if (!isOpen) return
+    fetch('/api/milestones?members=1')
+      .then(r => r.json())
+      .then(data => {
+        if (data.members) setTeamMembers(data.members)
+      })
+      .catch(() => {})
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen || !type) return
@@ -67,23 +84,18 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
     setLoading(true)
     try {
       if (isMilestoneType) {
-        // Fetch from milestones API
         const milestoneType = KEY_TO_MILESTONE_TYPE[type]
         const res = await fetch(`/api/milestones?type=${milestoneType}&date=${dateStr}`)
         const data = await res.json()
         setEntries(data.milestones ?? [])
       } else {
-        // Calls/convos: fetch from old kpi-entries API
         const res = await fetch(`/api/kpi-entries?type=${type}&date=${dateStr}`)
         const data = await res.json()
         setEntries((data.entries ?? []).map((e: Record<string, unknown>) => ({
-          id: e.id as string,
-          type: e.type as string,
+          id: e.id as string, type: e.type as string,
           source: (e.source as string) ?? 'MANUAL',
-          notes: e.notes as string | null,
-          time: e.time as string,
-          propertyId: e.propertyId as string,
-          propertyAddress: e.propertyAddress as string,
+          notes: e.notes as string | null, time: e.time as string,
+          propertyId: e.propertyId as string, propertyAddress: e.propertyAddress as string,
           userName: e.userName as string,
         })))
       }
@@ -91,16 +103,21 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
     setLoading(false)
   }
 
-  async function searchProperties(q: string) {
-    setPropSearch(q)
-    if (q.length < 2) { setPropResults([]); return }
-    setSearching(true)
+  async function searchProperties(q: string, mode: 'add' | 'edit') {
+    if (mode === 'add') setPropSearch(q)
+    else setEditPropSearch(q)
+    if (q.length < 2) { if (mode === 'add') setPropResults([]); else setEditPropResults([]); return }
+    if (mode === 'add') setSearching(true)
     try {
       const res = await fetch(`/api/properties/search?q=${encodeURIComponent(q)}`)
       const data = await res.json()
-      setPropResults(data.properties ?? [])
-    } catch { setPropResults([]) }
-    setSearching(false)
+      if (mode === 'add') setPropResults(data.properties ?? [])
+      else setEditPropResults(data.properties ?? [])
+    } catch {
+      if (mode === 'add') setPropResults([])
+      else setEditPropResults([])
+    }
+    if (mode === 'add') setSearching(false)
   }
 
   async function addEntry() {
@@ -119,7 +136,7 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
       })
       if (res.ok) {
         setNotes(''); setSelectedProp(null); setPropSearch(''); setShowAdd(false)
-        loadEntries() // refresh
+        loadEntries()
       }
     } catch {}
     setSaving(false)
@@ -127,7 +144,6 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
 
   async function deleteEntry(id: string) {
     if (!isMilestoneType) {
-      // Old kpi-entries delete
       try {
         await fetch('/api/kpi-entries', {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -154,26 +170,36 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
           id,
           notes: editNotes || undefined,
           date: editDate || undefined,
+          propertyId: editSelectedProp?.id || undefined,
+          loggedById: editUserId || undefined,
         }),
       })
       setEditingId(null)
-      loadEntries() // refresh to show green source
+      loadEntries()
     } catch {}
+  }
+
+  function startEdit(e: MilestoneEntry) {
+    setEditingId(e.id)
+    setEditNotes(e.notes ?? '')
+    setEditDate(format(new Date(e.time), 'yyyy-MM-dd'))
+    setEditUserId('')
+    setEditSelectedProp(null)
+    setEditPropSearch('')
+    setEditPropResults([])
   }
 
   if (!isOpen || !type) return null
 
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl max-w-[440px] w-full mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-[480px] w-full mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 pb-3">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-ds-label font-semibold text-txt-primary">{TYPE_LABELS[type] ?? type}</h3>
             <button onClick={onClose} className="text-txt-muted hover:text-txt-primary text-lg">&times;</button>
           </div>
-
-          {/* Date navigation */}
           <div className="flex items-center justify-between">
             <button onClick={() => setDate(d => subDays(d, 1))}
               className="w-8 h-8 rounded-full border border-[rgba(0,0,0,0.12)] flex items-center justify-center text-txt-muted hover:text-txt-primary transition-colors">
@@ -203,12 +229,11 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
         {/* Add form */}
         {showAdd && isMilestoneType && (
           <div className="px-6 py-3 border-t border-b border-[rgba(0,0,0,0.06)] space-y-2">
-            {/* Property search */}
             {!selectedProp ? (
               <div>
                 <div className="relative">
                   <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted" />
-                  <input value={propSearch} onChange={e => searchProperties(e.target.value)}
+                  <input value={propSearch} onChange={e => searchProperties(e.target.value, 'add')}
                     placeholder="Search property address..."
                     className="w-full bg-surface-secondary rounded-[8px] pl-8 pr-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
                 </div>
@@ -232,11 +257,9 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
                 <button onClick={() => setSelectedProp(null)} className="text-txt-muted hover:text-semantic-red"><X size={12} /></button>
               </div>
             )}
-
             <input value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Notes (optional)"
               className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
-
             <button onClick={addEntry} disabled={saving || !selectedProp}
               className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-[10px] transition-colors">
               {saving ? 'Adding...' : 'Add Entry'}
@@ -259,35 +282,81 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
               const isEditing = editingId === e.id
 
               return (
-                <div key={e.id} className="border-b border-[rgba(0,0,0,0.04)] py-2.5">
+                <div key={e.id} className="border-b border-[rgba(0,0,0,0.04)] py-3">
                   {isEditing ? (
-                    /* Edit mode */
-                    <div className="space-y-1.5">
-                      <input
-                        type="date"
-                        value={editDate}
-                        onChange={ev => setEditDate(ev.target.value)}
-                        className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine focus:outline-none"
-                      />
-                      <input
-                        value={editNotes}
-                        onChange={ev => setEditNotes(ev.target.value)}
-                        placeholder="Notes"
-                        className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none"
-                      />
-                      <div className="flex gap-2">
+                    <div className="space-y-2">
+                      {/* Edit: Property */}
+                      <div>
+                        <label className="text-[9px] font-semibold text-txt-muted uppercase">Property</label>
+                        {!editSelectedProp ? (
+                          <div>
+                            <p className="text-[10px] text-txt-secondary mb-1">Current: {e.propertyAddress}</p>
+                            <div className="relative">
+                              <Search size={10} className="absolute left-2 top-1/2 -translate-y-1/2 text-txt-muted" />
+                              <input value={editPropSearch} onChange={ev => searchProperties(ev.target.value, 'edit')}
+                                placeholder="Change property..."
+                                className="w-full bg-surface-secondary rounded-[8px] pl-7 pr-3 py-1 text-[11px] placeholder-txt-muted focus:outline-none" />
+                            </div>
+                            {editPropResults.length > 0 && (
+                              <div className="mt-1 bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] max-h-24 overflow-y-auto">
+                                {editPropResults.map(p => (
+                                  <button key={p.id} onClick={() => { setEditSelectedProp({ id: p.id, address: p.address }); setEditPropSearch(''); setEditPropResults([]) }}
+                                    className="w-full text-left px-3 py-1 text-[11px] hover:bg-surface-secondary">
+                                    {p.address}, {p.city} {p.state}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 bg-green-50 rounded-[8px] px-3 py-1">
+                            <MapPin size={9} className="text-green-600 shrink-0" />
+                            <span className="text-[11px] font-medium text-green-700 flex-1">{editSelectedProp.address}</span>
+                            <button onClick={() => setEditSelectedProp(null)} className="text-green-400 hover:text-red-500"><X size={10} /></button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Edit: User */}
+                      <div>
+                        <label className="text-[9px] font-semibold text-txt-muted uppercase">Assigned To</label>
+                        <p className="text-[10px] text-txt-secondary mb-1">Current: {e.userName}</p>
+                        <select value={editUserId} onChange={ev => setEditUserId(ev.target.value)}
+                          className="w-full bg-surface-secondary rounded-[8px] px-3 py-1 text-[11px] focus:outline-none">
+                          <option value="">Keep current</option>
+                          {teamMembers.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Edit: Date */}
+                      <div>
+                        <label className="text-[9px] font-semibold text-txt-muted uppercase">Date</label>
+                        <input type="date" value={editDate} onChange={ev => setEditDate(ev.target.value)}
+                          className="w-full bg-surface-secondary rounded-[8px] px-3 py-1 text-[11px] focus:outline-none" />
+                      </div>
+
+                      {/* Edit: Notes */}
+                      <div>
+                        <label className="text-[9px] font-semibold text-txt-muted uppercase">Notes</label>
+                        <input value={editNotes} onChange={ev => setEditNotes(ev.target.value)}
+                          placeholder="Notes"
+                          className="w-full bg-surface-secondary rounded-[8px] px-3 py-1 text-[11px] placeholder-txt-muted focus:outline-none" />
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
                         <button onClick={() => saveEdit(e.id)}
-                          className="text-[11px] font-medium text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-1 rounded-[8px] flex items-center gap-1">
+                          className="text-[11px] font-medium text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-1.5 rounded-[8px] flex items-center gap-1">
                           <Check size={10} /> Save
                         </button>
                         <button onClick={() => setEditingId(null)}
-                          className="text-[11px] text-txt-muted hover:text-txt-primary px-3 py-1">
+                          className="text-[11px] text-txt-muted hover:text-txt-primary px-3 py-1.5">
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
-                    /* View mode */
                     <div className="flex items-center gap-3">
                       {/* Source badge */}
                       <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${sourceStyle.bg} ${sourceStyle.text}`}>
@@ -306,14 +375,10 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
                         <p className="text-[9px] text-txt-muted">{e.userName} · {format(new Date(e.time), 'h:mm a')}</p>
                       </div>
 
-                      {/* Edit + Delete buttons (milestone types only) */}
+                      {/* Edit + Delete (milestone types only) */}
                       {isMilestoneType && (
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => {
-                            setEditingId(e.id)
-                            setEditNotes(e.notes ?? '')
-                            setEditDate(format(new Date(e.time), 'yyyy-MM-dd'))
-                          }}
+                          <button onClick={() => startEdit(e)}
                             className="text-gray-400 hover:text-blue-500 hover:bg-blue-50 w-6 h-6 rounded flex items-center justify-center transition-colors">
                             <Pencil size={11} />
                           </button>
@@ -331,7 +396,6 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
           )}
         </div>
 
-        {/* Footer spacer */}
         <div className="h-3 shrink-0" />
       </div>
     </div>

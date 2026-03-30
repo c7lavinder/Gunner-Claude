@@ -5,7 +5,7 @@ import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 import { MilestoneType } from '@prisma/client'
-import { startOfDay, endOfDay } from 'date-fns'
+// Central time boundaries used for ledger queries — see getCentralDayBounds pattern
 
 const MILESTONE_TYPES = [
   'LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED',
@@ -23,6 +23,8 @@ const updateSchema = z.object({
   id: z.string().min(1),
   notes: z.string().optional(),
   date: z.string().optional(),
+  propertyId: z.string().optional(),
+  loggedById: z.string().optional(),
 })
 
 const deleteSchema = z.object({
@@ -109,10 +111,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ milestones })
     }
 
+    // Mode 3: fetch team members (for edit dropdown)
+    if (searchParams.get('members') === '1') {
+      const users = await db.user.findMany({
+        where: { tenantId: session.tenantId },
+        select: { id: true, name: true, role: true },
+        orderBy: { name: 'asc' },
+      })
+      return NextResponse.json({ members: users })
+    }
+
     // Mode 2: fetch by type + date (for KPI ledger)
+    // Use Central time boundaries to match KPI box counts
     if (type && date) {
-      const dayStart = startOfDay(new Date(`${date}T12:00:00`))
-      const dayEnd = endOfDay(new Date(`${date}T12:00:00`))
+      const noon = new Date(`${date}T12:00:00Z`)
+      const centralNoon = new Date(noon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+      const offsetMs = noon.getTime() - centralNoon.getTime()
+      const dayStart = new Date(`${date}T00:00:00Z`)
+      dayStart.setTime(dayStart.getTime() + offsetMs)
+      const dayEnd = new Date(`${date}T23:59:59.999Z`)
+      dayEnd.setTime(dayEnd.getTime() + offsetMs)
       const milestones = await db.propertyMilestone.findMany({
         where: {
           tenantId: session.tenantId,
@@ -157,7 +175,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const { id, notes, date } = parsed.data
+  const { id, notes, date, propertyId, loggedById } = parsed.data
 
   try {
     const milestone = await db.propertyMilestone.update({
@@ -166,6 +184,8 @@ export async function PATCH(request: NextRequest) {
         source: 'MANUAL', // editing turns it green (user-verified)
         ...(notes !== undefined ? { notes } : {}),
         ...(date ? { createdAt: new Date(date) } : {}),
+        ...(propertyId ? { propertyId } : {}),
+        ...(loggedById ? { loggedById } : {}),
       },
       include: {
         property: { select: { address: true, city: true, state: true } },
