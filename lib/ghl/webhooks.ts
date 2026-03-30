@@ -655,14 +655,93 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
     return
   }
 
-  // For create/update, check if this contact is in the buyer pipeline
+  // For create/update — fetch fresh contact data from GHL
   try {
     const { getGHLClient } = await import('@/lib/ghl/client')
     const ghl = await getGHLClient(tenantId)
     const contact = await ghl.getContact(contactId)
     if (!contact) return
 
-    // Check if they have buyer-related custom fields or are in buyer pipeline
+    // ─── Sync property address + seller name ────────────────────────────
+    // When a contact is updated in GHL (address fixed, name corrected),
+    // push those changes to any linked Gunner property + seller.
+    const property = await db.property.findFirst({
+      where: { tenantId, ghlContactId: contactId },
+      select: { id: true, address: true, city: true, state: true, zip: true, marketId: true },
+    })
+
+    if (property) {
+      const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
+      const newAddress = standardizeStreet(contact.address1 ?? '')
+      const newCity = standardizeCity(contact.city ?? '')
+      const newState = standardizeState(contact.state ?? '')
+      const newZip = standardizeZip(contact.postalCode ?? '')
+
+      // Only update fields that GHL now has data for AND Gunner is missing or different
+      const updates: Record<string, string> = {}
+      if (newAddress && newAddress !== property.address) updates.address = newAddress
+      if (newCity && newCity !== property.city) updates.city = newCity
+      if (newState && newState !== property.state) updates.state = newState
+      if (newZip && newZip !== property.zip) updates.zip = newZip
+
+      if (Object.keys(updates).length > 0) {
+        await db.property.update({ where: { id: property.id }, data: updates })
+        console.log(`[GHL Webhook] Property ${property.id} address updated: ${JSON.stringify(updates)}`)
+
+        // Auto-assign market by zip if property has no market and we now have a zip
+        if (!property.marketId && (updates.zip || newZip)) {
+          const zipToCheck = updates.zip ?? newZip
+          const market = await db.market.findFirst({
+            where: { tenantId, zipCodes: { has: zipToCheck } },
+            select: { id: true },
+          })
+          if (market) {
+            await db.property.update({ where: { id: property.id }, data: { marketId: market.id } })
+            console.log(`[GHL Webhook] Property ${property.id} auto-assigned market from zip ${zipToCheck}`)
+          } else {
+            // Try config-based market lookup
+            try {
+              const { getMarketsForZip, MARKETS } = await import('@/lib/config/crm.config')
+              const marketNames = getMarketsForZip(zipToCheck)
+              if (marketNames.length > 0) {
+                const name = marketNames[0]
+                const zips = [...MARKETS[name].zips] as string[]
+                let mkt = await db.market.findFirst({ where: { tenantId, name }, select: { id: true } })
+                if (!mkt) mkt = await db.market.create({ data: { tenantId, name, zipCodes: zips } })
+                await db.property.update({ where: { id: property.id }, data: { marketId: mkt.id } })
+                console.log(`[GHL Webhook] Property ${property.id} auto-assigned market ${name} from zip ${zipToCheck}`)
+              }
+            } catch { /* config lookup optional */ }
+          }
+        }
+
+        // Re-trigger BatchData enrichment if address changed and we have the key
+        if (updates.address && process.env.BATCHDATA_API_KEY) {
+          import('@/lib/batchdata/enrich').then(({ enrichPropertyFromBatchData }) =>
+            enrichPropertyFromBatchData(property.id).catch(() => {})
+          )
+        }
+      }
+
+      // Update seller name/phone/email if changed
+      const seller = await db.seller.findFirst({
+        where: { tenantId, ghlContactId: contactId },
+        select: { id: true, name: true, phone: true, email: true },
+      })
+      if (seller) {
+        const newName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim()
+        const sellerUpdates: Record<string, string> = {}
+        if (newName && newName !== seller.name) sellerUpdates.name = newName
+        if (contact.phone && contact.phone !== seller.phone) sellerUpdates.phone = contact.phone
+        if (contact.email && contact.email !== seller.email) sellerUpdates.email = contact.email
+        if (Object.keys(sellerUpdates).length > 0) {
+          await db.seller.update({ where: { id: seller.id }, data: sellerUpdates })
+          console.log(`[GHL Webhook] Seller ${seller.id} updated: ${JSON.stringify(sellerUpdates)}`)
+        }
+      }
+    }
+
+    // ─── Sync buyer if applicable ───────────────────────────────────────
     const hasCustomFields = (contact.customFields ?? []).some(
       (f: { id: string }) => ['Y4ton500NvCkJKtb4YzP', 'ghOapC4jq1iSzmCzv5up', 'VcdWDP2lXuuV1LwedOhs'].includes(f.id)
     )
