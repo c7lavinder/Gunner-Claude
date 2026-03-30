@@ -50,14 +50,22 @@ export async function GET(
       ...(isAdmin ? {} : { loggedById: effective.userId }),
     })
 
-    const [callsToday, convosToday, leadsToday, aptsToday, offersToday, contractsToday, pushedToday, dispoOffersToday, dispoContractsToday] = await Promise.all([
+    const [callsToday, convosToday, leadsToday, aptsToday, offersToday, contractsToday, sendsToday, dispoOffersToday, dispoContractsToday] = await Promise.all([
       db.call.count({ where: callWhere }),
       db.call.count({ where: { ...callWhere, gradingStatus: 'COMPLETED', durationSeconds: { gte: 45 } } }),
       db.propertyMilestone.count({ where: milestoneWhere('LEAD') }),
       db.propertyMilestone.count({ where: milestoneWhere('APPOINTMENT_SET') }),
       db.propertyMilestone.count({ where: milestoneWhere('OFFER_MADE') }),
       db.propertyMilestone.count({ where: milestoneWhere('UNDER_CONTRACT') }),
-      db.propertyMilestone.count({ where: milestoneWhere('DISPO_PUSHED') }),
+      // "Sends" = buyers messaged about deals (outreach logs + blast recipients)
+      Promise.all([
+        db.outreachLog.count({
+          where: { tenantId, type: 'send', createdAt: { gte: dayStart, lte: dayEnd }, ...(isAdmin ? {} : { userId: effective.userId }) },
+        }),
+        db.dealBlastRecipient.count({
+          where: { blast: { tenantId, createdAt: { gte: dayStart, lte: dayEnd }, ...(isAdmin ? {} : { createdById: effective.userId }) } },
+        }),
+      ]).then(([logs, recipients]) => logs + recipients),
       db.propertyMilestone.count({ where: milestoneWhere('DISPO_OFFER_RECEIVED') }),
       db.propertyMilestone.count({ where: milestoneWhere('DISPO_CONTRACTED') }),
     ])
@@ -69,7 +77,7 @@ export async function GET(
       apts: { count: aptsToday, goal: goals.apts ?? 0 },
       offers: { count: offersToday, goal: goals.offers ?? 0 },
       contracts: { count: contractsToday, goal: goals.contracts ?? 0 },
-      pushed: { count: pushedToday, goal: goals.pushed ?? 0 },
+      pushed: { count: sendsToday, goal: goals.pushed ?? 0 },
       dispoOffers: { count: dispoOffersToday, goal: goals.dispoOffers ?? 0 },
       dispoContracts: { count: dispoContractsToday, goal: goals.dispoContracts ?? 0 },
       effectiveRole: effective.role,

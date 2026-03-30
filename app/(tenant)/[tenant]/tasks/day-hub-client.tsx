@@ -588,7 +588,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
               { icon: <MessageSquare size={16} />, label: 'CONVOS', key: 'convos', data: kpis?.convos },
               { icon: <Calendar size={16} />, label: 'APTS SET', key: 'apts', data: kpis?.apts },
             ] : activeTab === 'DISPO' ? [
-              { icon: <Send size={16} />, label: 'PUSHED', key: 'pushed', data: kpis?.pushed },
+              { icon: <Send size={16} />, label: 'SENDS', key: 'pushed', data: kpis?.pushed },
               { icon: <FileText size={16} />, label: 'OFFERS RCVD', key: 'dispoOffers', data: kpis?.dispoOffers },
               { icon: <Handshake size={16} />, label: 'CONTRACTED', key: 'dispoContracts', data: kpis?.dispoContracts },
             ] : activeTab === 'ADMIN' ? [
@@ -648,7 +648,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             { label: 'Apts Set', key: 'apts', data: kpis?.apts },
             { label: 'Offers', key: 'offers', data: kpis?.offers },
             { label: 'Contracts', key: 'contracts', data: kpis?.contracts },
-            { label: 'Pushed', key: 'pushed', data: kpis?.pushed },
+            { label: 'Sends', key: 'pushed', data: kpis?.pushed },
             { label: 'Dispo Offers', key: 'dispoOffers', data: kpis?.dispoOffers },
             { label: 'Dispo Contracts', key: 'dispoContracts', data: kpis?.dispoContracts },
           ].map(pill => {

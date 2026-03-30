@@ -365,7 +365,7 @@ export function SettingsClient({
                 {([
                   { key: 'LM', label: 'Lead Manager', fields: [{ k: 'calls', l: 'Calls' }, { k: 'convos', l: 'Convos' }, { k: 'apts', l: 'Apts Set' }] },
                   { key: 'AM', label: 'Acq Manager', fields: [{ k: 'calls', l: 'Calls' }, { k: 'offers', l: 'Offers' }, { k: 'contracts', l: 'Contracts' }] },
-                  { key: 'DISPO', label: 'Dispo Manager', fields: [{ k: 'pushed', l: 'Pushed' }, { k: 'dispoOffers', l: 'Offers Rcvd' }, { k: 'dispoContracts', l: 'Contracted' }] },
+                  { key: 'DISPO', label: 'Dispo Manager', fields: [{ k: 'pushed', l: 'Sends' }, { k: 'dispoOffers', l: 'Offers Rcvd' }, { k: 'dispoContracts', l: 'Contracted' }] },
                 ] as const).map(role => (
                   <div key={role.key} className="space-y-2">
                     <p className="text-ds-fine font-semibold text-txt-secondary">{role.label}</p>
