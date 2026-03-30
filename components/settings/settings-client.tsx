@@ -93,6 +93,31 @@ export function SettingsClient({
   const [ghlUsersLoading, setGhlUsersLoading] = useState(false)
   const [savingGhlMap, setSavingGhlMap] = useState<string | null>(null)
 
+  // KPI Goals per role
+  // WRITES TO: tenants.config → { kpiGoals: { LM: { calls: 100, convos: 15, apts: 3 }, ... } }
+  // READ BY: /api/[tenant]/dayhub/kpis
+  const DEFAULT_GOALS: Record<string, Record<string, number>> = {
+    LM: { calls: 100, convos: 15, apts: 3 },
+    AM: { calls: 50, offers: 2, contracts: 1 },
+    DISPO: { pushed: 5, dispoOffers: 3, dispoContracts: 1 },
+  }
+  const [kpiGoals, setKpiGoals] = useState<Record<string, Record<string, number>>>(() => {
+    const saved = (tenant.config?.kpiGoals ?? {}) as Record<string, Record<string, number>>
+    return { LM: { ...DEFAULT_GOALS.LM, ...saved.LM }, AM: { ...DEFAULT_GOALS.AM, ...saved.AM }, DISPO: { ...DEFAULT_GOALS.DISPO, ...saved.DISPO } }
+  })
+  const [savingGoals, setSavingGoals] = useState(false)
+
+  async function saveGoals() {
+    setSavingGoals(true)
+    try {
+      await fetch('/api/tenants/config', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: { ...tenant.config, kpiGoals: kpiGoals } }),
+      })
+    } catch {}
+    setSavingGoals(false)
+  }
+
   // Role change state
   const [confirmRoleChange, setConfirmRoleChange] = useState<{ memberId: string; newRole: string } | null>(null)
   const [savingRole, setSavingRole] = useState<string | null>(null)
@@ -325,6 +350,45 @@ export function SettingsClient({
               </div>
             )}
           </div>
+
+          {/* KPI Goals per role */}
+          {canManage && (
+            <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-ds-label font-medium text-txt-primary">Daily KPI Goals</h2>
+                <button onClick={saveGoals} disabled={savingGoals}
+                  className="text-ds-fine font-medium text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-1 rounded-[8px] disabled:opacity-50">
+                  {savingGoals ? 'Saving...' : 'Save Goals'}
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {([
+                  { key: 'LM', label: 'Lead Manager', fields: [{ k: 'calls', l: 'Calls' }, { k: 'convos', l: 'Convos' }, { k: 'apts', l: 'Apts Set' }] },
+                  { key: 'AM', label: 'Acq Manager', fields: [{ k: 'calls', l: 'Calls' }, { k: 'offers', l: 'Offers' }, { k: 'contracts', l: 'Contracts' }] },
+                  { key: 'DISPO', label: 'Dispo Manager', fields: [{ k: 'pushed', l: 'Pushed' }, { k: 'dispoOffers', l: 'Offers Rcvd' }, { k: 'dispoContracts', l: 'Contracted' }] },
+                ] as const).map(role => (
+                  <div key={role.key} className="space-y-2">
+                    <p className="text-ds-fine font-semibold text-txt-secondary">{role.label}</p>
+                    {role.fields.map(f => (
+                      <div key={f.k} className="flex items-center gap-2">
+                        <label className="text-ds-fine text-txt-muted w-20 shrink-0">{f.l}</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={kpiGoals[role.key]?.[f.k] ?? 0}
+                          onChange={e => setKpiGoals(prev => ({
+                            ...prev,
+                            [role.key]: { ...prev[role.key], [f.k]: parseInt(e.target.value) || 0 },
+                          }))}
+                          className="w-16 text-ds-fine text-center bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-2 py-1 focus:outline-none focus:border-gunner-red"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Invite */}
           {canManage && (
