@@ -314,6 +314,31 @@ export class GHLClient {
     return [...contactIds]
   }
 
+  /** Walk entire pipeline returning full opportunity objects (contactId + stageId + source) */
+  async getAllPipelineOpportunities(pipelineId: string): Promise<Array<{ id: string; contactId: string; name: string; stageId: string; status: string }>> {
+    const all: Array<{ id: string; contactId: string; name: string; stageId: string; status: string }> = []
+    const seen = new Set<string>()
+    let startAfterTs: number | undefined
+    let startAfterId: string | undefined
+    let page = 0
+    while (page < 60) { // safety: 60 pages × 100 = 6000
+      const result = await this.searchOpportunities(pipelineId, 100, startAfterTs, startAfterId)
+      const opps = result.opportunities ?? []
+      if (opps.length === 0) break
+      for (const opp of opps) {
+        if (opp.contactId && !seen.has(opp.contactId)) {
+          seen.add(opp.contactId)
+          all.push(opp)
+        }
+      }
+      startAfterTs = result.meta?.startAfter
+      startAfterId = result.meta?.startAfterId
+      if (!startAfterTs || !startAfterId || opps.length < 100) break
+      page++
+    }
+    return all
+  }
+
   async createOpportunity(data: {
     pipelineId: string; stageId: string; contactId: string; name: string; source?: string
   }) {

@@ -22,16 +22,23 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
   })
   const tenantConfig = (tenant?.config ?? {}) as Record<string, unknown>
 
-  // Fetch ALL properties for client-side aggregation
-  const properties = await db.property.findMany({
-    where: { tenantId },
-    select: {
-      id: true, address: true, city: true, state: true,
-      status: true, leadSource: true, zip: true,
-      projectType: true, assignmentFee: true, finalProfit: true,
-      createdAt: true,
-    },
-  })
+  // Fetch ALL properties + milestones for client-side aggregation
+  const [properties, milestones] = await Promise.all([
+    db.property.findMany({
+      where: { tenantId },
+      select: {
+        id: true, address: true, city: true, state: true,
+        status: true, leadSource: true, zip: true,
+        projectType: true, assignmentFee: true, finalProfit: true,
+        createdAt: true,
+      },
+    }),
+    db.propertyMilestone.findMany({
+      where: { tenantId },
+      select: { propertyId: true, type: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
 
   return (
     <KpiDashboard
@@ -49,6 +56,11 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
           createdAt: p.createdAt.toISOString(),
         }
       })}
+      milestones={milestones.map(m => ({
+        propertyId: m.propertyId,
+        type: m.type,
+        date: m.createdAt.toISOString(),
+      }))}
       initialConfig={{
         sourceTypes: (tenantConfig.sourceTypes ?? {}) as Record<string, string>,
         monthlySpend: (tenantConfig.monthlySpend ?? {}) as Record<string, Record<string, number>>,

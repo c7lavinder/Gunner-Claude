@@ -1,5 +1,5 @@
 // app/api/milestones/route.ts
-// Manual milestone logging: APPOINTMENT_SET, OFFER_MADE, UNDER_CONTRACT
+// Manual milestone logging: acquisition + disposition types
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
@@ -8,8 +8,12 @@ import { MilestoneType } from '@prisma/client'
 
 const schema = z.object({
   propertyId: z.string().min(1),
-  type: z.enum(['APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT']),
+  type: z.enum([
+    'LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED',
+    'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED',
+  ]),
   notes: z.string().optional(),
+  date: z.string().optional(), // ISO date string for backdating (e.g. '2026-03-15')
 })
 
 export async function POST(request: NextRequest) {
@@ -22,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const { propertyId, type, notes } = parsed.data
+  const { propertyId, type, notes, date } = parsed.data
   const tenantId = session.tenantId
 
   const property = await db.property.findUnique({
@@ -42,6 +46,7 @@ export async function POST(request: NextRequest) {
         loggedById: session.userId,
         source: 'MANUAL',
         notes: notes ?? null,
+        ...(date ? { createdAt: new Date(date) } : {}),
       },
       include: {
         property: { select: { address: true, city: true, state: true } },

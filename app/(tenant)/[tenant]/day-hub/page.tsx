@@ -18,7 +18,7 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
   const dayEnd = endOfDay(today)
   const tomorrowEnd = endOfDay(addDays(today, 1))
 
-  const [todayTasks, tomorrowTasks, overdueTasks, roleConfig, completedToday, xpRecord] = await Promise.all([
+  const [todayTasks, tomorrowTasks, overdueTasks, roleConfig, completedToday, xpRecord, milestoneCounts, callCounts, properties] = await Promise.all([
     // Today's tasks
     db.task.findMany({
       where: {
@@ -82,6 +82,32 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
       where: { tenantId_userId: { tenantId, userId } },
       select: { totalXp: true, level: true, weeklyXp: true },
     }),
+
+    // All 7 milestone type counts for today (unique properties per type)
+    Promise.all([
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'LEAD', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'OFFER_MADE', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'UNDER_CONTRACT', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_PUSHED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_OFFER_RECEIVED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_CONTRACTED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+    ]).then(([lead, aptSet, offer, contract, pushed, dispoOffer, dispoContract]) => ({
+      lead, aptSet, offer, contract, pushed, dispoOffer, dispoContract,
+    })),
+
+    // Calls made today + meaningful convos (>=45s)
+    Promise.all([
+      db.call.count({ where: { tenantId, assignedToId: userId, createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.call.count({ where: { tenantId, assignedToId: userId, createdAt: { gte: dayStart, lte: dayEnd }, durationSeconds: { gte: 45 } } }),
+    ]).then(([calls, convos]) => ({ calls, convos })),
+
+    // Properties for milestone entry dropdown (active only)
+    db.property.findMany({
+      where: { tenantId, status: { notIn: ['DEAD', 'SOLD'] } },
+      select: { id: true, address: true, city: true, state: true },
+      orderBy: { address: 'asc' },
+    }),
   ])
 
   const categories = (roleConfig?.taskCategories as string[]) ?? ['Follow-up', 'Call', 'Research', 'Admin']
@@ -101,12 +127,16 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
     <DayHubClient
       tenantSlug={params.tenant}
       userName={session.name}
+      userRole={role}
       todayTasks={todayTasks.map(mapTask)}
       tomorrowTasks={tomorrowTasks.map(mapTask)}
       overdueTasks={overdueTasks.map(mapTask)}
       categories={categories}
       completedToday={completedToday}
       xp={xpRecord ? { level: xpRecord.level, weeklyXp: xpRecord.weeklyXp } : null}
+      milestones={milestoneCounts}
+      calls={callCounts}
+      properties={properties.map(p => ({ id: p.id, label: `${p.address}, ${p.city} ${p.state}` }))}
     />
   )
 }

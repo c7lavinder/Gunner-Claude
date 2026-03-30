@@ -9,7 +9,7 @@ import {
   ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink, Copy,
   MessageSquare, FileText, ChevronRight, ChevronLeft, Zap, Pencil, Check,
   DollarSign, Bot, Send, Clock, Plus, Loader2,
-  Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X,
+  Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X, AlertTriangle,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -259,7 +259,7 @@ export function PropertyDetailClient({
         </div>
 
         {/* Deal progress — view only, click for milestone details */}
-        <DealProgress currentStatus={property.status} milestones={property.milestones} />
+        <DealProgress currentStatus={property.status} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} />
       </div>
 
       {/* Tab bar */}
@@ -385,11 +385,19 @@ const DISPO_STEPS = [
   { key: 'DISPO_CLOSED', label: 'Closed' },
 ]
 
-function DealProgress({ currentStatus, milestones }: {
+function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
   currentStatus: string
   milestones: Array<{ type: string; date: string; notes: string | null }>
+  propertyId: string
+  canEdit: boolean
 }) {
+  const router = useRouter()
+  const { toast } = useToast()
   const [expandedStep, setExpandedStep] = useState<string | null>(null)
+  const [addingMilestone, setAddingMilestone] = useState<string | null>(null)
+  const [milestoneNotes, setMilestoneNotes] = useState('')
+  const [milestoneDate, setMilestoneDate] = useState('')
+  const [saving, setSaving] = useState(false)
   const acqKeys = ACQ_STEPS.map(s => s.key)
   const dispoKeys = DISPO_STEPS.map(s => s.key)
   const acqIdx = acqKeys.indexOf(currentStatus)
@@ -404,13 +412,61 @@ function DealProgress({ currentStatus, milestones }: {
 
   // Map step keys to milestone types
   const stepToMilestone: Record<string, string> = {
+    // Acquisition
     NEW_LEAD: 'LEAD', APPOINTMENT_SET: 'APPOINTMENT_SET',
     OFFER_MADE: 'OFFER_MADE', UNDER_CONTRACT: 'UNDER_CONTRACT',
-    SOLD: 'CLOSED', IN_DISPOSITION: 'LEAD', DISPO_CONTRACTED: 'UNDER_CONTRACT',
-    DISPO_CLOSED: 'CLOSED',
+    SOLD: 'CLOSED',
+    // Disposition
+    IN_DISPOSITION: 'DISPO_NEW', DISPO_PUSHED: 'DISPO_PUSHED',
+    DISPO_OFFERS: 'DISPO_OFFER_RECEIVED', DISPO_CONTRACTED: 'DISPO_CONTRACTED',
+    DISPO_CLOSED: 'DISPO_CLOSED',
   }
 
-  function ProgressRow({ steps, activeIdx, color }: { steps: typeof ACQ_STEPS; activeIdx: number; color: string }) {
+  // Types that can be manually logged — all types allowed so users can fill gaps flagged by caution icons
+  const LOGGABLE_TYPES = [
+    'LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED',
+    'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED',
+  ]
+
+  async function logMilestone(milestoneType: string) {
+    if (!LOGGABLE_TYPES.includes(milestoneType)) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/milestones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId,
+          type: milestoneType,
+          notes: milestoneNotes || undefined,
+          date: milestoneDate || undefined,
+        }),
+      })
+      if (res.ok) {
+        toast('Milestone logged', 'success')
+        setAddingMilestone(null)
+        setMilestoneNotes('')
+        setMilestoneDate('')
+        router.refresh()
+      } else {
+        toast('Failed to log milestone', 'error')
+      }
+    } catch {
+      toast('Failed to log milestone', 'error')
+    }
+    setSaving(false)
+  }
+
+  function ProgressRow({ steps, activeIdx }: { steps: typeof ACQ_STEPS; activeIdx: number; color: string }) {
+    // Find the latest milestone date among all LATER stages (for stale detection)
+    function hasLaterStageMilestone(stepIdx: number): boolean {
+      for (let j = stepIdx + 1; j < steps.length; j++) {
+        const laterType = stepToMilestone[steps[j].key] ?? ''
+        if ((milestonesByType[laterType] ?? []).length > 0) return true
+      }
+      return false
+    }
+
     return (
       <div>
         <div className="flex items-center">
@@ -418,8 +474,14 @@ function DealProgress({ currentStatus, milestones }: {
             const isCurrent = i === activeIdx
             const milestoneType = stepToMilestone[step.key] ?? ''
             const stepMilestones = milestonesByType[milestoneType] ?? []
-            const everVisited = stepMilestones.length > 0
+            const isPast = activeIdx >= 0 && i < activeIdx
+            const everVisited = stepMilestones.length > 0 || isPast
             const isExpanded = expandedStep === step.key
+
+            // Caution: stage is passed through (or current) but has no milestone,
+            // AND a later stage DOES have a milestone (meaning this one was skipped)
+            const needsCaution = (isPast || isCurrent) && stepMilestones.length === 0 && hasLaterStageMilestone(i)
+
             // Visual: filled = current, outlined = ever visited (history), gray = never
             const circleClass = isCurrent
               ? `bg-gunner-red text-white ring-2 ring-offset-1 ring-gunner-red/30`
@@ -434,14 +496,20 @@ function DealProgress({ currentStatus, milestones }: {
                 <button
                   onClick={() => setExpandedStep(isExpanded ? null : step.key)}
                   className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform relative"
-                  title={everVisited ? `${step.label} — ${stepMilestones.length} time${stepMilestones.length !== 1 ? 's' : ''}` : step.label}
+                  title={needsCaution ? `${step.label} — no milestone, won't count in KPIs` : everVisited ? `${step.label} — ${stepMilestones.length} time${stepMilestones.length !== 1 ? 's' : ''}` : step.label}
                 >
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-colors ${circleClass}`}>
                     {isCurrent || everVisited ? <Check size={8} /> : i + 1}
                   </div>
                   <span className={`text-[7px] mt-0.5 ${labelClass}`}>{step.label}</span>
-                  {/* Count badge for multiple milestones */}
-                  {stepMilestones.length > 1 && (
+                  {/* Caution badge — missing milestone, won't count in KPIs */}
+                  {needsCaution && (
+                    <span className="absolute -top-1 -right-1.5 text-amber-500" title="No milestone — won't count in KPIs">
+                      <AlertTriangle size={8} fill="currentColor" />
+                    </span>
+                  )}
+                  {/* Count badge for multiple milestones (only if no caution) */}
+                  {!needsCaution && stepMilestones.length > 1 && (
                     <span className="absolute -top-1 -right-1.5 text-[6px] font-bold text-white bg-gunner-red w-3 h-3 rounded-full flex items-center justify-center">{stepMilestones.length}</span>
                   )}
                 </button>
@@ -456,24 +524,42 @@ function DealProgress({ currentStatus, milestones }: {
             )
           })}
         </div>
-        {/* Milestone detail popover — shows ALL entries for the stage */}
+        {/* Milestone detail popover — shows ALL entries for the stage + add button */}
         {expandedStep && steps.some(s => s.key === expandedStep) && (() => {
           const step = steps.find(s => s.key === expandedStep)!
           const milestoneType = stepToMilestone[step.key] ?? ''
           const stepMilestones = milestonesByType[milestoneType] ?? []
           const isCurrent = steps.indexOf(step) === activeIdx
+          const isPast = activeIdx >= 0 && steps.indexOf(step) < activeIdx
           const everVisited = stepMilestones.length > 0
+          const canLog = canEdit && LOGGABLE_TYPES.includes(milestoneType)
+          const isAdding = addingMilestone === milestoneType
+          const popoverCaution = (isPast || isCurrent) && stepMilestones.length === 0 && hasLaterStageMilestone(steps.indexOf(step))
           return (
             <div className={`mt-2 rounded-[8px] px-3 py-2 border-[0.5px] ${
-              isCurrent ? 'bg-gunner-red/5 border-gunner-red/20'
-              : everVisited ? 'bg-surface-secondary border-gunner-red/10'
+              popoverCaution ? 'bg-amber-50 border-amber-200'
+              : isCurrent ? 'bg-gunner-red/5 border-gunner-red/20'
+              : everVisited || isPast ? 'bg-surface-secondary border-gunner-red/10'
               : 'bg-surface-secondary border-[rgba(0,0,0,0.06)]'
             }`}>
-              <p className={`text-[10px] font-semibold ${isCurrent ? 'text-gunner-red' : everVisited ? 'text-txt-primary' : 'text-txt-muted'}`}>
-                {step.label}
-                {stepMilestones.length > 1 && <span className="text-txt-muted font-normal ml-1">({stepMilestones.length} times)</span>}
-              </p>
-              {stepMilestones.length > 0 ? (
+              <div className="flex items-center justify-between">
+                <p className={`text-[10px] font-semibold ${popoverCaution ? 'text-amber-700' : isCurrent ? 'text-gunner-red' : everVisited || isPast ? 'text-txt-primary' : 'text-txt-muted'}`}>
+                  {popoverCaution && <AlertTriangle size={9} className="inline mr-1 -mt-0.5" />}
+                  {step.label}
+                  {stepMilestones.length > 1 && <span className="text-txt-muted font-normal ml-1">({stepMilestones.length} times)</span>}
+                </p>
+                {canLog && !isAdding && (
+                  <button
+                    onClick={() => { setAddingMilestone(milestoneType); setMilestoneNotes(''); setMilestoneDate('') }}
+                    className="text-[8px] text-gunner-red hover:text-gunner-red-dark flex items-center gap-0.5"
+                  >
+                    <Plus size={8} /> Log
+                  </button>
+                )}
+              </div>
+              {popoverCaution ? (
+                <p className="text-[9px] text-amber-600 mt-0.5">No milestone — this stage won&apos;t count in KPIs. Log with the correct date.</p>
+              ) : stepMilestones.length > 0 ? (
                 <div className="space-y-1 mt-1">
                   {stepMilestones.map((m, mi) => (
                     <div key={mi} className="flex items-center gap-2">
@@ -484,8 +570,45 @@ function DealProgress({ currentStatus, milestones }: {
                 </div>
               ) : isCurrent ? (
                 <p className="text-[9px] text-txt-muted mt-0.5">Currently here — no milestone recorded</p>
+              ) : isPast ? (
+                <p className="text-[9px] text-txt-muted mt-0.5">Passed through — no milestone recorded yet</p>
               ) : (
                 <p className="text-[9px] text-txt-muted mt-0.5">Not yet reached</p>
+              )}
+              {/* Inline milestone form */}
+              {isAdding && (
+                <div className="mt-2 space-y-1.5 border-t border-[rgba(0,0,0,0.06)] pt-2">
+                  <input
+                    type="date"
+                    value={milestoneDate}
+                    onChange={e => setMilestoneDate(e.target.value)}
+                    className="w-full text-[9px] px-2 py-1 rounded border border-[rgba(0,0,0,0.1)] bg-white"
+                    placeholder="Date (optional — defaults to today)"
+                  />
+                  <input
+                    type="text"
+                    value={milestoneNotes}
+                    onChange={e => setMilestoneNotes(e.target.value)}
+                    placeholder="Notes (optional)"
+                    className="w-full text-[9px] px-2 py-1 rounded border border-[rgba(0,0,0,0.1)] bg-white"
+                    onKeyDown={e => { if (e.key === 'Enter') logMilestone(milestoneType) }}
+                  />
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => logMilestone(milestoneType)}
+                      disabled={saving}
+                      className="text-[8px] font-medium text-white bg-gunner-red hover:bg-gunner-red-dark px-2 py-0.5 rounded disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => { setAddingMilestone(null); setMilestoneNotes(''); setMilestoneDate('') }}
+                      className="text-[8px] text-txt-muted hover:text-txt-primary px-2 py-0.5"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )

@@ -317,11 +317,18 @@ model PropertyMilestone {
 }
 
 enum MilestoneType {
+  // Acquisition pipeline
   LEAD
   APPOINTMENT_SET
   OFFER_MADE
   UNDER_CONTRACT
   CLOSED
+  // Disposition pipeline
+  DISPO_NEW
+  DISPO_PUSHED
+  DISPO_OFFER_RECEIVED
+  DISPO_CONTRACTED
+  DISPO_CLOSED
 
   @@map("milestone_type")
 }

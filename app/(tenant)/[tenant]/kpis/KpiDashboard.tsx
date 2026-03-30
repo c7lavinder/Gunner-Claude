@@ -21,6 +21,12 @@ interface KpiProperty {
   createdAt: string
 }
 
+interface KpiMilestone {
+  propertyId: string
+  type: string
+  date: string // ISO string
+}
+
 // Tenant config for editable KPI data (spend, volume, source types)
 interface KpiConfig {
   sourceTypes?: Record<string, string>       // { "PPL": "Inbound", ... }
@@ -45,9 +51,6 @@ const DISPO_STAGES = [
   { key: 'contracted', label: 'Contracted', statuses: ['DISPO_CONTRACTED'] },
   { key: 'closed', label: 'Closed', statuses: ['DISPO_CLOSED'] },
 ]
-
-const ACQ_ALL_STATUSES = ACQ_STAGES.flatMap(s => s.statuses)
-const DISPO_ALL_STATUSES = DISPO_STAGES.flatMap(s => s.statuses)
 
 const FUNNEL_COLORS = ['blue', 'orange', 'purple', 'green', 'red']
 
@@ -92,25 +95,80 @@ function sumRevenue(props: KpiProperty[]): number {
   return props.reduce((s, p) => s + (p.finalProfit ?? p.assignmentFee ?? 0), 0)
 }
 
-// Cumulative stage count: a property at stage N counts in stages 0..N
-function cumulativeCounts(
-  props: KpiProperty[],
-  stages: typeof ACQ_STAGES,
+// Milestone type → KPI stage key mapping
+const ACQ_MILESTONE_MAP: Record<string, string> = {
+  LEAD: 'lead', APPOINTMENT_SET: 'aptSet', OFFER_MADE: 'offerMade',
+  UNDER_CONTRACT: 'underContract', CLOSED: 'closed',
+}
+const DISPO_MILESTONE_MAP: Record<string, string> = {
+  DISPO_NEW: 'newDeal', DISPO_PUSHED: 'pushedOut', DISPO_OFFER_RECEIVED: 'offers',
+  DISPO_CONTRACTED: 'contracted', DISPO_CLOSED: 'closed',
+}
+
+// Build a lookup: (propertyId, milestoneType) → most recent date
+// Returns: Map<stageKey, Map<propertyId, Date>>
+function buildMilestoneLookup(
+  milestones: KpiMilestone[],
+  milestoneMap: Record<string, string>,
+): Map<string, Map<string, Date>> {
+  const lookup = new Map<string, Map<string, Date>>()
+  for (const m of milestones) {
+    const stageKey = milestoneMap[m.type]
+    if (!stageKey) continue
+    if (!lookup.has(stageKey)) lookup.set(stageKey, new Map())
+    const stageMap = lookup.get(stageKey)!
+    const d = new Date(m.date)
+    const existing = stageMap.get(m.propertyId)
+    if (!existing || d > existing) stageMap.set(m.propertyId, d)
+  }
+  return lookup
+}
+
+// Count unique properties per stage within a time range using milestones
+// Each property counts ONCE per stage — most recent milestone date determines period
+function milestoneCounts(
+  lookup: Map<string, Map<string, Date>>,
+  stages: Array<{ key: string }>,
+  start: Date,
+  end: Date,
+  propertyIds?: Set<string>, // optional filter (e.g., by source or market)
 ): Record<string, number> {
   const counts: Record<string, number> = {}
-  for (const s of stages) counts[s.key] = 0
-  for (const p of props) {
-    const idx = stages.findIndex(s => s.statuses.includes(p.status))
-    if (idx < 0) continue
-    for (let i = 0; i <= idx; i++) counts[stages[i].key]++
+  for (const s of stages) {
+    const stageMap = lookup.get(s.key)
+    if (!stageMap) { counts[s.key] = 0; continue }
+    let count = 0
+    for (const [propId, date] of stageMap) {
+      if (propertyIds && !propertyIds.has(propId)) continue
+      if (date >= start && date <= end) count++
+    }
+    counts[s.key] = count
   }
   return counts
 }
 
+// Get property IDs that have a CLOSED/DISPO_CLOSED milestone in time range (for revenue gating)
+function closedPropertyIds(
+  lookup: Map<string, Map<string, Date>>,
+  closedKey: string,
+  start: Date,
+  end: Date,
+  propertyIds?: Set<string>,
+): Set<string> {
+  const ids = new Set<string>()
+  const stageMap = lookup.get(closedKey)
+  if (!stageMap) return ids
+  for (const [propId, date] of stageMap) {
+    if (propertyIds && !propertyIds.has(propId)) continue
+    if (date >= start && date <= end) ids.add(propId)
+  }
+  return ids
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
-  properties: KpiProperty[]; tenantSlug: string; initialConfig: KpiConfig
+export function KpiDashboard({ properties, milestones, tenantSlug, initialConfig }: {
+  properties: KpiProperty[]; milestones: KpiMilestone[]; tenantSlug: string; initialConfig: KpiConfig
 }) {
   const [timePeriod, setTimePeriod] = useState('all')
   const [marketFilter, setMarketFilter] = useState('all')
@@ -168,47 +226,72 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
     return monthlyVolume[mk]?.[source] ?? 0
   }
 
-  // ── Filter ──────────────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    const { start, end } = getTimeRange(timePeriod)
-    return properties.filter(p => {
-      const d = new Date(p.createdAt)
-      if (d < start || d > end) return false
-      if (marketFilter !== 'all' && p.market !== marketFilter) return false
-      return true
-    })
-  }, [properties, timePeriod, marketFilter])
+  // ── Milestone Lookups ────────────────────────────────────────────────────────
+  const acqLookup = useMemo(() => buildMilestoneLookup(milestones, ACQ_MILESTONE_MAP), [milestones])
+  const dispoLookup = useMemo(() => buildMilestoneLookup(milestones, DISPO_MILESTONE_MAP), [milestones])
 
-  // Acquisition properties (with source filter applied)
-  const acqFiltered = useMemo(() => {
-    const acq = filtered.filter(p => ACQ_ALL_STATUSES.includes(p.status))
-    if (sourceFilter === 'all') return acq
-    if (sourceFilter === '__none__') return acq.filter(p => !p.leadSource)
-    return acq.filter(p => p.leadSource === sourceFilter)
-  }, [filtered, sourceFilter])
+  // Property index by ID for fast lookup
+  const propById = useMemo(() => {
+    const m = new Map<string, KpiProperty>()
+    for (const p of properties) m.set(p.id, p)
+    return m
+  }, [properties])
 
-  // Disposition properties (source filter does NOT apply)
-  const dispoFiltered = useMemo(() => {
-    return filtered.filter(p => DISPO_ALL_STATUSES.includes(p.status))
-  }, [filtered])
+  // ── Time Range ─────────────────────────────────────────────────────────────
+  const timeRange = useMemo(() => getTimeRange(timePeriod), [timePeriod])
+
+  // ── Property ID sets for market + source filters ──────────────────────────
+  // Don't filter by status — milestones determine pipeline membership.
+  // A property that moved to dispo still has acquisition milestones that should count.
+  const filteredPropertyIds = useMemo(() => {
+    let props = [...properties]
+    if (marketFilter !== 'all') props = props.filter(p => p.market === marketFilter)
+    if (sourceFilter !== 'all') {
+      if (sourceFilter === '__none__') props = props.filter(p => !p.leadSource)
+      else props = props.filter(p => p.leadSource === sourceFilter)
+    }
+    return new Set(props.map(p => p.id))
+  }, [properties, marketFilter, sourceFilter])
+
+  // ── Milestone-driven counts ────────────────────────────────────────────────
+  const acqCounts = useMemo(() =>
+    milestoneCounts(acqLookup, ACQ_STAGES, timeRange.start, timeRange.end, filteredPropertyIds),
+    [acqLookup, timeRange, filteredPropertyIds])
+
+  const dispoCounts = useMemo(() =>
+    milestoneCounts(dispoLookup, DISPO_STAGES, timeRange.start, timeRange.end, filteredPropertyIds),
+    [dispoLookup, timeRange, filteredPropertyIds])
+
+  // ── Revenue (gated by CLOSED milestone in period) ─────────────────────────
+  const acqRevenue = useMemo(() => {
+    const ids = closedPropertyIds(acqLookup, 'closed', timeRange.start, timeRange.end, filteredPropertyIds)
+    return sumRevenue([...ids].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p))
+  }, [acqLookup, timeRange, filteredPropertyIds, propById])
+
+  const dispoRevenue = useMemo(() => {
+    const ids = closedPropertyIds(dispoLookup, 'closed', timeRange.start, timeRange.end, filteredPropertyIds)
+    return sumRevenue([...ids].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p))
+  }, [dispoLookup, timeRange, filteredPropertyIds, propById])
+
+  // Filtered property lists for breakdown tables — no status filter.
+  // Milestone types determine pipeline membership, not current property status.
+  const allFiltered = useMemo(() => {
+    let props = [...properties]
+    if (marketFilter !== 'all') props = props.filter(p => p.market === marketFilter)
+    if (sourceFilter !== 'all') {
+      if (sourceFilter === '__none__') props = props.filter(p => !p.leadSource)
+      else props = props.filter(p => p.leadSource === sourceFilter)
+    }
+    return props
+  }, [properties, marketFilter, sourceFilter])
 
   // ── Data Quality ────────────────────────────────────────────────────────────
-  const missingSource = properties.filter(p => !p.leadSource && ACQ_ALL_STATUSES.includes(p.status)).length
+  const missingSource = properties.filter(p => !p.leadSource).length
   const missingMarket = properties.filter(p => p.market === 'Global').length
-
-  // ── Acquisition Counts (cumulative: Offer Made also counts in Lead + Apt Set)
-  const acqCounts = useMemo(() => cumulativeCounts(acqFiltered, ACQ_STAGES), [acqFiltered])
-
-  const acqRevenue = useMemo(() => sumRevenue(acqFiltered.filter(p => p.status === 'SOLD')), [acqFiltered])
 
   const acqFunnelStages: FunnelStage[] = ACQ_STAGES.map((s, i) => ({
     label: s.label, count: acqCounts[s.key], color: FUNNEL_COLORS[i],
   }))
-
-  // ── Disposition Counts (cumulative: Contracted also counts in New Deal, Pushed Out, Offers)
-  const dispoCounts = useMemo(() => cumulativeCounts(dispoFiltered, DISPO_STAGES), [dispoFiltered])
-
-  const dispoRevenue = useMemo(() => sumRevenue(dispoFiltered.filter(p => p.status === 'DISPO_CLOSED')), [dispoFiltered])
 
   const dispoFunnelStages: FunnelStage[] = DISPO_STAGES.map((s, i) => ({
     label: s.label, count: dispoCounts[s.key], color: FUNNEL_COLORS[i],
@@ -216,15 +299,17 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
 
   // ── Acquisition Breakdown Tables ───────────────────────────────────────────
   const acqBySourceTab = useMemo((): TableTab => {
-    const sources = [...new Set(acqFiltered.map(p => p.leadSource ?? 'Unassigned'))]
-    if (!sources.includes('Unassigned') && acqFiltered.some(p => !p.leadSource)) sources.push('Unassigned')
+    const sources = [...new Set(allFiltered.map(p => p.leadSource ?? 'Unassigned'))]
+    if (!sources.includes('Unassigned') && allFiltered.some(p => !p.leadSource)) sources.push('Unassigned')
 
     const rows = sources.map(src => {
-      const group = acqFiltered.filter(p => src === 'Unassigned' ? !p.leadSource : p.leadSource === src)
+      const group = allFiltered.filter(p => src === 'Unassigned' ? !p.leadSource : p.leadSource === src)
+      const groupIds = new Set(group.map(p => p.id))
       const total = group.length
       const type = getSourceType(src)
-      const rev = sumRevenue(group.filter(p => p.status === 'SOLD'))
-      const cc = cumulativeCounts(group, ACQ_STAGES)
+      const cc = milestoneCounts(acqLookup, ACQ_STAGES, timeRange.start, timeRange.end, groupIds)
+      const closedIds = closedPropertyIds(acqLookup, 'closed', timeRange.start, timeRange.end, groupIds)
+      const rev = sumRevenue([...closedIds].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p))
       const spend = getSpend(src)
       const vol = getVolume(src) || total
 
@@ -251,14 +336,16 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
       ],
       rows,
     }
-  }, [acqFiltered])
+  }, [allFiltered, acqLookup, timeRange, propById])
 
   const acqByMarketTab = useMemo((): TableTab => {
     const rows = MARKETS.map(mkt => {
-      const group = acqFiltered.filter(p => p.market === mkt)
+      const group = allFiltered.filter(p => p.market === mkt)
+      const groupIds = new Set(group.map(p => p.id))
       const total = group.length
-      const rev = sumRevenue(group.filter(p => p.status === 'SOLD'))
-      const cc = cumulativeCounts(group, ACQ_STAGES)
+      const cc = milestoneCounts(acqLookup, ACQ_STAGES, timeRange.start, timeRange.end, groupIds)
+      const closedIds = closedPropertyIds(acqLookup, 'closed', timeRange.start, timeRange.end, groupIds)
+      const rev = sumRevenue([...closedIds].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p))
       return {
         market: mkt, spend: '—', vol: total,
         lead: countPct(cc.lead, total),
@@ -281,10 +368,10 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
       ],
       rows,
     }
-  }, [acqFiltered])
+  }, [allFiltered, acqLookup, timeRange, propById])
 
   const acqCrossTab = useMemo((): TableTab => {
-    const sources = [...new Set(acqFiltered.map(p => p.leadSource ?? 'Unassigned'))]
+    const sources = [...new Set(allFiltered.map(p => p.leadSource ?? 'Unassigned'))]
     const cols: TableTab['columns'] = [{ key: 'source', label: 'Source' }]
     const groupHeaders: TableTab['groupHeaders'] = []
 
@@ -301,26 +388,31 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
     const rows = sources.map(src => {
       const row: Record<string, string | number> = { source: src }
       for (const mkt of MARKETS) {
-        const group = acqFiltered.filter(p =>
+        const group = allFiltered.filter(p =>
           (src === 'Unassigned' ? !p.leadSource : p.leadSource === src) && p.market === mkt
         )
-        row[`${mkt}_lead`] = group.filter(p => ACQ_STAGES[0].statuses.includes(p.status)).length
-        row[`${mkt}_closed`] = group.filter(p => p.status === 'SOLD').length
+        const groupIds = new Set(group.map(p => p.id))
+        const cc = milestoneCounts(acqLookup, ACQ_STAGES, timeRange.start, timeRange.end, groupIds)
+        const closedIds = closedPropertyIds(acqLookup, 'closed', timeRange.start, timeRange.end, groupIds)
+        row[`${mkt}_lead`] = cc.lead
+        row[`${mkt}_closed`] = cc.closed
         row[`${mkt}_spend`] = '—'
-        row[`${mkt}_revenue`] = fmt$(sumRevenue(group.filter(p => p.status === 'SOLD')))
+        row[`${mkt}_revenue`] = fmt$(sumRevenue([...closedIds].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p)))
       }
       return row
     })
 
     return { key: 'crossTab', label: 'Lead Source × Market', columns: cols, groupHeaders, rows }
-  }, [acqFiltered])
+  }, [allFiltered, acqLookup, timeRange, propById])
 
   // ── Disposition Breakdown Tables ────────────────────────────────────────────
   const dispoByMarketTab = useMemo((): TableTab => {
     const rows = MARKETS.map(mkt => {
-      const group = dispoFiltered.filter(p => p.market === mkt)
-      const rev = sumRevenue(group.filter(p => p.status === 'DISPO_CLOSED'))
-      const cc = cumulativeCounts(group, DISPO_STAGES)
+      const group = allFiltered.filter(p => p.market === mkt)
+      const groupIds = new Set(group.map(p => p.id))
+      const cc = milestoneCounts(dispoLookup, DISPO_STAGES, timeRange.start, timeRange.end, groupIds)
+      const closedIds = closedPropertyIds(dispoLookup, 'closed', timeRange.start, timeRange.end, groupIds)
+      const rev = sumRevenue([...closedIds].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p))
       return {
         market: mkt,
         newDeal: cc.newDeal, pushedOut: cc.pushedOut, offers: cc.offers,
@@ -338,14 +430,16 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
       ],
       rows,
     }
-  }, [dispoFiltered])
+  }, [allFiltered, dispoLookup, timeRange, propById])
 
   const dispoByTypeTab = useMemo((): TableTab => {
-    const types = [...new Set(dispoFiltered.flatMap(p => p.projectType.length > 0 ? p.projectType : ['Unassigned']))]
+    const types = [...new Set(allFiltered.flatMap(p => p.projectType.length > 0 ? p.projectType : ['Unassigned']))]
     const rows = types.map(pt => {
-      const group = dispoFiltered.filter(p => pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt))
-      const rev = sumRevenue(group.filter(p => p.status === 'DISPO_CLOSED'))
-      const cc = cumulativeCounts(group, DISPO_STAGES)
+      const group = allFiltered.filter(p => pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt))
+      const groupIds = new Set(group.map(p => p.id))
+      const cc = milestoneCounts(dispoLookup, DISPO_STAGES, timeRange.start, timeRange.end, groupIds)
+      const closedIds = closedPropertyIds(dispoLookup, 'closed', timeRange.start, timeRange.end, groupIds)
+      const rev = sumRevenue([...closedIds].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p))
       return {
         projectType: pt,
         newDeal: cc.newDeal, pushedOut: cc.pushedOut, offers: cc.offers,
@@ -363,10 +457,10 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
       ],
       rows,
     }
-  }, [dispoFiltered])
+  }, [allFiltered, dispoLookup, timeRange, propById])
 
   const dispoCrossTab = useMemo((): TableTab => {
-    const types = [...new Set(dispoFiltered.flatMap(p => p.projectType.length > 0 ? p.projectType : ['Unassigned']))]
+    const types = [...new Set(allFiltered.flatMap(p => p.projectType.length > 0 ? p.projectType : ['Unassigned']))]
     const cols: TableTab['columns'] = [{ key: 'projectType', label: 'Project Type' }]
     const groupHeaders: TableTab['groupHeaders'] = []
 
@@ -382,19 +476,21 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
     const rows = types.map(pt => {
       const row: Record<string, string | number> = { projectType: pt }
       for (const mkt of MARKETS) {
-        const group = dispoFiltered.filter(p =>
+        const group = allFiltered.filter(p =>
           (pt === 'Unassigned' ? p.projectType.length === 0 : p.projectType.includes(pt)) && p.market === mkt
         )
-        const cc = cumulativeCounts(group, DISPO_STAGES)
+        const groupIds = new Set(group.map(p => p.id))
+        const cc = milestoneCounts(dispoLookup, DISPO_STAGES, timeRange.start, timeRange.end, groupIds)
+        const closedIds = closedPropertyIds(dispoLookup, 'closed', timeRange.start, timeRange.end, groupIds)
         row[`${mkt}_newDeal`] = cc.newDeal
         row[`${mkt}_closed`] = cc.closed
-        row[`${mkt}_revenue`] = fmt$(sumRevenue(group.filter(p => p.status === 'DISPO_CLOSED')))
+        row[`${mkt}_revenue`] = fmt$(sumRevenue([...closedIds].map(id => propById.get(id)).filter((p): p is KpiProperty => !!p)))
       }
       return row
     })
 
     return { key: 'dispoCross', label: 'Market × Project Type', columns: cols, groupHeaders, rows }
-  }, [dispoFiltered])
+  }, [allFiltered, dispoLookup, timeRange, propById])
 
   // ── All available sources for filter dropdown ───────────────────────────────
   const allSources = [...new Set(properties.map(p => p.leadSource).filter(Boolean))] as string[]
@@ -496,7 +592,7 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
           const stage = stageMap[colKey]
           if (stage) {
             const stageIdx = ACQ_STAGES.indexOf(stage)
-            let group = acqFiltered
+            let group = allFiltered
             // Filter by source or market depending on tab
             if (tabKey === 'bySource') {
               const src = String(row.source)
@@ -545,7 +641,7 @@ export function KpiDashboard({ properties, tenantSlug, initialConfig }: {
           const stage = stageMap[colKey]
           if (stage) {
             const stageIdx = DISPO_STAGES.indexOf(stage)
-            let group = dispoFiltered
+            let group = allFiltered
             if (tabKey === 'dispoByMarket') group = group.filter(p => p.market === String(row.market))
             else if (tabKey === 'dispoByType') {
               const pt = String(row.projectType)
