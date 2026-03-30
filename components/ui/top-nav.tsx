@@ -124,16 +124,18 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
 
         {/* Right side */}
         <div className="flex items-center gap-2 md:gap-3 ml-auto">
-          <Link
-            href={`${base}/settings`}
-            className={`p-2 rounded-[10px] transition-colors ${
-              pathname.startsWith(`${base}/settings`)
-                ? 'bg-surface-secondary text-txt-primary'
-                : 'text-txt-muted hover:text-txt-primary hover:bg-surface-secondary'
-            }`}
-          >
-            <Settings size={16} />
-          </Link>
+          {!isViewingAs && (
+            <Link
+              href={`${base}/settings`}
+              className={`p-2 rounded-[10px] transition-colors ${
+                pathname.startsWith(`${base}/settings`)
+                  ? 'bg-surface-secondary text-txt-primary'
+                  : 'text-txt-muted hover:text-txt-primary hover:bg-surface-secondary'
+              }`}
+            >
+              <Settings size={16} />
+            </Link>
+          )}
 
           <div className="relative">
             <button
