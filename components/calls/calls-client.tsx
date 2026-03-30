@@ -165,12 +165,14 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
     setActionLoading(null)
   }
 
-  const tabs: Array<{ id: Tab; label: string; count: number; icon: React.ReactNode }> = [
+  const allTabs: Array<{ id: Tab; label: string; count: number; icon: React.ReactNode }> = [
     { id: 'all', label: 'All Calls', count: allCalls.length, icon: <Phone size={13} /> },
     { id: 'review', label: 'Needs Review', count: reviewCalls.length, icon: <AlertTriangle size={13} /> },
     { id: 'skipped', label: 'Skipped', count: skippedCalls.length, icon: <X size={13} /> },
     { id: 'archived', label: 'Archived', count: 0, icon: <Archive size={13} /> },
   ]
+  // Non-admins only see "All Calls" — no review/skipped/archived tabs
+  const tabs = canViewAll ? allTabs : allTabs.filter(t => t.id === 'all')
 
   return (
     <div className="space-y-5">
@@ -217,7 +219,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
         </div>
 
         {/* STATUS TABS */}
-        <div className="grid grid-cols-4 gap-3">
+        {tabs.length > 1 && <div className={`grid grid-cols-${tabs.length} gap-3`}>
           {tabs.map(t => (
             <button
               key={t.id}
@@ -238,7 +240,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
               )}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* FILTER BAR */}
         {tab === 'all' && (
