@@ -29,6 +29,18 @@ const GHL_STAGE_COLORS: Record<string, string> = {
   'Under Contract (5)': 'bg-emerald-100 text-emerald-700',
   'Purchased (6)': 'bg-green-100 text-green-700',
 }
+const STAGE_DISPLAY_NAMES: Record<string, string> = {
+  'New Lead (1)': 'New Lead', 'Warm Leads(2)': 'Warm Lead', 'Hot Leads(2)': 'Hot Lead',
+  'Pending Apt(3)': 'Pending Apt', 'Pending Apt (3)': 'Pending Apt',
+  'Walkthrough Apt Scheduled': 'Walkthrough', 'Walkthrough Apt Scheduled (3)': 'Walkthrough',
+  'Offer Apt Scheduled (3)': 'Offer Apt', 'Offer Apt Scheduled(3)': 'Offer Apt',
+  'Made Offer (4)': 'Made Offer', 'Under Contract (5)': 'Under Contract', 'Purchased (6)': 'Purchased',
+  '1 Month Follow Up': '1 Month', '4 Month Follow Up': '4 Month', '1 Year Follow Up': '1 Year',
+}
+function cleanStageName(raw: string): string {
+  if (STAGE_DISPLAY_NAMES[raw]) return STAGE_DISPLAY_NAMES[raw]
+  return raw.replace(/\s*\(\d+\)\s*/g, '').replace(/\s+/g, ' ').trim()
+}
 const SOURCE_COLORS: Record<string, string> = {
   'PPL': 'bg-violet-100 text-violet-700',
   'PPC': 'bg-sky-100 text-sky-700',
@@ -162,7 +174,7 @@ export function PropertyDetailClient({
           </span>
           {property.ghlStageName && (
             <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${GHL_STAGE_COLORS[property.ghlStageName] ?? 'bg-blue-100 text-blue-700'}`}>
-              {property.ghlStageName}
+              {cleanStageName(property.ghlStageName)}
             </span>
           )}
           {property.leadSource && (
@@ -170,11 +182,6 @@ export function PropertyDetailClient({
               {property.leadSource}
             </span>
           )}
-          {property.propertyMarkets.map(m => (
-            <span key={m} className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${MARKET_COLORS[m] ?? 'bg-red-100 text-red-700'}`}>
-              {m}
-            </span>
-          ))}
           <span className={`text-ds-fine font-semibold ${domColor}`}>{dom}d</span>
         </div>
 
