@@ -8,6 +8,7 @@ import Link from 'next/link'
 interface MilestoneEntry {
   id: string; type: string; source: string; notes: string | null
   time: string; propertyId: string; propertyAddress: string; userName: string
+  contactName?: string; duration?: number
 }
 
 interface TeamMember { id: string; name: string }
@@ -32,6 +33,7 @@ const SOURCE_COLORS: Record<string, { bg: string; text: string; label: string }>
   AUTO_WEBHOOK: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'API' },
   AI: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'AI' },
   MANUAL: { bg: 'bg-green-100', text: 'text-green-700', label: 'Manual' },
+  call: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Call' },
 }
 
 export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
@@ -91,6 +93,21 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
         const res = await fetch(`/api/milestones?type=${milestoneType}&date=${dateStr}`)
         const data = await res.json()
         setEntries(data.milestones ?? [])
+      } else if (type === 'calls' || type === 'convos') {
+        // Fetch real call records
+        const res = await fetch(`/api/calls/ledger?type=${type}&date=${dateStr}`)
+        const data = await res.json()
+        setEntries((data.entries ?? []).map((e: Record<string, unknown>) => ({
+          id: e.id as string, type: type,
+          source: 'call',
+          notes: e.score != null ? `Score: ${e.score} · ${e.callType ?? ''}` : (e.status as string) ?? null,
+          time: e.time as string,
+          propertyId: (e.propertyId as string) ?? '',
+          propertyAddress: (e.propertyAddress as string) ?? '',
+          userName: e.userName as string,
+          contactName: e.contactName as string,
+          duration: e.duration as number,
+        })))
       } else {
         const res = await fetch(`/api/kpi-entries?type=${type}&date=${dateStr}`)
         const data = await res.json()
@@ -98,7 +115,7 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
           id: e.id as string, type: e.type as string,
           source: (e.source as string) ?? 'MANUAL',
           notes: e.notes as string | null, time: e.time as string,
-          propertyId: e.propertyId as string, propertyAddress: e.propertyAddress as string,
+          propertyId: (e.propertyId as string) ?? '', propertyAddress: (e.propertyAddress as string) ?? '',
           userName: e.userName as string,
         })))
       }
@@ -307,10 +324,12 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
               ? entries.filter(e =>
                   (e.propertyAddress ?? '').toLowerCase().includes(entrySearch.toLowerCase()) ||
                   (e.userName ?? '').toLowerCase().includes(entrySearch.toLowerCase()) ||
-                  (e.notes ?? '').toLowerCase().includes(entrySearch.toLowerCase())
+                  (e.notes ?? '').toLowerCase().includes(entrySearch.toLowerCase()) ||
+                  (e.contactName ?? '').toLowerCase().includes(entrySearch.toLowerCase())
                 )
               : entries
             ).map(e => {
+              const isCallEntry = e.source === 'call'
               const sourceStyle = SOURCE_COLORS[e.source] ?? SOURCE_COLORS.MANUAL
               const isEditing = editingId === e.id
 
@@ -393,14 +412,17 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
                     <div className="flex items-center gap-3">
                       {/* Source badge */}
                       <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${sourceStyle.bg} ${sourceStyle.text}`}>
-                        {sourceStyle.label}
+                        {isCallEntry ? `${Math.floor((e.duration ?? 0) / 60)}m${String((e.duration ?? 0) % 60).padStart(2, '0')}s` : sourceStyle.label}
                       </span>
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
+                        {isCallEntry && e.contactName && (
+                          <p className="text-[11px] font-medium text-txt-primary truncate">{e.contactName}</p>
+                        )}
                         {e.propertyAddress && (
-                          <Link href={`/${tenantSlug}/inventory/${e.propertyId}`}
-                            className="text-[11px] text-txt-primary hover:text-gunner-red flex items-center gap-0.5 truncate font-medium">
+                          <Link href={isCallEntry ? `/${tenantSlug}/calls/${e.id}` : `/${tenantSlug}/inventory/${e.propertyId}`}
+                            className={`text-[${isCallEntry ? '10' : '11'}px] ${isCallEntry ? 'text-txt-muted' : 'text-txt-primary hover:text-gunner-red font-medium'} flex items-center gap-0.5 truncate`}>
                             <MapPin size={8} className="shrink-0" /> {e.propertyAddress}
                           </Link>
                         )}
