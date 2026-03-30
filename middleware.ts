@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   '/api/health',
   '/api/stripe',
   '/api/tenants/register',
+  '/api/vieira',
   '/api/webhooks',
   '/_next',
   '/favicon.ico',
