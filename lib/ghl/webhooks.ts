@@ -201,7 +201,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       propertyId: property?.id,
       recordingUrl: recordingUrl ?? undefined,
       direction: direction as 'INBOUND' | 'OUTBOUND',
-      durationSeconds: callDuration || undefined, // may be 0 from webhook, real duration comes later
+      durationSeconds: callDuration > 0 ? callDuration : undefined, // 0 = not yet known, poll-calls fills it later
       calledAt: msg.dateAdded ? new Date(msg.dateAdded) : new Date(),
       gradingStatus: 'PENDING',
     },

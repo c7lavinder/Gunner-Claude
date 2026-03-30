@@ -146,7 +146,35 @@ async function pollCalls() {
                 if (['initiated', 'ringing'].includes(status)) continue
 
                 const dedupeId = String(msg.altId || msg.id)
-                if (existingIds.has(dedupeId)) continue
+                if (existingIds.has(dedupeId)) {
+                  // Already exists — but if duration was null (from webhook), fill it in now
+                  if (realDuration > 0) {
+                    const existing = await db.call.findFirst({
+                      where: { tenantId: tenant.id, ghlCallId: dedupeId, durationSeconds: null },
+                      select: { id: true, gradingStatus: true },
+                    })
+                    if (existing) {
+                      const isGradeable = realDuration >= MIN_CALL_DURATION_FOR_GRADING
+                      await db.call.update({
+                        where: { id: existing.id },
+                        data: {
+                          durationSeconds: realDuration,
+                          // If now gradeable and wasn't graded yet, queue for grading
+                          ...(isGradeable && existing.gradingStatus !== 'COMPLETED' ? { gradingStatus: 'PENDING' } : {}),
+                          ...(!isGradeable ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${realDuration}s) — not graded.` } : {}),
+                        },
+                      })
+                      console.log(`[poll-calls] Updated duration: ${conv.contactName || 'Unknown'} → ${realDuration}s${isGradeable ? ' (queued for grading)' : ''}`)
+                      // Grade if now qualifies
+                      if (isGradeable && existing.gradingStatus !== 'COMPLETED') {
+                        await gradeCall(existing.id).catch(err => {
+                          console.error(`[poll-calls] Grade failed ${existing.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
+                        })
+                      }
+                    }
+                  }
+                  continue
+                }
                 existingIds.add(dedupeId)
 
                 const contactName = conv.contactName || conv.fullName || conv.phone || null
