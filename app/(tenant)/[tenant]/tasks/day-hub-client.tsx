@@ -338,6 +338,9 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
   const [activityMap, setActivityMap] = useState<Record<string, ContactActivity>>({})
 
 
+  // Pipeline strip data — always tenant-wide (full business view)
+  const [pipelineKpis, setPipelineKpis] = useState<KPIData | null>(null)
+
   // Inbox thread
   const [selectedContact, setSelectedContact] = useState<InboxItem | null>(null)
   const [replyText, setReplyText] = useState('')
@@ -365,6 +368,14 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
       .then(d => { setKpis(d); setLoadingKpis(false) })
       .catch(() => setLoadingKpis(false))
   }, [tenantSlug, viewAsUserId, roleTab, roleTabUserIds.join(',')])
+
+  // Fetch pipeline strip KPIs — always tenant-wide (full business)
+  useEffect(() => {
+    fetch(`/api/${tenantSlug}/dayhub/kpis`)
+      .then(r => r.json())
+      .then(d => setPipelineKpis(d))
+      .catch(() => {})
+  }, [tenantSlug])
 
   // Fetch inbox (scoped to effective user or role tab)
   const fetchInbox = useCallback(() => {
@@ -676,16 +687,16 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
           )
         })()}
 
-        {/* ROW 2: Pipeline Strip — 7 mini cards, matching style, centered */}
+        {/* ROW 2: Pipeline Strip — 7 mini cards, always tenant-wide */}
         <div className="grid grid-cols-7 gap-2">
           {[
-            { label: 'Leads', key: 'lead', data: kpis?.lead },
-            { label: 'Apts Set', key: 'apts', data: kpis?.apts },
-            { label: 'Offers', key: 'offers', data: kpis?.offers },
-            { label: 'Contracts', key: 'contracts', data: kpis?.contracts },
-            { label: 'Sends', key: 'pushed', data: kpis?.pushed },
-            { label: 'Dispo Offers', key: 'dispoOffers', data: kpis?.dispoOffers },
-            { label: 'Dispo Contracts', key: 'dispoContracts', data: kpis?.dispoContracts },
+            { label: 'Leads', key: 'lead', data: pipelineKpis?.lead },
+            { label: 'Apts Set', key: 'apts', data: pipelineKpis?.apts },
+            { label: 'Offers', key: 'offers', data: pipelineKpis?.offers },
+            { label: 'Contracts', key: 'contracts', data: pipelineKpis?.contracts },
+            { label: 'Sends', key: 'pushed', data: pipelineKpis?.pushed },
+            { label: 'Dispo Offers', key: 'dispoOffers', data: pipelineKpis?.dispoOffers },
+            { label: 'Dispo Contracts', key: 'dispoContracts', data: pipelineKpis?.dispoContracts },
           ].map(pill => {
             const count = pill.data?.count ?? 0
             const isAcq = ['lead', 'apts', 'offers', 'contracts'].includes(pill.key)
