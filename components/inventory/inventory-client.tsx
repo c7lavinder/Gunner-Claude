@@ -151,21 +151,24 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
         {/* Data quality icon */}
         {totalIssues > 0 && (
           <div className="relative">
-            <button
-              onClick={() => setDataQualityOpen(v => !v)}
-              className={`flex items-center gap-1.5 text-ds-fine font-medium px-3 py-[7px] rounded-[10px] transition-colors ${
-                dataQualityFilter
-                  ? 'bg-amber-100 text-amber-800 border-[0.5px] border-amber-300'
-                  : 'bg-amber-50 text-amber-700 border-[0.5px] border-amber-200 hover:bg-amber-100'
-              }`}
-            >
-              <AlertTriangle size={12} />
-              {dataQualityFilter ? (
-                <>{filtered.length} issues <button onClick={e => { e.stopPropagation(); setDataQualityFilter(null); setDataQualityOpen(false) }} className="ml-1 hover:text-red-600"><X size={10} /></button></>
-              ) : (
-                <>{totalIssues} Data Issues</>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => dataQualityFilter ? undefined : setDataQualityOpen(v => !v)}
+                className={`flex items-center gap-1.5 text-ds-fine font-medium px-3 py-[7px] rounded-[10px] transition-colors ${
+                  dataQualityFilter
+                    ? 'bg-amber-100 text-amber-800 border-[0.5px] border-amber-300'
+                    : 'bg-amber-50 text-amber-700 border-[0.5px] border-amber-200 hover:bg-amber-100'
+                }`}
+              >
+                <AlertTriangle size={12} />
+                {dataQualityFilter ? <>{filtered.length} issues</> : <>{totalIssues} Data Issues</>}
+              </button>
+              {dataQualityFilter && (
+                <button onClick={() => { setDataQualityFilter(null); setDataQualityOpen(false) }} className="text-amber-600 hover:text-red-600 p-1">
+                  <X size={12} />
+                </button>
               )}
-            </button>
+            </div>
             {dataQualityOpen && !dataQualityFilter && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setDataQualityOpen(false)} />
