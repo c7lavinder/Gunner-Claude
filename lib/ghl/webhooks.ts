@@ -473,19 +473,42 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
         opportunitySource: oppData.source,
       })
     }
-    // Milestone creation happens below via the general newStatus path
-    // We'll treat this as newStatus = 'IN_DISPOSITION' for milestone only
+
     const propForMilestone = existing ?? await db.property.findFirst({
       where: { tenantId, ghlContactId: oppData.contactId },
-      select: { id: true },
+      select: { id: true, status: true },
     })
     if (propForMilestone) {
       const { getCentralDayBounds } = await import('@/lib/dates')
       const { dayStart, dayEnd } = getCentralDayBounds()
-      const existingMilestone = await db.propertyMilestone.findFirst({
+
+      // Backfill any missing acquisition milestones up to current acq status.
+      // A property entering dispo has clearly completed acquisition through its current stage.
+      const ACQ_STATUS_TO_MILESTONES: Record<string, string[]> = {
+        'UNDER_CONTRACT': ['LEAD', 'UNDER_CONTRACT'],
+        'OFFER_MADE': ['LEAD', 'OFFER_MADE'],
+        'APPOINTMENT_SET': ['LEAD', 'APPOINTMENT_SET'],
+        'SOLD': ['LEAD', 'UNDER_CONTRACT', 'CLOSED'],
+      }
+      const acqStatus = (existing ?? propForMilestone).status ?? ''
+      const neededMilestones = ACQ_STATUS_TO_MILESTONES[acqStatus] ?? ['LEAD']
+      for (const mType of neededMilestones) {
+        const exists = await db.propertyMilestone.findFirst({
+          where: { tenantId, propertyId: propForMilestone.id, type: mType as import('@prisma/client').MilestoneType },
+        })
+        if (!exists) {
+          await db.propertyMilestone.create({
+            data: { tenantId, propertyId: propForMilestone.id, type: mType as import('@prisma/client').MilestoneType, source: 'AUTO_WEBHOOK' },
+          }).catch(() => {})
+          console.log(`[GHL Webhook] Backfilled ${mType} milestone for ${propForMilestone.id}`)
+        }
+      }
+
+      // Create DISPO_NEW milestone (same-day dedup)
+      const existingDispo = await db.propertyMilestone.findFirst({
         where: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', createdAt: { gte: dayStart, lte: dayEnd } },
       })
-      if (!existingMilestone) {
+      if (!existingDispo) {
         await db.propertyMilestone.create({
           data: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', source: 'AUTO_WEBHOOK' },
         }).catch(() => {})
