@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
-  ExternalLink, X, Send, Users,
+  ExternalLink, X, Send, Users, AlertTriangle,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { formatPhone, titleCase } from '@/lib/format'
@@ -67,6 +67,11 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
 
   // Filter properties
   const filtered = properties.filter((p) => {
+    if (dataQualityFilter === 'address') return !p.address
+    if (dataQualityFilter === 'contact') return !p.sellerName && p.sellers.length === 0
+    if (dataQualityFilter === 'market') return !p.market
+    if (dataQualityFilter === 'source') return !p.leadSource
+    if (dataQualityFilter === 'stage') return !p.ghlStageName && p.status === 'NEW_LEAD'
     if (missingMarketFilter) {
       if (p.market && p.market !== 'Global') return false
     }
@@ -95,8 +100,16 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
     return true
   })
 
+  const [dataQualityOpen, setDataQualityOpen] = useState(false)
+  const [dataQualityFilter, setDataQualityFilter] = useState<string | null>(null)
+
   const activeCount = properties.filter(p => !['SOLD', 'DEAD'].includes(p.status)).length
   const missingSourceCount = properties.filter(p => !p.leadSource).length
+  const missingAddressCount = properties.filter(p => !p.address).length
+  const missingContactCount = properties.filter(p => !p.sellerName && p.sellers.length === 0).length
+  const missingMarketCount = properties.filter(p => !p.market).length
+  const missingStageCount = properties.filter(p => !p.ghlStageName && p.status === 'NEW_LEAD').length
+  const totalIssues = missingAddressCount + missingContactCount + missingMarketCount + missingSourceCount + missingStageCount
   const leadSources = [...new Set(properties.map(p => p.leadSource).filter(Boolean))] as string[]
   const markets = [...new Set(properties.map(p => p.market).filter(Boolean))] as string[]
   const selectedProperty = selectedPropertyId ? properties.find(p => p.id === selectedPropertyId) : null
@@ -138,23 +151,48 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
           />
         </div>
 
-        {/* Missing source alert */}
-        {missingSourceCount > 0 && (
-          <button
-            onClick={() => setSearch('__missing_source__')}
-            className="flex items-center gap-1.5 text-ds-fine font-medium bg-amber-50 text-amber-700 border-[0.5px] border-amber-200 px-3 py-[7px] rounded-[10px] hover:bg-amber-100 transition-colors"
-          >
-            ⚠️ {missingSourceCount} Missing Source
-          </button>
-        )}
-
-        {missingMarketFilter && (
-          <button
-            onClick={() => setMissingMarketFilter(false)}
-            className="flex items-center gap-1.5 text-ds-fine font-medium bg-red-50 text-red-700 border-[0.5px] border-red-200 px-3 py-[7px] rounded-[10px] hover:bg-red-100 transition-colors"
-          >
-            Missing market <X size={10} />
-          </button>
+        {/* Data quality icon */}
+        {totalIssues > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setDataQualityOpen(v => !v)}
+              className={`flex items-center gap-1.5 text-ds-fine font-medium px-3 py-[7px] rounded-[10px] transition-colors ${
+                dataQualityFilter
+                  ? 'bg-amber-100 text-amber-800 border-[0.5px] border-amber-300'
+                  : 'bg-amber-50 text-amber-700 border-[0.5px] border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              <AlertTriangle size={12} />
+              {dataQualityFilter ? (
+                <>{filtered.length} issues <button onClick={e => { e.stopPropagation(); setDataQualityFilter(null); setDataQualityOpen(false) }} className="ml-1 hover:text-red-600"><X size={10} /></button></>
+              ) : (
+                <>{totalIssues} Data Issues</>
+              )}
+            </button>
+            {dataQualityOpen && !dataQualityFilter && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setDataQualityOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 w-56 bg-white border-[0.5px] rounded-[10px] shadow-ds-float z-50 overflow-hidden" style={{ borderColor: 'var(--border-medium)' }}>
+                  {[
+                    { key: 'address', label: 'Missing Address', count: missingAddressCount },
+                    { key: 'contact', label: 'Missing Contact', count: missingContactCount },
+                    { key: 'market', label: 'Missing Market', count: missingMarketCount },
+                    { key: 'source', label: 'Missing Source', count: missingSourceCount },
+                    { key: 'stage', label: 'Missing Stage', count: missingStageCount },
+                  ].filter(i => i.count > 0).map(item => (
+                    <button
+                      key={item.key}
+                      onClick={() => { setDataQualityFilter(item.key); setDataQualityOpen(false); setSelectedStage(null); setSelectedMarket(null); setSelectedSource(null); setSearch('') }}
+                      className="w-full text-left px-4 py-2.5 text-[12px] text-txt-primary hover:bg-surface-secondary transition-colors flex items-center justify-between"
+                    >
+                      <span>{item.label}</span>
+                      <span className="text-amber-600 font-semibold">{item.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {selectedStage && (
