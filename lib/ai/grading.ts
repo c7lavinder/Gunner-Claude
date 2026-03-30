@@ -248,14 +248,14 @@ export async function gradeCall(callId: string): Promise<void> {
       const milestoneType = OUTCOME_TO_MILESTONE[grading.callOutcome]
       if (milestoneType) {
         try {
-          const { startOfDay, endOfDay } = await import('date-fns')
-          const now = new Date()
+          // Check if this milestone type already exists for this property (any date).
+          // AI should not spam milestones — if we already made an offer, follow-up
+          // calls about that offer should not create new OFFER_MADE milestones.
           const existing = await db.propertyMilestone.findFirst({
             where: {
               tenantId: call.tenantId,
               propertyId: call.propertyId,
               type: milestoneType as import('@prisma/client').MilestoneType,
-              createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
             },
           })
           if (!existing) {
