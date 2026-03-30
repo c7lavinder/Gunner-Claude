@@ -6,6 +6,7 @@ import { requireSession } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { TopNav } from '@/components/ui/top-nav'
 import { CoachSidebar } from '@/components/ui/coach-sidebar'
+import { ViewAsBanner } from '@/components/ui/view-as-banner'
 
 interface TenantLayoutProps {
   children: React.ReactNode
@@ -20,6 +21,7 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
 
   return (
     <div className="min-h-screen bg-surface-primary">
+      <ViewAsBanner />
       <TopNav tenantSlug={params.tenant} />
       <main className="px-4 md:px-8 py-4 md:py-6 max-w-[1400px] mx-auto">
         {children}

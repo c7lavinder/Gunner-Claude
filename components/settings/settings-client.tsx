@@ -6,7 +6,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power, MapPin, ChevronDown } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power, MapPin, ChevronDown, Eye } from 'lucide-react'
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
 import { GHLDropdown } from '@/components/ui/ghl-dropdown'
@@ -56,6 +57,7 @@ export function SettingsClient({
   canManage: boolean
 }) {
   const [tab, setTab] = useState<Tab>('team')
+  const router = useRouter()
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('LEAD_MANAGER')
   const [inviting, setInviting] = useState(false)
@@ -410,6 +412,20 @@ export function SettingsClient({
                         <span className="text-ds-fine text-txt-secondary bg-surface-secondary px-2 py-1 rounded-full">
                           {ROLE_LABELS[memberRole] ?? memberRole}
                         </span>
+                      )}
+                      {/* View As button — admin only, not on self */}
+                      {canManage && !isSelf && (
+                        <button
+                          onClick={() => {
+                            localStorage.setItem('gunner_view_as_user', member.name)
+                            localStorage.setItem('gunner_view_as_user_id', member.id)
+                            router.push(`/${tenant.slug}/tasks`)
+                          }}
+                          className="text-ds-fine font-medium text-txt-muted hover:text-semantic-blue hover:bg-semantic-blue-bg px-2 py-1 rounded-[8px] transition-colors flex items-center gap-1"
+                          title={`View Day Hub as ${member.name}`}
+                        >
+                          <Eye size={10} /> View As
+                        </button>
                       )}
                     </div>
                   </div>

@@ -262,9 +262,8 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
 
-  // View As — admin-only, client-side filter by assignedToName
+  // View As — set from Settings > Team, read from localStorage
   const [viewAsUser, setViewAsUser] = useState<string | null>(null)
-  const [showViewAsDropdown, setShowViewAsDropdown] = useState(false)
 
   // Load viewAsUser from localStorage on mount
   useEffect(() => {
@@ -274,13 +273,11 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
     } catch {}
   }, [])
 
-  // Persist viewAsUser to localStorage
-  function handleViewAs(name: string | null) {
-    setViewAsUser(name)
-    setShowViewAsDropdown(false)
+  function exitViewAs() {
+    setViewAsUser(null)
     try {
-      if (name) localStorage.setItem('gunner_view_as_user', name)
-      else localStorage.removeItem('gunner_view_as_user')
+      localStorage.removeItem('gunner_view_as_user')
+      localStorage.removeItem('gunner_view_as_user_id')
     } catch {}
   }
 
@@ -543,55 +540,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             </div>
           )}
 
-          {/* View As dropdown — admin only, filters tasks by team member */}
-          {isAdmin && assignedNames.length > 0 && (
-            <div className="relative">
-              {viewAsUser ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="bg-semantic-blue-bg text-semantic-blue text-[11px] font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                    <User size={10} />
-                    Viewing as: {viewAsUser}
-                    <button
-                      onClick={() => handleViewAs(null)}
-                      className="ml-0.5 hover:text-semantic-red transition-colors"
-                      title="Exit View As"
-                    >
-                      <X size={10} />
-                    </button>
-                  </span>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowViewAsDropdown(v => !v)}
-                  className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-[rgba(0,0,0,0.08)] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary transition-colors flex items-center gap-1.5"
-                >
-                  <User size={10} /> View As
-                  <ChevronDown size={10} />
-                </button>
-              )}
-              {showViewAsDropdown && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowViewAsDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-1 w-52 bg-surface-primary border rounded-[10px] shadow-ds-float z-50 overflow-hidden" style={{ borderColor: 'var(--border-medium)' }}>
-                    <div className="max-h-[220px] overflow-y-auto py-1">
-                      {assignedNames.map(name => (
-                        <button
-                          key={name}
-                          onClick={() => handleViewAs(name)}
-                          className="w-full text-left px-3 py-2 text-[11px] text-txt-primary hover:bg-surface-secondary transition-colors flex items-center gap-2"
-                        >
-                          <div className="w-5 h-5 rounded-full bg-gunner-red-light flex items-center justify-center shrink-0">
-                            <span className="text-gunner-red text-[9px] font-semibold">{name[0]?.toUpperCase()}</span>
-                          </div>
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          {/* View As is now set from Settings > Team */}
 
           <span className="text-[13px] text-txt-muted hidden md:inline">
             {viewAsUser ? `Showing ${viewAsUser}'s tasks`
