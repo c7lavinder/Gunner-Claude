@@ -33,7 +33,7 @@ const SOURCE_COLORS: Record<string, { bg: string; text: string; label: string }>
   AUTO_WEBHOOK: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'API' },
   AI: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'AI' },
   MANUAL: { bg: 'bg-green-100', text: 'text-green-700', label: 'Manual' },
-  call: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Call' },
+  call: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'API' },
 }
 
 export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
@@ -410,10 +410,16 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
-                      {/* Source badge */}
+                      {/* Source badge — always shows API/AI/Manual */}
                       <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${sourceStyle.bg} ${sourceStyle.text}`}>
-                        {isCallEntry ? `${Math.floor((e.duration ?? 0) / 60)}m${String((e.duration ?? 0) % 60).padStart(2, '0')}s` : sourceStyle.label}
+                        {sourceStyle.label}
                       </span>
+                      {/* Duration badge for calls */}
+                      {isCallEntry && (e.duration ?? 0) > 0 && (
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded shrink-0 bg-gray-100 text-gray-500">
+                          {Math.floor((e.duration ?? 0) / 60)}m{String((e.duration ?? 0) % 60).padStart(2, '0')}s
+                        </span>
+                      )}
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
