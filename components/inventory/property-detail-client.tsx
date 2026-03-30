@@ -486,7 +486,7 @@ function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
             const circleClass = isCurrent
               ? `bg-gunner-red text-white ring-2 ring-offset-1 ring-gunner-red/30`
               : everVisited
-              ? `bg-gunner-red/10 border-2 border-gunner-red text-gunner-red`
+              ? `border-2 border-gunner-red text-gunner-red`
               : 'border border-[rgba(0,0,0,0.1)] text-txt-muted'
             const labelClass = isCurrent
               ? 'text-gunner-red font-semibold'
