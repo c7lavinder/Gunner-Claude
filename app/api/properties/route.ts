@@ -80,16 +80,21 @@ export async function POST(request: NextRequest) {
       return prop
     })
 
-    // Auto-log LEAD milestone
-    await db.propertyMilestone.create({
-      data: {
-        tenantId: session.tenantId,
-        propertyId: property.id,
-        type: 'LEAD',
-        loggedById: session.userId,
-        source: 'MANUAL',
-      },
-    }).catch(() => {}) // non-fatal
+    // Auto-log LEAD milestone (dedup: skip if one already exists)
+    const existingLead = await db.propertyMilestone.findFirst({
+      where: { tenantId: session.tenantId, propertyId: property.id, type: 'LEAD' },
+    }).catch(() => null)
+    if (!existingLead) {
+      await db.propertyMilestone.create({
+        data: {
+          tenantId: session.tenantId,
+          propertyId: property.id,
+          type: 'LEAD',
+          loggedById: session.userId,
+          source: 'MANUAL',
+        },
+      }).catch(() => {}) // non-fatal
+    }
 
     await db.auditLog.create({
       data: {

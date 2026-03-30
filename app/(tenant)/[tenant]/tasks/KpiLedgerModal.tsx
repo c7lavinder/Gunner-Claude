@@ -189,10 +189,18 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
     setEditPropResults([])
   }
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [isOpen])
+
   if (!isOpen || !type) return null
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose} onWheel={e => e.stopPropagation()}>
       <div className="bg-white rounded-2xl shadow-xl max-w-[480px] w-full mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 pb-3">

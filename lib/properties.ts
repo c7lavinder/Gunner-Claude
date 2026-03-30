@@ -207,15 +207,20 @@ export async function createPropertyFromContact(
 
     console.log(`[Property] Created ${property.id} at ${address || 'no address'} (source: ${leadSource || 'unknown'}) for contact ${ghlContactId}`)
 
-    // Auto-log LEAD milestone
-    await db.propertyMilestone.create({
-      data: {
-        tenantId,
-        propertyId: property.id,
-        type: 'LEAD',
-        source: 'AUTO_WEBHOOK',
-      },
-    }).catch(() => {}) // non-fatal
+    // Auto-log LEAD milestone (dedup: skip if one already exists for this property)
+    const existingLead = await db.propertyMilestone.findFirst({
+      where: { tenantId, propertyId: property.id, type: 'LEAD' },
+    }).catch(() => null)
+    if (!existingLead) {
+      await db.propertyMilestone.create({
+        data: {
+          tenantId,
+          propertyId: property.id,
+          type: 'LEAD',
+          source: 'AUTO_WEBHOOK',
+        },
+      }).catch(() => {}) // non-fatal
+    }
 
     // Trigger property_created workflows
     triggerWorkflows(tenantId, 'property_created', {
