@@ -236,6 +236,47 @@ export async function gradeCall(callId: string): Promise<void> {
       score: grading.overallScore,
     }).catch(() => {})
 
+    // Auto-create milestone from AI-detected call outcome (source: 'AI', with dedup)
+    if (call.propertyId && grading.callOutcome) {
+      const OUTCOME_TO_MILESTONE: Record<string, string> = {
+        appointment_set: 'APPOINTMENT_SET',
+        showing_scheduled: 'APPOINTMENT_SET',
+        offer_collected: 'OFFER_MADE',
+        accepted: 'UNDER_CONTRACT',
+        signed: 'UNDER_CONTRACT',
+      }
+      const milestoneType = OUTCOME_TO_MILESTONE[grading.callOutcome]
+      if (milestoneType) {
+        try {
+          const { startOfDay, endOfDay } = await import('date-fns')
+          const now = new Date()
+          const existing = await db.propertyMilestone.findFirst({
+            where: {
+              tenantId: call.tenantId,
+              propertyId: call.propertyId,
+              type: milestoneType as import('@prisma/client').MilestoneType,
+              createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
+            },
+          })
+          if (!existing) {
+            await db.propertyMilestone.create({
+              data: {
+                tenantId: call.tenantId,
+                propertyId: call.propertyId,
+                type: milestoneType as import('@prisma/client').MilestoneType,
+                loggedById: call.assignedToId,
+                source: 'AI',
+                notes: `Detected from call: ${grading.callOutcome}`,
+              },
+            })
+            console.log(`[Call Grading] Auto-created ${milestoneType} milestone (AI) for property ${call.propertyId}`)
+          }
+        } catch (msErr) {
+          console.warn('[Call Grading] AI milestone auto-create failed:', msErr instanceof Error ? msErr.message : msErr)
+        }
+      }
+    }
+
     // Fire-and-forget: generate next steps in background
     generateAndSaveNextSteps(callId, call.tenantId, grading).catch(err =>
       console.error('[Grading] Next steps generation failed:', err)
