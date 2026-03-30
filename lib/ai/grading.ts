@@ -168,7 +168,7 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      max_tokens: 4000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     })
@@ -638,11 +638,29 @@ Grade this call now. Provide your JSON response.`)
 // ─── Response parser ────────────────────────────────────────────────────────
 
 function parseGradingResponse(text: string): GradingResult {
+  // Strip markdown fences and find the JSON object
+  let clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+
+  // Extract from first { to last } in case there's extra text
+  const firstBrace = clean.indexOf('{')
+  const lastBrace = clean.lastIndexOf('}')
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    clean = clean.substring(firstBrace, lastBrace + 1)
+  }
+
   try {
-    const clean = text.replace(/```json|```/g, '').trim()
     return JSON.parse(clean) as GradingResult
   } catch {
-    throw new Error(`Failed to parse Claude grading response: ${text.substring(0, 200)}`)
+    // Try fixing common JSON issues: trailing commas, control characters
+    try {
+      const fixed = clean
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']')
+        .replace(/[\x00-\x1f]/g, (ch) => ch === '\n' || ch === '\t' ? ch : ' ')
+      return JSON.parse(fixed) as GradingResult
+    } catch {
+      throw new Error(`Failed to parse Claude grading response: ${text.substring(0, 200)}`)
+    }
   }
 }
 
