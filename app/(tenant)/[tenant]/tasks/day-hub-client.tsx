@@ -631,39 +631,46 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             ]
           return (
             <div className="grid grid-cols-3 gap-3">
-              {roleCards.map(kpi => (
-                <div key={kpi.key} onClick={() => setOpenLedger(kpi.key)}
-                  className="bg-surface-primary border-[0.5px] rounded-[14px] p-4 transition-all hover:shadow-ds-float cursor-pointer" style={{ borderColor: 'var(--border-light)' }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-gunner-red">{kpi.icon}</span>
-                    <span className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase">{kpi.label}</span>
-                  </div>
-                  {loadingKpis ? (
-                    <Loader2 size={14} className="animate-spin text-txt-muted" />
-                  ) : (
-                    <>
-                      <p className={`text-[24px] font-semibold leading-tight ${(kpi.data?.count ?? 0) === 0 && new Date().getHours() >= 12 ? 'text-red-400' : 'text-txt-primary'}`}>
-                        {kpi.data?.count ?? 0}
-                        {(kpi.data?.goal ?? 0) > 0 && <span className="text-[13px] font-normal text-txt-muted"> / {kpi.data?.goal}</span>}
-                      </p>
-                      {(kpi.data?.goal ?? 0) > 0 && (
+              {roleCards.map(kpi => {
+                const count = kpi.data?.count ?? 0
+                const goal = kpi.data?.goal ?? 0
+                const hasGoal = goal > 0
+                return (
+                  <div key={kpi.key} onClick={() => setOpenLedger(kpi.key)}
+                    className="bg-surface-primary border-[0.5px] rounded-[14px] p-4 transition-all hover:shadow-ds-float cursor-pointer min-h-[100px]" style={{ borderColor: 'var(--border-light)' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-gunner-red">{kpi.icon}</span>
+                      <span className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase">{kpi.label}</span>
+                    </div>
+                    {loadingKpis ? (
+                      <Loader2 size={14} className="animate-spin text-txt-muted" />
+                    ) : (
+                      <>
+                        <p className={`text-[24px] font-semibold leading-tight ${count === 0 && new Date().getHours() >= 12 ? 'text-red-400' : 'text-txt-primary'}`}>
+                          {count}
+                          {hasGoal && <span className="text-[13px] font-normal text-txt-muted"> / {goal}</span>}
+                        </p>
                         <div className="mt-2 h-[3px] bg-surface-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gunner-red rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(((kpi.data?.count ?? 0) / Math.max(kpi.data?.goal ?? 1, 1)) * 100, 100)}%` }}
-                          />
+                          {hasGoal ? (
+                            <div
+                              className="h-full bg-gunner-red rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min((count / Math.max(goal, 1)) * 100, 100)}%` }}
+                            />
+                          ) : (
+                            <div className="h-full bg-transparent" />
+                          )}
                         </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))}
+                      </>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )
         })()}
 
-        {/* ROW 2: Pipeline Strip — 7 compact pills, all milestone types */}
-        <div className="flex gap-1.5 flex-wrap">
+        {/* ROW 2: Pipeline Strip — 7 mini cards, matching style, centered */}
+        <div className="grid grid-cols-7 gap-2">
           {[
             { label: 'Lead', key: 'lead', data: kpis?.lead },
             { label: 'Apt Set', key: 'apts', data: kpis?.apts },
@@ -676,20 +683,25 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             const count = pill.data?.count ?? 0
             const isAcq = ['lead', 'apts', 'offers', 'contracts'].includes(pill.key)
             return (
-              <button
+              <div
                 key={pill.key}
                 onClick={() => setOpenLedger(pill.key)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border-[0.5px] transition-all hover:shadow-sm ${
+                className={`bg-surface-primary border-[0.5px] rounded-[14px] px-2 py-3 text-center transition-all hover:shadow-ds-float cursor-pointer ${
                   count > 0
-                    ? isAcq
-                      ? 'bg-gunner-red/10 border-gunner-red/20 text-gunner-red'
-                      : 'bg-blue-50 border-blue-200 text-blue-700'
-                    : 'bg-surface-secondary border-[var(--border-light)] text-txt-muted hover:border-[var(--border-medium)]'
+                    ? isAcq ? 'border-gunner-red/20' : 'border-blue-200'
+                    : ''
                 }`}
+                style={{ borderColor: count > 0 ? undefined : 'var(--border-light)' }}
               >
-                <span className="font-bold">{loadingKpis ? '·' : count}</span>
-                <span>{pill.label}</span>
-              </button>
+                <p className={`text-[18px] font-semibold leading-tight ${
+                  count > 0
+                    ? isAcq ? 'text-gunner-red' : 'text-blue-700'
+                    : 'text-txt-muted'
+                }`}>
+                  {loadingKpis ? <Loader2 size={12} className="animate-spin mx-auto" /> : count}
+                </p>
+                <p className="text-[8px] font-medium text-txt-muted uppercase tracking-wide mt-1">{pill.label}</p>
+              </div>
             )
           })}
         </div>
