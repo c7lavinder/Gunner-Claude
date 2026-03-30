@@ -482,7 +482,7 @@ function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
             // AND a later stage DOES have a milestone (meaning this one was skipped)
             const needsCaution = (isPast || isCurrent) && stepMilestones.length === 0 && hasLaterStageMilestone(i)
 
-            // Visual: filled = current, outlined = ever visited (history), gray = never
+            // Visual: solid red = current active stage, red outline = visited (has milestone), gray = never reached
             const circleClass = isCurrent
               ? `bg-gunner-red text-white ring-2 ring-offset-1 ring-gunner-red/30`
               : everVisited
