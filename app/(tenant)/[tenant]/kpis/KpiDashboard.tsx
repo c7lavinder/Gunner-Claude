@@ -287,7 +287,7 @@ export function KpiDashboard({ properties, milestones, tenantSlug, initialConfig
 
   // ── Data Quality ────────────────────────────────────────────────────────────
   const missingSource = properties.filter(p => !p.leadSource).length
-  const missingMarket = properties.filter(p => p.market === 'Global').length
+  const missingMarket = properties.filter(p => !p.market).length
 
   const acqFunnelStages: FunnelStage[] = ACQ_STAGES.map((s, i) => ({
     label: s.label, count: acqCounts[s.key], color: FUNNEL_COLORS[i],
