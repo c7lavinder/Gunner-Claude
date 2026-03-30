@@ -676,13 +676,13 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         {/* ROW 2: Pipeline Strip — 7 mini cards, matching style, centered */}
         <div className="grid grid-cols-7 gap-2">
           {[
-            { label: 'Lead', key: 'lead', data: kpis?.lead },
-            { label: 'Apt Set', key: 'apts', data: kpis?.apts },
-            { label: 'Offer', key: 'offers', data: kpis?.offers },
-            { label: 'Contract', key: 'contracts', data: kpis?.contracts },
+            { label: 'Leads', key: 'lead', data: kpis?.lead },
+            { label: 'Apts Set', key: 'apts', data: kpis?.apts },
+            { label: 'Offers', key: 'offers', data: kpis?.offers },
+            { label: 'Contracts', key: 'contracts', data: kpis?.contracts },
             { label: 'Pushed', key: 'pushed', data: kpis?.pushed },
             { label: 'Dispo Offers', key: 'dispoOffers', data: kpis?.dispoOffers },
-            { label: 'Dispo Contract', key: 'dispoContracts', data: kpis?.dispoContracts },
+            { label: 'Dispo Contracts', key: 'dispoContracts', data: kpis?.dispoContracts },
           ].map(pill => {
             const count = pill.data?.count ?? 0
             const isAcq = ['lead', 'apts', 'offers', 'contracts'].includes(pill.key)
