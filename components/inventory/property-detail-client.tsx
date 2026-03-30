@@ -73,6 +73,7 @@ interface PropertyDetail {
   waterType: string | null; waterNotes: string | null
   sewerType: string | null; sewerCondition: string | null; sewerNotes: string | null
   electricType: string | null; electricNotes: string | null
+  marketName: string | null
   projectType: string[]; propertyMarkets: string[]
   description: string | null; internalNotes: string | null
   // Seller & Deal Intel
@@ -175,6 +176,11 @@ export function PropertyDetailClient({
           {property.ghlStageName && (
             <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${GHL_STAGE_COLORS[property.ghlStageName] ?? 'bg-blue-100 text-blue-700'}`}>
               {cleanStageName(property.ghlStageName)}
+            </span>
+          )}
+          {property.marketName && (
+            <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${MARKET_COLORS[property.marketName] ?? 'bg-red-100 text-red-700'}`}>
+              {property.marketName}
             </span>
           )}
           {property.leadSource && (
@@ -1766,7 +1772,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
         {/* Row 3: Market tags */}
         <div className="border-t border-[rgba(0,0,0,0.04)]">
-          <TagRow label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
+          <TagRow label="Target Markets" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
             field="propertyMarkets" propertyId={property.id} allowCustom source={sources.propertyMarkets} onSaved={handleArraySaved} />
         </div>
 

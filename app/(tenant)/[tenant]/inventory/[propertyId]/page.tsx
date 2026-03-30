@@ -157,15 +157,8 @@ export default async function PropertyDetailPage({
         sewerType: property.sewerType, sewerCondition: property.sewerCondition, sewerNotes: property.sewerNotes,
         electricType: property.electricType, electricNotes: property.electricNotes,
         projectType: (property.projectType ?? []) as string[],
-        propertyMarkets: (() => {
-          const arr = (property.propertyMarkets ?? []) as string[]
-          const marketName = property.market?.name
-          const fs = (property.fieldSources ?? {}) as Record<string, string>
-          // Only inject market relation if user hasn't manually edited propertyMarkets
-          if (fs.propertyMarkets === 'user') return arr
-          if (arr.length > 0) return arr
-          return marketName ? [marketName] : []
-        })(),
+        marketName: property.market?.name ?? null,
+        propertyMarkets: (property.propertyMarkets ?? []) as string[],
         description: property.description, internalNotes: property.internalNotes,
         // Seller & Deal Intel
         sellerMotivation: property.sellerMotivation ?? null,
