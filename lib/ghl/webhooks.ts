@@ -503,7 +503,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       })
     }
 
-    // Auto-create milestone for the new status (with dedup: same type + property + same day = skip)
+    // Auto-create milestone for the new status (all-time dedup: only create if none exists for this property+type)
     if (newStatus) {
       const STATUS_TO_MILESTONE: Record<string, string> = {
         'NEW_LEAD': 'LEAD', 'CONTACTED': 'LEAD', 'FOLLOW_UP': 'LEAD',
@@ -521,12 +521,9 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
             select: { id: true },
           })
           if (prop) {
-            const { startOfDay, endOfDay } = await import('date-fns')
-            const now = new Date()
             const existing = await db.propertyMilestone.findFirst({
               where: {
                 tenantId, propertyId: prop.id, type: milestoneType as import('@prisma/client').MilestoneType,
-                createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
               },
             })
             if (!existing) {

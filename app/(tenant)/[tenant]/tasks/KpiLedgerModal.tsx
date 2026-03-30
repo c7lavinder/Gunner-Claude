@@ -51,6 +51,9 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
   const [saving, setSaving] = useState(false)
   const [searching, setSearching] = useState(false)
 
+  // Search entries
+  const [entrySearch, setEntrySearch] = useState('')
+
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editNotes, setEditNotes] = useState('')
@@ -275,8 +278,23 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
           </div>
         )}
 
-        {/* Entries list */}
-        <div className="flex-1 overflow-y-auto px-6">
+        {/* Search bar */}
+        {entries.length > 0 && (
+          <div className="px-6 pb-2">
+            <div className="relative">
+              <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted" />
+              <input
+                value={entrySearch}
+                onChange={e => setEntrySearch(e.target.value)}
+                placeholder="Search entries..."
+                className="w-full bg-surface-secondary rounded-[8px] pl-8 pr-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Entries list — fixed height for ~5 entries, scrollable */}
+        <div className="h-[320px] overflow-y-auto px-6">
           {loading ? (
             <div className="py-8 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
           ) : entries.length === 0 ? (
@@ -285,7 +303,14 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
               {isMilestoneType && <p className="text-[10px] text-txt-muted mt-1">Click Add to record one</p>}
             </div>
           ) : (
-            entries.map(e => {
+            (entrySearch
+              ? entries.filter(e =>
+                  (e.propertyAddress ?? '').toLowerCase().includes(entrySearch.toLowerCase()) ||
+                  (e.userName ?? '').toLowerCase().includes(entrySearch.toLowerCase()) ||
+                  (e.notes ?? '').toLowerCase().includes(entrySearch.toLowerCase())
+                )
+              : entries
+            ).map(e => {
               const sourceStyle = SOURCE_COLORS[e.source] ?? SOURCE_COLORS.MANUAL
               const isEditing = editingId === e.id
 
