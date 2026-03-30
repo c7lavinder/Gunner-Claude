@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
+import { resolveEffectiveUser } from '@/lib/auth/view-as'
 
 export async function GET(
   req: Request,
@@ -86,13 +87,11 @@ export async function GET(
     const calData = await calRes.json() as { calendars?: Array<{ id: string; name: string }> }
     const calendars = calData.calendars ?? []
 
-    // Get user's GHL ID for scoping — admins see all, others see only their appointments
-    const userRecord = await db.user.findUnique({
-      where: { id: session.userId },
-      select: { ghlUserId: true, role: true },
-    })
-    const isAdmin = userRecord?.role === 'OWNER' || userRecord?.role === 'ADMIN'
-    const userGhlId = userRecord?.ghlUserId ?? null
+    // Resolve effective user (supports admin View As via ?asUserId=)
+    const asUserId = url.searchParams.get('asUserId')
+    const effective = await resolveEffectiveUser(session, asUserId)
+    const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
+    const userGhlId = effective.ghlUserId
 
     // Resolve user IDs → names
     const ghl = await getGHLClient(tenantId)

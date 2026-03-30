@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
+import { resolveEffectiveUser } from '@/lib/auth/view-as'
 
 export async function GET(
   req: Request,
@@ -17,20 +18,20 @@ export async function GET(
     const url = new URL(req.url)
     const filter = url.searchParams.get('filter') ?? 'all'
 
-    // Get user's GHL ID for scoping — admins see all, others see only their conversations
-    const [tenantRecord, userRecord] = await Promise.all([
-      db.tenant.findUnique({ where: { id: tenantId }, select: { ghlLocationId: true } }),
-      db.user.findUnique({ where: { id: session.userId }, select: { ghlUserId: true, role: true } }),
-    ])
+    const asUserId = url.searchParams.get('asUserId')
+    const effective = await resolveEffectiveUser(session, asUserId)
+    const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
+
+    const tenantRecord = await db.tenant.findUnique({
+      where: { id: tenantId }, select: { ghlLocationId: true },
+    })
     const locationId = tenantRecord?.ghlLocationId ?? ''
-    const isAdmin = userRecord?.role === 'OWNER' || userRecord?.role === 'ADMIN'
-    const ghlUserId = userRecord?.ghlUserId ?? undefined
 
     const ghl = await getGHLClient(tenantId)
-    // Non-admins only see conversations assigned to them in GHL
+    // Non-admins (or View As) only see conversations assigned to their GHL user
     const conversations = await ghl.getConversations({
       limit: 30,
-      ...(isAdmin || !ghlUserId ? {} : { assignedTo: ghlUserId }),
+      ...(isAdmin || !effective.ghlUserId ? {} : { assignedTo: effective.ghlUserId }),
     })
     const rawConversations = conversations.conversations ?? []
 

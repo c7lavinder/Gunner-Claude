@@ -264,17 +264,25 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
   // View As — set from Settings > Team, read from localStorage
   const [viewAsUser, setViewAsUser] = useState<string | null>(null)
+  const [viewAsUserId, setViewAsUserId] = useState<string | null>(null)
 
   // Load viewAsUser from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem('gunner_view_as_user')
+      const storedId = localStorage.getItem('gunner_view_as_user_id')
       if (stored) setViewAsUser(stored)
+      if (storedId) setViewAsUserId(storedId)
     } catch {}
   }, [])
 
+  // Query param suffix for API calls when impersonating
+  const asParam = viewAsUserId ? `&asUserId=${viewAsUserId}` : ''
+  const asParamFirst = viewAsUserId ? `?asUserId=${viewAsUserId}` : ''
+
   function exitViewAs() {
     setViewAsUser(null)
+    setViewAsUserId(null)
     try {
       localStorage.removeItem('gunner_view_as_user')
       localStorage.removeItem('gunner_view_as_user_id')
@@ -322,19 +330,19 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const [fromDropdownOpen, setFromDropdownOpen] = useState(false)
 
 
-  // Fetch KPIs
+  // Fetch KPIs (re-fetch when viewAsUserId changes)
   useEffect(() => {
     setLoadingKpis(true)
-    fetch(`/api/${tenantSlug}/dayhub/kpis`)
+    fetch(`/api/${tenantSlug}/dayhub/kpis${asParamFirst}`)
       .then(r => r.json())
       .then(d => { setKpis(d); setLoadingKpis(false) })
       .catch(() => setLoadingKpis(false))
-  }, [tenantSlug])
+  }, [tenantSlug, asParamFirst])
 
-  // Fetch inbox
+  // Fetch inbox (scoped to effective user)
   const fetchInbox = useCallback(() => {
     setLoadingInbox(true)
-    fetch(`/api/${tenantSlug}/dayhub/inbox`)
+    fetch(`/api/${tenantSlug}/dayhub/inbox${asParamFirst ? asParamFirst : ''}`)
       .then(r => r.json())
       .then(d => {
         setUnreadInbox(d.unread ?? [])
@@ -343,7 +351,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         setLoadingInbox(false)
       })
       .catch(() => setLoadingInbox(false))
-  }, [tenantSlug])
+  }, [tenantSlug, asParamFirst])
 
   useEffect(() => { fetchInbox() }, [fetchInbox])
 
@@ -363,7 +371,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
   const fetchAppts = useCallback((date: Date) => {
     setLoadingAppts(true)
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    fetch(`/api/${tenantSlug}/dayhub/appointments?date=${dateStr}`)
+    fetch(`/api/${tenantSlug}/dayhub/appointments?date=${dateStr}${asParam}`)
       .then(r => r.json())
       .then(d => {
         setAppointments(d.appointments ?? [])
@@ -371,7 +379,7 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
         setLoadingAppts(false)
       })
       .catch(() => setLoadingAppts(false))
-  }, [tenantSlug])
+  }, [tenantSlug, asParam])
 
   useEffect(() => { fetchAppts(apptDate) }, [fetchAppts, apptDate])
 
@@ -521,8 +529,8 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
             <span className="text-[20px]">🔥</span> Day Hub
           </h1>
 
-          {/* Role tabs — only visible to admin/owner */}
-          {isAdmin && (
+          {/* Role tabs — only visible to admin/owner, hidden when viewing as someone */}
+          {isAdmin && !viewAsUser && (
             <div className="flex gap-1">
               {(['ADMIN', 'LM', 'AM', 'DISPO'] as RoleTab[]).map(r => (
                 <button

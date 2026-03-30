@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getCentralDayBounds } from '@/lib/dates'
+import { resolveEffectiveUser } from '@/lib/auth/view-as'
 
 export async function GET(request: NextRequest) {
   const session = await getSession()
@@ -11,8 +12,11 @@ export async function GET(request: NextRequest) {
 
   const type = request.nextUrl.searchParams.get('type') // 'calls' or 'convos'
   const date = request.nextUrl.searchParams.get('date') // 'YYYY-MM-DD'
+  const asUserId = request.nextUrl.searchParams.get('asUserId')
   if (!type || !date) return NextResponse.json({ error: 'type and date required' }, { status: 400 })
 
+  const effective = await resolveEffectiveUser(session, asUserId)
+  const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
   const { dayStart, dayEnd } = getCentralDayBounds(date)
 
   try {
@@ -20,7 +24,7 @@ export async function GET(request: NextRequest) {
       where: {
         tenantId: session.tenantId,
         calledAt: { gte: dayStart, lte: dayEnd },
-        // Convos = graded calls with real conversations (>=45s)
+        ...(isAdmin ? {} : { assignedToId: effective.userId }),
         ...(type === 'convos' ? { gradingStatus: 'COMPLETED', durationSeconds: { gte: 45 } } : {}),
       },
       orderBy: { calledAt: 'desc' },

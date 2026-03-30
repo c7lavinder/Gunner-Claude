@@ -18,6 +18,14 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
   const role = ((session?.user as { role?: string })?.role ?? 'LEAD_MANAGER') as UserRole
   const [showMenu, setShowMenu] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isViewingAs, setIsViewingAs] = useState(false)
+
+  // Check if View As is active (hides admin-only nav items)
+  useEffect(() => {
+    try {
+      setIsViewingAs(!!localStorage.getItem('gunner_view_as_user'))
+    } catch {}
+  }, [])
   const [reviewCount, setReviewCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState<Array<{
@@ -64,7 +72,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
 
   const visibleItems = navItems.filter(item => {
     if (item.always) return true
-    if (item.adminOnly) return isRoleAtLeast(role, 'ADMIN')
+    if (item.adminOnly) return !isViewingAs && isRoleAtLeast(role, 'ADMIN')
     if (item.permission) return hasPermission(role, item.permission as never)
     return false
   })
