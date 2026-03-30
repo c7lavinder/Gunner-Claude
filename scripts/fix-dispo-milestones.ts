@@ -1,10 +1,7 @@
 // scripts/fix-dispo-milestones.ts
-// One-time fix: properties with IN_DISPOSITION status are missing acquisition milestones.
-// The old dispo trigger overwrote status without creating acq milestones.
-// This script:
-//   1. Finds properties with dispo statuses
-//   2. Restores their acq status to UNDER_CONTRACT (they entered dispo from there)
-//   3. Creates missing LEAD + UNDER_CONTRACT milestones
+// One-time fix: properties with dispo statuses may be missing acquisition milestones.
+// This script ensures LEAD + UNDER_CONTRACT + DISPO_NEW milestones exist
+// WITHOUT changing the status field (status stays as-is — dispo status is correct).
 // Run: npx tsx scripts/fix-dispo-milestones.ts
 
 import { db } from '../lib/db/client'
@@ -20,13 +17,6 @@ async function fix() {
   console.log(`Found ${props.length} properties with dispo status`)
 
   for (const prop of props) {
-    // Restore acquisition status to UNDER_CONTRACT
-    // (all dispo properties came through acquisition — they were under contract)
-    await db.property.update({
-      where: { id: prop.id },
-      data: { status: 'UNDER_CONTRACT' },
-    })
-
     // Ensure LEAD milestone exists
     const hasLead = await db.propertyMilestone.findFirst({
       where: { propertyId: prop.id, type: 'LEAD' },
@@ -60,7 +50,7 @@ async function fix() {
       console.log(`  + DISPO_NEW milestone for ${prop.address}`)
     }
 
-    console.log(`Fixed: ${prop.address} (was ${prop.status} → UNDER_CONTRACT + dispo milestones)`)
+    console.log(`OK: ${prop.address} (status: ${prop.status}, milestones ensured)`)
   }
 
   console.log('Done.')

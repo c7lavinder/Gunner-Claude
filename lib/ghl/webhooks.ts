@@ -458,14 +458,18 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     (!tenant.dispoPipelineId || oppData.pipelineId === tenant.dispoPipelineId)
 
   if (isDispoTrigger) {
-    // Entering dispo: keep acquisition status intact, just create DISPO_NEW milestone.
-    // The property stays "UNDER_CONTRACT" (or whatever acq stage) — dispo is a parallel track.
+    // Entering dispo: set status to IN_DISPOSITION (so inventory list shows it in dispo)
+    // AND backfill acquisition milestones (so property detail shows acq pipeline progress).
     const existing = await db.property.findFirst({
       where: { tenantId, ghlContactId: oppData.contactId },
       select: { id: true, address: true, status: true },
     })
     if (existing) {
-      console.log(`[GHL Webhook] Dispo trigger: ${existing.address} enters dispo (keeping acq status ${existing.status})`)
+      await db.property.update({
+        where: { id: existing.id },
+        data: { status: 'IN_DISPOSITION' },
+      })
+      console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → IN_DISPOSITION (was ${existing.status})`)
     } else {
       await createPropertyFromContact(tenantId, oppData.contactId, {
         ghlPipelineId: oppData.pipelineId,
@@ -544,14 +548,13 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
     const isDispoStage = appStage?.startsWith('disposition')
 
-    // Dispo and acquisition are parallel tracks. Dispo stage changes DON'T overwrite
-    // the main status (which tracks acquisition). Both are tracked via milestones.
+    // Both dispo and acquisition stage changes update the status field.
+    // Acquisition progress is preserved via milestones (property detail derives acqIdx from them).
     const updateData: Record<string, unknown> = {}
 
     if (isDispoStage) {
-      // Dispo stage: only update ghlPipelineStage for display, do NOT overwrite acq status
-      // Milestones (created below) track dispo progression independently
-      console.log(`[GHL Webhook] Dispo stage change: ${stageName ?? stageId} — milestone only, keeping acq status`)
+      // Dispo stage: update status to dispo status so inventory list shows it correctly
+      if (newStatus) updateData.status = newStatus
     } else {
       // Acquisition / longterm: update status + pipeline info normally
       updateData.ghlPipelineStage = stageName ?? stageId
