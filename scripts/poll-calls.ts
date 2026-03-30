@@ -126,7 +126,15 @@ async function pollCalls() {
                 const msgDate = new Date(String(msg.dateAdded))
                 if (msgDate < cutoff) { hitOld = true; continue }
 
-                const metaDur = (msg.callDuration ?? (msg.meta as { call?: { duration?: number } })?.call?.duration ?? 0) as number
+                // Extract duration — meta can be object or JSON string
+                let meta: Record<string, unknown> = {}
+                if (msg.meta && typeof msg.meta === 'string') {
+                  try { meta = JSON.parse(msg.meta) } catch {}
+                } else if (msg.meta && typeof msg.meta === 'object') {
+                  meta = msg.meta as Record<string, unknown>
+                }
+                const callMeta = (meta.call ?? {}) as Record<string, unknown>
+                const metaDur = (msg.callDuration ?? callMeta.duration ?? 0) as number
                 const elapsed = msg.dateUpdated
                   ? Math.round((new Date(String(msg.dateUpdated)).getTime() - msgDate.getTime()) / 1000)
                   : 0
