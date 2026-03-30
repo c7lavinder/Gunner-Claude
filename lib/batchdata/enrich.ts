@@ -108,17 +108,21 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
     if (fieldSources[f] === 'ai') fieldSources[f] = 'api'
   }
 
-  if (property.beds == null && result.bedrooms) {
-    updateData.beds = result.bedrooms; fieldSources.beds = 'api'
+  if (result.bedrooms) {
+    if (property.beds == null) updateData.beds = result.bedrooms
+    if (!fieldSources.beds || fieldSources.beds !== 'user') fieldSources.beds = 'api'
   }
-  if (property.baths == null && result.bathrooms) {
-    updateData.baths = result.bathrooms; fieldSources.baths = 'api'
+  if (result.bathrooms) {
+    if (property.baths == null) updateData.baths = result.bathrooms
+    if (!fieldSources.baths || fieldSources.baths !== 'user') fieldSources.baths = 'api'
   }
-  if (property.sqft == null && result.squareFootage) {
-    updateData.sqft = result.squareFootage; fieldSources.sqft = 'api'
+  if (result.squareFootage) {
+    if (property.sqft == null) updateData.sqft = result.squareFootage
+    if (!fieldSources.sqft || fieldSources.sqft !== 'user') fieldSources.sqft = 'api'
   }
-  if (property.yearBuilt == null && result.yearBuilt) {
-    updateData.yearBuilt = result.yearBuilt; fieldSources.yearBuilt = 'api'
+  if (result.yearBuilt) {
+    if (property.yearBuilt == null) updateData.yearBuilt = result.yearBuilt
+    if (!fieldSources.yearBuilt || fieldSources.yearBuilt !== 'user') fieldSources.yearBuilt = 'api'
   }
   if (!property.lotSize && result.lotSquareFootage) {
     const acres = result.lotSquareFootage / 43560
