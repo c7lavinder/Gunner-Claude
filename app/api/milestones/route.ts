@@ -1,27 +1,41 @@
 // app/api/milestones/route.ts
-// Manual milestone logging: acquisition + disposition types
+// CRUD for PropertyMilestone — used by Day Hub KPI ledger + property detail
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 import { MilestoneType } from '@prisma/client'
+import { startOfDay, endOfDay } from 'date-fns'
 
-const schema = z.object({
+const MILESTONE_TYPES = [
+  'LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED',
+  'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED',
+] as const
+
+const createSchema = z.object({
   propertyId: z.string().min(1),
-  type: z.enum([
-    'LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED',
-    'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED',
-  ]),
+  type: z.enum(MILESTONE_TYPES),
   notes: z.string().optional(),
   date: z.string().optional(), // ISO date string for backdating (e.g. '2026-03-15')
 })
 
+const updateSchema = z.object({
+  id: z.string().min(1),
+  notes: z.string().optional(),
+  date: z.string().optional(),
+})
+
+const deleteSchema = z.object({
+  id: z.string().min(1),
+})
+
+// POST — create milestone (manual, source = MANUAL)
 export async function POST(request: NextRequest) {
   const session = await getSession()
   if (!session) return unauthorizedResponse()
 
   const body = await request.json()
-  const parsed = schema.safeParse(body)
+  const parsed = createSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
@@ -74,26 +88,116 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// GET — fetch milestones by propertyId OR by type+date (for KPI ledger)
 export async function GET(request: NextRequest) {
   const session = await getSession()
   if (!session) return unauthorizedResponse()
 
   const { searchParams } = new URL(request.url)
   const propertyId = searchParams.get('propertyId')
-  if (!propertyId) {
-    return NextResponse.json({ error: 'propertyId required' }, { status: 400 })
-  }
+  const type = searchParams.get('type')
+  const date = searchParams.get('date') // YYYY-MM-DD
 
   try {
-    const milestones = await db.propertyMilestone.findMany({
-      where: { tenantId: session.tenantId, propertyId },
-      orderBy: { createdAt: 'asc' },
-      include: { loggedBy: { select: { name: true } } },
-    })
+    // Mode 1: fetch by property (for property detail pipeline)
+    if (propertyId) {
+      const milestones = await db.propertyMilestone.findMany({
+        where: { tenantId: session.tenantId, propertyId },
+        orderBy: { createdAt: 'asc' },
+        include: { loggedBy: { select: { name: true } } },
+      })
+      return NextResponse.json({ milestones })
+    }
 
-    return NextResponse.json({ milestones })
+    // Mode 2: fetch by type + date (for KPI ledger)
+    if (type && date) {
+      const dayStart = startOfDay(new Date(`${date}T12:00:00`))
+      const dayEnd = endOfDay(new Date(`${date}T12:00:00`))
+      const milestones = await db.propertyMilestone.findMany({
+        where: {
+          tenantId: session.tenantId,
+          type: type as MilestoneType,
+          createdAt: { gte: dayStart, lte: dayEnd },
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          property: { select: { id: true, address: true, city: true, state: true } },
+          loggedBy: { select: { name: true } },
+        },
+      })
+      return NextResponse.json({
+        milestones: milestones.map(m => ({
+          id: m.id,
+          type: m.type,
+          source: m.source,
+          notes: m.notes,
+          time: m.createdAt.toISOString(),
+          propertyId: m.property.id,
+          propertyAddress: `${m.property.address}, ${m.property.city} ${m.property.state}`,
+          userName: m.loggedBy?.name ?? 'System',
+        })),
+      })
+    }
+
+    return NextResponse.json({ error: 'propertyId or type+date required' }, { status: 400 })
   } catch (err) {
     console.error('[Milestones] Fetch failed:', err)
     return NextResponse.json({ milestones: [] })
+  }
+}
+
+// PATCH — update milestone (notes, date). Changes source to MANUAL (green = user-verified)
+export async function PATCH(request: NextRequest) {
+  const session = await getSession()
+  if (!session) return unauthorizedResponse()
+
+  const body = await request.json()
+  const parsed = updateSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+  }
+
+  const { id, notes, date } = parsed.data
+
+  try {
+    const milestone = await db.propertyMilestone.update({
+      where: { id, tenantId: session.tenantId },
+      data: {
+        source: 'MANUAL', // editing turns it green (user-verified)
+        ...(notes !== undefined ? { notes } : {}),
+        ...(date ? { createdAt: new Date(date) } : {}),
+      },
+      include: {
+        property: { select: { address: true, city: true, state: true } },
+        loggedBy: { select: { name: true } },
+      },
+    })
+
+    return NextResponse.json({ milestone })
+  } catch (err) {
+    console.error('[Milestones] Update failed:', err)
+    return NextResponse.json({ error: 'Failed to update milestone' }, { status: 500 })
+  }
+}
+
+// DELETE — remove milestone
+export async function DELETE(request: NextRequest) {
+  const session = await getSession()
+  if (!session) return unauthorizedResponse()
+
+  const body = await request.json()
+  const parsed = deleteSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+  }
+
+  try {
+    await db.propertyMilestone.deleteMany({
+      where: { id: parsed.data.id, tenantId: session.tenantId },
+    })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('[Milestones] Delete failed:', err)
+    return NextResponse.json({ error: 'Failed to delete milestone' }, { status: 500 })
   }
 }

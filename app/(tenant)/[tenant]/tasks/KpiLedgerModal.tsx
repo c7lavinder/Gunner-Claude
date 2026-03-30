@@ -1,30 +1,47 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Minus, Search, Loader2, Clock, MapPin, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil, Search, Loader2, MapPin, X, Check } from 'lucide-react'
 import { format, addDays, subDays } from 'date-fns'
 import Link from 'next/link'
 
-interface LedgerEntry {
-  id: string; type: string; time: string; contactName: string | null
-  propertyId: string | null; propertyAddress: string | null
-  notes: string | null; source: string; userName: string
+interface MilestoneEntry {
+  id: string; type: string; source: string; notes: string | null
+  time: string; propertyId: string; propertyAddress: string; userName: string
+}
+
+// Milestone types that come from PropertyMilestone table
+const MILESTONE_KEYS = ['lead', 'apts', 'offers', 'contracts', 'pushed', 'dispoOffers', 'dispoContracts']
+
+// Map ledger keys → milestone type for API queries
+const KEY_TO_MILESTONE_TYPE: Record<string, string> = {
+  lead: 'LEAD', apts: 'APPOINTMENT_SET', offers: 'OFFER_MADE',
+  contracts: 'UNDER_CONTRACT', pushed: 'DISPO_PUSHED',
+  dispoOffers: 'DISPO_OFFER_RECEIVED', dispoContracts: 'DISPO_CONTRACTED',
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  calls: 'Calls', convos: 'Conversations', apts: 'Appointments', offers: 'Offers', contracts: 'Contracts',
+  calls: 'Calls', convos: 'Conversations', lead: 'Leads',
+  apts: 'Appointments Set', offers: 'Offers Made', contracts: 'Contracts',
+  pushed: 'Pushed Out', dispoOffers: 'Dispo Offers', dispoContracts: 'Dispo Contracted',
+}
+
+// Source colors: purple = API/webhook, blue = AI, green = manual/edited
+const SOURCE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  AUTO_WEBHOOK: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'API' },
+  AI: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'AI' },
+  MANUAL: { bg: 'bg-green-100', text: 'text-green-700', label: 'Manual' },
 }
 
 export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
   type: string | null; isOpen: boolean; onClose: () => void; tenantSlug: string
 }) {
   const [date, setDate] = useState(new Date())
-  const [entries, setEntries] = useState<LedgerEntry[]>([])
+  const [entries, setEntries] = useState<MilestoneEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
 
   // Add form
-  const [contactName, setContactName] = useState('')
   const [notes, setNotes] = useState('')
   const [propSearch, setPropSearch] = useState('')
   const [propResults, setPropResults] = useState<Array<{ id: string; address: string; city: string; state: string }>>([])
@@ -32,7 +49,13 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
   const [saving, setSaving] = useState(false)
   const [searching, setSearching] = useState(false)
 
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editNotes, setEditNotes] = useState('')
+  const [editDate, setEditDate] = useState('')
+
   const dateStr = format(date, 'yyyy-MM-dd')
+  const isMilestoneType = type ? MILESTONE_KEYS.includes(type) : false
 
   useEffect(() => {
     if (!isOpen || !type) return
@@ -40,11 +63,30 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
   }, [isOpen, type, dateStr])
 
   async function loadEntries() {
+    if (!type) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/kpi-entries?type=${type}&date=${dateStr}`)
-      const data = await res.json()
-      setEntries(data.entries ?? [])
+      if (isMilestoneType) {
+        // Fetch from milestones API
+        const milestoneType = KEY_TO_MILESTONE_TYPE[type]
+        const res = await fetch(`/api/milestones?type=${milestoneType}&date=${dateStr}`)
+        const data = await res.json()
+        setEntries(data.milestones ?? [])
+      } else {
+        // Calls/convos: fetch from old kpi-entries API
+        const res = await fetch(`/api/kpi-entries?type=${type}&date=${dateStr}`)
+        const data = await res.json()
+        setEntries((data.entries ?? []).map((e: Record<string, unknown>) => ({
+          id: e.id as string,
+          type: e.type as string,
+          source: (e.source as string) ?? 'MANUAL',
+          notes: e.notes as string | null,
+          time: e.time as string,
+          propertyId: e.propertyId as string,
+          propertyAddress: e.propertyAddress as string,
+          userName: e.userName as string,
+        })))
+      }
     } catch {}
     setLoading(false)
   }
@@ -62,36 +104,60 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
   }
 
   async function addEntry() {
-    if (!type) return
+    if (!type || !selectedProp || !isMilestoneType) return
     setSaving(true)
     try {
-      const res = await fetch('/api/kpi-entries', {
+      const milestoneType = KEY_TO_MILESTONE_TYPE[type]
+      const res = await fetch('/api/milestones', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type,
-          contactName: contactName || null,
-          propertyId: selectedProp?.id ?? null,
-          propertyAddress: selectedProp?.address ?? null,
-          notes: notes || null,
-          time: new Date().toISOString(),
+          propertyId: selectedProp.id,
+          type: milestoneType,
+          notes: notes || undefined,
+          date: dateStr !== format(new Date(), 'yyyy-MM-dd') ? dateStr : undefined,
         }),
       })
       if (res.ok) {
-        const data = await res.json()
-        setEntries(prev => [data.entry, ...prev])
-        setContactName(''); setNotes(''); setSelectedProp(null); setPropSearch(''); setShowAdd(false)
+        setNotes(''); setSelectedProp(null); setPropSearch(''); setShowAdd(false)
+        loadEntries() // refresh
       }
     } catch {}
     setSaving(false)
   }
 
   async function deleteEntry(id: string) {
+    if (!isMilestoneType) {
+      // Old kpi-entries delete
+      try {
+        await fetch('/api/kpi-entries', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id }),
+        })
+        setEntries(prev => prev.filter(e => e.id !== id))
+      } catch {}
+      return
+    }
     try {
-      await fetch('/api/kpi-entries', {
+      await fetch('/api/milestones', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       })
       setEntries(prev => prev.filter(e => e.id !== id))
+    } catch {}
+  }
+
+  async function saveEdit(id: string) {
+    try {
+      await fetch('/api/milestones', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          notes: editNotes || undefined,
+          date: editDate || undefined,
+        }),
+      })
+      setEditingId(null)
+      loadEntries() // refresh to show green source
     } catch {}
   }
 
@@ -126,26 +192,24 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
           <p className="text-[10px] font-semibold tracking-wider uppercase text-txt-muted">
             {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
           </p>
-          <button onClick={() => setShowAdd(!showAdd)}
-            className="bg-gunner-red text-white rounded-[10px] px-3 py-1.5 text-sm flex items-center gap-1.5 hover:bg-gunner-red-dark transition-colors">
-            <Plus size={12} /> Add
-          </button>
+          {isMilestoneType && (
+            <button onClick={() => setShowAdd(!showAdd)}
+              className="bg-gunner-red text-white rounded-[10px] px-3 py-1.5 text-sm flex items-center gap-1.5 hover:bg-gunner-red-dark transition-colors">
+              <Plus size={12} /> Add
+            </button>
+          )}
         </div>
 
         {/* Add form */}
-        {showAdd && (
+        {showAdd && isMilestoneType && (
           <div className="px-6 py-3 border-t border-b border-[rgba(0,0,0,0.06)] space-y-2">
-            <input value={contactName} onChange={e => setContactName(e.target.value)}
-              placeholder="Contact name (optional)"
-              className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
-
             {/* Property search */}
             {!selectedProp ? (
               <div>
                 <div className="relative">
                   <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted" />
                   <input value={propSearch} onChange={e => searchProperties(e.target.value)}
-                    placeholder="Link to property (search address)..."
+                    placeholder="Search property address..."
                     className="w-full bg-surface-secondary rounded-[8px] pl-8 pr-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
                 </div>
                 {searching && <p className="text-[10px] text-txt-muted mt-1">Searching...</p>}
@@ -173,7 +237,7 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
               placeholder="Notes (optional)"
               className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none" />
 
-            <button onClick={addEntry} disabled={saving}
+            <button onClick={addEntry} disabled={saving || !selectedProp}
               className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-[10px] transition-colors">
               {saving ? 'Adding...' : 'Add Entry'}
             </button>
@@ -187,41 +251,83 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
           ) : entries.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-ds-fine text-txt-muted">No entries for this day</p>
-              <p className="text-[10px] text-txt-muted mt-1">Click Add to record one</p>
+              {isMilestoneType && <p className="text-[10px] text-txt-muted mt-1">Click Add to record one</p>}
             </div>
           ) : (
-            entries.map(e => (
-              <div key={e.id} className="border-b border-[rgba(0,0,0,0.04)] py-2.5 flex items-center gap-3">
-                {/* Time */}
-                <span className="text-xs text-txt-muted font-mono w-14 shrink-0">
-                  {format(new Date(e.time), 'h:mm a')}
-                </span>
+            entries.map(e => {
+              const sourceStyle = SOURCE_COLORS[e.source] ?? SOURCE_COLORS.MANUAL
+              const isEditing = editingId === e.id
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  {e.contactName && <p className="text-ds-fine font-medium text-txt-primary truncate">{e.contactName}</p>}
-                  {e.propertyAddress && (
-                    <Link href={`/${tenantSlug}/inventory/${e.propertyId}`}
-                      className="text-[10px] text-semantic-blue hover:underline flex items-center gap-0.5 truncate">
-                      <MapPin size={8} /> {e.propertyAddress}
-                    </Link>
-                  )}
-                  {e.notes && <p className="text-[10px] text-txt-muted truncate">{e.notes}</p>}
-                  {!e.contactName && !e.propertyAddress && !e.notes && (
-                    <p className="text-ds-fine text-txt-muted">Entry by {e.userName}</p>
+              return (
+                <div key={e.id} className="border-b border-[rgba(0,0,0,0.04)] py-2.5">
+                  {isEditing ? (
+                    /* Edit mode */
+                    <div className="space-y-1.5">
+                      <input
+                        type="date"
+                        value={editDate}
+                        onChange={ev => setEditDate(ev.target.value)}
+                        className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine focus:outline-none"
+                      />
+                      <input
+                        value={editNotes}
+                        onChange={ev => setEditNotes(ev.target.value)}
+                        placeholder="Notes"
+                        className="w-full bg-surface-secondary rounded-[8px] px-3 py-1.5 text-ds-fine placeholder-txt-muted focus:outline-none"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => saveEdit(e.id)}
+                          className="text-[11px] font-medium text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-1 rounded-[8px] flex items-center gap-1">
+                          <Check size={10} /> Save
+                        </button>
+                        <button onClick={() => setEditingId(null)}
+                          className="text-[11px] text-txt-muted hover:text-txt-primary px-3 py-1">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* View mode */
+                    <div className="flex items-center gap-3">
+                      {/* Source badge */}
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${sourceStyle.bg} ${sourceStyle.text}`}>
+                        {sourceStyle.label}
+                      </span>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        {e.propertyAddress && (
+                          <Link href={`/${tenantSlug}/inventory/${e.propertyId}`}
+                            className="text-[11px] text-txt-primary hover:text-gunner-red flex items-center gap-0.5 truncate font-medium">
+                            <MapPin size={8} className="shrink-0" /> {e.propertyAddress}
+                          </Link>
+                        )}
+                        {e.notes && <p className="text-[10px] text-txt-muted truncate">{e.notes}</p>}
+                        <p className="text-[9px] text-txt-muted">{e.userName} · {format(new Date(e.time), 'h:mm a')}</p>
+                      </div>
+
+                      {/* Edit + Delete buttons (milestone types only) */}
+                      {isMilestoneType && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => {
+                            setEditingId(e.id)
+                            setEditNotes(e.notes ?? '')
+                            setEditDate(format(new Date(e.time), 'yyyy-MM-dd'))
+                          }}
+                            className="text-gray-400 hover:text-blue-500 hover:bg-blue-50 w-6 h-6 rounded flex items-center justify-center transition-colors">
+                            <Pencil size={11} />
+                          </button>
+                          <button onClick={() => deleteEntry(e.id)}
+                            className="text-gray-400 hover:text-red-500 hover:bg-red-50 w-6 h-6 rounded flex items-center justify-center transition-colors">
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                {/* Source badge */}
-                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded shrink-0">{e.source}</span>
-
-                {/* Delete */}
-                <button onClick={() => deleteEntry(e.id)}
-                  className="text-gray-400 hover:text-red-500 hover:bg-red-50 w-6 h-6 rounded flex items-center justify-center shrink-0 transition-colors">
-                  <Minus size={12} />
-                </button>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
 

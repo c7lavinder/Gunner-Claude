@@ -503,6 +503,50 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       })
     }
 
+    // Auto-create milestone for the new status (with dedup: same type + property + same day = skip)
+    if (newStatus) {
+      const STATUS_TO_MILESTONE: Record<string, string> = {
+        'NEW_LEAD': 'LEAD', 'CONTACTED': 'LEAD', 'FOLLOW_UP': 'LEAD',
+        'APPOINTMENT_SET': 'APPOINTMENT_SET', 'APPOINTMENT_COMPLETED': 'APPOINTMENT_SET',
+        'OFFER_MADE': 'OFFER_MADE', 'UNDER_CONTRACT': 'UNDER_CONTRACT', 'SOLD': 'CLOSED',
+        'IN_DISPOSITION': 'DISPO_NEW', 'DISPO_PUSHED': 'DISPO_PUSHED',
+        'DISPO_OFFERS': 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED': 'DISPO_CONTRACTED',
+        'DISPO_CLOSED': 'DISPO_CLOSED',
+      }
+      const milestoneType = STATUS_TO_MILESTONE[newStatus]
+      if (milestoneType) {
+        try {
+          const prop = await db.property.findFirst({
+            where: { tenantId, ghlContactId: oppData.contactId },
+            select: { id: true },
+          })
+          if (prop) {
+            const { startOfDay, endOfDay } = await import('date-fns')
+            const now = new Date()
+            const existing = await db.propertyMilestone.findFirst({
+              where: {
+                tenantId, propertyId: prop.id, type: milestoneType as import('@prisma/client').MilestoneType,
+                createdAt: { gte: startOfDay(now), lte: endOfDay(now) },
+              },
+            })
+            if (!existing) {
+              await db.propertyMilestone.create({
+                data: {
+                  tenantId,
+                  propertyId: prop.id,
+                  type: milestoneType as import('@prisma/client').MilestoneType,
+                  source: 'AUTO_WEBHOOK',
+                },
+              })
+              console.log(`[GHL Webhook] Auto-created ${milestoneType} milestone for property ${prop.id}`)
+            }
+          }
+        } catch (err) {
+          console.warn('[GHL Webhook] Milestone auto-create failed:', err instanceof Error ? err.message : err)
+        }
+      }
+    }
+
     console.log(`[GHL Webhook] Stage changed for contact ${oppData.contactId}: ${stageName ?? stageId} → ${appStage ?? 'unknown'} → ${newStatus ?? 'no update'}`)
   } catch (err) {
     console.error('[GHL Webhook] Stage update failed:', err instanceof Error ? err.message : err)
