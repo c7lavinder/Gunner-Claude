@@ -623,8 +623,12 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
               { icon: <Send size={16} />, label: 'PUSHED', key: 'pushed', data: kpis?.pushed },
               { icon: <FileText size={16} />, label: 'OFFERS RCVD', key: 'dispoOffers', data: kpis?.dispoOffers },
               { icon: <Handshake size={16} />, label: 'CONTRACTED', key: 'dispoContracts', data: kpis?.dispoContracts },
+            ] : roleTab === 'ADMIN' ? [
+              { icon: <Target size={16} />, label: 'OFFERS', key: 'offers', data: kpis?.offers },
+              { icon: <Handshake size={16} />, label: 'CONTRACTS', key: 'contracts', data: kpis?.contracts },
+              { icon: <Handshake size={16} />, label: 'CONTRACTED', key: 'dispoContracts', data: kpis?.dispoContracts },
             ] : [
-              // AM + ADMIN default
+              // AM default
               { icon: <Phone size={16} />, label: 'CALLS', key: 'calls', data: kpis?.calls },
               { icon: <Target size={16} />, label: 'OFFERS', key: 'offers', data: kpis?.offers },
               { icon: <Handshake size={16} />, label: 'CONTRACTS', key: 'contracts', data: kpis?.contracts },
