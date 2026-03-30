@@ -45,6 +45,8 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null)
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [dataQualityOpen, setDataQualityOpen] = useState(false)
+  const [dataQualityFilter, setDataQualityFilter] = useState<string | null>(null)
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
 
@@ -96,9 +98,6 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
     }
     return true
   })
-
-  const [dataQualityOpen, setDataQualityOpen] = useState(false)
-  const [dataQualityFilter, setDataQualityFilter] = useState<string | null>(null)
 
   const activeCount = properties.filter(p => !['SOLD', 'DEAD'].includes(p.status)).length
   const missingSourceCount = properties.filter(p => !p.leadSource).length
