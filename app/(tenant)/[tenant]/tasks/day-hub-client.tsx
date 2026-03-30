@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Phone, MessageSquare, Calendar, Star, Target, FileText,
+  Phone, MessageSquare, Calendar, Star, Target, FileText, Handshake,
   Settings, RefreshCw, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
   MapPin, User, Clock, Loader2, Send, Circle, CheckCircle,
   PhoneOff, MessageCircle, Pencil, Plus, Play, ClipboardList, X,
@@ -56,12 +56,17 @@ export interface EnrichedTask {
   pmDone: boolean
 }
 
+interface KPIEntry { count: number; goal: number }
 interface KPIData {
-  calls: { count: number; goal: number }
-  convos: { count: number; goal: number }
-  apts: { count: number; goal: number }
-  offers: { count: number; goal: number }
-  contracts: { count: number; goal: number }
+  calls: KPIEntry
+  convos: KPIEntry
+  lead: KPIEntry
+  apts: KPIEntry
+  offers: KPIEntry
+  contracts: KPIEntry
+  pushed: KPIEntry
+  dispoOffers: KPIEntry
+  dispoContracts: KPIEntry
 }
 
 interface InboxItem {
@@ -607,40 +612,86 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
           </div>
         </div>
 
-        {/* KPI STAT CARDS — clickable to open ledger */}
-        <div className="grid grid-cols-5 gap-3">
-          {[
-            { icon: <Phone size={16} />, label: 'CALLS', key: 'calls', data: kpis?.calls },
-            { icon: <MessageSquare size={16} />, label: 'CONVOS', key: 'convos', data: kpis?.convos },
-            { icon: <Calendar size={16} />, label: 'APTS', key: 'apts', data: kpis?.apts },
-            { icon: <Target size={16} />, label: 'OFFERS', key: 'offers', data: kpis?.offers },
-            { icon: <FileText size={16} />, label: 'CONTRACTS', key: 'contracts', data: kpis?.contracts },
-          ].map(kpi => (
-            <div key={kpi.label} onClick={() => setOpenLedger(kpi.key)}
-              className="bg-surface-primary border-[0.5px] rounded-[14px] p-4 transition-all hover:shadow-ds-float cursor-pointer" style={{ borderColor: 'var(--border-light)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-gunner-red">{kpi.icon}</span>
-                <span className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase">{kpi.label}</span>
-              </div>
-              {loadingKpis ? (
-                <Loader2 size={14} className="animate-spin text-txt-muted" />
-              ) : (
-                <>
-                  <p className={`text-[24px] font-semibold leading-tight ${(kpi.data?.count ?? 0) === 0 && new Date().getHours() >= 12 ? 'text-red-400' : 'text-txt-primary'}`}>
-                    {kpi.data?.count ?? 0}
-                    <span className="text-[13px] font-normal text-txt-muted"> / {kpi.data?.goal ?? 0}</span>
-                  </p>
-                  {/* Progress bar */}
-                  <div className="mt-2 h-[3px] bg-surface-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gunner-red rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(((kpi.data?.count ?? 0) / Math.max(kpi.data?.goal ?? 1, 1)) * 100, 100)}%` }}
-                    />
+        {/* ROW 1: Role-based KPI Cards (3 big cards) */}
+        {(() => {
+          const roleCards: Array<{ icon: React.ReactNode; label: string; key: string; data: KPIEntry | undefined }> =
+            roleTab === 'LM' ? [
+              { icon: <Phone size={16} />, label: 'CALLS', key: 'calls', data: kpis?.calls },
+              { icon: <MessageSquare size={16} />, label: 'CONVOS', key: 'convos', data: kpis?.convos },
+              { icon: <Calendar size={16} />, label: 'APTS SET', key: 'apts', data: kpis?.apts },
+            ] : roleTab === 'DISPO' ? [
+              { icon: <Send size={16} />, label: 'PUSHED', key: 'pushed', data: kpis?.pushed },
+              { icon: <FileText size={16} />, label: 'OFFERS RCVD', key: 'dispoOffers', data: kpis?.dispoOffers },
+              { icon: <Handshake size={16} />, label: 'CONTRACTED', key: 'dispoContracts', data: kpis?.dispoContracts },
+            ] : [
+              // AM + ADMIN default
+              { icon: <Phone size={16} />, label: 'CALLS', key: 'calls', data: kpis?.calls },
+              { icon: <Target size={16} />, label: 'OFFERS', key: 'offers', data: kpis?.offers },
+              { icon: <Handshake size={16} />, label: 'CONTRACTS', key: 'contracts', data: kpis?.contracts },
+            ]
+          return (
+            <div className="grid grid-cols-3 gap-3">
+              {roleCards.map(kpi => (
+                <div key={kpi.key} onClick={() => setOpenLedger(kpi.key)}
+                  className="bg-surface-primary border-[0.5px] rounded-[14px] p-4 transition-all hover:shadow-ds-float cursor-pointer" style={{ borderColor: 'var(--border-light)' }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-gunner-red">{kpi.icon}</span>
+                    <span className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase">{kpi.label}</span>
                   </div>
-                </>
-              )}
+                  {loadingKpis ? (
+                    <Loader2 size={14} className="animate-spin text-txt-muted" />
+                  ) : (
+                    <>
+                      <p className={`text-[24px] font-semibold leading-tight ${(kpi.data?.count ?? 0) === 0 && new Date().getHours() >= 12 ? 'text-red-400' : 'text-txt-primary'}`}>
+                        {kpi.data?.count ?? 0}
+                        {(kpi.data?.goal ?? 0) > 0 && <span className="text-[13px] font-normal text-txt-muted"> / {kpi.data?.goal}</span>}
+                      </p>
+                      {(kpi.data?.goal ?? 0) > 0 && (
+                        <div className="mt-2 h-[3px] bg-surface-secondary rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gunner-red rounded-full transition-all duration-500"
+                            style={{ width: `${Math.min(((kpi.data?.count ?? 0) / Math.max(kpi.data?.goal ?? 1, 1)) * 100, 100)}%` }}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
+          )
+        })()}
+
+        {/* ROW 2: Pipeline Strip — 7 compact pills, all milestone types */}
+        <div className="flex gap-1.5 flex-wrap">
+          {[
+            { label: 'Lead', key: 'lead', data: kpis?.lead },
+            { label: 'Apt Set', key: 'apts', data: kpis?.apts },
+            { label: 'Offer', key: 'offers', data: kpis?.offers },
+            { label: 'Contract', key: 'contracts', data: kpis?.contracts },
+            { label: 'Pushed', key: 'pushed', data: kpis?.pushed },
+            { label: 'Dispo Offers', key: 'dispoOffers', data: kpis?.dispoOffers },
+            { label: 'Dispo Contract', key: 'dispoContracts', data: kpis?.dispoContracts },
+          ].map(pill => {
+            const count = pill.data?.count ?? 0
+            const isAcq = ['lead', 'apts', 'offers', 'contracts'].includes(pill.key)
+            return (
+              <button
+                key={pill.key}
+                onClick={() => setOpenLedger(pill.key)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border-[0.5px] transition-all hover:shadow-sm ${
+                  count > 0
+                    ? isAcq
+                      ? 'bg-gunner-red/10 border-gunner-red/20 text-gunner-red'
+                      : 'bg-blue-50 border-blue-200 text-blue-700'
+                    : 'bg-surface-secondary border-[var(--border-light)] text-txt-muted hover:border-[var(--border-medium)]'
+                }`}
+              >
+                <span className="font-bold">{loadingKpis ? '·' : count}</span>
+                <span>{pill.label}</span>
+              </button>
+            )
+          })}
         </div>
 
         {/* INBOX + APPOINTMENTS — side by side, fixed height */}

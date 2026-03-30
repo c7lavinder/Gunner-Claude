@@ -18,42 +18,35 @@ export async function GET(
     const dayStart = startOfDay(today)
     const dayEnd = endOfDay(today)
 
-    const [callsToday, propertiesActive, tasksCompleted, appointmentsToday] = await Promise.all([
+    const [callsToday, convosToday, leadsToday, aptsToday, offersToday, contractsToday, pushedToday, dispoOffersToday, dispoContractsToday] = await Promise.all([
+      // Calls made today
       db.call.count({
         where: { tenantId, calledAt: { gte: dayStart, lte: dayEnd } },
       }),
-      db.property.count({
-        where: { tenantId, status: { notIn: ['DEAD', 'SOLD'] } },
+      // Conversations (graded calls = meaningful convos)
+      db.call.count({
+        where: { tenantId, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' },
       }),
-      db.task.count({
-        where: { tenantId, status: 'COMPLETED', completedAt: { gte: dayStart } },
-      }),
-      db.propertyMilestone.count({
-        where: { tenantId, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } },
-      }),
+      // Milestones — unique properties per type
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'LEAD', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'OFFER_MADE', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'UNDER_CONTRACT', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_PUSHED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_OFFER_RECEIVED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
+      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_CONTRACTED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
     ])
-
-    // Count offers and contracts from milestones
-    const [offersToday, contractsToday] = await Promise.all([
-      db.propertyMilestone.count({
-        where: { tenantId, type: 'OFFER_MADE', createdAt: { gte: dayStart, lte: dayEnd } },
-      }),
-      db.propertyMilestone.count({
-        where: { tenantId, type: 'UNDER_CONTRACT', createdAt: { gte: dayStart, lte: dayEnd } },
-      }),
-    ])
-
-    // Get conversations count from DB (cached from GHL)
-    const convosToday = await db.call.count({
-      where: { tenantId, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' },
-    })
 
     return NextResponse.json({
       calls: { count: callsToday, goal: 340 },
       convos: { count: convosToday, goal: 40 },
-      apts: { count: appointmentsToday, goal: 8 },
+      lead: { count: leadsToday, goal: 0 },
+      apts: { count: aptsToday, goal: 8 },
       offers: { count: offersToday, goal: 2 },
       contracts: { count: contractsToday, goal: 1 },
+      pushed: { count: pushedToday, goal: 0 },
+      dispoOffers: { count: dispoOffersToday, goal: 0 },
+      dispoContracts: { count: dispoContractsToday, goal: 0 },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
