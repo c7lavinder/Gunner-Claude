@@ -44,16 +44,16 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   const [selectedStage, setSelectedStage] = useState<AppStage | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null)
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
-  const [missingMarketFilter, setMissingMarketFilter] = useState(false)
   const [search, setSearch] = useState('')
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
 
-  // Handle ?filter=missing_market from KPI page deeplink
+  // Handle ?filter= deeplinks from KPI page
   useEffect(() => {
-    if (searchParams?.get('filter') === 'missing_market') {
-      setMissingMarketFilter(true)
-    }
+    const filter = searchParams?.get('filter')
+    if (filter === 'missing_market') setDataQualityFilter('market')
+    else if (filter === 'missing_source') setDataQualityFilter('source')
+    else if (filter === 'missing_address') setDataQualityFilter('address')
   }, [searchParams])
 
   // Convert DB status counts to AppStage counts
@@ -72,9 +72,6 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
     if (dataQualityFilter === 'market') return !p.market
     if (dataQualityFilter === 'source') return !p.leadSource
     if (dataQualityFilter === 'stage') return !p.ghlStageName && p.status === 'NEW_LEAD'
-    if (missingMarketFilter) {
-      if (p.market && p.market !== 'Global') return false
-    }
     if (selectedStage) {
       const propStage = STATUS_TO_APP_STAGE[p.status]
       if (propStage !== selectedStage) return false
