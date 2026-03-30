@@ -103,7 +103,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   const activeCount = properties.filter(p => !['SOLD', 'DEAD'].includes(p.status)).length
   const missingSourceCount = properties.filter(p => !p.leadSource).length
   const missingAddressCount = properties.filter(p => !p.address).length
-  const missingContactCount = properties.filter(p => !p.sellerName && p.sellers.length === 0).length
+  const missingContactCount = properties.filter(p => !p.sellerName && (!p.sellers || p.sellers.length === 0)).length
   const missingMarketCount = properties.filter(p => !p.market).length
   const missingStageCount = properties.filter(p => !p.ghlStageName && p.status === 'NEW_LEAD').length
   const totalIssues = missingAddressCount + missingContactCount + missingMarketCount + missingSourceCount + missingStageCount

@@ -1,7 +1,7 @@
 import { requireSession } from '@/lib/auth/session'
 // app/(tenant)/[tenant]/inventory/page.tsx
 
-
+import { Suspense } from 'react'
 import { db } from '@/lib/db/client'
 import { redirect } from 'next/navigation'
 import { InventoryClient } from '@/components/inventory/inventory-client'
@@ -50,6 +50,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
   })
 
   return (
+    <Suspense fallback={<div className="p-8 text-center text-txt-muted">Loading inventory...</div>}>
     <InventoryClient
       properties={properties.map((p) => ({
         id: p.id,
@@ -95,5 +96,6 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
       canManage={hasPermission(role, 'inventory.manage')}
       ghlLocationId={tenant?.ghlLocationId ?? undefined}
     />
+    </Suspense>
   )
 }
