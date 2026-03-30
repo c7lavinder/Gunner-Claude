@@ -5,6 +5,7 @@ import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { DashboardClient } from '@/components/ui/dashboard-client'
 import { formatDistanceToNow, startOfDay, endOfDay, subDays, startOfWeek, startOfMonth } from 'date-fns'
+import { getCentralDayBounds } from '@/lib/dates'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
 import { getLeaderboard, getUserBadges } from '@/lib/gamification/xp'
@@ -22,8 +23,7 @@ export default async function DashboardPage({ params }: PageProps) {
   const role = (session.role) as UserRole
 
   const today = new Date()
-  const dayStart = startOfDay(today)
-  const dayEnd = endOfDay(today)
+  const { dayStart, dayEnd } = getCentralDayBounds()
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const monthStart = startOfMonth(today)
 

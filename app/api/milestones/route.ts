@@ -5,7 +5,7 @@ import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 import { MilestoneType } from '@prisma/client'
-// Central time boundaries used for ledger queries — see getCentralDayBounds pattern
+import { getCentralDayBounds } from '@/lib/dates'
 
 const MILESTONE_TYPES = [
   'LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED',
@@ -122,15 +122,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Mode 2: fetch by type + date (for KPI ledger)
-    // Use Central time boundaries to match KPI box counts
     if (type && date) {
-      const noon = new Date(`${date}T12:00:00Z`)
-      const centralNoon = new Date(noon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-      const offsetMs = noon.getTime() - centralNoon.getTime()
-      const dayStart = new Date(`${date}T00:00:00Z`)
-      dayStart.setTime(dayStart.getTime() + offsetMs)
-      const dayEnd = new Date(`${date}T23:59:59.999Z`)
-      dayEnd.setTime(dayEnd.getTime() + offsetMs)
+      const { dayStart, dayEnd } = getCentralDayBounds(date)
       const milestones = await db.propertyMilestone.findMany({
         where: {
           tenantId: session.tenantId,

@@ -5,7 +5,8 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
-import { startOfDay, endOfDay, addDays, differenceInDays } from 'date-fns'
+import { addDays, differenceInDays } from 'date-fns'
+import { getCentralDayBounds } from '@/lib/dates'
 
 const priorityScores: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
 
@@ -25,8 +26,7 @@ export async function GET(
     const offset = parseInt(url.searchParams.get('offset') ?? '0')
 
     const today = new Date()
-    const dayStart = startOfDay(today)
-    const dayEnd = endOfDay(today)
+    const { dayStart, dayEnd } = getCentralDayBounds()
 
     const where: Record<string, unknown> = {
       tenantId,

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
-import { startOfDay } from 'date-fns'
+import { getCentralDayBounds } from '@/lib/dates'
 
 export async function GET(
   request: NextRequest,
@@ -67,7 +67,7 @@ export async function GET(
     if (conversationsResult.status === 'fulfilled') {
       const convs = conversationsResult.value.conversations ?? []
       const contactConvs = convs.filter(c => c.contactId === contactId)
-      const todayStart = startOfDay(new Date()).getTime()
+      const todayStart = getCentralDayBounds().dayStart.getTime()
 
       for (const conv of contactConvs) {
         const msgDate = conv.lastMessageDate ?? conv.dateUpdated

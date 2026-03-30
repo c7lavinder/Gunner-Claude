@@ -1,32 +1,9 @@
 // GET /api/[tenant]/dayhub/kpis
 // Returns today's KPI counts vs goals for Day Hub stat cards
-// Uses Central time (America/Chicago) for "today" boundaries
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
-
-function getCentralDayBounds(): { dayStart: Date; dayEnd: Date } {
-  // Get today's date string in Central time
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
-  }).format(new Date()) // e.g. '2026-03-29'
-
-  // Create UTC dates that represent Central midnight boundaries
-  // Parse the Central date at noon UTC to avoid DST edge cases,
-  // then compute the UTC offset for that moment in Central time
-  const noon = new Date(`${parts}T12:00:00Z`)
-  const centralNoon = new Date(noon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-  const offsetMs = noon.getTime() - centralNoon.getTime()
-
-  // Central midnight = UTC midnight + offset
-  const dayStart = new Date(`${parts}T00:00:00Z`)
-  dayStart.setTime(dayStart.getTime() + offsetMs)
-
-  const dayEnd = new Date(`${parts}T23:59:59.999Z`)
-  dayEnd.setTime(dayEnd.getTime() + offsetMs)
-
-  return { dayStart, dayEnd }
-}
+import { getCentralDayBounds } from '@/lib/dates'
 
 export async function GET(
   _req: Request,

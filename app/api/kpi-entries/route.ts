@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { Prisma, MilestoneType } from '@prisma/client'
+import { getCentralDayBounds } from '@/lib/dates'
 
 // Maps KPI entry types to PropertyMilestone types
 const KPI_TO_MILESTONE: Record<string, MilestoneType> = {
@@ -22,8 +23,7 @@ export async function GET(request: NextRequest) {
   const date = request.nextUrl.searchParams.get('date') // 'YYYY-MM-DD'
   if (!type || !date) return NextResponse.json({ error: 'type and date required' }, { status: 400 })
 
-  const dayStart = new Date(`${date}T00:00:00`)
-  const dayEnd = new Date(`${date}T23:59:59.999`)
+  const { dayStart, dayEnd } = getCentralDayBounds(date)
 
   const entries = await db.auditLog.findMany({
     where: {

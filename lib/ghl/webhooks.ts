@@ -525,14 +525,8 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
           })
           if (prop) {
             // Same-day dedup in Central time
-            const centralDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
-            const noon = new Date(`${centralDate}T12:00:00Z`)
-            const centralNoon = new Date(noon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-            const offsetMs = noon.getTime() - centralNoon.getTime()
-            const dayStart = new Date(`${centralDate}T00:00:00Z`)
-            dayStart.setTime(dayStart.getTime() + offsetMs)
-            const dayEnd = new Date(`${centralDate}T23:59:59.999Z`)
-            dayEnd.setTime(dayEnd.getTime() + offsetMs)
+            const { getCentralDayBounds } = await import('@/lib/dates')
+            const { dayStart, dayEnd } = getCentralDayBounds()
 
             const existing = await db.propertyMilestone.findFirst({
               where: {

@@ -5,7 +5,8 @@ import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { DayHubClient } from './day-hub-client'
 import type { UserRole } from '@/types/roles'
-import { startOfDay, endOfDay, addDays } from 'date-fns'
+import { endOfDay, addDays } from 'date-fns'
+import { getCentralDayBounds } from '@/lib/dates'
 
 export default async function DayHubPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -14,8 +15,7 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
   const userId = session.userId
   const role = session.role as UserRole
   const today = new Date()
-  const dayStart = startOfDay(today)
-  const dayEnd = endOfDay(today)
+  const { dayStart, dayEnd } = getCentralDayBounds()
   const tomorrowEnd = endOfDay(addDays(today, 1))
 
   const [todayTasks, tomorrowTasks, overdueTasks, roleConfig, completedToday, xpRecord, milestoneCounts, callCounts, properties] = await Promise.all([
