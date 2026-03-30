@@ -76,7 +76,7 @@ async function pollCalls() {
         type ConvItem = { id: string; contactId?: string; contactName?: string; fullName?: string; phone?: string; userId?: string; assignedTo?: string }
         const conversations: ConvItem[] = []
         let startAfterId: string | undefined
-        for (let page = 0; page < 5; page++) { // max 5 pages = 500 conversations
+        for (let page = 0; page < 10; page++) { // max 10 pages = 1000 conversations
           const params = new URLSearchParams({ locationId: freshTenant.ghlLocationId!, limit: String(CONVERSATION_LIMIT) })
           if (startAfterId) params.set('startAfterId', startAfterId)
           const convRes = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
@@ -106,7 +106,7 @@ async function pollCalls() {
           try {
             // Paginate messages
             let lastMsgId: string | undefined
-            for (let p = 0; p < 3; p++) {
+            for (let p = 0; p < 5; p++) {
               const msgUrl = `${GHL_BASE_URL}/conversations/${conv.id}/messages${lastMsgId ? `?lastMessageId=${lastMsgId}` : ''}`
               const msgRes = await fetch(msgUrl, { headers })
               if (!msgRes.ok) break

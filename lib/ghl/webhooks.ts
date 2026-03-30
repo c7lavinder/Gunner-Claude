@@ -314,51 +314,87 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     contactId?: string
     userId?: string
     locationId: string
+    callStatus?: string
+    status?: string
   }
 
   const messageId = callData.messageId ?? callData.id ?? callData.callId
   if (!messageId) return
 
+  // Skip only pre-connection statuses (not yet a dial)
+  const status = String(callData.callStatus ?? callData.status ?? '').toLowerCase()
+  if (['initiated', 'ringing'].includes(status)) return
+
   const duration = callData.callDuration ?? callData.duration ?? 0
-  if (duration < 45) return
 
   // Deduplicate
   const existing = await db.call.findFirst({
     where: { tenantId, ghlCallId: messageId },
-    select: { id: true },
+    select: { id: true, durationSeconds: true, gradingStatus: true },
   })
-  if (existing) return
+  if (existing) {
+    // If existing call has null duration and we now have a real one, update it
+    if (existing.durationSeconds === null && duration > 0) {
+      const isGradeable = duration >= 45
+      await db.call.update({
+        where: { id: existing.id },
+        data: {
+          durationSeconds: duration,
+          ...(isGradeable && existing.gradingStatus !== 'COMPLETED' ? { gradingStatus: 'PENDING' } : {}),
+          ...(!isGradeable ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${duration}s) — not graded.` } : {}),
+        },
+      })
+      if (isGradeable && existing.gradingStatus !== 'COMPLETED') {
+        gradeCall(existing.id).catch(() => {})
+      }
+    }
+    return
+  }
 
   const user = callData.userId
     ? await db.user.findFirst({ where: { tenantId, ghlUserId: callData.userId } })
     : null
 
-  const recordingUrl = extractRecordingUrl(callData)
+  const isGradeable = duration >= 45
 
+  // Save ALL calls — short/0s count as dials, only grade >= 45s
   const call = await db.call.create({
     data: {
       tenantId,
       ghlCallId: messageId,
       ghlContactId: callData.contactId ?? undefined,
       assignedToId: user?.id,
-      recordingUrl: recordingUrl ?? undefined,
       direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
-      durationSeconds: duration,
+      durationSeconds: duration > 0 ? duration : undefined,
       calledAt: new Date(),
-      gradingStatus: 'PENDING',
+      callResult: duration === 0 ? 'no_answer' : isGradeable ? undefined : 'short_call',
+      gradingStatus: isGradeable ? 'PENDING' : 'FAILED',
+      ...(isGradeable ? {} : {
+        aiSummary: duration === 0
+          ? 'No answer — zero duration.'
+          : `Short call (${duration}s) — not graded.`,
+      }),
     },
   })
 
-  if (!recordingUrl) {
-    setTimeout(() => {
-      fetchAndStoreRecording(call.id, messageId)
-        .then(() => gradeCall(call.id).catch(() => {}))
-        .catch(() => gradeCall(call.id).catch(() => {}))
-    }, 90_000)
-  } else {
-    gradeCall(call.id).catch(err => {
-      console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
-    })
+  // Only fetch recording + grade for calls >= 45s
+  if (isGradeable) {
+    const recordingUrl = extractRecordingUrl(callData)
+    if (recordingUrl) {
+      await db.call.update({ where: { id: call.id }, data: { recordingUrl } })
+    }
+
+    if (!recordingUrl) {
+      setTimeout(() => {
+        fetchAndStoreRecording(call.id, messageId)
+          .then(() => gradeCall(call.id).catch(() => {}))
+          .catch(() => gradeCall(call.id).catch(() => {}))
+      }, 90_000)
+    } else {
+      gradeCall(call.id).catch(err => {
+        console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
+      })
+    }
   }
 }
 
