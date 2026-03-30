@@ -2,7 +2,7 @@
 // components/calls/calls-client.tsx
 // Calls list page — matches getgunner.ai design
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -99,6 +99,17 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const [, startTransition] = useTransition()
   const { toast } = useToast()
 
+  // View As override — when admin is viewing as someone, hide admin features
+  const [isViewingAs, setIsViewingAs] = useState(false)
+  const [viewAsName, setViewAsName] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      const name = localStorage.getItem('gunner_view_as_user')
+      if (name) { setIsViewingAs(true); setViewAsName(name) }
+    } catch {}
+  }, [])
+  const effectiveCanViewAll = canViewAll && !isViewingAs
+
   const [tab, setTab] = useState<Tab>('all')
   const [teamFilter, setTeamFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
@@ -132,6 +143,10 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
 
   // Apply filters
   let filtered = tab === 'all' ? allCalls : tab === 'review' ? reviewCalls : tab === 'skipped' ? skippedCalls : []
+  // View As: filter to only that user's calls
+  if (isViewingAs && viewAsName) {
+    filtered = filtered.filter(c => c.assignedTo?.name === viewAsName)
+  }
   if (tab === 'all') {
     if (teamFilter) filtered = filtered.filter(c => c.assignedTo?.id === teamFilter)
     if (typeFilter) filtered = filtered.filter(c => c.callType === typeFilter)
@@ -172,7 +187,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
     { id: 'archived', label: 'Archived', count: 0, icon: <Archive size={13} /> },
   ]
   // Non-admins only see "All Calls" — no review/skipped/archived tabs
-  const tabs = canViewAll ? allTabs : allTabs.filter(t => t.id === 'all')
+  const tabs = effectiveCanViewAll ? allTabs : allTabs.filter(t => t.id === 'all')
 
   return (
     <div className="space-y-5">
@@ -254,7 +269,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
               <option value="90d">Last 90 Days</option>
               <option value="">All Time</option>
             </select>
-            {canViewAll && teamMembers.length > 0 && (
+            {effectiveCanViewAll && teamMembers.length > 0 && (
               <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
                 className="bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-secondary focus:outline-none"
                 style={{ borderColor: 'var(--border-medium)' }}>
