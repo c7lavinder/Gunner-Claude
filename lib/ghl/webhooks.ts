@@ -503,10 +503,13 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       })
     }
 
-    // Auto-create milestone for the new status (all-time dedup: only create if none exists for this property+type)
+    // Auto-create milestone for the new status
+    // Same-day dedup (Central time): allows re-entries on different days but prevents
+    // duplicate milestones from multiple webhook fires within the same day.
+    // CONTACTED/FOLLOW_UP don't create new LEAD milestones — only actual stage triggers do.
     if (newStatus) {
       const STATUS_TO_MILESTONE: Record<string, string> = {
-        'NEW_LEAD': 'LEAD', 'CONTACTED': 'LEAD', 'FOLLOW_UP': 'LEAD',
+        'NEW_LEAD': 'LEAD',
         'APPOINTMENT_SET': 'APPOINTMENT_SET', 'APPOINTMENT_COMPLETED': 'APPOINTMENT_SET',
         'OFFER_MADE': 'OFFER_MADE', 'UNDER_CONTRACT': 'UNDER_CONTRACT', 'SOLD': 'CLOSED',
         'IN_DISPOSITION': 'DISPO_NEW', 'DISPO_PUSHED': 'DISPO_PUSHED',
@@ -521,9 +524,20 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
             select: { id: true },
           })
           if (prop) {
+            // Same-day dedup in Central time
+            const centralDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
+            const noon = new Date(`${centralDate}T12:00:00Z`)
+            const centralNoon = new Date(noon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+            const offsetMs = noon.getTime() - centralNoon.getTime()
+            const dayStart = new Date(`${centralDate}T00:00:00Z`)
+            dayStart.setTime(dayStart.getTime() + offsetMs)
+            const dayEnd = new Date(`${centralDate}T23:59:59.999Z`)
+            dayEnd.setTime(dayEnd.getTime() + offsetMs)
+
             const existing = await db.propertyMilestone.findFirst({
               where: {
                 tenantId, propertyId: prop.id, type: milestoneType as import('@prisma/client').MilestoneType,
+                createdAt: { gte: dayStart, lte: dayEnd },
               },
             })
             if (!existing) {
