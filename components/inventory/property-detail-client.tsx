@@ -2033,6 +2033,7 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         {(property.repairEstimate || property.rentalEstimate || property.floodZone || property.neighborhoodSummary) && (
           <div className="border-t border-[rgba(0,0,0,0.04)] p-3 space-y-2">
             <div className="grid grid-cols-3 gap-3">
+              {property.arv && <DataCard label="ARV" value={fmt$(property.arv)} highlight />}
               {property.repairEstimate && <DataCard label="Repair Estimate" value={fmt$(property.repairEstimate)} highlight />}
               {property.rentalEstimate && <DataCard label="Rental Estimate" value={`${fmt$(property.rentalEstimate)}/mo`} highlight />}
               {property.floodZone && <DataCard label="Flood Zone" value={property.floodZone} highlight />}
