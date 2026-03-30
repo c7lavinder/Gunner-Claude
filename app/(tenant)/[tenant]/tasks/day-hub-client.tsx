@@ -571,16 +571,27 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError }: {
 
         {/* ROW 1: Role-based KPI Cards (3 big cards) */}
         {(() => {
+          // When viewing as someone, use their actual role from the KPI API response
+          // Otherwise use the admin's selected roleTab
+          const effectiveRole = (kpis as unknown as Record<string, unknown>)?.effectiveRole as string | undefined
+          const ROLE_TO_TAB: Record<string, RoleTab> = {
+            LEAD_MANAGER: 'LM', ACQUISITION_MANAGER: 'AM', DISPOSITION_MANAGER: 'DISPO',
+            TEAM_LEAD: 'AM', ADMIN: 'ADMIN', OWNER: 'ADMIN',
+          }
+          const activeTab = viewAsUser && effectiveRole
+            ? (ROLE_TO_TAB[effectiveRole] ?? 'AM')
+            : roleTab
+
           const roleCards: Array<{ icon: React.ReactNode; label: string; key: string; data: KPIEntry | undefined }> =
-            roleTab === 'LM' ? [
+            activeTab === 'LM' ? [
               { icon: <Phone size={16} />, label: 'CALLS', key: 'calls', data: kpis?.calls },
               { icon: <MessageSquare size={16} />, label: 'CONVOS', key: 'convos', data: kpis?.convos },
               { icon: <Calendar size={16} />, label: 'APTS SET', key: 'apts', data: kpis?.apts },
-            ] : roleTab === 'DISPO' ? [
+            ] : activeTab === 'DISPO' ? [
               { icon: <Send size={16} />, label: 'PUSHED', key: 'pushed', data: kpis?.pushed },
               { icon: <FileText size={16} />, label: 'OFFERS RCVD', key: 'dispoOffers', data: kpis?.dispoOffers },
               { icon: <Handshake size={16} />, label: 'CONTRACTED', key: 'dispoContracts', data: kpis?.dispoContracts },
-            ] : roleTab === 'ADMIN' ? [
+            ] : activeTab === 'ADMIN' ? [
               { icon: <Target size={16} />, label: 'OFFERS', key: 'offers', data: kpis?.offers },
               { icon: <Handshake size={16} />, label: 'CONTRACTS', key: 'contracts', data: kpis?.contracts },
               { icon: <Handshake size={16} />, label: 'CONTRACTED', key: 'dispoContracts', data: kpis?.dispoContracts },
