@@ -156,11 +156,12 @@ export class GHLClient {
 
   // ─── Conversations / Inbox ─────────────────────────────────────────────────
 
-  async getConversations(params?: { unreadOnly?: boolean; limit?: number; startAfterId?: string }) {
+  async getConversations(params?: { unreadOnly?: boolean; limit?: number; startAfterId?: string; assignedTo?: string }) {
     const query = new URLSearchParams({
       locationId: this.locationId,
       ...(params?.limit && { limit: String(params.limit) }),
       ...(params?.startAfterId && { startAfterId: params.startAfterId }),
+      ...(params?.assignedTo && { assignedTo: params.assignedTo }),
     })
     return this.request<GHLConversationList>('GET', `/conversations/search?${query}`)
   }

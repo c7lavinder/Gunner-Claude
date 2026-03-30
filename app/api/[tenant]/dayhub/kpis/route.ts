@@ -1,5 +1,6 @@
 // GET /api/[tenant]/dayhub/kpis
 // Returns today's KPI counts vs goals for Day Hub stat cards
+// Admins see tenant-wide, others see only their own
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
@@ -14,23 +15,39 @@ export async function GET(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const tenantId = session.tenantId
+    const userId = session.userId
     const { dayStart, dayEnd } = getCentralDayBounds()
 
+    // Check if admin — admins see tenant-wide, others see their own
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    })
+    const isAdmin = user?.role === 'OWNER' || user?.role === 'ADMIN'
+
+    // Scope filters
+    const callWhere = {
+      tenantId,
+      calledAt: { gte: dayStart, lte: dayEnd },
+      ...(isAdmin ? {} : { assignedToId: userId }),
+    }
+    const milestoneWhere = (type: string) => ({
+      tenantId,
+      type: type as import('@prisma/client').MilestoneType,
+      createdAt: { gte: dayStart, lte: dayEnd },
+      ...(isAdmin ? {} : { loggedById: userId }),
+    })
+
     const [callsToday, convosToday, leadsToday, aptsToday, offersToday, contractsToday, pushedToday, dispoOffersToday, dispoContractsToday] = await Promise.all([
-      db.call.count({
-        where: { tenantId, calledAt: { gte: dayStart, lte: dayEnd } },
-      }),
-      db.call.count({
-        where: { tenantId, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' },
-      }),
-      // Milestones — total entries per type (matches ledger)
-      db.propertyMilestone.count({ where: { tenantId, type: 'LEAD', createdAt: { gte: dayStart, lte: dayEnd } } }),
-      db.propertyMilestone.count({ where: { tenantId, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }),
-      db.propertyMilestone.count({ where: { tenantId, type: 'OFFER_MADE', createdAt: { gte: dayStart, lte: dayEnd } } }),
-      db.propertyMilestone.count({ where: { tenantId, type: 'UNDER_CONTRACT', createdAt: { gte: dayStart, lte: dayEnd } } }),
-      db.propertyMilestone.count({ where: { tenantId, type: 'DISPO_PUSHED', createdAt: { gte: dayStart, lte: dayEnd } } }),
-      db.propertyMilestone.count({ where: { tenantId, type: 'DISPO_OFFER_RECEIVED', createdAt: { gte: dayStart, lte: dayEnd } } }),
-      db.propertyMilestone.count({ where: { tenantId, type: 'DISPO_CONTRACTED', createdAt: { gte: dayStart, lte: dayEnd } } }),
+      db.call.count({ where: callWhere }),
+      db.call.count({ where: { ...callWhere, gradingStatus: 'COMPLETED', durationSeconds: { gte: 45 } } }),
+      db.propertyMilestone.count({ where: milestoneWhere('LEAD') }),
+      db.propertyMilestone.count({ where: milestoneWhere('APPOINTMENT_SET') }),
+      db.propertyMilestone.count({ where: milestoneWhere('OFFER_MADE') }),
+      db.propertyMilestone.count({ where: milestoneWhere('UNDER_CONTRACT') }),
+      db.propertyMilestone.count({ where: milestoneWhere('DISPO_PUSHED') }),
+      db.propertyMilestone.count({ where: milestoneWhere('DISPO_OFFER_RECEIVED') }),
+      db.propertyMilestone.count({ where: milestoneWhere('DISPO_CONTRACTED') }),
     ])
 
     return NextResponse.json({

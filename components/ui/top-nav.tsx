@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
 import { Bell, Settings, ChevronDown, Menu, X, MessageSquare } from 'lucide-react'
-import { hasPermission, type UserRole } from '@/types/roles'
+import { hasPermission, isRoleAtLeast, type UserRole } from '@/types/roles'
 import { formatDistanceToNow } from 'date-fns'
 
 export function TopNav({ tenantSlug }: { tenantSlug: string }) {
@@ -54,17 +54,20 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
 
   const base = `/${tenantSlug}`
 
-  const navItems = [
+  const navItems: Array<{ href: string; label: string; permission?: typeof undefined; always?: boolean; adminOnly?: boolean }> = [
     { href: `${base}/tasks`, label: 'Day Hub', always: true },
-    { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as const },
-    { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as const },
-    { href: `${base}/kpis`, label: 'KPIs', permission: 'kpis.view.own' as const },
-    { href: `${base}/training`, label: 'Training', permission: 'calls.view.own' as const },
+    { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as never },
+    { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
+    { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
+    { href: `${base}/training`, label: 'Training', permission: 'calls.view.own' as never },
   ]
 
-  const visibleItems = navItems.filter(item =>
-    item.always || (item.permission && hasPermission(role, item.permission))
-  )
+  const visibleItems = navItems.filter(item => {
+    if (item.always) return true
+    if (item.adminOnly) return isRoleAtLeast(role, 'ADMIN')
+    if (item.permission) return hasPermission(role, item.permission as never)
+    return false
+  })
 
   return (
     <header className="sticky top-0 z-[100] bg-surface-primary border-b" style={{ borderColor: 'var(--border-light)' }}>

@@ -86,6 +86,14 @@ export async function GET(
     const calData = await calRes.json() as { calendars?: Array<{ id: string; name: string }> }
     const calendars = calData.calendars ?? []
 
+    // Get user's GHL ID for scoping — admins see all, others see only their appointments
+    const userRecord = await db.user.findUnique({
+      where: { id: session.userId },
+      select: { ghlUserId: true, role: true },
+    })
+    const isAdmin = userRecord?.role === 'OWNER' || userRecord?.role === 'ADMIN'
+    const userGhlId = userRecord?.ghlUserId ?? null
+
     // Resolve user IDs → names
     const ghl = await getGHLClient(tenantId)
     const userMap = new Map<string, string>()
@@ -133,8 +141,13 @@ export async function GET(
     // Sort by time
     allAppts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
 
+    // Non-admins only see their own appointments
+    const filteredAppts = (isAdmin || !userGhlId)
+      ? allAppts
+      : allAppts.filter(a => a.assignedUserId === userGhlId)
+
     // Bulk fetch contact details (phone, address) from GHL
-    const contactIds = [...new Set(allAppts.map(a => a.contactId).filter(Boolean))]
+    const contactIds = [...new Set(filteredAppts.map(a => a.contactId).filter(Boolean))]
     const contactMap = new Map<string, { name: string; phone: string; address: string }>()
 
     // Also check local properties for address
@@ -162,7 +175,7 @@ export async function GET(
     }
 
     // Build final response
-    const appointments = allAppts.map(a => {
+    const appointments = filteredAppts.map(a => {
       const contact = contactMap.get(a.contactId)
       const startMs = new Date(a.startTime).getTime()
       const endMs = new Date(a.endTime).getTime()

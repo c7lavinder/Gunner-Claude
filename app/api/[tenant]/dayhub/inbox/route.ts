@@ -17,14 +17,21 @@ export async function GET(
     const url = new URL(req.url)
     const filter = url.searchParams.get('filter') ?? 'all'
 
-    const tenantRecord = await db.tenant.findUnique({
-      where: { id: tenantId },
-      select: { ghlLocationId: true },
-    })
+    // Get user's GHL ID for scoping — admins see all, others see only their conversations
+    const [tenantRecord, userRecord] = await Promise.all([
+      db.tenant.findUnique({ where: { id: tenantId }, select: { ghlLocationId: true } }),
+      db.user.findUnique({ where: { id: session.userId }, select: { ghlUserId: true, role: true } }),
+    ])
     const locationId = tenantRecord?.ghlLocationId ?? ''
+    const isAdmin = userRecord?.role === 'OWNER' || userRecord?.role === 'ADMIN'
+    const ghlUserId = userRecord?.ghlUserId ?? undefined
 
     const ghl = await getGHLClient(tenantId)
-    const conversations = await ghl.getConversations({ limit: 30 })
+    // Non-admins only see conversations assigned to them in GHL
+    const conversations = await ghl.getConversations({
+      limit: 30,
+      ...(isAdmin || !ghlUserId ? {} : { assignedTo: ghlUserId }),
+    })
     const rawConversations = conversations.conversations ?? []
 
     // Resolve GHL user IDs → team member names

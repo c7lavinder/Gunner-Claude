@@ -4,7 +4,7 @@ import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { redirect } from 'next/navigation'
 import type { UserRole } from '@/types/roles'
-import { hasPermission } from '@/types/roles'
+import { isRoleAtLeast } from '@/types/roles'
 import { getMarketsForZip } from '@/lib/config/crm.config'
 import { KpiDashboard } from './KpiDashboard'
 
@@ -14,7 +14,8 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
   const tenantId = session.tenantId
   const role = session.role as UserRole
 
-  if (!hasPermission(role, 'kpis.view.own')) redirect(`/${params.tenant}/dashboard`)
+  // KPI page is admin/owner only — team members see their KPIs on Day Hub
+  if (!isRoleAtLeast(role, 'ADMIN')) redirect(`/${params.tenant}/tasks`)
 
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
