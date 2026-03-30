@@ -1726,25 +1726,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
           <InlineEditCard label="ASSIGNMENT FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={property.id} source={sources.assignmentFee} onSaved={handleSaved} />
           <InlineEditCard label="FINAL PROFIT" value={vals.finalProfit} field="finalProfit" propertyId={property.id} source={sources.finalProfit} onSaved={handleSaved} />
         </div>
-        {/* AI estimates row */}
-        {(property.repairEstimate || property.rentalEstimate) && (
-          <div className="grid grid-cols-3 gap-3 mt-2">
-            {property.repairEstimate && (
-              <div className="bg-blue-50 border-[0.5px] border-blue-300 rounded-[10px] px-3 py-2.5 relative">
-                <span className="absolute top-1 right-1.5 text-[7px] font-bold text-blue-400">AI</span>
-                <p className="text-[9px] font-semibold text-blue-700 uppercase tracking-wider">Repair Estimate</p>
-                <p className="text-ds-card font-semibold text-blue-800 mt-0.5">${Number(property.repairEstimate).toLocaleString()}</p>
-              </div>
-            )}
-            {property.rentalEstimate && (
-              <div className="bg-blue-50 border-[0.5px] border-blue-300 rounded-[10px] px-3 py-2.5 relative">
-                <span className="absolute top-1 right-1.5 text-[7px] font-bold text-blue-400">AI</span>
-                <p className="text-[9px] font-semibold text-blue-700 uppercase tracking-wider">Rental Estimate</p>
-                <p className="text-ds-card font-semibold text-blue-800 mt-0.5">${Number(property.rentalEstimate).toLocaleString()}/mo</p>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Rental/Repair estimates moved to Research tab */}
       </div>
 
       {/* Property Details — structured grid */}
