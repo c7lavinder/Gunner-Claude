@@ -414,6 +414,10 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
   const [milestoneNotes, setMilestoneNotes] = useState('')
   const [milestoneDate, setMilestoneDate] = useState('')
   const [milestoneUserId, setMilestoneUserId] = useState('')
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
+  const [editMilestoneDate, setEditMilestoneDate] = useState('')
+  const [editMilestoneNotes, setEditMilestoneNotes] = useState('')
+  const [editMilestoneUserId, setEditMilestoneUserId] = useState('')
   const [saving, setSaving] = useState(false)
   const acqKeys = ACQ_STEPS.map(s => s.key)
   const dispoKeys = DISPO_STEPS.map(s => s.key)
@@ -447,6 +451,44 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
     'LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED',
     'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED',
   ]
+
+  async function editMilestone(milestoneId: string) {
+    setSaving(true)
+    try {
+      const body: Record<string, string> = {}
+      if (editMilestoneDate) body.date = editMilestoneDate
+      if (editMilestoneNotes !== undefined) body.notes = editMilestoneNotes
+      if (editMilestoneUserId) body.loggedById = editMilestoneUserId
+      const res = await fetch('/api/milestones', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: milestoneId, ...body }),
+      })
+      if (res.ok) {
+        toast('Milestone updated', 'success')
+        setEditingMilestoneId(null)
+        router.refresh()
+      } else toast('Failed to update', 'error')
+    } catch { toast('Failed to update', 'error') }
+    setSaving(false)
+  }
+
+  async function deleteMilestone(milestoneId: string) {
+    if (!window.confirm('Delete this milestone? This affects KPI counts.')) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/milestones', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: milestoneId }),
+      })
+      if (res.ok) {
+        toast('Milestone deleted', 'success')
+        router.refresh()
+      } else toast('Failed to delete', 'error')
+    } catch { toast('Failed to delete', 'error') }
+    setSaving(false)
+  }
 
   async function logMilestone(milestoneType: string) {
     if (!LOGGABLE_TYPES.includes(milestoneType)) return
@@ -582,22 +624,66 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
               {popoverCaution ? (
                 <p className="text-[9px] text-amber-600 mt-0.5">No milestone — this stage won&apos;t count in KPIs. Log with the correct date.</p>
               ) : stepMilestones.length > 0 ? (
-                <div className="space-y-1 mt-1">
-                  {stepMilestones.map((m, mi) => (
-                    <div key={mi} className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[9px] text-txt-muted">{format(new Date(m.date), 'MMM d, yyyy')}</span>
-                      {m.loggedByName && <span className="text-[9px] font-medium text-txt-secondary">· {m.loggedByName}</span>}
-                      {!m.loggedByName && <span className="text-[9px] text-txt-muted italic">· unassigned</span>}
-                      {m.source && (
-                        <span className={`text-[7px] px-1 py-0.5 rounded font-medium ${
-                          m.source === 'AUTO_WEBHOOK' ? 'bg-purple-100 text-purple-700'
-                          : m.source === 'AI' ? 'bg-blue-100 text-blue-700'
-                          : 'bg-green-100 text-green-700'
-                        }`}>{m.source === 'AUTO_WEBHOOK' ? 'API' : m.source === 'AI' ? 'AI' : 'Manual'}</span>
-                      )}
-                      {m.notes && <span className="text-[9px] text-txt-muted">— {m.notes}</span>}
-                    </div>
-                  ))}
+                <div className="space-y-1.5 mt-1">
+                  {stepMilestones.map((m, mi) => {
+                    const isEditingThis = editingMilestoneId === m.id
+                    return (
+                      <div key={mi}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] text-txt-muted">{format(new Date(m.date), 'MMM d, yyyy')}</span>
+                          {m.loggedByName && <span className="text-[9px] font-medium text-txt-secondary">· {m.loggedByName}</span>}
+                          {!m.loggedByName && <span className="text-[9px] text-txt-muted italic">· unassigned</span>}
+                          {m.source && (
+                            <span className={`text-[7px] px-1 py-0.5 rounded font-medium ${
+                              m.source === 'AUTO_WEBHOOK' ? 'bg-purple-100 text-purple-700'
+                              : m.source === 'AI' ? 'bg-blue-100 text-blue-700'
+                              : 'bg-green-100 text-green-700'
+                            }`}>{m.source === 'AUTO_WEBHOOK' ? 'API' : m.source === 'AI' ? 'AI' : 'Manual'}</span>
+                          )}
+                          {m.notes && <span className="text-[9px] text-txt-muted">— {m.notes}</span>}
+                          {canEdit && m.id && (
+                            <div className="flex gap-1 ml-auto">
+                              <button
+                                onClick={() => {
+                                  if (isEditingThis) { setEditingMilestoneId(null); return }
+                                  setEditingMilestoneId(m.id!)
+                                  setEditMilestoneDate(format(new Date(m.date), 'yyyy-MM-dd'))
+                                  setEditMilestoneNotes(m.notes ?? '')
+                                  setEditMilestoneUserId(m.loggedById ?? '')
+                                }}
+                                className="text-[8px] text-semantic-blue hover:underline"
+                              >
+                                {isEditingThis ? 'Cancel' : 'Edit'}
+                              </button>
+                              <button onClick={() => deleteMilestone(m.id!)} className="text-[8px] text-semantic-red hover:underline">
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {isEditingThis && (
+                          <div className="mt-1.5 space-y-1 pl-2 border-l-2 border-semantic-blue/30">
+                            <select
+                              value={editMilestoneUserId}
+                              onChange={e => setEditMilestoneUserId(e.target.value)}
+                              className="w-full text-[9px] px-2 py-1 rounded border border-[rgba(0,0,0,0.1)] bg-white"
+                            >
+                              <option value="">Who did this?</option>
+                              {teamMembers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                            <input type="date" value={editMilestoneDate} onChange={e => setEditMilestoneDate(e.target.value)}
+                              className="w-full text-[9px] px-2 py-1 rounded border border-[rgba(0,0,0,0.1)] bg-white" />
+                            <input type="text" value={editMilestoneNotes} onChange={e => setEditMilestoneNotes(e.target.value)}
+                              placeholder="Notes" className="w-full text-[9px] px-2 py-1 rounded border border-[rgba(0,0,0,0.1)] bg-white" />
+                            <button onClick={() => editMilestone(m.id!)} disabled={saving}
+                              className="text-[8px] font-medium text-white bg-gunner-red px-2 py-0.5 rounded disabled:opacity-50">
+                              {saving ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               ) : isCurrent ? (
                 <p className="text-[9px] text-txt-muted mt-0.5">Currently here — no milestone recorded</p>
