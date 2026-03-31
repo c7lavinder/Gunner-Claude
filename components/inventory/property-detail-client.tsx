@@ -2389,6 +2389,9 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         </div>
       </div>
 
+      {/* ── COMPUTED METRICS ────────────────────────────────────── */}
+      <ComputedMetricsSection propertyId={property.id} />
+
       {/* ── DEAL INTELLIGENCE (from calls — blue source) ───────────── */}
       <DealIntelSection dealIntel={(property as unknown as { dealIntel?: Record<string, unknown> }).dealIntel ?? null} />
 
@@ -2410,6 +2413,143 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         )}
       </div>
     </div>
+  )
+}
+
+// ─── Computed Metrics (Research tab) ─────────────────────────────────────────
+
+function ComputedMetricsSection({ propertyId }: { propertyId: string }) {
+  const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/properties/${propertyId}/metrics`)
+      .then(r => r.json())
+      .then(d => { if (d.metrics) setMetrics(d.metrics); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [propertyId])
+
+  if (!loaded || !metrics) return null
+
+  const fmt = (v: unknown) => v != null ? String(v) : '—'
+  const fmtDays = (v: unknown) => v != null ? `${v}d` : '—'
+  const fmtMin = (v: unknown) => v != null ? `${v} min` : '—'
+  const fmt$ = (v: unknown) => v != null ? `$${Number(v).toLocaleString()}` : '—'
+  const fmtPct = (v: unknown) => v != null ? `${v}%` : '—'
+
+  const m = metrics as {
+    leadAge?: number; speedToFirstContact?: number | null
+    totalCallCount?: number; outboundCallCount?: number; inboundCallCount?: number; voicemailCount?: number
+    contactAttemptsVsMade?: { attempts: number; contacts: number }
+    daysSinceLastContact?: number | null; avgCallScore?: number | null
+    daysInCurrentStage?: number | null
+    appointmentHistory?: { set: number; completed: number; noShowed: number }
+    mao?: number | null; equityEstimate?: number | null; negotiationGap?: number | null
+    zestimateVsARV?: number | null; taxAssessmentVsARV?: number | null
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-3 pt-2">
+        <div className="flex-1 h-px bg-gray-200" />
+        <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">COMPUTED METRICS</span>
+        <div className="flex-1 h-px bg-gray-200" />
+      </div>
+
+      {/* Engagement */}
+      <div className="border-[0.5px] border-gray-200 rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+          <p className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider">Engagement</p>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-3">
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Lead Age</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmtDays(m.leadAge)}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Speed to 1st Contact</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmtMin(m.speedToFirstContact)}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Total Calls</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmt(m.totalCallCount)}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Out / In</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{m.outboundCallCount ?? 0} / {m.inboundCallCount ?? 0}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Voicemails</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmt(m.voicemailCount)}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Answer Rate</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">
+              {m.contactAttemptsVsMade && m.contactAttemptsVsMade.attempts > 0
+                ? `${Math.round((m.contactAttemptsVsMade.contacts / m.contactAttemptsVsMade.attempts) * 100)}%`
+                : '—'}
+            </p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Days Since Contact</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmtDays(m.daysSinceLastContact)}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Avg Call Score</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{m.avgCallScore != null ? `${m.avgCallScore}%` : '—'}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Days in Stage</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmtDays(m.daysInCurrentStage)}</p>
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+            <p className="text-[8px] font-semibold text-txt-muted uppercase">Appointments</p>
+            <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">
+              {m.appointmentHistory ? `${m.appointmentHistory.set} set, ${m.appointmentHistory.completed} done` : '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Deal Financials (computed) */}
+      {(m.mao != null || m.equityEstimate != null || m.negotiationGap != null) && (
+        <div className="border-[0.5px] border-gray-200 rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+            <p className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider">Computed Deal Numbers</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 p-3">
+            <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+              <p className="text-[8px] font-semibold text-txt-muted uppercase">MAO</p>
+              <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmt$(m.mao)}</p>
+            </div>
+            <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+              <p className="text-[8px] font-semibold text-txt-muted uppercase">Equity Estimate</p>
+              <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmt$(m.equityEstimate)}</p>
+            </div>
+            <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+              <p className="text-[8px] font-semibold text-txt-muted uppercase">Negotiation Gap</p>
+              <p className="text-ds-fine font-semibold text-txt-primary mt-0.5">{fmt$(m.negotiationGap)}</p>
+            </div>
+            {m.zestimateVsARV != null && (
+              <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+                <p className="text-[8px] font-semibold text-txt-muted uppercase">Zestimate vs ARV</p>
+                <p className={`text-ds-fine font-semibold mt-0.5 ${m.zestimateVsARV > 0 ? 'text-semantic-green' : 'text-semantic-red'}`}>
+                  {m.zestimateVsARV > 0 ? '+' : ''}{fmtPct(m.zestimateVsARV)}
+                </p>
+              </div>
+            )}
+            {m.taxAssessmentVsARV != null && (
+              <div className="rounded-[8px] bg-surface-secondary px-3 py-2">
+                <p className="text-[8px] font-semibold text-txt-muted uppercase">Tax Assess vs ARV</p>
+                <p className={`text-ds-fine font-semibold mt-0.5 ${m.taxAssessmentVsARV < 0 ? 'text-semantic-green' : 'text-semantic-amber'}`}>
+                  {m.taxAssessmentVsARV > 0 ? '+' : ''}{fmtPct(m.taxAssessmentVsARV)}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
