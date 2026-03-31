@@ -101,8 +101,7 @@ interface PropertyDetail {
   leadSource: string | null
   ghlStageName: string | null
   milestones: Array<{ type: string; date: string; notes: string | null }>
-  serverAcqIdx?: number
-  serverDispoIdx?: number
+  dispoStatus: string | null
   teamMembers: Array<{ id: string; name: string }>
   messages: Array<{ id: string; text: string; mentions: Array<{ id: string; name: string }>; userId: string | null; userName: string; createdAt: string }>
 }
@@ -274,7 +273,7 @@ export function PropertyDetailClient({
         </div>
 
         {/* Deal progress — view only, click for milestone details */}
-        <DealProgress currentStatus={property.status} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} serverAcqIdx={property.serverAcqIdx} serverDispoIdx={property.serverDispoIdx} />
+        <DealProgress currentStatus={property.status} dispoStatus={property.dispoStatus} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} />
       </div>
 
       {/* Tab bar */}
@@ -400,13 +399,12 @@ const DISPO_STEPS = [
   { key: 'DISPO_CLOSED', label: 'Closed' },
 ]
 
-function DealProgress({ currentStatus, milestones, propertyId, canEdit, serverAcqIdx, serverDispoIdx }: {
+function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canEdit }: {
   currentStatus: string
+  dispoStatus: string | null
   milestones: Array<{ type: string; date: string; notes: string | null }>
   propertyId: string
   canEdit: boolean
-  serverAcqIdx?: number
-  serverDispoIdx?: number
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -437,23 +435,9 @@ function DealProgress({ currentStatus, milestones, propertyId, canEdit, serverAc
     milestonesByType[m.type].push({ date: m.date, notes: m.notes })
   }
 
-  // Pipeline indices: prefer server-computed (from milestones), then client milestone derivation, then status fallback.
-  function highestMilestoneIdx(steps: typeof ACQ_STEPS): number {
-    let highest = -1
-    for (let i = steps.length - 1; i >= 0; i--) {
-      const mt = stepToMilestone[steps[i].key] ?? ''
-      if ((milestonesByType[mt] ?? []).length > 0) { highest = i; break }
-    }
-    return highest
-  }
-  const acqFromMilestones = highestMilestoneIdx(ACQ_STEPS)
-  const dispoFromMilestones = highestMilestoneIdx(DISPO_STEPS)
-  const acqIdx = serverAcqIdx !== undefined && serverAcqIdx >= 0 ? serverAcqIdx
-    : acqFromMilestones >= 0 ? acqFromMilestones
-    : acqKeys.indexOf(currentStatus)
-  const dispoIdx = serverDispoIdx !== undefined && serverDispoIdx >= 0 ? serverDispoIdx
-    : dispoFromMilestones >= 0 ? dispoFromMilestones
-    : dispoKeys.indexOf(currentStatus)
+  // Simple: status → acq position, dispoStatus → dispo position. Two fields, two pipelines.
+  const acqIdx = acqKeys.indexOf(currentStatus)
+  const dispoIdx = dispoStatus ? dispoKeys.indexOf(dispoStatus) : -1
 
   // Types that can be manually logged — all types allowed so users can fill gaps flagged by caution icons
   const LOGGABLE_TYPES = [

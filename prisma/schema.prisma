@@ -188,8 +188,10 @@ model Property {
   contractPrice Decimal? @db.Decimal(12, 2) @map("contract_price")
   assignmentFee Decimal? @db.Decimal(12, 2) @map("assignment_fee")
 
-  // Status
+  // Status — acquisition pipeline position (never overwritten by dispo)
   status PropertyStatus @default(NEW_LEAD)
+  // Disposition pipeline position — null means not in dispo yet
+  dispoStatus PropertyStatus? @map("dispo_status")
 
   // Lead tracking
   leadSource       String? @map("lead_source") // GHL opportunity source — tracked for KPIs

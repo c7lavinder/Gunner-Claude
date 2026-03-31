@@ -458,8 +458,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     (!tenant.dispoPipelineId || oppData.pipelineId === tenant.dispoPipelineId)
 
   if (isDispoTrigger) {
-    // Entering dispo: set status to IN_DISPOSITION (so inventory list shows it in dispo)
-    // AND backfill acquisition milestones (so property detail shows acq pipeline progress).
+    // Entering dispo: set dispoStatus (never touch acq status).
     const existing = await db.property.findFirst({
       where: { tenantId, ghlContactId: oppData.contactId },
       select: { id: true, address: true, status: true },
@@ -467,9 +466,9 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     if (existing) {
       await db.property.update({
         where: { id: existing.id },
-        data: { status: 'IN_DISPOSITION' },
+        data: { dispoStatus: 'IN_DISPOSITION' },
       })
-      console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → IN_DISPOSITION (was ${existing.status})`)
+      console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → dispoStatus=IN_DISPOSITION (acq stays ${existing.status})`)
     } else {
       await createPropertyFromContact(tenantId, oppData.contactId, {
         ghlPipelineId: oppData.pipelineId,
@@ -548,15 +547,12 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
     const isDispoStage = appStage?.startsWith('disposition')
 
-    // Both dispo and acquisition stage changes update the status field.
-    // Acquisition progress is preserved via milestones (property detail derives acqIdx from them).
+    // Dispo stages → dispoStatus. Acq/longterm stages → status. Never cross-contaminate.
     const updateData: Record<string, unknown> = {}
 
     if (isDispoStage) {
-      // Dispo stage: update status to dispo status so inventory list shows it correctly
-      if (newStatus) updateData.status = newStatus
+      if (newStatus) updateData.dispoStatus = newStatus
     } else {
-      // Acquisition / longterm: update status + pipeline info normally
       updateData.ghlPipelineStage = stageName ?? stageId
       updateData.ghlPipelineId = oppData.pipelineId
       if (newStatus) updateData.status = newStatus

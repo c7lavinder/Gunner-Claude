@@ -91,23 +91,6 @@ export default async function PropertyDetailPage({
     ...kpiMilestones.filter(m => !milestoneTypes.has(m.type)),
   ]
 
-  // Compute pipeline indices server-side from milestones — reliable even with cached client JS.
-  // Acquisition: highest acq milestone determines position. Dispo: same for dispo milestones.
-  const MILESTONE_TO_ACQ_IDX: Record<string, number> = {
-    LEAD: 0, APPOINTMENT_SET: 1, OFFER_MADE: 2, UNDER_CONTRACT: 3, CLOSED: 4,
-  }
-  const MILESTONE_TO_DISPO_IDX: Record<string, number> = {
-    DISPO_NEW: 0, DISPO_PUSHED: 1, DISPO_OFFER_RECEIVED: 2, DISPO_CONTRACTED: 3, DISPO_CLOSED: 4,
-  }
-  let serverAcqIdx = -1
-  let serverDispoIdx = -1
-  for (const m of milestones) {
-    const aIdx = MILESTONE_TO_ACQ_IDX[m.type as string]
-    if (aIdx !== undefined && aIdx > serverAcqIdx) serverAcqIdx = aIdx
-    const dIdx = MILESTONE_TO_DISPO_IDX[m.type as string]
-    if (dIdx !== undefined && dIdx > serverDispoIdx) serverDispoIdx = dIdx
-  }
-
   // Fetch team members for @mentions in messaging
   const teamMembers = await db.user.findMany({
     where: { tenantId },
@@ -232,8 +215,7 @@ export default async function PropertyDetailPage({
         leadSource: property.leadSource,
         ghlStageName: property.ghlPipelineStage,
         milestones: milestones.map(m => ({ type: m.type, date: m.createdAt.toISOString(), notes: m.notes })),
-        serverAcqIdx,
-        serverDispoIdx,
+        dispoStatus: property.dispoStatus,
         teamMembers: teamMembers.map(u => ({ id: u.id, name: u.name })),
         messages: messages.map(m => ({
           id: m.id,
