@@ -189,7 +189,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   }
 
   const allTabs: Array<{ id: Tab; label: string; count: number; icon: React.ReactNode }> = [
-    { id: 'all', label: 'All Calls', count: allCalls.length, icon: <Phone size={13} /> },
+    { id: 'all', label: 'All Calls', count: filtered.length, icon: <Phone size={13} /> },
     { id: 'review', label: 'Needs Review', count: reviewCalls.length, icon: <AlertTriangle size={13} /> },
     { id: 'skipped', label: 'Skipped', count: skippedCalls.length, icon: <X size={13} /> },
     { id: 'archived', label: 'Archived', count: 0, icon: <Archive size={13} /> },
