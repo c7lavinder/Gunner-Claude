@@ -46,6 +46,27 @@ export default async function CallDetailPage({
   const keyMoments = (call.keyMoments as Array<{ timestamp: string; type: string; description: string }> | null) ?? []
   const objections = (call.objections as Array<{ objection: string; response: string; handled: boolean }> | null) ?? []
 
+  // Parse structured coaching data from aiFeedback (new format stores JSON string)
+  let coachingData: {
+    strengths: string[]
+    redFlags: string[]
+    improvements: Array<{ what_went_wrong: string; call_example: string; coaching_tip: string }>
+    objectionReplies: Array<{ objection_label: string; call_quote: string; suggested_responses: string[] }>
+  } = { strengths: [], redFlags: [], improvements: [], objectionReplies: [] }
+
+  if (call.aiFeedback) {
+    try {
+      const parsed = JSON.parse(call.aiFeedback)
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.strengths)) {
+        coachingData = parsed
+      }
+    } catch {
+      // Old format — aiFeedback is a plain string. Extract strengths from it for backwards compat.
+      const lines = call.aiFeedback.split(/\n+/).map(s => s.replace(/^[-•*]\s*/, '').trim()).filter(s => s.length > 15)
+      coachingData.strengths = lines.slice(0, 4)
+    }
+  }
+
   const contactName = call.contactName ?? call.property?.sellers[0]?.seller.name ?? null
   const contactPhone = call.property?.sellers[0]?.seller.phone ?? null
 
@@ -64,6 +85,7 @@ export default async function CallDetailPage({
         transcript: call.transcript,
         aiSummary: call.aiSummary,
         aiFeedback: call.aiFeedback,
+        coachingData,
         sentiment: call.sentiment,
         sellerMotivation: call.sellerMotivation,
         talkRatio: call.talkRatio,

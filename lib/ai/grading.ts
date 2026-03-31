@@ -200,8 +200,15 @@ export async function gradeCall(callId: string): Promise<void> {
         score: grading.overallScore,
         rubricScores: grading.rubricScores,
         aiSummary: grading.summary,
-        aiFeedback: grading.feedback,
+        // Store structured coaching data as JSON string in aiFeedback
+        aiFeedback: JSON.stringify({
+          strengths: grading.strengths,
+          redFlags: grading.redFlags,
+          improvements: grading.improvements,
+          objectionReplies: grading.objectionReplies,
+        }),
         aiCoachingTips: grading.coachingTips,
+        objections: grading.objectionReplies.length > 0 ? grading.objectionReplies : undefined,
         gradedAt: new Date(),
         // 3-tier call type: 1) manual (already set) → 2) AI detection → 3) role fallback
         ...(!call.callType ? { callType: grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role) } : {}),
@@ -528,9 +535,30 @@ ${feedbackCorrections}`)
       "notes": "<specific note referencing what was said>"
     }
   },
-  "summary": "<2-3 sentence call summary — specific, not generic>",
-  "feedback": "<specific actionable feedback paragraph — must reference transcript moments>",
-  "coachingTips": ["<tip 1 — specific to this call>", "<tip 2>", "<tip 3>"],
+  "summary": "<2-4 sentences. Factual and neutral. Must include any specific numbers mentioned (offer price, asking price, etc.), who called who, the outcome, and the key turning points. No editorial opinion. Think 'what happened on this call' not 'what went wrong.'>",
+  "strengths": [
+    "<short bullet, 1-2 sentences. Purely positive. Must reference a specific moment or quote from the call.>"
+  ],
+  "redFlags": [
+    "<1 sentence each. Concise labels for things that were missing or risky. e.g. 'Weak or uncertain price delivery.' No explanation needed.>"
+  ],
+  "improvements": [
+    {
+      "what_went_wrong": "<1-2 sentences. What specifically happened and why it was a problem. Reference the actual moment.>",
+      "call_example": "<Verbatim quote or exchange from the call that illustrates the mistake. Just the relevant line(s).>",
+      "coaching_tip": "<2-3 sentences. What they should have done instead, including a word-for-word example script they could have used. Concrete and ready to use.>"
+    }
+  ],
+  "objectionReplies": [
+    {
+      "objection_label": "<Short name for the objection, e.g. 'Price is too low'>",
+      "call_quote": "<Verbatim exchange from the call where this objection occurred>",
+      "suggested_responses": [
+        "<First-person ready-to-say scripted response>",
+        "<Second alternative scripted response>"
+      ]
+    }
+  ],
   "callType": <"cold_call"|"qualification_call"|"admin_call"|"follow_up_call"|"offer_call"|"purchase_agreement_call"|"dispo_call"|null — return null if call type was already provided>,
   "callOutcome": "<must be one of the valid outcomes listed below>",
   "followUpScheduled": <boolean — true if any specific future contact was agreed to>,
@@ -545,6 +573,13 @@ ${feedbackCorrections}`)
   "sentiment": <number -1.0 to 1.0>,
   "sellerMotivation": <number 0.0 to 1.0 or null>
 }
+
+IMPORTANT COACHING OUTPUT RULES:
+- strengths: 2-4 items. Short bullets only. No "however" or critique mixed in.
+- redFlags: 2-4 items. 1 sentence each. No explanation, just the flag.
+- improvements: 2-4 items. Each MUST have all three fields (what_went_wrong, call_example, coaching_tip). The coaching_tip MUST include a word-for-word script example.
+- objectionReplies: 1-3 objections IF objections occurred. Each suggested_response must be a first-person line the rep could say verbatim. If no objections occurred, return an empty array.
+- Do NOT produce generic coaching tips. Every piece of feedback must reference a specific moment from THIS call.
 
 VALID OUTCOMES FOR THIS CALL: ${validOutcomes}
 
@@ -662,19 +697,63 @@ function parseGradingResponse(text: string): GradingResult {
     clean = clean.substring(firstBrace, lastBrace + 1)
   }
 
+  let raw: Record<string, unknown>
   try {
-    return JSON.parse(clean) as GradingResult
+    raw = JSON.parse(clean) as Record<string, unknown>
   } catch {
-    // Try fixing common JSON issues: trailing commas, control characters
     try {
       const fixed = clean
         .replace(/,\s*}/g, '}')
         .replace(/,\s*]/g, ']')
         .replace(/[\x00-\x1f]/g, (ch) => ch === '\n' || ch === '\t' ? ch : ' ')
-      return JSON.parse(fixed) as GradingResult
+      raw = JSON.parse(fixed) as Record<string, unknown>
     } catch {
       throw new Error(`Failed to parse Claude grading response: ${text.substring(0, 200)}`)
     }
+  }
+
+  // Extract new structured fields with fallbacks for old format
+  const strengths = Array.isArray(raw.strengths) ? raw.strengths as string[] : []
+  const redFlags = Array.isArray(raw.redFlags) ? raw.redFlags as string[] : []
+  const improvements = Array.isArray(raw.improvements)
+    ? (raw.improvements as Array<{ what_went_wrong?: string; call_example?: string; coaching_tip?: string }>).map(i => ({
+        what_went_wrong: i.what_went_wrong ?? '',
+        call_example: i.call_example ?? '',
+        coaching_tip: i.coaching_tip ?? '',
+      }))
+    : []
+  const objectionReplies = Array.isArray(raw.objectionReplies)
+    ? (raw.objectionReplies as Array<{ objection_label?: string; call_quote?: string; suggested_responses?: string[] }>).map(o => ({
+        objection_label: o.objection_label ?? '',
+        call_quote: o.call_quote ?? '',
+        suggested_responses: Array.isArray(o.suggested_responses) ? o.suggested_responses : [],
+      }))
+    : []
+
+  // Build legacy fields from new structure for backwards compatibility
+  const feedback = strengths.length > 0
+    ? strengths.join('\n')
+    : (raw.feedback as string) ?? ''
+  const coachingTips = improvements.length > 0
+    ? improvements.map(i => i.coaching_tip)
+    : Array.isArray(raw.coachingTips) ? raw.coachingTips as string[] : []
+
+  return {
+    overallScore: (raw.overallScore as number) ?? 0,
+    rubricScores: (raw.rubricScores as GradingResult['rubricScores']) ?? {},
+    summary: (raw.summary as string) ?? '',
+    strengths,
+    redFlags,
+    improvements,
+    objectionReplies,
+    feedback,
+    coachingTips,
+    callType: (raw.callType as string) ?? null,
+    callOutcome: (raw.callOutcome as string) ?? null,
+    followUpScheduled: (raw.followUpScheduled as boolean) ?? false,
+    keyMoments: Array.isArray(raw.keyMoments) ? raw.keyMoments as GradingResult['keyMoments'] : [],
+    sentiment: (raw.sentiment as number) ?? null,
+    sellerMotivation: (raw.sellerMotivation as number) ?? null,
   }
 }
 
@@ -818,6 +897,12 @@ export interface GradingResult {
   overallScore: number
   rubricScores: Record<string, { score: number; maxScore: number; notes: string }>
   summary: string
+  // New structured coaching fields
+  strengths: string[]
+  redFlags: string[]
+  improvements: Array<{ what_went_wrong: string; call_example: string; coaching_tip: string }>
+  objectionReplies: Array<{ objection_label: string; call_quote: string; suggested_responses: string[] }>
+  // Legacy fields — populated from new structure for backwards compatibility
   feedback: string
   coachingTips: string[]
   // Auto-classification

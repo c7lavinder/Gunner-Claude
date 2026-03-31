@@ -24,12 +24,20 @@ interface RubricScore { score: number; maxScore: number; notes: string }
 interface KeyMoment { timestamp: string; type: string; description: string }
 interface Objection { objection: string; response: string; handled: boolean }
 
+interface CoachingData {
+  strengths: string[]
+  redFlags: string[]
+  improvements: Array<{ what_went_wrong: string; call_example: string; coaching_tip: string }>
+  objectionReplies: Array<{ objection_label: string; call_quote: string; suggested_responses: string[] }>
+}
+
 interface CallDetail {
   id: string; score: number | null; gradingStatus: string
   callType: string | null; callOutcome: string | null; direction: string
   durationSeconds: number | null; calledAt: string
   recordingUrl: string | null; transcript: string | null
   aiSummary: string | null; aiFeedback: string | null
+  coachingData: CoachingData
   sentiment: number | null; sellerMotivation: number | null
   talkRatio: number | null; nextBestAction: string | null
   keyMoments: KeyMoment[]; objections: Objection[]
@@ -124,12 +132,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const grade = gradeInfo(call.score)
   const outcome = call.callOutcome ?? call.property?.status ?? null
 
-  // Extract strengths from AI feedback — split on newlines (not periods) for cleaner sentences
-  const strengths = (call.aiFeedback ?? '')
-    .split(/\n+/)
-    .map(s => s.replace(/^[-•*]\s*/, '').trim())
-    .filter(s => s.length > 15 && !s.toLowerCase().startsWith('area') && !s.toLowerCase().startsWith('improve'))
-    .slice(0, 4)
+  const { strengths, redFlags, improvements, objectionReplies } = call.coachingData
 
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: 'coaching', label: 'Coaching', icon: <Lightbulb size={14} /> },
@@ -362,11 +365,28 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               <h3 className="text-[14px] font-semibold text-semantic-green flex items-center gap-2 mb-3">
                 <CheckCircle size={14} /> STRENGTHS
               </h3>
-              <ul className="space-y-3">
+              <ul className="space-y-2.5">
                 {strengths.map((s, i) => (
                   <li key={i} className="text-[13px] text-txt-secondary leading-relaxed flex items-start gap-2">
                     <span className="text-semantic-green mt-0.5 shrink-0">•</span>
-                    {s.trim()}
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* RED FLAGS card */}
+          {redFlags.length > 0 && (
+            <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+              <h3 className="text-[14px] font-semibold text-semantic-amber flex items-center gap-2 mb-3">
+                <AlertTriangle size={14} /> RED FLAGS
+              </h3>
+              <ul className="space-y-2">
+                {redFlags.map((flag, i) => (
+                  <li key={i} className="text-[13px] text-txt-secondary leading-relaxed flex items-start gap-2">
+                    <span className="text-semantic-amber mt-0.5 shrink-0">•</span>
+                    {flag}
                   </li>
                 ))}
               </ul>
@@ -409,34 +429,84 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                 </div>
               )}
 
-              {/* Areas for Improvement */}
-              {call.coachingTips.length > 0 && (
-                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
-                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-amber uppercase flex items-center gap-2 mb-3">
-                    <ArrowLeft size={12} className="rotate-[135deg]" /> Areas for Improvement
+              {/* Areas for Improvement — each item is its own card */}
+              {improvements.length > 0 && (
+                <div>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-amber uppercase flex items-center gap-2 mb-3 px-1">
+                    <Target size={12} /> Areas for Improvement
                   </h3>
-                  <ul className="space-y-3">
-                    {call.coachingTips.map((tip, i) => (
-                      <li key={i} className="text-[13px] text-txt-secondary leading-relaxed flex items-start gap-2">
-                        <span className="text-semantic-amber mt-0.5 shrink-0">•</span>
-                        {tip}
-                      </li>
+                  <div className="space-y-3">
+                    {improvements.map((item, i) => (
+                      <div key={i} className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                        {/* What went wrong */}
+                        <p className="text-[13px] text-txt-primary leading-relaxed mb-3">{item.what_went_wrong}</p>
+
+                        {/* Call example — blockquote style */}
+                        {item.call_example && (
+                          <div className="flex gap-2 mb-3 pl-1">
+                            <span className="text-[20px] text-txt-muted leading-none shrink-0 -mt-1">&ldquo;</span>
+                            <p className="text-[12px] text-txt-muted italic leading-relaxed">{item.call_example}</p>
+                          </div>
+                        )}
+
+                        {/* Coaching tip — accent border card */}
+                        {item.coaching_tip && (
+                          <div className="border-l-[3px] border-semantic-blue bg-semantic-blue/5 rounded-r-[10px] px-4 py-3">
+                            <p className="text-[10px] font-medium tracking-[0.08em] text-semantic-blue uppercase mb-1.5">
+                              <Lightbulb size={10} className="inline -mt-0.5 mr-1" />Script Suggestion
+                            </p>
+                            <p className="text-[13px] text-txt-secondary leading-relaxed">{item.coaching_tip}</p>
+                          </div>
+                        )}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
 
-              {/* Coaching Tips */}
-              {call.aiFeedback && (
-                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--blue)' }}>
-                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-blue uppercase flex items-center gap-2 mb-3">
-                    <Lightbulb size={12} /> Coaching Tips
+              {/* Potential Replies to Objections */}
+              {objectionReplies.length > 0 && (
+                <div>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-purple uppercase flex items-center gap-2 mb-1 px-1">
+                    <ShieldCheck size={12} /> Potential Replies to Objections
                   </h3>
-                  <p className="text-[13px] text-txt-secondary leading-relaxed">{call.aiFeedback}</p>
+                  <p className="text-[11px] text-txt-muted mb-3 px-1">Objections identified in this call with suggested responses</p>
+                  <div className="space-y-3">
+                    {objectionReplies.map((obj, i) => (
+                      <div key={i} className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                        {/* Objection label chip */}
+                        <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-semantic-purple-bg text-semantic-purple mb-3 inline-block">
+                          {obj.objection_label}
+                        </span>
+
+                        {/* Call quote — blockquote style */}
+                        {obj.call_quote && (
+                          <div className="flex gap-2 mb-3 pl-1 mt-2">
+                            <span className="text-[20px] text-txt-muted leading-none shrink-0 -mt-1">&ldquo;</span>
+                            <p className="text-[12px] text-txt-muted italic leading-relaxed">{obj.call_quote}</p>
+                          </div>
+                        )}
+
+                        {/* Suggested responses */}
+                        {obj.suggested_responses.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-[9px] font-medium tracking-[0.1em] text-txt-muted uppercase mb-2">Suggested Responses</p>
+                            <div className="space-y-2">
+                              {obj.suggested_responses.map((resp, ri) => (
+                                <div key={ri} className="border-l-[3px] border-semantic-blue bg-semantic-blue/5 rounded-r-[10px] px-4 py-3">
+                                  <p className="text-[13px] text-txt-secondary leading-relaxed">{resp}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {!call.aiSummary && !call.aiFeedback && call.coachingTips.length === 0 && (
+              {!call.aiSummary && improvements.length === 0 && objectionReplies.length === 0 && (
                 <EmptyState icon={<Lightbulb size={24} />} message="No coaching data available yet" />
               )}
             </div>
