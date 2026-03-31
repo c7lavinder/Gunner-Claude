@@ -75,8 +75,9 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
     if (dataQualityFilter === 'source') return !p.leadSource
     if (dataQualityFilter === 'stage') return !p.ghlStageName && p.status === 'NEW_LEAD'
     if (selectedStage) {
-      const propStage = STATUS_TO_APP_STAGE[p.dispoStatus ?? p.status]
-      if (propStage !== selectedStage) return false
+      const acqStage = STATUS_TO_APP_STAGE[p.status]
+      const dispoStage = p.dispoStatus ? STATUS_TO_APP_STAGE[p.dispoStatus] : null
+      if (acqStage !== selectedStage && dispoStage !== selectedStage) return false
     }
     if (selectedMarket) {
       if (p.market !== selectedMarket) return false
