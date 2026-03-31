@@ -303,6 +303,15 @@ export async function gradeCall(callId: string): Promise<void> {
       console.error('[Grading] Next steps generation failed:', err)
     )
 
+    // Fire-and-forget: extract deal intelligence from transcript
+    if (call.propertyId && transcript) {
+      import('@/lib/ai/extract-deal-intel').then(({ extractDealIntel }) =>
+        extractDealIntel(callId).catch(err =>
+          console.error('[Grading] Deal intel extraction failed:', err instanceof Error ? err.message : err)
+        )
+      )
+    }
+
     // Recalculate TCP for the associated property
     if (call.propertyId) {
       calculateTCP(call.propertyId).catch((tcpErr) => {

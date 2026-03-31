@@ -195,6 +195,7 @@ model Property {
 
   // Lead tracking
   leadSource       String? @map("lead_source") // GHL opportunity source — tracked for KPIs
+  leadSubSource    String? @map("lead_sub_source") // Sub-channel: "Google Ads", "Facebook", "PropertyLeads", etc.
 
   // TCP — True Conversion Probability (0.0 to 1.0)
   tcpScore     Float?    @map("tcp_score")
@@ -220,10 +221,18 @@ model Property {
   internalNotes String? @db.Text @map("internal_notes")
 
   // Seller & deal intel (gathered from calls)
-  sellerMotivation   String?  @map("seller_motivation_text") // Why selling: inheritance, divorce, foreclosure, tired landlord, etc.
-  sellerTimeline     String?  @map("seller_timeline")        // When to close: ASAP, 30 days, 60 days, flexible
-  propertyCondition  String?  @map("property_condition")     // Move-in, minor repairs, major rehab, teardown
-  sellerAskingReason String?  @map("seller_asking_reason")   // Why the price: owes X, needs X to move, comps show X
+  sellerMotivation      String?  @map("seller_motivation_text") // Why selling: inheritance, divorce, foreclosure, tired landlord, etc.
+  sellerTimeline        String?  @map("seller_timeline")        // When to close: ASAP, 30 days, 60 days, flexible
+  propertyCondition     String?  @map("property_condition")     // Move-in, minor repairs, major rehab, teardown
+  sellerAskingReason    String?  @map("seller_asking_reason")   // Why the price: owes X, needs X to move, comps show X
+  // Queryable deal intel fields (for algorithms, sorting, filtering)
+  sellerMotivationLevel Int?     @map("seller_motivation_level") // 1-10 scale from AI
+  timelineUrgency       String?  @map("timeline_urgency")       // high | medium | low | unknown
+  decisionMakersConfirmed Boolean? @map("decision_makers_confirmed")
+  competingOfferCount   Int?     @map("competing_offer_count")
+  dealHealthScore       Int?     @map("deal_health_score")      // 1-10 composite from AI
+  // Full deal intelligence JSON — accumulated from all calls
+  dealIntel             Json?    @map("deal_intel") // See lib/types/deal-intel.ts for structure
 
   // Extended financials
   offerPrice     Decimal? @db.Decimal(12, 2) @map("offer_price")
@@ -450,6 +459,8 @@ model Call {
   sellerMotivation Float?    @map("seller_motivation") // 0.0 to 1.0
   nextBestAction   String?   @map("next_best_action") // AI suggested next step
   aiNextSteps      Json?     @map("ai_next_steps") // [{type, label, reasoning, status, pushedAt}]
+  // Deal intel proposed changes from this call — [{field, label, currentValue, proposedValue, confidence, evidence, category, decision, decidedAt}]
+  dealIntelHistory  Json?     @map("deal_intel_history")
 
   @@map("calls")
 }
