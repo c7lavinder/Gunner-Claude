@@ -156,11 +156,19 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
       if (range) filtered = filtered.filter(c => c.score !== null && c.score >= range.min && c.score <= range.max)
     }
     if (dateFilter) {
-      const now = new Date()
-      const cutoff = dateFilter === '1d' ? subDays(now, 1)
-        : dateFilter === '7d' ? subDays(now, 7)
-        : dateFilter === '30d' ? subDays(now, 30)
-        : dateFilter === '90d' ? subMonths(now, 3) : null
+      // Use Central time day boundaries so "Today" means today in Central, not last 24h
+      const centralToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+      const centralMidnight = new Date(`${centralToday}T00:00:00`)
+      // Adjust to UTC: Central is UTC-5 (CST) or UTC-6 (CDT)
+      const centralNoon = new Date(`${centralToday}T12:00:00Z`)
+      const centralNoonLocal = new Date(centralNoon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+      const offsetMs = centralNoon.getTime() - centralNoonLocal.getTime()
+      const todayStart = new Date(centralMidnight.getTime() + offsetMs)
+
+      const cutoff = dateFilter === '1d' ? todayStart
+        : dateFilter === '7d' ? subDays(todayStart, 6)
+        : dateFilter === '30d' ? subDays(todayStart, 29)
+        : dateFilter === '90d' ? subMonths(todayStart, 3) : null
       if (cutoff) filtered = filtered.filter(c => new Date(c.calledAt) >= cutoff)
     }
   }
