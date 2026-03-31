@@ -2389,6 +2389,9 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         </div>
       </div>
 
+      {/* ── DEAL INTELLIGENCE (from calls — blue source) ───────────── */}
+      <DealIntelSection dealIntel={(property as unknown as { dealIntel?: Record<string, unknown> }).dealIntel ?? null} />
+
       {/* External links */}
       <div className="flex gap-3">
         <a href={`https://www.zillow.com/homes/${encodeURIComponent(fullAddr)}`} target="_blank" rel="noopener noreferrer"
@@ -2407,6 +2410,171 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         )}
       </div>
     </div>
+  )
+}
+
+// ─── Deal Intel Display (Research tab) ──────────────────────────────────────
+
+const INTEL_SECTIONS: Array<{ key: string; label: string; color: string; fields: string[] }> = [
+  { key: 'seller', label: 'Seller Profile', color: 'blue', fields: [
+    'sellerMotivationLevel', 'sellerMotivationReason', 'statedVsImpliedMotivation', 'sellerWhySelling',
+    'sellerTimeline', 'sellerTimelineUrgency', 'sellerKnowledgeLevel', 'sellerCommunicationStyle',
+    'sellerContactPreference', 'sellerEmotionalTriggers', 'sellerFamilySituation',
+    'sellerPreviousInvestorContact', 'sellerAlternativePlan',
+  ]},
+  { key: 'decision', label: 'Decision Making', color: 'purple', fields: [
+    'decisionMakers', 'decisionMakersConfirmed', 'decisionMakerNotes', 'documentReadiness',
+  ]},
+  { key: 'negotiation', label: 'Price Negotiation', color: 'green', fields: [
+    'sellerAskingHistory', 'offersWeHaveMade', 'competingOffers', 'priceAnchors', 'stickingPoints', 'counterOffers',
+  ]},
+  { key: 'condition', label: 'Property Condition (Seller)', color: 'amber', fields: [
+    'conditionNotesFromSeller', 'repairItemsMentioned', 'accessSituation', 'gateCodeAccessNotes',
+    'tenantSituation', 'utilityStatus', 'environmentalConcerns', 'unpermittedWork',
+    'insuranceSituation', 'neighborhoodComplaints', 'previousDealFellThrough',
+  ]},
+  { key: 'legal', label: 'Legal & Title', color: 'red', fields: [
+    'titleIssuesMentioned', 'legalComplications', 'liensMentioned', 'backTaxesMentioned',
+    'hoaMentioned', 'mortgageBalanceMentioned',
+  ]},
+  { key: 'communication', label: 'Communication Intel', color: 'teal', fields: [
+    'whatNotToSay', 'toneShiftMoments', 'exactTriggerPhrases', 'questionsSellerAskedUs',
+    'appointmentLogisticsPreferences', 'bestApproachNotes',
+  ]},
+  { key: 'status', label: 'Deal Status', color: 'orange', fields: [
+    'rollingDealSummary', 'commitmentsWeMade', 'promisesTheyMade', 'promiseDeadlines',
+    'nextStepAgreed', 'triggerEvents', 'topicsNotYetDiscussed', 'objectionsEncountered',
+    'relationshipRapportLevel',
+  ]},
+  { key: 'marketing', label: 'Marketing', color: 'pink', fields: [
+    'howTheyFoundUs', 'referralSource', 'referralChain', 'firstMarketingPieceReceived',
+    'whichMarketingMessageResonated',
+  ]},
+]
+
+const INTEL_FIELD_LABELS: Record<string, string> = {
+  sellerMotivationLevel: 'Motivation (1-10)', sellerMotivationReason: 'Motivation Reason',
+  statedVsImpliedMotivation: 'Stated vs Implied', sellerWhySelling: 'Why Selling',
+  sellerTimeline: 'Timeline', sellerTimelineUrgency: 'Urgency',
+  sellerKnowledgeLevel: 'Knowledge Level', sellerCommunicationStyle: 'Communication Style',
+  sellerContactPreference: 'Contact Preference', sellerEmotionalTriggers: 'Emotional Triggers',
+  sellerFamilySituation: 'Family Situation', sellerPreviousInvestorContact: 'Previous Investors',
+  sellerAlternativePlan: 'Alternative Plan',
+  decisionMakers: 'Decision Makers', decisionMakersConfirmed: 'DM Confirmed',
+  decisionMakerNotes: 'DM Notes', documentReadiness: 'Document Readiness',
+  sellerAskingHistory: 'Asking History', offersWeHaveMade: 'Our Offers',
+  competingOffers: 'Competing Offers', priceAnchors: 'Price Anchors',
+  stickingPoints: 'Sticking Points', counterOffers: 'Counter Offers',
+  conditionNotesFromSeller: 'Condition Notes', repairItemsMentioned: 'Repairs Mentioned',
+  accessSituation: 'Access', gateCodeAccessNotes: 'Gate Code / Access',
+  tenantSituation: 'Tenant Situation', utilityStatus: 'Utilities',
+  environmentalConcerns: 'Environmental', unpermittedWork: 'Unpermitted Work',
+  insuranceSituation: 'Insurance', neighborhoodComplaints: 'Neighborhood Issues',
+  previousDealFellThrough: 'Previous Deal Failed',
+  titleIssuesMentioned: 'Title Issues', legalComplications: 'Legal Issues',
+  liensMentioned: 'Liens', backTaxesMentioned: 'Back Taxes',
+  hoaMentioned: 'HOA', mortgageBalanceMentioned: 'Mortgage (Seller Says)',
+  whatNotToSay: 'What Not to Say', toneShiftMoments: 'Tone Shifts',
+  exactTriggerPhrases: 'Trigger Phrases', questionsSellerAskedUs: 'Seller Questions',
+  appointmentLogisticsPreferences: 'Appointment Preferences', bestApproachNotes: 'Best Approach',
+  rollingDealSummary: 'Deal Summary', commitmentsWeMade: 'Our Commitments',
+  promisesTheyMade: 'Their Promises', promiseDeadlines: 'Deadlines',
+  nextStepAgreed: 'Next Step', triggerEvents: 'Trigger Events',
+  topicsNotYetDiscussed: 'Topics Not Discussed', objectionsEncountered: 'Objections',
+  relationshipRapportLevel: 'Rapport Level',
+  howTheyFoundUs: 'How Found Us', referralSource: 'Referral',
+  referralChain: 'Referral Chain', firstMarketingPieceReceived: 'First Marketing Piece',
+  whichMarketingMessageResonated: 'Message Resonated',
+}
+
+function formatIntelValue(val: unknown): string {
+  if (val === null || val === undefined) return ''
+  if (typeof val === 'object' && 'value' in (val as Record<string, unknown>)) {
+    return formatIntelValue((val as { value: unknown }).value)
+  }
+  if (typeof val === 'object' && 'items' in (val as Record<string, unknown>)) {
+    const items = (val as { items: unknown[] }).items
+    return items.map(i => {
+      if (typeof i === 'string') return i
+      if (typeof i === 'object' && i !== null) {
+        const o = i as Record<string, unknown>
+        return String(o.what ?? o.objection ?? o.event ?? o.name ?? o.amount ?? o.phrase ?? JSON.stringify(o))
+      }
+      return String(i)
+    }).join(', ')
+  }
+  if (Array.isArray(val)) return val.join(', ')
+  if (typeof val === 'object') {
+    const o = val as Record<string, unknown>
+    return String(o.action ?? o.value ?? o.notes ?? JSON.stringify(val))
+  }
+  return String(val)
+}
+
+function DealIntelSection({ dealIntel }: { dealIntel: Record<string, unknown> | null }) {
+  if (!dealIntel || Object.keys(dealIntel).length === 0) return null
+
+  const populatedSections = INTEL_SECTIONS.filter(section =>
+    section.fields.some(f => {
+      const val = dealIntel[f]
+      if (!val) return false
+      const formatted = formatIntelValue(val)
+      return formatted !== '' && formatted !== '[]' && formatted !== '{}'
+    })
+  )
+
+  if (populatedSections.length === 0) return null
+
+  const colorMap: Record<string, { bg: string; border: string; headerBg: string; text: string }> = {
+    blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',   headerBg: 'bg-blue-100',   text: 'text-blue-700' },
+    purple: { bg: 'bg-purple-50', border: 'border-purple-200', headerBg: 'bg-purple-100', text: 'text-purple-700' },
+    green:  { bg: 'bg-green-50',  border: 'border-green-200',  headerBg: 'bg-green-100',  text: 'text-green-700' },
+    amber:  { bg: 'bg-amber-50',  border: 'border-amber-200',  headerBg: 'bg-amber-100',  text: 'text-amber-700' },
+    red:    { bg: 'bg-red-50',    border: 'border-red-200',    headerBg: 'bg-red-100',    text: 'text-red-700' },
+    teal:   { bg: 'bg-teal-50',   border: 'border-teal-200',   headerBg: 'bg-teal-100',   text: 'text-teal-700' },
+    orange: { bg: 'bg-orange-50', border: 'border-orange-200', headerBg: 'bg-orange-100', text: 'text-orange-700' },
+    pink:   { bg: 'bg-pink-50',   border: 'border-pink-200',   headerBg: 'bg-pink-100',   text: 'text-pink-700' },
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-3 pt-2">
+        <div className="flex-1 h-px bg-blue-200" />
+        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">DEAL INTELLIGENCE (from calls)</span>
+        <span className="text-[7px] font-bold text-blue-400">AI</span>
+        <div className="flex-1 h-px bg-blue-200" />
+      </div>
+
+      {populatedSections.map(section => {
+        const c = colorMap[section.color] ?? colorMap.blue
+        const populated = section.fields.filter(f => {
+          const formatted = formatIntelValue(dealIntel[f])
+          return formatted !== '' && formatted !== '[]' && formatted !== '{}'
+        })
+        return (
+          <div key={section.key} className={`border-[0.5px] ${c.border} rounded-[12px] overflow-hidden`}>
+            <div className={`px-4 py-2 ${c.headerBg} border-b ${c.border} flex items-center justify-between`}>
+              <p className={`text-[9px] font-semibold uppercase tracking-wider ${c.text}`}>{section.label}</p>
+              <span className={`text-[7px] font-bold ${c.text}`}>AI</span>
+            </div>
+            <div className={`grid grid-cols-2 gap-2 p-3 ${c.bg}`}>
+              {populated.map(field => {
+                const formatted = formatIntelValue(dealIntel[field])
+                const isLong = formatted.length > 80
+                return (
+                  <div key={field} className={`rounded-[8px] bg-white/60 px-3 py-2 ${isLong ? 'col-span-2' : ''}`}>
+                    <p className={`text-[8px] font-semibold uppercase tracking-wider ${c.text}`}>
+                      {INTEL_FIELD_LABELS[field] ?? field}
+                    </p>
+                    <p className="text-[11px] text-txt-primary mt-0.5 leading-relaxed">{formatted}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </>
   )
 }
 
