@@ -26,19 +26,44 @@ export async function createPropertyFromContact(
 
     // Parse and standardize address from contact
     const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
-    const address = standardizeStreet(contact.address1 ?? '')
+    const rawAddress = contact.address1 ?? ''
     const city = standardizeCity(contact.city ?? '')
     const state = standardizeState(contact.state ?? '')
     const zip = standardizeZip(contact.postalCode ?? '')
 
-    // Deduplicate: first check by ghlContactId (prevents race condition duplicates)
-    const existingByContact = await db.property.findFirst({
-      where: { tenantId, ghlContactId },
+    // Detect multi-address patterns: "410 & 114 Ideal Valley Rd", "123/456 Main St"
+    const multiAddressMatch = rawAddress.match(/^(\d+)\s*[&\/,]\s*(\d+)\s+(.+)$/)
+    if (multiAddressMatch) {
+      const [, num1, num2, streetName] = multiAddressMatch
+      const addr1 = `${num1} ${streetName}`
+      const addr2 = `${num2} ${streetName}`
+      console.log(`[Property] Multi-address detected: "${rawAddress}" → "${addr1}" + "${addr2}"`)
+
+      // Create first property with modified address
+      const id1 = await createPropertyFromContact(tenantId, ghlContactId, {
+        ...context,
+        _overrideAddress: standardizeStreet(addr1),
+      } as PropertyTriggerContext & { _overrideAddress?: string })
+
+      // Create second property with modified address (same contact)
+      const id2 = await createPropertyFromContact(tenantId, ghlContactId, {
+        ...context,
+        _overrideAddress: standardizeStreet(addr2),
+      } as PropertyTriggerContext & { _overrideAddress?: string })
+
+      return id1 // return first property ID
+    }
+
+    const address = (context as { _overrideAddress?: string })._overrideAddress ?? standardizeStreet(rawAddress)
+
+    // Deduplicate: check by ghlContactId + address (one contact CAN have multiple properties)
+    const existingByContactAndAddress = await db.property.findFirst({
+      where: { tenantId, ghlContactId, address: { equals: address, mode: 'insensitive' } },
       select: { id: true },
     })
-    if (existingByContact) {
-      console.log(`[Property] Already exists for GHL contact ${ghlContactId} — skipping`)
-      return existingByContact.id
+    if (existingByContactAndAddress) {
+      console.log(`[Property] Already exists for GHL contact ${ghlContactId} at ${address} — skipping`)
+      return existingByContactAndAddress.id
     }
 
     // Deduplicate by normalized street address + state
