@@ -8,7 +8,8 @@ import { Prisma } from '@prisma/client'
 import { DayHubClient, type EnrichedTask } from './day-hub-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
-import { startOfDay, differenceInDays, isPast, isToday } from 'date-fns'
+import { isPast, isToday } from 'date-fns'
+import { scoreTask as computeScore, getOverdueTier, type OverdueTier } from '@/lib/tasks/scoring'
 
 // ─── Category classification ───────────────────────────────────────────────
 
@@ -26,40 +27,6 @@ function classifyTask(title: string, body: string): TaskCategory {
     if (keywords.some(kw => text.includes(kw))) return category
   }
   return 'Follow-Up'
-}
-
-// ─── Priority scoring ──────────────────────────────────────────────────────
-
-const CATEGORY_SCORES: Record<TaskCategory, { overdue: number; dueToday: number; future: number }> = {
-  'New Lead':   { overdue: 1000, dueToday: 900, future: 300 },
-  'Reschedule': { overdue: 800,  dueToday: 700, future: 250 },
-  'Admin':      { overdue: 600,  dueToday: 500, future: 200 },
-  'Follow-Up':  { overdue: 400,  dueToday: 300, future: 150 },
-}
-
-function scoreTask(category: TaskCategory, dueDate: string | null, amDone: boolean, pmDone: boolean): number {
-  const scores = CATEGORY_SCORES[category]
-
-  // Uncalled contacts get a major boost — they need attention first
-  const callBoost = (!amDone && !pmDone) ? 200 : (!amDone || !pmDone) ? 100 : 0
-
-  if (!dueDate) return scores.future + callBoost
-
-  const due = new Date(dueDate)
-  const todayStart = startOfDay(new Date())
-
-  if (isToday(due)) return scores.dueToday + callBoost
-
-  if (isPast(due)) {
-    const daysOverdue = differenceInDays(todayStart, startOfDay(due))
-    // More overdue = higher priority (boost by 10 per day, cap at 200)
-    const urgency = Math.min(daysOverdue * 10, 200)
-    return scores.overdue + urgency + callBoost
-  }
-
-  // Future: subtract 10 per day until due
-  const daysUntilDue = differenceInDays(startOfDay(due), todayStart)
-  return Math.max(scores.future - (daysUntilDue * 10), 0) + callBoost
 }
 
 // ─── Page component ────────────────────────────────────────────────────────
@@ -86,14 +53,19 @@ export default async function TasksPage({ params }: { params: { tenant: string }
   ])
 
   let enrichedTasks: EnrichedTask[] = []
+  let completedTodayTasks: EnrichedTask[] = []
   let fetchError = false
 
   try {
     const ghl = await getGHLClient(tenantId)
 
-    // Fetch tasks from GHL
-    const result = await ghl.searchTasks('incompleted')
-    let tasks: GHLTaskItem[] = result.tasks ?? []
+    // Fetch incomplete + completed tasks from GHL in parallel
+    const [incompleteResult, completedResult] = await Promise.all([
+      ghl.searchTasks('incompleted'),
+      ghl.searchTasks('completed'),
+    ])
+    let tasks: GHLTaskItem[] = incompleteResult.tasks ?? []
+    const completedTasks: GHLTaskItem[] = completedResult.tasks ?? []
 
     // Filter: non-admins only see their own tasks
     if (!isAdmin && currentUser?.ghlUserId) {
@@ -229,10 +201,16 @@ export default async function TasksPage({ params }: { params: { tenant: string }
 
       const category = classifyTask(t.title || '', t.body || '')
       const callStatus = amPmMap.get(t.contactId) ?? { am: false, pm: false }
-      const score = scoreTask(category, t.dueDate, callStatus.am, callStatus.pm)
       const dueDate = t.dueDate ? new Date(t.dueDate) : null
       const taskIsOverdue = dueDate ? isPast(dueDate) && !isToday(dueDate) : false
       const taskIsDueToday = dueDate ? isToday(dueDate) : false
+      const score = computeScore({
+        id: t.id || t._id || '',
+        category,
+        dueAt: t.dueDate ?? null,
+        createdAt: t.dueDate ?? new Date().toISOString(),
+      })
+      const overdueTier = getOverdueTier(t.dueDate ?? null)
 
       return {
         id: t.id || t._id || '',
@@ -240,6 +218,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         body: t.body ?? null,
         category,
         score,
+        overdueTier,
         dueDate: t.dueDate ?? null,
         isOverdue: taskIsOverdue,
         isDueToday: taskIsDueToday,
@@ -255,6 +234,52 @@ export default async function TasksPage({ params }: { params: { tenant: string }
 
     // Sort by score descending
     enrichedTasks.sort((a, b) => b.score - a.score)
+
+    // Enrich today's completed tasks (filter to today in Central time)
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+    const todayCompleted = completedTasks.filter(t => {
+      if (!t.dueDate) return false
+      const taskDate = new Date(t.dueDate).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+      return taskDate === todayStr
+    })
+
+    // Filter completed by user permissions
+    let filteredCompleted = todayCompleted
+    if (!isAdmin && currentUser?.ghlUserId) {
+      filteredCompleted = filteredCompleted.filter(t => t.assignedTo === currentUser.ghlUserId)
+    }
+
+    completedTodayTasks = filteredCompleted.slice(0, 30).map(t => {
+      const contact = contactMap.get(t.contactId)
+      const inlineName = t.contactDetails
+        ? `${t.contactDetails.firstName ?? ''} ${t.contactDetails.lastName ?? ''}`.trim()
+        : null
+      const contactName = inlineName || contact?.name || null
+      const inlineAssigned = t.assignedToUserDetails
+        ? `${t.assignedToUserDetails.firstName ?? ''} ${t.assignedToUserDetails.lastName ?? ''}`.trim()
+        : null
+      const assignedToName = inlineAssigned || (t.assignedTo ? ghlUserMap.get(t.assignedTo) ?? null : null)
+      const category = classifyTask(t.title || '', t.body || '')
+
+      return {
+        id: t.id || t._id || '',
+        title: t.title || 'Untitled task',
+        body: t.body ?? null,
+        category,
+        score: 0,
+        overdueTier: 'green' as OverdueTier,
+        dueDate: t.dueDate ?? null,
+        isOverdue: false,
+        isDueToday: false,
+        contactId: t.contactId,
+        contactName,
+        contactPhone: contact?.phone ?? null,
+        contactAddress: propertyMap.get(t.contactId) || contact?.address || null,
+        assignedToName,
+        amDone: false,
+        pmDone: false,
+      }
+    })
   } catch (err) {
     console.error('[Tasks] GHL fetch failed:', err instanceof Error ? err.message : err)
     fetchError = true
@@ -263,6 +288,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
   return (
     <DayHubClient
       tasks={enrichedTasks}
+      completedTasks={completedTodayTasks}
       isAdmin={isAdmin}
       tenantSlug={params.tenant}
       fetchError={fetchError}

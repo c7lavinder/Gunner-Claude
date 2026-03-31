@@ -38,12 +38,15 @@ function titleCase(name: string | null): string {
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export type OverdueTier = 'none' | 'yellow' | 'orange' | 'red' | 'green'
+
 export interface EnrichedTask {
   id: string
   title: string
   body: string | null
   category: 'New Lead' | 'Reschedule' | 'Admin' | 'Follow-Up'
   score: number
+  overdueTier?: OverdueTier
   dueDate: string | null
   isOverdue: boolean
   isDueToday: boolean
@@ -249,8 +252,9 @@ interface TeamMemberInfo {
   id: string; name: string; role: string; ghlUserId: string | null
 }
 
-export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoster = [] }: {
+export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, fetchError, teamRoster = [] }: {
   tasks: EnrichedTask[]
+  completedTasks?: EnrichedTask[]
   isAdmin: boolean
   tenantSlug: string
   fetchError?: boolean
@@ -265,6 +269,8 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
   const [categoryFilter, setCategoryFilter] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
+  const [pushAttemptedDown, setPushAttemptedDown] = useState(false)
+  const [showCompleted, setShowCompleted] = useState(false)
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
 
   // Map role tabs to team members
@@ -469,6 +475,27 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length
   let displayTasks = filteredTasks
   if (showOverdueOnly) displayTasks = displayTasks.filter(t => t.isOverdue)
+
+  // "Push Attempted Down" toggle — time-of-day aware
+  // If currently AM: push tasks with AM call to bottom. If PM: push tasks with PM call.
+  if (pushAttemptedDown) {
+    const centralHour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hour12: false }), 10)
+    const isCurrentlyAm = centralHour < 12
+    displayTasks = [...displayTasks].sort((a, b) => {
+      const aActivity = activityMap[a.contactId]
+      const bActivity = activityMap[b.contactId]
+      const aAttempted = isCurrentlyAm
+        ? (aActivity?.hasAm ?? a.amDone)
+        : (aActivity?.hasPm ?? a.pmDone)
+      const bAttempted = isCurrentlyAm
+        ? (bActivity?.hasAm ?? b.amDone)
+        : (bActivity?.hasPm ?? b.pmDone)
+      if (aAttempted && !bAttempted) return 1  // push attempted down
+      if (!aAttempted && bAttempted) return -1
+      return 0 // preserve score order within same group
+    })
+  }
+
   const visibleTasks = displayTasks.slice(0, visibleTaskCount)
   const remaining = displayTasks.length - visibleTaskCount
 
@@ -1039,6 +1066,22 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
             </select>
             <span className="text-[13px] text-txt-muted ml-auto">{displayTasks.length} tasks</span>
             <button
+              onClick={() => setPushAttemptedDown(prev => !prev)}
+              className={`text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                pushAttemptedDown ? 'bg-semantic-blue text-white' : 'bg-blue-50 text-semantic-blue hover:bg-blue-100'
+              }`}
+            >
+              {pushAttemptedDown ? 'Attempted ↓' : 'Attempted'}
+            </button>
+            <button
+              onClick={() => setShowCompleted(prev => !prev)}
+              className={`text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                showCompleted ? 'bg-semantic-green text-white' : 'bg-green-50 text-green-600 hover:bg-green-100'
+              }`}
+            >
+              Completed
+            </button>
+            <button
               onClick={() => setShowOverdueOnly(prev => !prev)}
               className={`text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${
                 showOverdueOnly ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'
@@ -1095,6 +1138,43 @@ export function DayHubClient({ tasks, isAdmin, tenantSlug, fetchError, teamRoste
             >
               View More ({remaining} remaining)
             </button>
+          )}
+
+          {/* Completed today section */}
+          {showCompleted && completedTasks.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider mb-2 px-1">
+                Completed Today ({completedTasks.length})
+              </p>
+              <div className="space-y-1.5 opacity-70">
+                {completedTasks.map(task => (
+                  <div
+                    key={task.id}
+                    className="bg-surface-primary border-[0.5px] rounded-[10px] px-4 py-2.5 flex items-center gap-3"
+                    style={{ borderColor: 'var(--border-light)' }}
+                  >
+                    <CheckCircle size={16} className="text-semantic-green shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] text-txt-secondary line-through truncate">
+                        {task.contactName ?? task.title}
+                      </p>
+                      {task.contactAddress && (
+                        <p className="text-[10px] text-txt-muted truncate">{task.contactAddress}</p>
+                      )}
+                    </div>
+                    <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
+                      (CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']).color
+                    }`}>
+                      {(CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']).label}
+                    </span>
+                    {task.assignedToName && (
+                      <span className="text-[10px] text-txt-muted shrink-0">{task.assignedToName}</span>
+                    )}
+                    <span className="w-2 h-2 rounded-full bg-semantic-green shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
@@ -1166,6 +1246,7 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
   onSMS: (task: EnrichedTask) => void
 }) {
   const [activityTab, setActivityTab] = useState<'activity' | 'notes'>('activity')
+  const [confirmingComplete, setConfirmingComplete] = useState(false)
   const activity = preloadedActivity
   const loadingActivity = isExpanded && !activity
 
@@ -1176,6 +1257,22 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
   const catBadge = CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']
   const isCompleting = completing === task.id
 
+  // Two-click confirm: first click → confirming state, second click → complete
+  // Auto-revert after 3 seconds if not confirmed
+  function handleCheckClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (isCompleting) return
+    if (confirmingComplete) {
+      // Second click — confirm
+      setConfirmingComplete(false)
+      onComplete(task.id, task.contactId)
+    } else {
+      // First click — enter confirm state
+      setConfirmingComplete(true)
+      setTimeout(() => setConfirmingComplete(false), 3000)
+    }
+  }
+
   return (
     <div className={`bg-surface-primary border-[0.5px] rounded-[14px] overflow-hidden transition-shadow ${
       isExpanded ? 'shadow-md ring-1 ring-gunner-red/10' : ''
@@ -1185,17 +1282,27 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
         onClick={onToggle}
         className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-surface-secondary transition-colors"
       >
-        {/* Checkbox */}
+        {/* Two-click confirm checkbox */}
         <button
-          onClick={(e) => { e.stopPropagation(); onComplete(task.id, task.contactId) }}
+          onClick={handleCheckClick}
           disabled={isCompleting}
-          className="shrink-0 text-txt-muted hover:text-gunner-red transition-colors"
+          className={`shrink-0 transition-all duration-200 ${
+            isCompleting ? 'text-semantic-green'
+            : confirmingComplete ? 'text-semantic-green scale-110'
+            : 'text-txt-muted hover:text-gunner-red'
+          }`}
+          title={confirmingComplete ? 'Click again to confirm' : 'Complete task'}
         >
           {isCompleting
-            ? <CheckCircle size={18} className="text-semantic-green animate-pulse" />
+            ? <CheckCircle size={18} className="animate-pulse" />
+            : confirmingComplete
+            ? <CheckCircle size={18} className="animate-pulse" />
             : <Circle size={18} />
           }
         </button>
+        {confirmingComplete && (
+          <span className="text-[9px] text-semantic-green font-medium shrink-0 animate-pulse">Confirm?</span>
+        )}
 
         {/* Category badge */}
         <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border shrink-0 ${catBadge.color}`}>
@@ -1238,8 +1345,13 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
                   ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
                   : 'bg-surface-tertiary text-txt-muted'
               }`}>PM</span>
-              {task.isOverdue && !amActive && !pmActive && (
-                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Overdue — not contacted today" />
+              {/* Overdue tier dot: yellow 1-5d, orange 6-10d, red 11+d */}
+              {task.overdueTier && task.overdueTier !== 'none' && task.overdueTier !== 'green' && (
+                <span className={`w-2 h-2 rounded-full shrink-0 ${
+                  task.overdueTier === 'yellow' ? 'bg-yellow-400'
+                  : task.overdueTier === 'orange' ? 'bg-orange-500'
+                  : 'bg-red-500'
+                }`} title={`Overdue (${task.overdueTier})`} />
               )}
             </div>
           )
