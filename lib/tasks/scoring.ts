@@ -28,8 +28,8 @@ export const DEFAULT_SCORING_CONFIG: TaskScoringConfig = {
   categoryWeights: {
     // Weights are spaced so that a higher-category task at its LOWEST time
     // multiplier still beats a lower-category task at its HIGHEST.
-    // New Lead (150) × 0.6 future = 90 > Admin (40) × 2.0 today = 80
-    'New Lead': 150,
+    // New Lead (160) × 0.51 (7 days out) = 81.6 > Admin (40) × 2.0 today = 80
+    'New Lead': 160,
     'Reschedule': 100,
     'Admin': 40,
     'Follow-Up': 30,
@@ -74,7 +74,6 @@ function getTimeMultiplier(
   if (!dueAt) return multipliers.noDueDate
 
   const { dayStart } = getCentralDayBounds()
-  const now = new Date()
   const due = new Date(dueAt)
 
   // Calculate days difference (in Central time day granularity)
@@ -82,7 +81,7 @@ function getTimeMultiplier(
   const daysDiff = Math.floor(msDiff / (1000 * 60 * 60 * 24))
 
   if (daysDiff < 0) {
-    // Overdue
+    // Overdue — bucket-based decay
     const daysOverdue = Math.abs(daysDiff)
     if (daysOverdue <= 5) return multipliers.overdue1to5
     if (daysOverdue <= 10) return multipliers.overdue6to10
@@ -91,8 +90,12 @@ function getTimeMultiplier(
 
   if (daysDiff === 0) return multipliers.dueToday
   if (daysDiff === 1) return multipliers.dueTomorrow
-  if (daysDiff <= 5) return multipliers.dueThisWeek
-  return multipliers.futureBeyondWeek
+
+  // Future tasks: continuous decay — closer due date = higher score.
+  // Due in 2 days ≈ 0.93, due in 5 days ≈ 0.70, due in 7 days ≈ 0.58
+  // Due in 14 days ≈ 0.34, due in 30 days ≈ 0.18, due in 60 days ≈ 0.10
+  // Formula: 1.4 / (1 + 0.25 * daysDiff) — smooth curve that drops steeply then flattens
+  return Math.max(1.4 / (1 + 0.25 * daysDiff), 0.03)
 }
 
 // ─── Sort tasks by score ────────────────────────────────────────────────────
