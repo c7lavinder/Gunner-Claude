@@ -96,17 +96,19 @@ export async function gradeCall(callId: string): Promise<void> {
       }
     }
 
-    // If no recording AND no transcript, don't grade — send to review queue.
-    // Recording may still be processing in GHL. Poll-calls will retry later.
-    if (!transcript && !call.recordingUrl) {
+    // If no transcript available (either no recording, or transcription failed), don't grade.
+    // Mark as FAILED so the retry loop in poll-calls picks it up later.
+    if (!transcript) {
       await db.call.update({
         where: { id: callId },
         data: {
           gradingStatus: 'FAILED',
-          aiSummary: 'No recording or transcript available — awaiting recording from GHL.',
+          aiSummary: call.recordingUrl
+            ? 'Transcription failed — will retry automatically.'
+            : 'No recording or transcript available — awaiting recording from GHL.',
         },
       })
-      console.log(`[Call Grading] No recording/transcript for call ${callId} (${duration}s) — sent to review`)
+      console.log(`[Call Grading] No transcript for call ${callId} (${duration}s, recording: ${call.recordingUrl ? 'yes' : 'no'}) — will retry`)
       return
     }
 

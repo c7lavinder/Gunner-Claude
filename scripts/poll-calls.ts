@@ -252,6 +252,55 @@ async function pollCalls() {
     }
 
     console.log(`[poll-calls] Done. New calls: ${totalNew}`)
+
+    // ─── Retry failed transcriptions ──────────────────────────────────
+    // Find calls with recordings that failed to transcribe (FAILED status, has recording URL,
+    // no transcript, created in the last 24 hours). Retry transcription + grading.
+    const retryWindow = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const failedCalls = await db.call.findMany({
+      where: {
+        gradingStatus: 'FAILED',
+        recordingUrl: { not: null },
+        transcript: null,
+        durationSeconds: { not: 0 },
+        calledAt: { gte: retryWindow },
+      },
+      select: {
+        id: true, contactName: true, recordingUrl: true, durationSeconds: true,
+        tenant: { select: { ghlAccessToken: true } },
+      },
+      take: 10, // cap retries per cycle
+    })
+
+    if (failedCalls.length > 0) {
+      console.log(`[poll-calls] Retrying ${failedCalls.length} failed transcriptions...`)
+      for (const fc of failedCalls) {
+        try {
+          const trans = await transcribeRecording(fc.recordingUrl!, fc.tenant.ghlAccessToken ?? undefined)
+          if (trans.status === 'success' && trans.transcript && trans.transcript.length > 20) {
+            // Estimate duration from transcript if we don't have it
+            const estDuration = fc.durationSeconds ?? Math.max(Math.round(trans.transcript.length / 15), 45)
+            await db.call.update({
+              where: { id: fc.id },
+              data: {
+                transcript: trans.transcript,
+                durationSeconds: estDuration,
+                gradingStatus: 'PENDING',
+                callResult: null,
+                aiSummary: null,
+              },
+            })
+            console.log(`[poll-calls] Retry transcribed: ${fc.contactName ?? fc.id} (${trans.transcript.length} chars)`)
+            await gradeCall(fc.id).catch(err => {
+              console.error(`[poll-calls] Retry grade failed ${fc.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
+            })
+            await sleep(500) // rate limit
+          }
+        } catch { /* continue to next */ }
+      }
+    }
+
+    console.log(`[poll-calls] Complete.`)
   } catch (err) {
     console.error('[poll-calls] Fatal:', err instanceof Error ? err.message : err)
     process.exit(1)
