@@ -37,9 +37,10 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
     },
   })
 
-  // Status counts for filter chips
+  // Status counts for filter chips — use dispoStatus when set (property is in dispo pipeline)
   const statusCounts = properties.reduce<Record<string, number>>((acc, p) => {
-    acc[p.status] = (acc[p.status] ?? 0) + 1
+    const effectiveStatus = p.dispoStatus ?? p.status
+    acc[effectiveStatus] = (acc[effectiveStatus] ?? 0) + 1
     return acc
   }, {})
 
@@ -59,6 +60,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         state: p.state,
         zip: p.zip,
         status: p.status,
+        dispoStatus: p.dispoStatus,
         arv: p.arv?.toString() ?? null,
         askingPrice: p.askingPrice?.toString() ?? null,
         mao: p.mao?.toString() ?? null,

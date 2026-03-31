@@ -16,7 +16,7 @@ import type { AppStage } from '@/types/property'
 
 interface Property {
   id: string; address: string; city: string; state: string; zip: string
-  status: string; arv: string | null; askingPrice: string | null
+  status: string; dispoStatus: string | null; arv: string | null; askingPrice: string | null
   mao: string | null; contractPrice: string | null; assignmentFee: string | null
   currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
   fieldSources: Record<string, string>
@@ -75,7 +75,7 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
     if (dataQualityFilter === 'source') return !p.leadSource
     if (dataQualityFilter === 'stage') return !p.ghlStageName && p.status === 'NEW_LEAD'
     if (selectedStage) {
-      const propStage = STATUS_TO_APP_STAGE[p.status]
+      const propStage = STATUS_TO_APP_STAGE[p.dispoStatus ?? p.status]
       if (propStage !== selectedStage) return false
     }
     if (selectedMarket) {
@@ -409,7 +409,7 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
       {properties.map(p => {
-        const appStage = STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
+        const appStage = STATUS_TO_APP_STAGE[p.dispoStatus ?? p.status] ?? 'acquisition.new_lead'
         const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
         const isSelected = selectedId === p.id
         const sourceColor = p.leadSource ? getSourceColor(p.leadSource) : ''
@@ -543,7 +543,7 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
   ghlLocationId?: string
   onClose: () => void
 }) {
-  const appStage = STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
+  const appStage = STATUS_TO_APP_STAGE[p.dispoStatus ?? p.status] ?? 'acquisition.new_lead'
   const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
   const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
   const domColor = dom < 6 ? 'text-green-600 bg-green-50' : dom <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
