@@ -96,6 +96,20 @@ export async function gradeCall(callId: string): Promise<void> {
       }
     }
 
+    // If no recording AND no transcript, don't grade — send to review queue.
+    // Recording may still be processing in GHL. Poll-calls will retry later.
+    if (!transcript && !call.recordingUrl) {
+      await db.call.update({
+        where: { id: callId },
+        data: {
+          gradingStatus: 'FAILED',
+          aiSummary: 'No recording or transcript available — awaiting recording from GHL.',
+        },
+      })
+      console.log(`[Call Grading] No recording/transcript for call ${callId} (${duration}s) — sent to review`)
+      return
+    }
+
     // Get rubric: call type rubric > tenant custom rubric > role default
     // Priority 1: Tenant custom rubric for this call type
     let rubricCriteria: RubricCriteria[] | null = null
