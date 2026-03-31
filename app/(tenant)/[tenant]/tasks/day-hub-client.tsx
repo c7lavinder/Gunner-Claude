@@ -1329,12 +1329,23 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
           )}
         </div>
 
+        {/* Overdue tier dot — fixed-width slot so it never shifts layout */}
+        <div className="w-3 shrink-0 flex items-center justify-center">
+          {task.overdueTier && task.overdueTier !== 'none' && task.overdueTier !== 'green' && (
+            <span className={`w-2 h-2 rounded-full ${
+              task.overdueTier === 'yellow' ? 'bg-yellow-400'
+              : task.overdueTier === 'orange' ? 'bg-orange-500'
+              : 'bg-red-500'
+            }`} title={`Overdue (${task.overdueTier})`} />
+          )}
+        </div>
+
         {/* AM/PM glow — activity is source of truth, server DB as fallback */}
         {(() => {
           const amActive = activity ? activity.hasAm : task.amDone
           const pmActive = activity ? activity.hasPm : task.pmDone
           return (
-            <div className="flex gap-1 shrink-0 items-center">
+            <div className="flex gap-1 shrink-0 items-center w-[72px]">
               <span title={amActive ? 'Called in AM' : 'Not yet contacted in AM'} className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] transition-all ${
                 amActive
                   ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
@@ -1345,14 +1356,6 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
                   ? 'bg-semantic-green text-white shadow-[0_0_8px_rgba(34,197,94,0.5)]'
                   : 'bg-surface-tertiary text-txt-muted'
               }`}>PM</span>
-              {/* Overdue tier dot: yellow 1-5d, orange 6-10d, red 11+d */}
-              {task.overdueTier && task.overdueTier !== 'none' && task.overdueTier !== 'green' && (
-                <span className={`w-2 h-2 rounded-full shrink-0 ${
-                  task.overdueTier === 'yellow' ? 'bg-yellow-400'
-                  : task.overdueTier === 'orange' ? 'bg-orange-500'
-                  : 'bg-red-500'
-                }`} title={`Overdue (${task.overdueTier})`} />
-              )}
             </div>
           )
         })()}

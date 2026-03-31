@@ -26,12 +26,14 @@ export interface TaskScoringConfig {
 
 export const DEFAULT_SCORING_CONFIG: TaskScoringConfig = {
   categoryWeights: {
-    'New Lead': 100,
-    'Reschedule': 80,
+    // Weights are spaced so that a higher-category task at its LOWEST time
+    // multiplier still beats a lower-category task at its HIGHEST.
+    // New Lead (150) × 0.6 future = 90 > Admin (40) × 2.0 today = 80
+    'New Lead': 150,
+    'Reschedule': 100,
     'Admin': 40,
     'Follow-Up': 30,
     'Follow Up': 30,
-    // Fallback for unknown categories
     '_default': 35,
   },
   timeMultipliers: {
@@ -42,7 +44,7 @@ export const DEFAULT_SCORING_CONFIG: TaskScoringConfig = {
     overdue6to10: 0.4,
     overdue11plus: 0.2,
     noDueDate: 0.5,
-    futureBeyondWeek: 0.8,
+    futureBeyondWeek: 0.6,
   },
 }
 
