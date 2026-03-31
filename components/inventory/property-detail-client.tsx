@@ -100,7 +100,7 @@ interface PropertyDetail {
   auditLogs: Array<{ id: string; action: string; payload: Record<string, unknown> | null; createdAt: string; userName: string }>
   leadSource: string | null
   ghlStageName: string | null
-  milestones: Array<{ type: string; date: string; notes: string | null }>
+  milestones: Array<{ id?: string; type: string; date: string; notes: string | null; source?: string; loggedById?: string | null; loggedByName?: string | null }>
   dispoStatus: string | null
   teamMembers: Array<{ id: string; name: string }>
   messages: Array<{ id: string; text: string; mentions: Array<{ id: string; name: string }>; userId: string | null; userName: string; createdAt: string }>
@@ -273,7 +273,7 @@ export function PropertyDetailClient({
         </div>
 
         {/* Deal progress — view only, click for milestone details */}
-        <DealProgress currentStatus={property.status} dispoStatus={property.dispoStatus} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} />
+        <DealProgress currentStatus={property.status} dispoStatus={property.dispoStatus} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} teamMembers={property.teamMembers} />
       </div>
 
       {/* Tab bar */}
@@ -399,12 +399,13 @@ const DISPO_STEPS = [
   { key: 'DISPO_CLOSED', label: 'Closed' },
 ]
 
-function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canEdit }: {
+function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canEdit, teamMembers }: {
   currentStatus: string
   dispoStatus: string | null
-  milestones: Array<{ type: string; date: string; notes: string | null }>
+  milestones: Array<{ id?: string; type: string; date: string; notes: string | null; source?: string; loggedById?: string | null; loggedByName?: string | null }>
   propertyId: string
   canEdit: boolean
+  teamMembers: Array<{ id: string; name: string }>
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -412,6 +413,7 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
   const [addingMilestone, setAddingMilestone] = useState<string | null>(null)
   const [milestoneNotes, setMilestoneNotes] = useState('')
   const [milestoneDate, setMilestoneDate] = useState('')
+  const [milestoneUserId, setMilestoneUserId] = useState('')
   const [saving, setSaving] = useState(false)
   const acqKeys = ACQ_STEPS.map(s => s.key)
   const dispoKeys = DISPO_STEPS.map(s => s.key)
@@ -429,10 +431,11 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
   }
 
   // Map milestone types → ALL records (not just latest) for showing history
-  const milestonesByType: Record<string, Array<{ date: string; notes: string | null }>> = {}
+  type MilestoneRecord = { id?: string; date: string; notes: string | null; source?: string; loggedById?: string | null; loggedByName?: string | null }
+  const milestonesByType: Record<string, MilestoneRecord[]> = {}
   for (const m of milestones) {
     if (!milestonesByType[m.type]) milestonesByType[m.type] = []
-    milestonesByType[m.type].push({ date: m.date, notes: m.notes })
+    milestonesByType[m.type].push({ id: m.id, date: m.date, notes: m.notes, source: m.source, loggedById: m.loggedById, loggedByName: m.loggedByName })
   }
 
   // Simple: status → acq position, dispoStatus → dispo position. Two fields, two pipelines.
@@ -457,6 +460,7 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
           type: milestoneType,
           notes: milestoneNotes || undefined,
           date: milestoneDate || undefined,
+          loggedById: milestoneUserId || undefined,
         }),
       })
       if (res.ok) {
@@ -464,6 +468,7 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
         setAddingMilestone(null)
         setMilestoneNotes('')
         setMilestoneDate('')
+        setMilestoneUserId('')
         router.refresh()
       } else {
         toast('Failed to log milestone', 'error')
@@ -579,9 +584,18 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
               ) : stepMilestones.length > 0 ? (
                 <div className="space-y-1 mt-1">
                   {stepMilestones.map((m, mi) => (
-                    <div key={mi} className="flex items-center gap-2">
+                    <div key={mi} className="flex items-center gap-2 flex-wrap">
                       <span className="text-[9px] text-txt-muted">{format(new Date(m.date), 'MMM d, yyyy')}</span>
-                      {m.notes && <span className="text-[9px] text-txt-secondary">— {m.notes}</span>}
+                      {m.loggedByName && <span className="text-[9px] font-medium text-txt-secondary">· {m.loggedByName}</span>}
+                      {!m.loggedByName && <span className="text-[9px] text-txt-muted italic">· unassigned</span>}
+                      {m.source && (
+                        <span className={`text-[7px] px-1 py-0.5 rounded font-medium ${
+                          m.source === 'AUTO_WEBHOOK' ? 'bg-purple-100 text-purple-700'
+                          : m.source === 'AI' ? 'bg-blue-100 text-blue-700'
+                          : 'bg-green-100 text-green-700'
+                        }`}>{m.source === 'AUTO_WEBHOOK' ? 'API' : m.source === 'AI' ? 'AI' : 'Manual'}</span>
+                      )}
+                      {m.notes && <span className="text-[9px] text-txt-muted">— {m.notes}</span>}
                     </div>
                   ))}
                 </div>
@@ -595,6 +609,14 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
               {/* Inline milestone form */}
               {isAdding && (
                 <div className="mt-2 space-y-1.5 border-t border-[rgba(0,0,0,0.06)] pt-2">
+                  <select
+                    value={milestoneUserId}
+                    onChange={e => setMilestoneUserId(e.target.value)}
+                    className="w-full text-[9px] px-2 py-1 rounded border border-[rgba(0,0,0,0.1)] bg-white"
+                  >
+                    <option value="">Who did this?</option>
+                    {teamMembers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
                   <input
                     type="date"
                     value={milestoneDate}
@@ -619,7 +641,7 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
                       {saving ? 'Saving...' : 'Save'}
                     </button>
                     <button
-                      onClick={() => { setAddingMilestone(null); setMilestoneNotes(''); setMilestoneDate('') }}
+                      onClick={() => { setAddingMilestone(null); setMilestoneNotes(''); setMilestoneDate(''); setMilestoneUserId('') }}
                       className="text-[8px] text-txt-muted hover:text-txt-primary px-2 py-0.5"
                     >
                       Cancel

@@ -54,7 +54,7 @@ export default async function PropertyDetailPage({
     db.propertyMilestone.findMany({
       where: { propertyId: params.propertyId, tenantId },
       orderBy: { createdAt: 'asc' },
-      select: { type: true, createdAt: true, notes: true },
+      select: { id: true, type: true, createdAt: true, notes: true, source: true, loggedById: true, loggedBy: { select: { name: true } } },
     }),
     db.auditLog.findMany({
       where: {
@@ -214,7 +214,15 @@ export default async function PropertyDetailPage({
         auditLogs: [],
         leadSource: property.leadSource,
         ghlStageName: property.ghlPipelineStage,
-        milestones: milestones.map(m => ({ type: m.type, date: m.createdAt.toISOString(), notes: m.notes })),
+        milestones: milestones.map(m => ({
+          id: 'id' in m ? m.id : undefined,
+          type: m.type as string,
+          date: m.createdAt.toISOString(),
+          notes: m.notes,
+          source: 'source' in m ? (m.source as string) : 'MANUAL',
+          loggedById: 'loggedById' in m ? (m.loggedById as string | null) : null,
+          loggedByName: 'loggedBy' in m ? ((m.loggedBy as { name: string } | null)?.name ?? null) : null,
+        })),
         dispoStatus: property.dispoStatus,
         teamMembers: teamMembers.map(u => ({ id: u.id, name: u.name })),
         messages: messages.map(m => ({

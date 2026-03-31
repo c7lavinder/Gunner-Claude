@@ -17,6 +17,7 @@ const createSchema = z.object({
   type: z.enum(MILESTONE_TYPES),
   notes: z.string().optional(),
   date: z.string().optional(), // ISO date string for backdating (e.g. '2026-03-15')
+  loggedById: z.string().optional(), // who carried out this milestone
 })
 
 const updateSchema = z.object({
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const { propertyId, type, notes, date } = parsed.data
+  const { propertyId, type, notes, date, loggedById } = parsed.data
   const tenantId = session.tenantId
 
   const property = await db.property.findUnique({
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
         tenantId,
         propertyId,
         type: type as MilestoneType,
-        loggedById: session.userId,
+        loggedById: loggedById || session.userId,
         source: 'MANUAL',
         notes: notes ?? null,
         ...(date ? { createdAt: new Date(date) } : {}),
