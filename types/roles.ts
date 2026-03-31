@@ -122,7 +122,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   DISPOSITION_MANAGER: [
     'calls.view.own',
-    'properties.view.all',
+    'properties.view.assigned', 'properties.view.all', 'properties.edit',
     'inventory.view', 'inventory.manage',
     'tasks.view.own', 'tasks.create', 'tasks.complete',
     'kpis.view.own', 'kpis.configure',
