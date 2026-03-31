@@ -2321,16 +2321,30 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         </div>
       )}
 
-      {/* School & Zoning */}
-      {(bd.schoolDistrict != null || bd.zoning != null) && (
+      {/* School, Zoning & Location */}
+      {(bd.schoolDistrict != null || bd.zoning != null || bd.latitude != null) && (
         <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
           <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">School & Zoning</p>
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Zoning & Location</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3">
             <DataCard label="School District" value={fmtStr(bd.schoolDistrict)} fieldKey="schoolDistrict" />
             <DataCard label="Zoning" value={fmtStr(bd.zoning)} fieldKey="zoning" />
             <DataCard label="Zoning Desc." value={fmtStr(bd.zoningDescription)} fieldKey="zoningDescription" />
+            {bd.latitude != null && <DataCard label="Coordinates" value={`${Number(bd.latitude).toFixed(4)}, ${Number(bd.longitude).toFixed(4)}`} />}
+          </div>
+        </div>
+      )}
+
+      {/* Marketing Attribution */}
+      {(property.leadSource || (property as unknown as { leadSubSource?: string }).leadSubSource) && (
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Marketing Attribution</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3">
+            <DataCard label="Lead Source" value={fmtStr(property.leadSource)} />
+            <DataCard label="Sub-Source" value={fmtStr((property as unknown as { leadSubSource?: string }).leadSubSource)} />
           </div>
         </div>
       )}
@@ -2559,8 +2573,8 @@ const INTEL_SECTIONS: Array<{ key: string; label: string; color: string; fields:
   { key: 'seller', label: 'Seller Profile', color: 'blue', fields: [
     'sellerMotivationLevel', 'sellerMotivationReason', 'statedVsImpliedMotivation', 'sellerWhySelling',
     'sellerTimeline', 'sellerTimelineUrgency', 'sellerKnowledgeLevel', 'sellerCommunicationStyle',
-    'sellerContactPreference', 'sellerEmotionalTriggers', 'sellerFamilySituation',
-    'sellerPreviousInvestorContact', 'sellerAlternativePlan',
+    'sellerContactPreference', 'sellerPersonalityProfile', 'sellerEmotionalTriggers', 'sellerFamilySituation',
+    'sellerPreviousInvestorContact', 'sellerAlternativePlan', 'sellerOnlineBehavior',
   ]},
   { key: 'decision', label: 'Decision Making', color: 'purple', fields: [
     'decisionMakers', 'decisionMakersConfirmed', 'decisionMakerNotes', 'documentReadiness',
@@ -2579,12 +2593,13 @@ const INTEL_SECTIONS: Array<{ key: string; label: string; color: string; fields:
   ]},
   { key: 'communication', label: 'Communication Intel', color: 'teal', fields: [
     'whatNotToSay', 'toneShiftMoments', 'exactTriggerPhrases', 'questionsSellerAskedUs',
-    'appointmentLogisticsPreferences', 'bestApproachNotes',
+    'infoVolunteeredVsExtracted', 'silencePausePatterns', 'appointmentLogisticsPreferences', 'bestApproachNotes',
   ]},
   { key: 'status', label: 'Deal Status', color: 'orange', fields: [
-    'rollingDealSummary', 'commitmentsWeMade', 'promisesTheyMade', 'promiseDeadlines',
+    'rollingDealSummary', 'dealHealthScore', 'dealRedFlags', 'dealGreenFlags',
+    'commitmentsWeMade', 'promisesTheyMade', 'promiseDeadlines',
     'nextStepAgreed', 'triggerEvents', 'topicsNotYetDiscussed', 'objectionsEncountered',
-    'relationshipRapportLevel',
+    'relationshipRapportLevel', 'bestRepForThisSeller',
   ]},
   { key: 'marketing', label: 'Marketing', color: 'pink', fields: [
     'howTheyFoundUs', 'referralSource', 'referralChain', 'firstMarketingPieceReceived',
@@ -2600,6 +2615,7 @@ const INTEL_FIELD_LABELS: Record<string, string> = {
   sellerContactPreference: 'Contact Preference', sellerEmotionalTriggers: 'Emotional Triggers',
   sellerFamilySituation: 'Family Situation', sellerPreviousInvestorContact: 'Previous Investors',
   sellerAlternativePlan: 'Alternative Plan',
+  sellerPersonalityProfile: 'Personality Profile', sellerOnlineBehavior: 'Online Behavior',
   decisionMakers: 'Decision Makers', decisionMakersConfirmed: 'DM Confirmed',
   decisionMakerNotes: 'DM Notes', documentReadiness: 'Document Readiness',
   sellerAskingHistory: 'Asking History', offersWeHaveMade: 'Our Offers',
@@ -2616,12 +2632,15 @@ const INTEL_FIELD_LABELS: Record<string, string> = {
   hoaMentioned: 'HOA', mortgageBalanceMentioned: 'Mortgage (Seller Says)',
   whatNotToSay: 'What Not to Say', toneShiftMoments: 'Tone Shifts',
   exactTriggerPhrases: 'Trigger Phrases', questionsSellerAskedUs: 'Seller Questions',
+  infoVolunteeredVsExtracted: 'Info Volunteered vs Extracted', silencePausePatterns: 'Silence Patterns',
   appointmentLogisticsPreferences: 'Appointment Preferences', bestApproachNotes: 'Best Approach',
-  rollingDealSummary: 'Deal Summary', commitmentsWeMade: 'Our Commitments',
+  rollingDealSummary: 'Deal Summary', dealHealthScore: 'Deal Health (1-10)',
+  dealRedFlags: 'Red Flags', dealGreenFlags: 'Green Flags',
+  commitmentsWeMade: 'Our Commitments',
   promisesTheyMade: 'Their Promises', promiseDeadlines: 'Deadlines',
   nextStepAgreed: 'Next Step', triggerEvents: 'Trigger Events',
   topicsNotYetDiscussed: 'Topics Not Discussed', objectionsEncountered: 'Objections',
-  relationshipRapportLevel: 'Rapport Level',
+  relationshipRapportLevel: 'Rapport Level', bestRepForThisSeller: 'Best Rep for Seller',
   howTheyFoundUs: 'How Found Us', referralSource: 'Referral',
   referralChain: 'Referral Chain', firstMarketingPieceReceived: 'First Marketing Piece',
   whichMarketingMessageResonated: 'Message Resonated',
