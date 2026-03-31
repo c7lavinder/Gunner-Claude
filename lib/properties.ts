@@ -218,6 +218,7 @@ export async function createPropertyFromContact(
           propertyId: property.id,
           type: 'LEAD',
           source: 'AUTO_WEBHOOK',
+          loggedById: assignedToId,
         },
       }).catch(() => {}) // non-fatal
     }

@@ -409,6 +409,8 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     contactId?: string
     pipelineId?: string
     source?: string
+    assignedTo?: string
+    userId?: string
     locationId: string
   }
 
@@ -435,6 +437,12 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     },
   })
   if (!tenant) return
+
+  // Resolve GHL user → local user for milestone attribution
+  const ghlUserId = oppData.assignedTo ?? oppData.userId ?? ''
+  const milestoneUser = ghlUserId
+    ? await db.user.findFirst({ where: { tenantId, ghlUserId }, select: { id: true } })
+    : null
 
   // ─── Check: is this the acquisition trigger? ──────────────────────────
   const isAcqTrigger =
@@ -501,7 +509,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
         })
         if (!exists) {
           await db.propertyMilestone.create({
-            data: { tenantId, propertyId: propForMilestone.id, type: mType as import('@prisma/client').MilestoneType, source: 'AUTO_WEBHOOK' },
+            data: { tenantId, propertyId: propForMilestone.id, type: mType as import('@prisma/client').MilestoneType, source: 'AUTO_WEBHOOK', loggedById: milestoneUser?.id },
           }).catch(() => {})
           console.log(`[GHL Webhook] Backfilled ${mType} milestone for ${propForMilestone.id}`)
         }
@@ -513,7 +521,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       })
       if (!existingDispo) {
         await db.propertyMilestone.create({
-          data: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', source: 'AUTO_WEBHOOK' },
+          data: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', source: 'AUTO_WEBHOOK', loggedById: milestoneUser?.id },
         }).catch(() => {})
         console.log(`[GHL Webhook] Created DISPO_NEW milestone for ${propForMilestone.id}`)
       }
@@ -603,6 +611,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
                   propertyId: prop.id,
                   type: milestoneType as import('@prisma/client').MilestoneType,
                   source: 'AUTO_WEBHOOK',
+                  loggedById: milestoneUser?.id,
                 },
               })
               console.log(`[GHL Webhook] Auto-created ${milestoneType} milestone for property ${prop.id}`)
