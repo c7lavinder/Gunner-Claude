@@ -52,6 +52,7 @@ type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps' | 'property'
 
 interface NextStep {
   type: string; label: string; reasoning: string
+  originalLabel?: string // AI's original output, for learning feedback loop
   status: 'pending' | 'pushed' | 'skipped'
   pushedAt?: string
 }
@@ -208,7 +209,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
       if (res.ok) {
         const data = await res.json()
         if (data.steps) {
-          const newSteps = data.steps.map((s: { type: string; label: string; reasoning: string }) => ({ ...s, status: 'pending' as const }))
+          const newSteps = data.steps.map((s: { type: string; label: string; reasoning: string }) => ({ ...s, originalLabel: s.label, status: 'pending' as const }))
           setGeneratedSteps(newSteps)
           toast('Next steps generated', 'success')
         }
@@ -224,7 +225,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: step.type }),
+        body: JSON.stringify({ type: step.type, label: step.label }),
       })
       if (res.ok) {
         const updatedSteps = generatedSteps.map((s, i) => i === index ? { ...s, status: 'pushed' as const, pushedAt: new Date().toISOString() } : s)
@@ -234,6 +235,23 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ aiNextSteps: updatedSteps }),
         }).catch(() => {})
+
+        // AI Learning: if user edited the label before pushing, log the correction
+        if (step.originalLabel && step.label !== step.originalLabel) {
+          fetch(`/api/${tenantSlug}/calls/${call.id}/feedback`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'nextstep_correction',
+              details: JSON.stringify({
+                actionType: step.type,
+                aiOriginal: step.originalLabel,
+                userEdited: step.label,
+                contactName: call.contactName,
+              }),
+            }),
+          }).catch(() => {})
+        }
+
         toast('Action pushed to CRM', 'success')
       } else toast('Failed to push action', 'error')
     } catch { toast('Failed to push action', 'error') }
