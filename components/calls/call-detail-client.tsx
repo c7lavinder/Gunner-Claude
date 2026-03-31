@@ -87,14 +87,20 @@ const MOMENT_ICONS: Record<string, typeof Star> = {
   closing_attempt: Target, motivation_revealed: Lightbulb,
 }
 
-const STEP_ICONS: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
-  check_off_task: { icon: CheckCircle, color: 'text-semantic-green', bg: 'bg-semantic-green-bg' },
-  create_appointment: { icon: CalendarCheck, color: 'text-[#e11d48]', bg: 'bg-[#ffe4e6]' },
-  change_stage: { icon: RefreshCw, color: 'text-semantic-amber', bg: 'bg-semantic-amber-bg' },
-  add_note: { icon: FileText, color: 'text-semantic-blue', bg: 'bg-semantic-blue-bg' },
-  send_sms: { icon: Send, color: 'text-[#0d9488]', bg: 'bg-[#ccfbf1]' },
-  create_task: { icon: CheckCircle, color: 'text-semantic-purple', bg: 'bg-semantic-purple-bg' },
+const STEP_ICONS: Record<string, { icon: typeof CheckCircle; color: string; bg: string; cardBg: string; label: string }> = {
+  add_note:              { icon: FileText,      color: 'text-amber-700',   bg: 'bg-amber-100',    cardBg: 'bg-amber-50',     label: 'Add Note' },
+  create_task:           { icon: CheckCircle,   color: 'text-blue-700',    bg: 'bg-blue-100',     cardBg: 'bg-blue-50',      label: 'Create Task' },
+  check_off_task:        { icon: CheckCircle,   color: 'text-green-700',   bg: 'bg-green-100',    cardBg: 'bg-green-50',     label: 'Check Off Task' },
+  update_task:           { icon: RefreshCw,     color: 'text-sky-700',     bg: 'bg-sky-100',      cardBg: 'bg-sky-50',       label: 'Update Task' },
+  change_stage:          { icon: RefreshCw,     color: 'text-orange-700',  bg: 'bg-orange-100',   cardBg: 'bg-orange-50',    label: 'Change Pipeline Stage' },
+  create_appointment:    { icon: CalendarCheck, color: 'text-purple-700',  bg: 'bg-purple-100',   cardBg: 'bg-purple-50',    label: 'Create Appointment' },
+  send_sms:              { icon: Send,          color: 'text-teal-700',    bg: 'bg-teal-100',     cardBg: 'bg-teal-50',      label: 'Send SMS' },
+  schedule_sms:          { icon: Clock,         color: 'text-teal-700',    bg: 'bg-teal-100',     cardBg: 'bg-teal-50',      label: 'Schedule SMS' },
+  add_to_workflow:       { icon: Zap,           color: 'text-gray-700',    bg: 'bg-gray-100',     cardBg: 'bg-gray-50',      label: 'Add to Workflow' },
+  remove_from_workflow:  { icon: X,             color: 'text-gray-700',    bg: 'bg-gray-100',     cardBg: 'bg-gray-50',      label: 'Remove from Workflow' },
 }
+
+const ALL_ACTION_TYPES = Object.keys(STEP_ICONS)
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
@@ -110,6 +116,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
+  const [expandedMoment, setExpandedMoment] = useState<number | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
   const [reclassifying, setReclassifying] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -127,6 +134,12 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   })
   const [generatingSteps, setGeneratingSteps] = useState(false)
   const [expandedReasons, setExpandedReasons] = useState<Set<number>>(new Set())
+  const [showAddAction, setShowAddAction] = useState(false)
+  const [addActionType, setAddActionType] = useState('')
+  const [addActionSummary, setAddActionSummary] = useState('')
+  const [addingAction, setAddingAction] = useState(false)
+  const [editingStep, setEditingStep] = useState<number | null>(null)
+  const [editFields, setEditFields] = useState<Record<string, string>>({})
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const grade = gradeInfo(call.score)
@@ -237,6 +250,30 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     }).catch(() => {})
   }
 
+  async function addAction() {
+    if (!addActionType) return
+    setAddingAction(true)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/generate-next-steps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actionType: addActionType, summary: addActionSummary }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.steps && data.steps.length > 0) {
+          const newStep = { ...data.steps[0], status: 'pending' as const }
+          setGeneratedSteps(prev => [...prev, newStep])
+          toast('Action added', 'success')
+          setShowAddAction(false)
+          setAddActionType('')
+          setAddActionSummary('')
+        }
+      } else toast('Failed to generate action', 'error')
+    } catch { toast('Failed to generate action', 'error') }
+    setAddingAction(false)
+  }
+
   function toggleReason(index: number) {
     setExpandedReasons(prev => {
       const next = new Set(prev)
@@ -321,14 +358,9 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           </Pill>
         )}
         {call.property && (
-          <Pill icon={<MapPin size={9} />}>
-            {call.property.address}, {call.property.city}, {call.property.state}
-          </Pill>
-        )}
-        {call.property && (
-          <Pill icon={<Clipboard size={9} />}>
-            {call.property.status === 'DEAD' ? 'Property no longer in inventory' : 'View Property'}
-          </Pill>
+          <Link href={`/${tenantSlug}/inventory/${call.property.id}`} target="_blank" className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border-[0.5px] border-[rgba(0,0,0,0.14)] text-txt-secondary hover:text-gunner-red hover:border-gunner-red/30 transition-colors">
+            <MapPin size={9} /> {call.property.address}, {call.property.city}, {call.property.state}
+          </Link>
         )}
       </div>
 
@@ -359,8 +391,8 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
             </button>
           </div>
 
-          {/* STRENGTHS card */}
-          {strengths.length > 0 && (
+          {/* STRENGTHS card — only visible on Coaching tab */}
+          {tab === 'coaching' && strengths.length > 0 && (
             <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
               <h3 className="text-[14px] font-semibold text-semantic-green flex items-center gap-2 mb-3">
                 <CheckCircle size={14} /> STRENGTHS
@@ -376,8 +408,8 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
             </div>
           )}
 
-          {/* RED FLAGS card */}
-          {redFlags.length > 0 && (
+          {/* RED FLAGS card — only visible on Coaching tab */}
+          {tab === 'coaching' && redFlags.length > 0 && (
             <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
               <h3 className="text-[14px] font-semibold text-semantic-amber flex items-center gap-2 mb-3">
                 <AlertTriangle size={14} /> RED FLAGS
@@ -519,12 +551,14 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                 <div className="grid grid-cols-2 gap-3">
                   {Object.entries(call.rubricScores).map(([cat, data]) => {
                     const pct = data.maxScore > 0 ? Math.round((data.score / data.maxScore) * 100) : 0
-                    const barColor = pct >= 80 ? 'bg-semantic-green' : pct >= 60 ? 'bg-semantic-blue' : 'bg-semantic-red'
+                    // Color tiers: green (80%+), gold/yellow (60-79%), red (<40%), blue (40-59%)
+                    const barColor = pct >= 80 ? 'bg-semantic-green' : pct >= 60 ? 'bg-yellow-500' : pct >= 40 ? 'bg-semantic-blue' : 'bg-semantic-red'
+                    const textColor = pct >= 80 ? 'text-semantic-green' : pct >= 60 ? 'text-yellow-600' : pct >= 40 ? 'text-semantic-blue' : 'text-semantic-red'
                     return (
                       <div key={cat} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-[14px] font-medium text-txt-primary">{formatFieldLabel(cat)}</span>
-                          <span className={`text-[14px] font-semibold ${pct >= 80 ? 'text-semantic-green' : pct >= 60 ? 'text-semantic-blue' : 'text-semantic-red'}`}>
+                          <span className={`text-[14px] font-semibold ${textColor}`}>
                             {data.score}/{data.maxScore}
                           </span>
                         </div>
@@ -554,49 +588,55 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                     <Play size={12} /> Call Recording
                   </h3>
 
-                  {/* Waveform placeholder */}
-                  <div className="h-16 bg-surface-secondary rounded-[10px] flex items-center justify-center mb-3 overflow-hidden relative">
-                    <div className="flex items-end gap-[2px] h-12">
-                      {Array.from({ length: 60 }).map((_, i) => {
-                        // Deterministic wave pattern: sine + harmonic for natural-looking audio bars
-                        const h = 20 + Math.abs(Math.sin(i * 0.4) * 40) + Math.abs(Math.sin(i * 0.9) * 30) + (i % 3 === 0 ? 10 : 0)
+                  {/* Waveform — larger, cleaner */}
+                  <div className="h-24 bg-surface-secondary rounded-[12px] flex items-center justify-center mb-4 overflow-hidden relative cursor-pointer"
+                    onClick={(e) => {
+                      if (!audioRef.current || !call.durationSeconds) return
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const pct = (e.clientX - rect.left) / rect.width
+                      audioRef.current.currentTime = pct * call.durationSeconds
+                    }}
+                  >
+                    <div className="flex items-end gap-[3px] h-20 px-4 w-full">
+                      {Array.from({ length: 80 }).map((_, i) => {
+                        const h = 15 + Math.abs(Math.sin(i * 0.35) * 45) + Math.abs(Math.sin(i * 0.85) * 35) + (i % 4 === 0 ? 12 : 0)
+                        const progress = call.durationSeconds ? currentTime / call.durationSeconds : 0
+                        const barProgress = i / 80
+                        const isPast = barProgress < progress
                         return (
                           <div
                             key={i}
-                            className="w-[3px] rounded-full bg-gunner-red/30"
+                            className={`flex-1 rounded-full transition-colors ${isPast ? 'bg-gunner-red' : 'bg-gunner-red/20'}`}
                             style={{ height: `${Math.min(h, 100)}%` }}
                           />
                         )
                       })}
                     </div>
-                    {/* Playhead */}
-                    <div
-                      className="absolute top-0 bottom-0 w-[2px] bg-gunner-red"
-                      style={{ left: `${call.durationSeconds ? (currentTime / call.durationSeconds) * 100 : 0}%` }}
-                    />
                   </div>
 
-                  {/* Controls */}
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => { if (audioRef.current) { audioRef.current.currentTime = 0 } }} className="p-1 text-txt-muted hover:text-txt-primary">
-                      <SkipBack size={14} />
+                  {/* Controls — cleaner layout */}
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => { if (audioRef.current) { audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 15) } }} className="p-1.5 text-txt-muted hover:text-txt-primary" title="Back 15s">
+                      <SkipBack size={16} />
                     </button>
-                    <button onClick={togglePlay} className="w-9 h-9 rounded-full bg-gunner-red text-white flex items-center justify-center hover:bg-gunner-red-dark">
-                      {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                    <button onClick={togglePlay} className="w-11 h-11 rounded-full bg-gunner-red text-white flex items-center justify-center hover:bg-gunner-red-dark shadow-md">
+                      {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
                     </button>
-                    <button onClick={() => { if (audioRef.current) { audioRef.current.currentTime = audioRef.current.duration } }} className="p-1 text-txt-muted hover:text-txt-primary">
-                      <SkipForward size={14} />
+                    <button onClick={() => { if (audioRef.current) { audioRef.current.currentTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + 15) } }} className="p-1.5 text-txt-muted hover:text-txt-primary" title="Forward 15s">
+                      <SkipForward size={16} />
                     </button>
-                    <span className="text-[11px] text-txt-muted">
-                      {fmtDuration(Math.round(currentTime))} / {fmtDuration(call.durationSeconds)}
+                    <span className="text-[13px] font-medium text-txt-primary tabular-nums">
+                      {fmtDuration(Math.round(currentTime))}
                     </span>
-                    <div className="ml-auto flex items-center gap-2">
-                      <button onClick={changeSpeed} className="text-[11px] font-medium text-txt-secondary bg-surface-secondary px-2 py-1 rounded-[6px] hover:text-txt-primary">
+                    <span className="text-[13px] text-txt-muted">/</span>
+                    <span className="text-[13px] text-txt-muted tabular-nums">
+                      {fmtDuration(call.durationSeconds)}
+                    </span>
+                    <div className="ml-auto flex items-center gap-3">
+                      <button onClick={changeSpeed} className="text-[12px] font-semibold text-txt-secondary bg-surface-secondary px-3 py-1.5 rounded-[8px] hover:text-txt-primary">
                         {playbackRate}x
                       </button>
-                      <button className="p-1 text-txt-muted hover:text-txt-primary">
-                        <Volume2 size={14} />
-                      </button>
+                      <Volume2 size={14} className="text-txt-muted" />
                     </div>
                   </div>
 
@@ -617,30 +657,46 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                 </h3>
                 <p className="text-[12px] text-txt-muted mb-3">AI-identified highlights from this call — objections, appointments, price discussions, and more.</p>
                 {call.keyMoments.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {call.keyMoments.map((m, i) => {
                       const Icon = MOMENT_ICONS[m.type] ?? Zap
+                      const isExpM = expandedMoment === i
+                      // Short summary: first sentence or first 80 chars
+                      const shortDesc = m.description.includes('.')
+                        ? m.description.split('.')[0] + '.'
+                        : m.description.length > 80 ? m.description.slice(0, 80).replace(/\s+\S*$/, '') + '...' : m.description
+                      const hasMore = m.description.length > shortDesc.length || (m as { quote?: string }).quote
                       return (
-                        <button
-                          key={i}
-                          onClick={() => seekTo(m.timestamp)}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-[10px] bg-surface-secondary text-left hover:bg-surface-tertiary transition-colors"
-                        >
-                          <Icon size={12} className="text-semantic-purple shrink-0" />
-                          <span className="text-[11px] text-semantic-purple font-medium shrink-0">{m.timestamp}</span>
-                          <span className="text-[13px] text-txt-secondary truncate">{m.description}</span>
-                        </button>
+                        <div key={i} className="rounded-[10px] bg-surface-secondary overflow-hidden">
+                          <button
+                            onClick={() => hasMore ? setExpandedMoment(isExpM ? null : i) : seekTo(m.timestamp)}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-tertiary transition-colors"
+                          >
+                            <Icon size={12} className="text-semantic-purple shrink-0" />
+                            <span className="text-[11px] text-semantic-purple font-medium shrink-0">{m.timestamp}</span>
+                            <span className="text-[13px] text-txt-secondary flex-1">{shortDesc}</span>
+                            {hasMore && <ChevronDown size={12} className={`text-txt-muted transition-transform ${isExpM ? 'rotate-180' : ''}`} />}
+                          </button>
+                          {isExpM && (
+                            <div className="px-3 pb-3 pt-0.5 border-t" style={{ borderColor: 'var(--border-light)' }}>
+                              <p className="text-[12px] text-txt-secondary leading-relaxed mb-2">{m.description}</p>
+                              {(m as { quote?: string }).quote && (
+                                <div className="flex gap-2 pl-1">
+                                  <span className="text-[16px] text-txt-muted leading-none shrink-0">&ldquo;</span>
+                                  <p className="text-[11px] text-txt-muted italic leading-relaxed">{(m as { quote?: string }).quote}</p>
+                                </div>
+                              )}
+                              <button onClick={() => seekTo(m.timestamp)} className="text-[11px] text-semantic-purple hover:underline mt-2 flex items-center gap-1">
+                                <Play size={9} /> Jump to {m.timestamp}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )
                     })}
                   </div>
                 ) : (
-                  <button
-                    onClick={() => toast('Highlight generation coming soon', 'info')}
-                    className="flex items-center gap-2 px-4 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-semantic-purple hover:bg-semantic-purple-bg transition-all"
-                    style={{ borderColor: 'var(--border-medium)' }}
-                  >
-                    &#x2726; Generate Highlights
-                  </button>
+                  <p className="text-[12px] text-txt-muted">No key moments identified in this call.</p>
                 )}
               </div>
 
@@ -685,24 +741,56 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                   </p>
                   <p className="text-[12px] text-txt-muted">Review, edit, and push each action to CRM</p>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toast('Manual action creation coming soon', 'info')}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-txt-primary"
-                    style={{ borderColor: 'var(--border-medium)' }}
-                  >
-                    <Plus size={13} /> Add Action
-                  </button>
-                  {generatedSteps.length > 0 && (
-                    <button onClick={generateNextSteps} className="text-[13px] text-txt-secondary hover:text-txt-primary">
-                      Regenerate
-                    </button>
-                  )}
-                </div>
+                <button
+                  onClick={() => setShowAddAction(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-txt-primary"
+                  style={{ borderColor: 'var(--border-medium)' }}
+                >
+                  <Plus size={13} /> Add Action
+                </button>
               </div>
 
+              {/* Add Action inline form */}
+              {showAddAction && (
+                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-4 space-y-3" style={{ borderColor: 'var(--border-light)' }}>
+                  <p className="text-[12px] font-medium text-txt-primary">New Action</p>
+                  <select
+                    value={addActionType}
+                    onChange={e => setAddActionType(e.target.value)}
+                    className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary focus:outline-none"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                  >
+                    <option value="">Select Action Type...</option>
+                    {ALL_ACTION_TYPES.map(t => (
+                      <option key={t} value={t}>{STEP_ICONS[t]?.label ?? t}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={addActionSummary}
+                    onChange={e => setAddActionSummary(e.target.value)}
+                    placeholder="Briefly describe what you want to do..."
+                    className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary placeholder:text-txt-muted focus:outline-none"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                    onKeyDown={e => { if (e.key === 'Enter') addAction() }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={addAction}
+                      disabled={!addActionType || addingAction}
+                      className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-[12px] font-semibold px-3 py-1.5 rounded-[10px] transition-colors"
+                    >
+                      {addingAction ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                      {addingAction ? 'Generating...' : 'Add'}
+                    </button>
+                    <button onClick={() => { setShowAddAction(false); setAddActionType(''); setAddActionSummary('') }}
+                      className="text-[12px] text-txt-secondary hover:text-txt-primary px-3 py-1.5">Cancel</button>
+                  </div>
+                </div>
+              )}
+
               {/* Generate button */}
-              {generatedSteps.length === 0 && (
+              {generatedSteps.length === 0 && !showAddAction && (
                 <button
                   onClick={generateNextSteps}
                   disabled={generatingSteps}
@@ -714,73 +802,101 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
               {/* Pending actions */}
               {generatedSteps.filter(s => s.status === 'pending').length > 0 && (
-                <div>
-                  <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2 flex items-center gap-1">
-                    <MessageSquare size={10} /> CRM Actions ({generatedSteps.filter(s => s.status === 'pending').length})
-                  </p>
-                  <div className="space-y-3">
-                    {generatedSteps.map((step, i) => {
-                      if (step.status !== 'pending') return null
-                      const stepDef = STEP_ICONS[step.type] ?? STEP_ICONS.add_note
-                      const StepIcon = stepDef.icon
-                      return (
-                        <div key={i} className="bg-semantic-green-bg/30 border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--green)' }}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${stepDef.bg} ${stepDef.color}`}>
-                              <StepIcon size={10} className="inline mr-1" />
-                              {step.type.replace(/_/g, ' ')}
-                            </span>
-                            <span className="text-[11px] font-medium text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">&#x2726; AI</span>
-                          </div>
-                          <p className="text-[13px] text-txt-primary font-medium mb-1">{step.label}</p>
-                          <button onClick={() => toggleReason(i)} className="text-[11px] text-semantic-purple hover:underline mb-3 flex items-center gap-1">
-                            &#x2726; Why this action? <ChevronDown size={10} className={expandedReasons.has(i) ? 'rotate-180' : ''} />
-                          </button>
-                          {expandedReasons.has(i) && (
-                            <p className="text-[12px] text-txt-muted italic mb-3">{step.reasoning}</p>
-                          )}
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => pushStep(i)}
-                              disabled={actionLoading === `step-${i}`}
-                              className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-[12px] font-semibold px-3 py-1.5 rounded-[10px] transition-colors"
-                            >
-                              {actionLoading === `step-${i}` ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
-                              Push to CRM
-                            </button>
-                            <button className="text-[12px] text-txt-secondary hover:text-txt-primary">Edit</button>
-                            <button onClick={() => skipStep(i)} className="text-[12px] text-txt-secondary hover:text-txt-primary">Skip</button>
-                          </div>
+                <div className="space-y-3">
+                  {generatedSteps.map((step, i) => {
+                    if (step.status !== 'pending') return null
+                    const stepDef = STEP_ICONS[step.type] ?? STEP_ICONS.add_note
+                    const StepIcon = stepDef.icon
+                    const isEditing = editingStep === i
+                    return (
+                      <div key={i} className={`${stepDef.cardBg} border-[0.5px] rounded-[14px] p-4`} style={{ borderColor: 'var(--border-light)' }}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${stepDef.bg} ${stepDef.color}`}>
+                            <StepIcon size={10} className="inline mr-1" />
+                            {stepDef.label}
+                          </span>
+                          <span className="text-[11px] font-medium text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">&#x2726; AI</span>
                         </div>
-                      )
-                    })}
-                  </div>
+                        <p className="text-[13px] text-txt-primary font-medium mb-1">{step.label}</p>
+                        <button onClick={() => toggleReason(i)} className="text-[11px] text-semantic-purple hover:underline mb-3 flex items-center gap-1">
+                          &#x2726; Why this action? <ChevronDown size={10} className={expandedReasons.has(i) ? 'rotate-180' : ''} />
+                        </button>
+                        {expandedReasons.has(i) && (
+                          <p className="text-[12px] text-txt-muted italic mb-3">{step.reasoning}</p>
+                        )}
+
+                        {/* Edit panel — inline accordion */}
+                        {isEditing && (
+                          <div className="border-t pt-3 mb-3 space-y-2" style={{ borderColor: 'var(--border-light)' }}>
+                            <input
+                              value={editFields.label ?? step.label}
+                              onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                              className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[13px] text-txt-primary focus:outline-none"
+                              style={{ borderColor: 'var(--border-medium)' }}
+                              placeholder="Action description..."
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  const updatedSteps = generatedSteps.map((s, si) => si === i ? { ...s, label: editFields.label ?? s.label } : s)
+                                  setGeneratedSteps(updatedSteps)
+                                  fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
+                                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ aiNextSteps: updatedSteps }),
+                                  }).catch(() => {})
+                                  setEditingStep(null)
+                                  setEditFields({})
+                                }}
+                                className="text-[11px] font-semibold text-white bg-gunner-red px-3 py-1 rounded-[8px]"
+                              >Save Changes</button>
+                              <button onClick={() => { setEditingStep(null); setEditFields({}) }}
+                                className="text-[11px] text-txt-secondary px-3 py-1">Cancel</button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => pushStep(i)}
+                            disabled={actionLoading === `step-${i}`}
+                            className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-[12px] font-semibold px-3 py-1.5 rounded-[10px] transition-colors"
+                          >
+                            {actionLoading === `step-${i}` ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                            Push to CRM
+                          </button>
+                          <button onClick={() => { setEditingStep(isEditing ? null : i); setEditFields({ label: step.label }) }}
+                            className="text-[12px] text-txt-secondary hover:text-txt-primary">
+                            {isEditing ? 'Close' : 'Edit'}
+                          </button>
+                          <button onClick={() => skipStep(i)} className="text-[12px] text-txt-secondary hover:text-txt-primary">Skip</button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 
-              {/* Pushed actions */}
+              {/* Pushed actions — dimmed, at bottom */}
               {generatedSteps.filter(s => s.status === 'pushed').length > 0 && (
                 <div>
                   <p className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-2 flex items-center gap-1">
                     <Clock size={10} /> Actions Taken ({generatedSteps.filter(s => s.status === 'pushed').length} pushed)
                   </p>
-                  <div className="space-y-3">
+                  <div className="space-y-2 opacity-60">
                     {generatedSteps.map((step, i) => {
                       if (step.status !== 'pushed') return null
                       const stepDef = STEP_ICONS[step.type] ?? STEP_ICONS.add_note
                       const StepIcon = stepDef.icon
                       return (
-                        <div key={i} className="bg-semantic-amber-bg/30 border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--amber)' }}>
-                          <div className="flex items-center gap-2 mb-2">
+                        <div key={i} className="bg-surface-tertiary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
+                          <div className="flex items-center gap-2 mb-1">
                             <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${stepDef.bg} ${stepDef.color}`}>
                               <StepIcon size={10} className="inline mr-1" />
-                              {step.type.replace(/_/g, ' ')}
+                              {stepDef.label}
                             </span>
-                            <span className="text-[11px] font-medium text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">&#x2726; AI</span>
                             <span className="text-[11px] font-medium text-semantic-green bg-semantic-green-bg px-2 py-0.5 rounded-full">&#x2713; Pushed</span>
                           </div>
-                          <p className="text-[13px] text-txt-primary mb-2">{step.label}</p>
-                          <p className="text-[12px] text-semantic-green">&#x2713; Action completed successfully!</p>
+                          <p className="text-[13px] text-txt-secondary">{step.label}</p>
                           {step.pushedAt && (
                             <p className="text-[11px] text-txt-muted mt-1">Pushed {format(new Date(step.pushedAt), "MMM d 'at' h:mm a")}</p>
                           )}
@@ -792,7 +908,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               )}
 
               {/* AI recommended action (from grading) */}
-              {call.nextBestAction && generatedSteps.length === 0 && (
+              {call.nextBestAction && generatedSteps.length === 0 && !showAddAction && (
                 <div className="bg-semantic-purple-bg/30 border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)', borderLeft: '3px solid var(--purple)' }}>
                   <h3 className="text-[14px] font-semibold text-semantic-purple flex items-center gap-2 mb-2">
                     <Zap size={14} /> AI Recommended Action
@@ -897,31 +1013,35 @@ function FeedbackModal({ callId, tenantSlug, onClose }: { callId: string; tenant
 }
 
 function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: string }) {
+  // Load persisted suggestions from call data if available
+  const persistedSuggestions = (call as { propertySuggestions?: Array<{
+    field: string; label: string; currentValue: string | null
+    suggestedValue: string; confidence: 'high' | 'medium' | 'low'
+    quote: string; applied: boolean
+  }> }).propertySuggestions ?? null
+
   const [suggestions, setSuggestions] = useState<Array<{
     field: string; label: string; currentValue: string | null
     suggestedValue: string; confidence: 'high' | 'medium' | 'low'
     quote: string; applied: boolean
-  }>>([])
+  }>>(persistedSuggestions ?? [])
   const [loading, setLoading] = useState(false)
-  const [generated, setGenerated] = useState(false)
   const [applying, setApplying] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
   const { toast } = useToast()
 
-  async function generateSuggestions() {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/property-suggestions`, { method: 'POST' })
-      if (res.ok) {
-        const data = await res.json()
-        setSuggestions(data.suggestions ?? [])
-        setGenerated(true)
-      } else {
-        toast('Failed to analyze call', 'error')
-      }
-    } catch {
-      toast('Failed to analyze call', 'error')
-    }
-    setLoading(false)
+  const generated = suggestions.length > 0 || persistedSuggestions !== null
+
+  // Auto-generate if not persisted and call has transcript
+  const [autoGenerated, setAutoGenerated] = useState(false)
+  if (!generated && !autoGenerated && call.transcript && call.property) {
+    setAutoGenerated(true)
+    // Trigger auto-generation
+    fetch(`/api/${tenantSlug}/calls/${call.id}/property-suggestions`, { method: 'POST' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.suggestions) setSuggestions(data.suggestions) })
+      .catch(() => {})
   }
 
   async function applySuggestion(index: number) {
@@ -929,14 +1049,51 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
     if (!s || !call.property) return
     setApplying(s.field)
     try {
+      const value = editingField === s.field ? editValue : s.suggestedValue
       const res = await fetch(`/api/properties/${call.property.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [s.field]: s.suggestedValue, fieldSources: { [s.field]: 'ai' } }),
+        body: JSON.stringify({ [s.field]: value, fieldSources: { [s.field]: 'ai' } }),
       })
       if (res.ok) {
-        setSuggestions(prev => prev.map((item, i) => i === index ? { ...item, applied: true } : item))
+        const updated = suggestions.map((item, i) => i === index ? { ...item, applied: true, suggestedValue: value } : item)
+        setSuggestions(updated)
+        setEditingField(null)
+        // Persist to call record
+        fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ propertySuggestions: updated }),
+        }).catch(() => {})
         toast(`Updated ${s.label}`, 'success')
+      }
+    } catch { /* swallow */ }
+    setApplying(null)
+  }
+
+  async function pushAll() {
+    const pending = suggestions.filter(s => !s.applied)
+    if (!call.property || pending.length === 0) return
+    setApplying('all')
+    const updateData: Record<string, string> = {}
+    const sourceData: Record<string, string> = {}
+    for (const s of pending) {
+      updateData[s.field] = s.suggestedValue
+      sourceData[s.field] = 'ai'
+    }
+    try {
+      const res = await fetch(`/api/properties/${call.property.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...updateData, fieldSources: sourceData }),
+      })
+      if (res.ok) {
+        const updated = suggestions.map(s => ({ ...s, applied: true }))
+        setSuggestions(updated)
+        fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ propertySuggestions: updated }),
+        }).catch(() => {})
+        toast(`Updated ${pending.length} fields`, 'success')
       }
     } catch { /* swallow */ }
     setApplying(null)
@@ -949,75 +1106,77 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[14px] font-medium text-txt-primary">Property Data from Call</p>
-          <p className="text-[12px] text-txt-muted">AI-extracted data points that can update the property record</p>
+          <p className="text-[12px] text-txt-muted">AI-extracted data points — edit then push to property record</p>
         </div>
-        {generated && pendingCount > 0 && (
-          <span className="text-[10px] font-bold text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">{pendingCount} suggestions</span>
-        )}
+        <div className="flex items-center gap-2">
+          {pendingCount > 0 && (
+            <button onClick={pushAll} disabled={applying === 'all'}
+              className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-[11px] font-semibold px-3 py-1.5 rounded-[10px] transition-colors">
+              {applying === 'all' ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+              Push All to Property
+            </button>
+          )}
+          {generated && (
+            <span className="text-[10px] font-bold text-semantic-purple bg-semantic-purple-bg px-2 py-0.5 rounded-full">{suggestions.length} extracted</span>
+          )}
+        </div>
       </div>
 
       {!call.property && (
-        <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-8 text-center" style={{ borderColor: 'var(--border-light)' }}>
-          <p className="text-[13px] text-txt-muted">No property linked to this call</p>
-        </div>
+        <EmptyState icon={<Home size={24} />} message="No property linked to this call" />
       )}
 
-      {call.property && !generated && (
-        <button
-          onClick={generateSuggestions}
-          disabled={loading}
-          className="w-full bg-semantic-purple hover:opacity-90 text-white text-[13px] font-semibold py-3 rounded-[10px] transition-colors flex items-center justify-center gap-2"
-        >
-          {loading ? <><Loader2 size={14} className="animate-spin" /> Analyzing transcript...</> : <><Sparkles size={14} /> Extract Property Data from Call</>}
-        </button>
-      )}
-
-      {call.property && generated && suggestions.length === 0 && (
-        <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-8 text-center" style={{ borderColor: 'var(--border-light)' }}>
-          <p className="text-[13px] text-txt-muted">No new data points found in this call</p>
-        </div>
+      {call.property && !generated && !loading && (
+        <EmptyState icon={<Sparkles size={24} />} message="Analyzing call for property data..." />
       )}
 
       {suggestions.length > 0 && (
         <div className="space-y-2">
-          {suggestions.map((s, i) => (
-            <div key={i} className={`border-[0.5px] rounded-[14px] p-4 ${s.applied ? 'bg-green-50 border-green-200' : 'bg-surface-primary'}`} style={s.applied ? {} : { borderColor: 'var(--border-light)' }}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[13px] font-medium text-txt-primary">{s.label}</span>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                    s.confidence === 'high' ? 'bg-green-100 text-green-700' : s.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
-                  }`}>{s.confidence}</span>
-                  {s.applied ? (
-                    <span className="text-[10px] font-medium text-green-600">Applied</span>
-                  ) : (
-                    <button
-                      onClick={() => applySuggestion(i)}
-                      disabled={applying === s.field}
-                      className="text-[10px] font-semibold text-semantic-purple hover:text-semantic-purple/80 bg-semantic-purple-bg px-2.5 py-1 rounded-[8px]"
-                    >
-                      {applying === s.field ? '...' : 'Apply'}
-                    </button>
-                  )}
+          {suggestions.map((s, i) => {
+            const isEditing = editingField === s.field
+            return (
+              <div key={i} className={`border-[0.5px] rounded-[14px] p-4 ${s.applied ? 'bg-green-50 border-green-200' : 'bg-surface-primary'}`} style={s.applied ? {} : { borderColor: 'var(--border-light)' }}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[13px] font-medium text-txt-primary">{s.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      s.confidence === 'high' ? 'bg-green-100 text-green-700' : s.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                    }`}>{s.confidence}</span>
+                    {s.applied ? (
+                      <span className="text-[10px] font-medium text-green-600">&#x2713; Pushed</span>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <button onClick={() => { setEditingField(isEditing ? null : s.field); setEditValue(s.suggestedValue) }}
+                          className="text-[10px] font-medium text-txt-secondary hover:text-txt-primary">
+                          {isEditing ? 'Cancel' : 'Edit'}
+                        </button>
+                        <button
+                          onClick={() => applySuggestion(i)}
+                          disabled={applying === s.field}
+                          className="text-[10px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-2.5 py-1 rounded-[8px]"
+                        >
+                          {applying === s.field ? '...' : 'Push'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {s.currentValue && <p className="text-[11px] text-txt-muted">Current: {s.currentValue}</p>}
+                {isEditing ? (
+                  <input
+                    value={editValue}
+                    onChange={e => setEditValue(e.target.value)}
+                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[12px] text-txt-primary mt-1 focus:outline-none"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                  />
+                ) : (
+                  <p className="text-[12px] text-txt-primary font-medium mt-0.5">{s.suggestedValue}</p>
+                )}
+                {s.quote && <p className="text-[11px] text-txt-muted italic mt-1">&ldquo;{s.quote}&rdquo;</p>}
               </div>
-              {s.currentValue && (
-                <p className="text-[11px] text-txt-muted">Current: {s.currentValue}</p>
-              )}
-              <p className="text-[12px] text-txt-primary font-medium mt-0.5">Suggested: {s.suggestedValue}</p>
-              {s.quote && (
-                <p className="text-[11px] text-txt-muted italic mt-1">&ldquo;{s.quote}&rdquo;</p>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
-      )}
-
-      {generated && (
-        <button onClick={generateSuggestions} disabled={loading}
-          className="text-[12px] text-txt-secondary hover:text-txt-primary">
-          {loading ? 'Analyzing...' : 'Re-analyze'}
-        </button>
       )}
     </div>
   )
@@ -1032,24 +1191,24 @@ function TranscriptView({ transcript, searchQuery }: { transcript: string; searc
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {searchQuery && <p className="text-[11px] text-txt-muted mb-2">{filtered.length} matches</p>}
       {filtered.map((line, i) => {
-        const match = line.match(/^(Speaker \d+|Rep|Seller|Agent|Customer|Unknown):\s*/i)
+        const match = line.match(/^(Speaker \d+|Rep|Seller|Agent|Customer|Unknown|[A-Z][a-z]+ ?[A-Z]?[a-z]*):\s*/i)
         const speaker = match?.[1] ?? null
         const content = speaker ? line.substring(match![0].length) : line
         const isRep = speaker?.toLowerCase().includes('rep') || speaker?.toLowerCase().includes('agent') || speaker === 'Speaker 0'
 
         return (
-          <div key={i} className={`text-[13px] leading-relaxed ${speaker ? 'flex gap-2' : ''}`}>
+          <div key={i} className="text-[13px] leading-relaxed">
             {speaker && (
-              <span className={`text-[11px] font-medium shrink-0 mt-0.5 ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
-                {speaker}:
-              </span>
+              <p className={`text-[12px] font-semibold mb-0.5 ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
+                {speaker}
+              </p>
             )}
-            <span className="text-txt-secondary">
+            <p className="text-txt-secondary">
               {searchQuery ? highlightText(content, searchQuery) : content}
-            </span>
+            </p>
           </div>
         )
       })}

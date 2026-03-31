@@ -532,7 +532,7 @@ ${feedbackCorrections}`)
     "<category>": {
       "score": <number>,
       "maxScore": <number>,
-      "notes": "<specific note referencing what was said>"
+      "notes": "<STRICT 2-3 sentences MAX: what happened on the call for this criterion, one supporting quote or moment, and the outcome. NO coaching advice — coaching goes in improvements only.>"
     }
   },
   "summary": "<2-4 sentences. Factual and neutral. Must include any specific numbers mentioned (offer price, asking price, etc.), who called who, the outcome, and the key turning points. No editorial opinion. Think 'what happened on this call' not 'what went wrong.'>",
