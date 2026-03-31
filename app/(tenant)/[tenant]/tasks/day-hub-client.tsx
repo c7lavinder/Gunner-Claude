@@ -932,9 +932,6 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
                 {isToday(apptDate) ? 'Today' : format(apptDate, 'EEE, MMM d')}
               </span>
               <button onClick={() => setApptDate(d => addDays(d, 1))} className="p-0.5 text-txt-muted hover:text-txt-primary"><ChevronDown size={12} className="rotate-[-90deg]" /></button>
-              {!loadingAppts && appointments.length > 0 && (
-                <span className="bg-gunner-red text-white text-[9px] font-medium px-1.5 py-0.5 rounded-full">{appointments.length}</span>
-              )}
             </div>
 
             {/* Appointments body */}
