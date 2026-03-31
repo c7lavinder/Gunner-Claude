@@ -101,6 +101,8 @@ interface PropertyDetail {
   leadSource: string | null
   ghlStageName: string | null
   milestones: Array<{ type: string; date: string; notes: string | null }>
+  serverAcqIdx?: number
+  serverDispoIdx?: number
   teamMembers: Array<{ id: string; name: string }>
   messages: Array<{ id: string; text: string; mentions: Array<{ id: string; name: string }>; userId: string | null; userName: string; createdAt: string }>
 }
@@ -272,7 +274,7 @@ export function PropertyDetailClient({
         </div>
 
         {/* Deal progress — view only, click for milestone details */}
-        <DealProgress currentStatus={property.status} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} />
+        <DealProgress currentStatus={property.status} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} serverAcqIdx={property.serverAcqIdx} serverDispoIdx={property.serverDispoIdx} />
       </div>
 
       {/* Tab bar */}
@@ -398,11 +400,13 @@ const DISPO_STEPS = [
   { key: 'DISPO_CLOSED', label: 'Closed' },
 ]
 
-function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
+function DealProgress({ currentStatus, milestones, propertyId, canEdit, serverAcqIdx, serverDispoIdx }: {
   currentStatus: string
   milestones: Array<{ type: string; date: string; notes: string | null }>
   propertyId: string
   canEdit: boolean
+  serverAcqIdx?: number
+  serverDispoIdx?: number
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -433,8 +437,7 @@ function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
     milestonesByType[m.type].push({ date: m.date, notes: m.notes })
   }
 
-  // Derive active index from milestones — highest stage with a milestone, OR currentStatus as fallback.
-  // This lets acq + dispo pipelines be independent (a property can be UNDER_CONTRACT AND in dispo).
+  // Pipeline indices: prefer server-computed (from milestones), then client milestone derivation, then status fallback.
   function highestMilestoneIdx(steps: typeof ACQ_STEPS): number {
     let highest = -1
     for (let i = steps.length - 1; i >= 0; i--) {
@@ -445,9 +448,12 @@ function DealProgress({ currentStatus, milestones, propertyId, canEdit }: {
   }
   const acqFromMilestones = highestMilestoneIdx(ACQ_STEPS)
   const dispoFromMilestones = highestMilestoneIdx(DISPO_STEPS)
-  // Use milestone-derived index, falling back to currentStatus for properties without milestones yet
-  const acqIdx = acqFromMilestones >= 0 ? acqFromMilestones : acqKeys.indexOf(currentStatus)
-  const dispoIdx = dispoFromMilestones >= 0 ? dispoFromMilestones : dispoKeys.indexOf(currentStatus)
+  const acqIdx = serverAcqIdx !== undefined && serverAcqIdx >= 0 ? serverAcqIdx
+    : acqFromMilestones >= 0 ? acqFromMilestones
+    : acqKeys.indexOf(currentStatus)
+  const dispoIdx = serverDispoIdx !== undefined && serverDispoIdx >= 0 ? serverDispoIdx
+    : dispoFromMilestones >= 0 ? dispoFromMilestones
+    : dispoKeys.indexOf(currentStatus)
 
   // Types that can be manually logged — all types allowed so users can fill gaps flagged by caution icons
   const LOGGABLE_TYPES = [
