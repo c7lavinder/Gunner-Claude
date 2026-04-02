@@ -362,6 +362,63 @@ export async function POST(request: NextRequest) {
         break
       }
 
+      case 'create_contact': {
+        if (!ghl) { result = 'GHL not connected'; break }
+        const newContact = await ghl.createContact({
+          firstName: String(toolCall.input.firstName ?? ''),
+          lastName: String(toolCall.input.lastName ?? ''),
+          phone: String(toolCall.input.phone ?? ''),
+          email: toolCall.input.email ? String(toolCall.input.email) : undefined,
+          source: toolCall.input.source ? String(toolCall.input.source) : undefined,
+          tags: Array.isArray(toolCall.input.tags) ? toolCall.input.tags.map(String) : undefined,
+        })
+        result = `Contact created: ${toolCall.input.firstName} ${toolCall.input.lastName ?? ''} (${toolCall.input.phone})${newContact?.contact?.id ? ` — ID: ${newContact.contact.id}` : ''}`
+        break
+      }
+
+      case 'create_opportunity': {
+        if (!ghl) { result = 'GHL not connected'; break }
+        const oppContactId = await resolveContactId()
+        if (!oppContactId) { result = 'No contact linked — cannot create opportunity'; break }
+
+        const pipelines = await ghl.getPipelines()
+        const pipeline = pipelines.pipelines?.find(p =>
+          p.name.toLowerCase().includes(String(toolCall!.input.pipelineName ?? '').toLowerCase())
+        ) ?? pipelines.pipelines?.[0]
+        if (!pipeline) { result = 'No pipeline found'; break }
+
+        const stage = toolCall.input.stageName
+          ? pipeline.stages?.find(s => s.name.toLowerCase().includes(String(toolCall!.input.stageName).toLowerCase()))
+          : pipeline.stages?.[0]
+
+        await ghl.createOpportunity({
+          pipelineId: pipeline.id,
+          stageId: stage?.id ?? pipeline.stages?.[0]?.id ?? '',
+          contactId: oppContactId,
+          name: String(toolCall.input.dealName ?? 'New Deal'),
+        })
+        result = `Opportunity created: "${toolCall.input.dealName}" in ${pipeline.name} → ${stage?.name ?? 'first stage'}`
+        break
+      }
+
+      case 'regrade_call': {
+        const callId = pageContext?.startsWith('call:') ? pageContext.split(':')[1] : null
+        if (!callId) { result = 'No call in context — navigate to a call page first'; break }
+        await db.call.update({
+          where: { id: callId, tenantId },
+          data: { gradingStatus: 'PENDING' },
+        })
+        result = 'Call queued for re-grading. Refresh the page in a moment to see updated results.'
+        break
+      }
+
+      case 'summarize_property': {
+        const propertyId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!propertyId) { result = 'No property in context'; break }
+        result = 'Property summary is displayed in the page data above. Ask me specific questions about this deal.'
+        break
+      }
+
       default:
         result = `Action "${toolCall.name}" acknowledged`
     }

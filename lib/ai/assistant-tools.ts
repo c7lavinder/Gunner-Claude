@@ -212,4 +212,60 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
       required: ['userName', 'role'],
     },
   },
+
+  // ─── Contact + Opportunity Actions ───
+  {
+    name: 'create_contact',
+    description: 'Create a new contact in GHL CRM.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        firstName: { type: 'string', description: 'First name' },
+        lastName: { type: 'string', description: 'Last name' },
+        phone: { type: 'string', description: 'Phone number' },
+        email: { type: 'string', description: 'Email address' },
+        source: { type: 'string', description: 'Lead source (cold call, referral, etc.)' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags to add' },
+      },
+      required: ['firstName', 'phone'],
+    },
+  },
+  {
+    name: 'create_opportunity',
+    description: 'Create a new deal/opportunity in a GHL pipeline.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        contactName: { type: 'string', description: 'Contact name for the deal' },
+        pipelineName: { type: 'string', description: 'Pipeline name' },
+        stageName: { type: 'string', description: 'Initial stage name' },
+        dealName: { type: 'string', description: 'Deal name (e.g., "123 Main St - Smith")' },
+        monetaryValue: { type: 'number', description: 'Estimated deal value in dollars' },
+      },
+      required: ['contactName', 'dealName'],
+    },
+  },
+  {
+    name: 'regrade_call',
+    description: 'Re-grade the current call with updated AI analysis. Use when the user wants fresh grading.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        callId: { type: 'string', description: 'Call ID to regrade (from page context)' },
+        reason: { type: 'string', description: 'Why regrading' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'summarize_property',
+    description: 'Generate a comprehensive deal brief for the current property. Includes all data points, deal health, and recommended actions.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        propertyAddress: { type: 'string', description: 'Property address' },
+      },
+      required: [],
+    },
+  },
 ]
