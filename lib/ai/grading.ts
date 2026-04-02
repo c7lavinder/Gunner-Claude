@@ -145,9 +145,6 @@ export async function gradeCall(callId: string): Promise<void> {
       rubricCriteria = getDefaultRubric(call.assignedTo?.role)
     }
 
-    // Tenant-specific grading materials (scripts, processes, standards)
-    const tenantMaterials = (call.tenant as { gradingMaterials?: string | null }).gradingMaterials ?? null
-
     // 30-60s calls: summary only, limited grading
     const isSummaryOnly = duration >= 45 && duration < 90
 
@@ -157,30 +154,23 @@ export async function gradeCall(callId: string): Promise<void> {
       ghlContext = await fetchGHLCallContext(call.tenantId, call.ghlCallId)
     }
 
-    // Fetch recent feedback corrections to include in grading context
-    const recentFeedback = await db.auditLog.findMany({
-      where: {
-        tenantId: call.tenantId,
-        action: 'call.feedback',
-        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, // last 30 days
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      select: { payload: true },
+    // ── Build full knowledge context from playbook + user profiles + cross-call data ──
+    const { buildGradingContext } = await import('@/lib/ai/context-builder')
+    const knowledgeContext = await buildGradingContext({
+      tenantId: call.tenantId,
+      userId: call.assignedToId ?? undefined,
+      callType: call.callType,
+      userRole: call.assignedTo?.role ?? null,
+      contactId: call.ghlContactId ?? ghlContext?.contactId ?? null,
+      propertyId: call.propertyId ?? undefined,
     })
-    const feedbackContext = recentFeedback.length > 0
-      ? recentFeedback.map(f => {
-          const p = f.payload as { type?: string; details?: string } | null
-          return p ? `- ${p.type}: ${p.details}` : null
-        }).filter(Boolean).join('\n')
-      : null
 
-    // Build and send the grading prompt (3 layers: rubric + industry + tenant materials + feedback)
+    // Build and send the grading prompt with full playbook knowledge
     const systemPrompt = isSummaryOnly
       ? buildSummaryOnlySystemPrompt()
-      : buildGradingSystemPrompt(rubricCriteria, call.callType ?? null, tenantMaterials, feedbackContext)
+      : buildGradingSystemPrompt(rubricCriteria, call.callType ?? null, knowledgeContext)
     const callWithTranscript = { ...call, transcript }
-    const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext)
+    const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext, knowledgeContext)
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -459,41 +449,103 @@ Response format:
 function buildGradingSystemPrompt(
   criteria: RubricCriteria[],
   callType: string | null,
-  tenantMaterials?: string | null,
-  feedbackCorrections?: string | null
+  ctx: import('@/lib/ai/context-builder').GradingContext,
 ): string {
   const sections: string[] = []
 
-  // Layer 1: Core role + grading philosophy
-  sections.push(`You are an expert sales call coach and grader for a real estate wholesaling company.
+  // Layer 1: Company identity + grading methodology (from playbook if available)
+  if (ctx.gradingMethodology) {
+    sections.push(`GRADING METHODOLOGY (from company playbook):\n${ctx.gradingMethodology}`)
+  }
+  if (ctx.companyOverview) {
+    sections.push(`COMPANY CONTEXT:\n${ctx.companyOverview}`)
+  }
 
-Your job is to analyze sales calls and provide accurate, constructive scoring and feedback.
-
-You grade based on FOUR sources of knowledge:
-1. RUBRIC — the specific scoring criteria for this call type (determines the score)
-2. INDUSTRY KNOWLEDGE — wholesale real estate best practices, coaching methodology, and psychology
-3. COMPANY MATERIALS — this specific company's scripts, processes, and standards (if provided)
-4. FEEDBACK CORRECTIONS — calibration from previous grades that users flagged as wrong
+  sections.push(`You are an expert sales call coach and grader for New Again Houses, a wholesale real estate company that buys properties cash, as-is, at discounted prices below market value.
 
 GRADING PHILOSOPHY:
-Reps have different communication styles. Some follow scripts closely; others achieve the same goals conversationally. BOTH are valid. Focus on WHETHER the rep accomplished the GOAL of each criterion — not whether they used specific phrases. Award full points when the goal is clearly achieved. Award partial points when partially achieved. Only give zero when the behavior is completely absent.
+- Grade based on the 7 Core Beliefs (Dr. Frame): Fatal Problem Belief, Solution Conviction, Transformation Focus, Abundance Mindset, Selective Enrollment, Resourcefulness Recognition, Outcome-Centered Communication
+- Apply the C3 Framework to all feedback: Caring (genuine empathy), Certainty (conviction in solution), Clarity (clear explanations)
+- Use "Never Split the Difference" techniques as grading criteria: mirroring, labeling, calibrated questions
+- Reps have different communication styles — BOTH scripted and conversational are valid. Focus on WHETHER the rep accomplished the GOAL, not whether they used specific phrases.
+- FEEDBACK MUST BE TRANSCRIPT-SPECIFIC — reference exact moments, exact quotes, exact scripts they should have used.
+- When evaluating, account for challenging seller behaviors (interruptions, hostility, noise) — credit the rep for persistence or quick disqualification.`)
 
-FEEDBACK MUST BE TRANSCRIPT-SPECIFIC — never generic:
-WRONG: "The rep failed to probe motivation effectively."
-RIGHT: "When the seller said 'I just need to sell fast,' the rep immediately moved to price instead of asking 'What's been making speed the priority? How long has that been going on?'"
+  // Layer 2: Industry + company knowledge (from playbook)
+  if (ctx.industryKnowledge.length > 0) {
+    // Include the most relevant industry docs (cap at 3 to manage token count)
+    sections.push(`INDUSTRY & COMPANY KNOWLEDGE:\n${ctx.industryKnowledge.slice(0, 3).join('\n\n')}`)
+  } else {
+    // Fallback to hardcoded if no playbook loaded
+    sections.push(INDUSTRY_KNOWLEDGE)
+  }
 
-When no transcript is available, grade meaningfully on: call duration, outcome, contact context, and conversation history. A 5-minute completed outbound call to a warm lead is fundamentally different from a 10-second no-answer. Do NOT give a score of 0 unless the call was genuinely a failure.`)
-
-  // Layer 2: Full industry knowledge (coaching methodology, DQ awareness, etc.)
-  sections.push(INDUSTRY_KNOWLEDGE)
-
-  // Layer 3: Call-type-specific critical instructions
+  // Layer 3: Call-type-specific scripts and training
   if (callType) {
     const callTypeInstructions = buildCallTypeInstructions(callType)
     if (callTypeInstructions) sections.push(callTypeInstructions)
   }
 
-  // Layer 4: Rubric criteria with keyPhrases
+  // Inject company scripts for this call type
+  if (ctx.scripts.length > 0) {
+    sections.push(`COMPANY SCRIPTS FOR THIS CALL TYPE — grade the rep against these specific scripts:\n${ctx.scripts.join('\n\n')}`)
+  }
+
+  // Inject objection handling guides
+  if (ctx.objectionHandling.length > 0) {
+    sections.push(`OBJECTION HANDLING REFERENCE — use these to evaluate how the rep handled objections:\n${ctx.objectionHandling.slice(0, 2).join('\n\n')}`)
+  }
+
+  // Inject training materials
+  if (ctx.trainingMaterials.length > 0) {
+    sections.push(`TRAINING MATERIALS — additional context for grading:\n${ctx.trainingMaterials.slice(0, 2).join('\n\n')}`)
+  }
+
+  // Layer 4: User-specific context (personalized coaching)
+  if (ctx.userProfile) {
+    sections.push(`REP PERFORMANCE PROFILE — personalize coaching to this specific rep:
+Known Strengths (acknowledge, don't re-teach): ${ctx.userProfile.strengths.join('; ')}
+Known Weaknesses (watch for these specifically): ${ctx.userProfile.weaknesses.join('; ')}
+Common Mistakes: ${ctx.userProfile.commonMistakes.join('; ')}
+Communication Style: ${ctx.userProfile.communicationStyle ?? 'Unknown'}
+Coaching Priorities (ranked): ${ctx.userProfile.coachingPriorities.join('; ')}
+Total Calls Graded: ${ctx.userProfile.totalCallsGraded}
+
+IMPORTANT: If this rep makes one of their known common mistakes, call it out specifically in improvements. Reference that this is a pattern, not a one-time thing.`)
+  }
+
+  // Layer 5: Cross-call context
+  if (ctx.priorCalls.length > 0) {
+    const priorSummary = ctx.priorCalls.slice(0, 5).map(c =>
+      `- ${c.calledAt?.slice(0, 10) ?? '?'}: Score ${c.score ?? '?'}, Outcome: ${c.callOutcome ?? '?'}, Summary: ${c.aiSummary?.slice(0, 100) ?? 'N/A'}`
+    ).join('\n')
+    sections.push(`PRIOR CALLS WITH THIS CONTACT (most recent first):
+${priorSummary}
+
+IMPORTANT: Do NOT penalize the rep for skipping qualification steps that were already covered in prior calls. Evaluate THIS call in context of the relationship history.`)
+  }
+
+  if (ctx.dealIntelSummary) {
+    sections.push(`ACCUMULATED DEAL INTELLIGENCE:\n${ctx.dealIntelSummary}`)
+  }
+
+  // Layer 6: Calibration + corrections
+  if (ctx.calibrationExamples.length > 0) {
+    const examples = ctx.calibrationExamples.slice(0, 3).map(c =>
+      `- ${c.type.toUpperCase()} example (score: ${c.score}): ${c.summary?.slice(0, 100) ?? 'N/A'}${c.notes ? ` — Notes: ${c.notes}` : ''}`
+    ).join('\n')
+    sections.push(`CALIBRATION EXAMPLES — use these as reference for what good/bad looks like at this company:\n${examples}`)
+  }
+
+  if (ctx.feedbackCorrections) {
+    sections.push(`GRADING CORRECTIONS FROM MANAGERS — incorporate these calibrations:\n${ctx.feedbackCorrections}`)
+  }
+
+  if (ctx.companyStandards) {
+    sections.push(`COMPANY STANDARDS AND RULES:\n${ctx.companyStandards}`)
+  }
+
+  // Layer 7: Rubric criteria with keyPhrases
   const criteriaText = criteria.map((c, i) => {
     let text = `${i + 1}. ${c.category} (max ${c.maxPoints} pts)\n   ${c.description}`
     if (c.keyPhrases && c.keyPhrases.length > 0) {
@@ -513,21 +565,7 @@ ${callTypeRedFlags.length > 0
     ? callTypeRedFlags.map(f => `• ${f}`).join('\n')
     : '• No specific red flags defined — use general wholesale RE best practices'}`)
 
-  // Layer 5: Tenant-specific materials
-  if (tenantMaterials) {
-    sections.push(`COMPANY-SPECIFIC MATERIALS:
-The following are this company's own scripts, processes, and standards. Use these to inform grading — if the rep followed the company's specific process, note it positively.
-
-${tenantMaterials}`)
-  }
-
-  // Layer 6: Recent feedback corrections
-  if (feedbackCorrections) {
-    sections.push(`GRADING CORRECTIONS FROM USERS:
-The following feedback was submitted by managers on previous grades. Incorporate these calibrations:
-
-${feedbackCorrections}`)
-  }
+  // (Layers 4-6 now handled via context builder above)
 
   // Response format
   const validResults = callType ? getResultsForCallType(callType) : []
@@ -646,6 +684,7 @@ function buildGradingUserPrompt(
   },
   criteria: RubricCriteria[],
   ghlContext: GHLCallContext | null,
+  ctx?: import('@/lib/ai/context-builder').GradingContext,
 ): string {
   const sections: string[] = []
 
