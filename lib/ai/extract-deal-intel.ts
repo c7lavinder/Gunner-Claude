@@ -52,18 +52,26 @@ export async function extractDealIntel(callId: string): Promise<void> {
   const learningContext = buildLearningContext(recentDecisions)
 
   try {
+    const { logAiCall, startTimer } = await import('@/lib/ai/log')
+    const timer = startTimer()
+    const userPrompt = buildExtractionUserPrompt({ ...call, property }, currentDealIntel, batchData)
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 6000,
       system: buildExtractionSystemPrompt(learningContext),
-      messages: [{
-        role: 'user',
-        content: buildExtractionUserPrompt({ ...call, property }, currentDealIntel, batchData),
-      }],
+      messages: [{ role: 'user', content: userPrompt }],
     })
 
     const content = response.content[0]
     if (content.type !== 'text') throw new Error('Unexpected response type')
+
+    logAiCall({
+      tenantId: call.tenant.id, userId: call.assignedTo?.id, type: 'deal_intel',
+      pageContext: `call:${callId}`, input: userPrompt.slice(0, 3000), output: content.text.slice(0, 3000),
+      tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
+      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+    }).catch(() => {})
 
     const proposedChanges = parseExtractionResponse(content.text, callId)
 

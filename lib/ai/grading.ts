@@ -910,6 +910,9 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
 
     const transcriptExcerpt = call.transcript ? call.transcript.slice(0, 500) : 'No transcript available'
 
+    const { logAiCall, startTimer } = await import('@/lib/ai/log')
+    const nsTimer = startTimer()
+
     const res = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
@@ -942,6 +945,14 @@ Return JSON array only:
     })
 
     const text = res.content[0].type === 'text' ? res.content[0].text : '[]'
+
+    logAiCall({
+      tenantId, type: 'next_steps', pageContext: `call:${callId}`,
+      input: `Next steps for call ${callId}`, output: text.slice(0, 2000),
+      tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
+      durationMs: nsTimer(), model: 'claude-sonnet-4-20250514',
+    }).catch(() => {})
+
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) return
 
