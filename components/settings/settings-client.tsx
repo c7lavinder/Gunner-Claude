@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power, MapPin, ChevronDown, Eye } from 'lucide-react'
+import { Users, Phone, Zap, GitBranch, CheckCircle, XCircle, Copy, Check, Loader2, Link2, Workflow, Plus, Trash2, Power, MapPin, ChevronDown, Eye, BookOpen } from 'lucide-react'
 import { ROLE_LABELS, type UserRole } from '@/types/roles'
 import { RubricEditor } from '@/components/settings/rubric-editor'
 import { GHLDropdown } from '@/components/ui/ghl-dropdown'
@@ -43,7 +43,7 @@ interface Rubric {
   id: string; name: string; role: string; callType: string | null; isDefault: boolean
 }
 
-type Tab = 'team' | 'integrations' | 'pipeline' | 'calls' | 'workflows' | 'markets' | 'inventory'
+type Tab = 'team' | 'integrations' | 'pipeline' | 'calls' | 'workflows' | 'markets' | 'inventory' | 'knowledge'
 
 export function SettingsClient({
   tenant, teamMembers, rubrics, callTypes, currentUserId, currentUserRole, canManage,
@@ -294,6 +294,7 @@ export function SettingsClient({
     { id: 'workflows', label: 'Workflows', icon: <Workflow size={14} /> },
     { id: 'markets', label: 'Markets', icon: <MapPin size={14} /> },
     { id: 'inventory', label: 'Inventory', icon: <CheckCircle size={14} /> },
+    { id: 'knowledge', label: 'Knowledge', icon: <BookOpen size={14} /> },
   ]
 
   return (
@@ -794,6 +795,9 @@ export function SettingsClient({
 
       {/* Inventory — Project Types */}
       {tab === 'inventory' && <ProjectTypesTab tenantConfig={tenant.config} />}
+
+      {/* Knowledge — Scripts, Standards, Training Materials */}
+      {tab === 'knowledge' && <KnowledgeTab tenantSlug={tenant.slug} />}
     </div>
   )
 }
@@ -1522,6 +1526,222 @@ function ProjectTypesTab({ tenantConfig }: { tenantConfig: Record<string, unknow
 
         {msg && <p className={`text-ds-fine font-medium ${msg === 'Saved!' ? 'text-semantic-green' : 'text-semantic-red'}`}>{msg}</p>}
       </div>
+    </div>
+  )
+}
+
+// ─── Knowledge Tab ──────────────────────────────────────────────────────────
+
+interface KnowledgeDoc {
+  id: string; title: string; type: string; callType: string | null; role: string | null; source: string; isActive: boolean; updatedAt: string
+}
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  script: 'Script', standard: 'Standard', playbook: 'Playbook', training: 'Training',
+  market: 'Market', objection: 'Objection', industry: 'Industry',
+}
+
+const DOC_TYPE_COLORS: Record<string, string> = {
+  script: 'bg-blue-100 text-blue-700', standard: 'bg-gray-100 text-gray-700',
+  playbook: 'bg-purple-100 text-purple-700', training: 'bg-green-100 text-green-700',
+  market: 'bg-amber-100 text-amber-700', objection: 'bg-red-100 text-red-700',
+  industry: 'bg-teal-100 text-teal-700',
+}
+
+function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
+  const [docs, setDocs] = useState<KnowledgeDoc[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAdd, setShowAdd] = useState(false)
+  const [addTitle, setAddTitle] = useState('')
+  const [addType, setAddType] = useState('training')
+  const [addCallType, setAddCallType] = useState('')
+  const [addRole, setAddRole] = useState('ALL')
+  const [addContent, setAddContent] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [loadingPlaybook, setLoadingPlaybook] = useState(false)
+  const [playbookMsg, setPlaybookMsg] = useState('')
+
+  useEffect(() => {
+    fetch(`/api/admin/knowledge`)
+      .then(r => r.json())
+      .then(d => { setDocs(d.documents ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  async function loadPlaybook() {
+    setLoadingPlaybook(true)
+    setPlaybookMsg('')
+    try {
+      const res = await fetch('/api/admin/load-playbook', { method: 'POST' })
+      const data = await res.json()
+      setPlaybookMsg(`Loaded ${data.loaded?.documents ?? 0} docs, ${data.loaded?.profiles ?? 0} profiles${data.errors?.length ? ` (${data.errors.length} errors)` : ''}`)
+      // Refresh list
+      const refreshRes = await fetch(`/api/admin/knowledge`)
+      const refreshData = await refreshRes.json()
+      setDocs(refreshData.documents ?? [])
+    } catch { setPlaybookMsg('Failed to load playbook') }
+    setLoadingPlaybook(false)
+  }
+
+  async function saveDoc() {
+    if (!addTitle.trim() || !addContent.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: addTitle, type: addType, callType: addCallType || null, role: addRole, content: addContent }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setDocs(prev => [data.document, ...prev])
+        setShowAdd(false)
+        setAddTitle(''); setAddContent(''); setAddCallType(''); setAddType('training')
+      }
+    } catch {}
+    setSaving(false)
+  }
+
+  async function toggleDoc(id: string, isActive: boolean) {
+    await fetch('/api/admin/knowledge', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, isActive: !isActive }),
+    })
+    setDocs(prev => prev.map(d => d.id === id ? { ...d, isActive: !d.isActive } : d))
+  }
+
+  async function deleteDoc(id: string) {
+    await fetch('/api/admin/knowledge', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    setDocs(prev => prev.filter(d => d.id !== id))
+  }
+
+  const grouped: Record<string, KnowledgeDoc[]> = {}
+  for (const d of docs) {
+    const key = d.type
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(d)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-ds-label font-semibold text-txt-primary">Knowledge Base</p>
+          <p className="text-ds-fine text-txt-muted">{docs.length} documents loaded — used by grading, coaching, and assistant</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowAdd(!showAdd)}
+            className="flex items-center gap-1.5 text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-2 rounded-[10px] transition-colors">
+            <Plus size={12} /> Add Document
+          </button>
+          <button onClick={loadPlaybook} disabled={loadingPlaybook}
+            className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
+            style={{ borderColor: 'var(--border-medium)' }}>
+            {loadingPlaybook ? <Loader2 size={12} className="animate-spin" /> : <BookOpen size={12} />}
+            {loadingPlaybook ? 'Loading...' : 'Load Playbook'}
+          </button>
+        </div>
+      </div>
+
+      {playbookMsg && <p className="text-ds-fine text-semantic-green font-medium">{playbookMsg}</p>}
+
+      {/* Add document form */}
+      {showAdd && (
+        <div className="bg-white border-[0.5px] rounded-[14px] p-5 space-y-3" style={{ borderColor: 'var(--border-light)' }}>
+          <input value={addTitle} onChange={e => setAddTitle(e.target.value)}
+            placeholder="Document title..." className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-ds-fine text-txt-primary focus:outline-none" style={{ borderColor: 'var(--border-medium)' }} />
+          <div className="grid grid-cols-3 gap-2">
+            <select value={addType} onChange={e => setAddType(e.target.value)}
+              className="bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-ds-fine text-txt-primary" style={{ borderColor: 'var(--border-medium)' }}>
+              <option value="script">Script</option>
+              <option value="training">Training</option>
+              <option value="standard">Standard</option>
+              <option value="objection">Objection Handling</option>
+              <option value="playbook">Playbook</option>
+              <option value="market">Market Knowledge</option>
+              <option value="industry">Industry Knowledge</option>
+            </select>
+            <select value={addCallType} onChange={e => setAddCallType(e.target.value)}
+              className="bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-ds-fine text-txt-primary" style={{ borderColor: 'var(--border-medium)' }}>
+              <option value="">All Call Types</option>
+              <option value="cold_call">Cold Call</option>
+              <option value="qualification_call">Qualification Call</option>
+              <option value="offer_call">Offer Call</option>
+              <option value="follow_up_call">Follow-Up Call</option>
+              <option value="dispo_call">Dispo Call</option>
+              <option value="admin_call">Admin Call</option>
+              <option value="purchase_agreement_call">Purchase Agreement</option>
+            </select>
+            <select value={addRole} onChange={e => setAddRole(e.target.value)}
+              className="bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-ds-fine text-txt-primary" style={{ borderColor: 'var(--border-medium)' }}>
+              <option value="ALL">All Roles</option>
+              <option value="LEAD_GENERATOR">Lead Generator</option>
+              <option value="LEAD_MANAGER">Lead Manager</option>
+              <option value="ACQUISITION_MANAGER">Acquisition Manager</option>
+              <option value="DISPOSITION_MANAGER">Disposition Manager</option>
+            </select>
+          </div>
+          <textarea value={addContent} onChange={e => setAddContent(e.target.value)} rows={8}
+            placeholder="Paste your script, training material, or knowledge document here..."
+            className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-ds-fine text-txt-primary focus:outline-none resize-none" style={{ borderColor: 'var(--border-medium)' }} />
+          <div className="flex gap-2">
+            <button onClick={saveDoc} disabled={saving || !addTitle.trim() || !addContent.trim()}
+              className="text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-4 py-2 rounded-[10px]">
+              {saving ? 'Saving...' : 'Save Document'}
+            </button>
+            <button onClick={() => setShowAdd(false)} className="text-ds-fine text-txt-secondary px-4 py-2">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Document list grouped by type */}
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-txt-muted" /></div>
+      ) : Object.keys(grouped).length === 0 ? (
+        <div className="bg-white border-[0.5px] rounded-[14px] py-12 text-center" style={{ borderColor: 'var(--border-light)' }}>
+          <BookOpen size={24} className="text-txt-muted mx-auto mb-2" />
+          <p className="text-ds-fine text-txt-muted">No knowledge documents. Click &quot;Load Playbook&quot; to import the NAH Wholesale Playbook.</p>
+        </div>
+      ) : (
+        Object.entries(grouped).map(([type, typeDocs]) => (
+          <div key={type}>
+            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">
+              {DOC_TYPE_LABELS[type] ?? type} ({typeDocs.length})
+            </p>
+            <div className="bg-white border-[0.5px] rounded-[14px] overflow-hidden" style={{ borderColor: 'var(--border-light)' }}>
+              {typeDocs.map((doc, i) => (
+                <div key={doc.id} className={`flex items-center gap-3 px-4 py-2.5 ${i < typeDocs.length - 1 ? 'border-b-[0.5px]' : ''} ${!doc.isActive ? 'opacity-40' : ''}`} style={{ borderColor: 'var(--border-light)' }}>
+                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${DOC_TYPE_COLORS[doc.type] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {DOC_TYPE_LABELS[doc.type] ?? doc.type}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-ds-fine font-medium text-txt-primary truncate">{doc.title}</p>
+                    <p className="text-[9px] text-txt-muted">
+                      {doc.callType ? doc.callType.replace(/_/g, ' ') : 'All types'}
+                      {doc.role && doc.role !== 'ALL' ? ` · ${doc.role.replace(/_/g, ' ')}` : ''}
+                      {doc.source === 'playbook' ? ' · Playbook' : ''}
+                    </p>
+                  </div>
+                  <button onClick={() => toggleDoc(doc.id, doc.isActive)}
+                    className={`text-[9px] px-2 py-1 rounded-full ${doc.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {doc.isActive ? 'Active' : 'Disabled'}
+                  </button>
+                  {doc.source !== 'playbook' && (
+                    <button onClick={() => deleteDoc(doc.id)} className="text-txt-muted hover:text-semantic-red transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
     </div>
   )
 }
