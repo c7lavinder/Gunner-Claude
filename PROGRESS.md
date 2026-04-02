@@ -451,20 +451,58 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 
 ---
 
+### Session 30-31 — Bug fixes + AI Intelligence Layer + Role Assistant (2026-04-01 to 2026-04-02)
+**What was done:**
+
+**8 Bug Fixes:**
+- Bug 1: Calendar parallel fetch + retry
+- Bug 2: Call duration extraction hardened + recording safety rule
+- Bug 3: Buyer market matching normalization + daily sync cron
+- Bug 4: PropertyTeamMember model (multi-user per property)
+- Bug 5: SMS sender dropdown all users + GHL phone numbers
+- Bug 6: Data issues flag icon + address edit + zip auto-market
+- Bug 7 (8 sub-issues): coaching fonts, transcript line-by-line, next steps dedup + per-action edit forms + AI change box, property tab redesign, follow-up label dedup
+- Bug 8: Appointments on property overview
+
+**Call Ingestion Rewrite:**
+- Verified GHL API types against official docs (messageType: CALL, messageTypeId: 1)
+- Poll-calls rewritten: export endpoint + per-user conversation search
+- Cursor-based tracking (never miss, never reprocess)
+- 3-layer reliability: webhook + export + per-user search
+
+**AI Intelligence Layer:**
+- 5 new DB models: KnowledgeDocument, UserProfile, AssistantMessage, ActionLog, AiLog
+- NAH Wholesale Playbook (42 files) loaded as knowledge base
+- 3 user profiles from playbook (Chris, Daniel, Kyle)
+- Grading rebuilt with 7-layer playbook knowledge
+- Context builder centralizing all knowledge for AI calls
+- AI Log page for admin debugging
+- Knowledge upload UI in Settings
+
+**Role Assistant:**
+- Replaces AI Coach — dynamic name from user role
+- Daily conversation persistence
+- Page context awareness
+- 17 action tools via Claude tool use
+- All GHL actions wired (SMS, tasks, notes, stages, contacts, email)
+- All Gunner actions wired (property updates, milestones, team members)
+- Action cards inline with Approve/Reject/Edit
+
 ## Next Session — Start Exactly Here
 
-**Task:** Production verification + Stripe activation (when ready)
+**Task:** Test and fix deployed AI intelligence layer + Role Assistant
 
 **First message to Claude Code:**
 
-Read CLAUDE.md, AGENTS.md, and PROGRESS.md first.
+Read CLAUDE.md, PROGRESS.md, and memory/project_current_state.md first.
 
-Phase 4 is functionally complete (4A–4F built). Remaining items:
-- 4D (Multi-Pipeline) and 4E (API Access) are nice-to-haves, not blockers
-- Stripe activation deferred per Corey's instruction — product first
-
-**Production verification needed:**
-1. Log in to Railway URL, verify all new pages render
+Major deployment just went live. Need to:
+1. Run playbook loader (Settings → Knowledge → Load Playbook)
+2. Test Role Assistant on live site
+3. Test grading with playbook knowledge
+4. Fix any issues found
+5. Wire AI logging into remaining touchpoints (coach, blasts, buyer scoring)
+6. Consider: pgvector for knowledge search, weekly user profile auto-generation
 2. Test: Dashboard, Day Hub, Training, Disposition, ROI, AI Coach, Workflows
 3. Test password reset flow
 4. When ready for monetization, activate Stripe (see Session 17)
