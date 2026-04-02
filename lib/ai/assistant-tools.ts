@@ -131,27 +131,85 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
     },
   },
 
-  // ─── Information Actions (no approval needed) ───
+  // ─── Additional GHL Actions ───
   {
-    name: 'summarize_deal',
-    description: 'Generate a comprehensive deal summary for a property.',
+    name: 'send_email',
+    description: 'Send an email to a GHL contact.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        propertyAddress: { type: 'string', description: 'Property address to summarize' },
+        contactName: { type: 'string', description: 'Contact name' },
+        subject: { type: 'string', description: 'Email subject line' },
+        body: { type: 'string', description: 'Email body (HTML supported)' },
       },
-      required: [],
+      required: ['subject', 'body'],
     },
   },
   {
-    name: 'analyze_call',
-    description: 'Provide detailed analysis of a specific call.',
+    name: 'update_contact',
+    description: 'Update a contact\'s fields in GHL (name, phone, email, tags).',
     input_schema: {
       type: 'object' as const,
       properties: {
-        callId: { type: 'string', description: 'Call ID to analyze' },
+        contactName: { type: 'string', description: 'Contact to update' },
+        firstName: { type: 'string', description: 'New first name' },
+        lastName: { type: 'string', description: 'New last name' },
+        phone: { type: 'string', description: 'New phone number' },
+        email: { type: 'string', description: 'New email' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags to set' },
       },
-      required: [],
+      required: ['contactName'],
+    },
+  },
+  {
+    name: 'complete_task',
+    description: 'Mark a GHL task as completed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        taskId: { type: 'string', description: 'Task ID to complete' },
+        title: { type: 'string', description: 'Task title for display' },
+      },
+      required: ['taskId'],
+    },
+  },
+  {
+    name: 'add_contact_to_property',
+    description: 'Link a GHL contact to a property as a seller, buyer, or other role.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        contactName: { type: 'string', description: 'Contact name to search in GHL' },
+        role: { type: 'string', description: 'Role: Primary Seller, Co-Seller, Buyer, Attorney, Agent, Other' },
+      },
+      required: ['contactName'],
+    },
+  },
+
+  // ─── Gunner Data Actions ───
+  {
+    name: 'change_property_status',
+    description: 'Change a property\'s acquisition or disposition status.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        statusType: { type: 'string', description: 'acquisition or disposition' },
+        newStatus: { type: 'string', description: 'New status value' },
+        reason: { type: 'string', description: 'Why changing status' },
+      },
+      required: ['statusType', 'newStatus'],
+    },
+  },
+  {
+    name: 'add_team_member_to_property',
+    description: 'Assign a team member to a property.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        userName: { type: 'string', description: 'Team member name' },
+        role: { type: 'string', description: 'Role on this property: Admin, Lead Manager, Acquisition Manager, Disposition Manager' },
+      },
+      required: ['userName', 'role'],
     },
   },
 ]
