@@ -106,30 +106,28 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
   }
 
   // Log full payload for debugging
-  console.log(`[GHL Webhook] Message: ${JSON.stringify(event).slice(0, 600)}`)
+  console.log(`[GHL Webhook] Message: type=${msg.messageType} typeId=${msg.messageTypeId} direction=${msg.direction} contact=${msg.contactId} payload=${JSON.stringify(event).slice(0, 400)}`)
 
   // Check if this is a call message
-  // GHL primary type: TYPE_VOICE_CALL (messageType string) or type 25 (outbound) / 26 (inbound)
+  // Verified from GHL docs: messageType="CALL", messageTypeId=1, messageTypeString="TYPE_CALL"
+  // Voicemail: messageTypeId=10
+  // Fallback: any message with callDuration/callStatus/meta.call is a call
   const msgType = (msg.messageType ?? '').toUpperCase()
-  const numType = typeof msg.messageTypeId === 'number' ? msg.messageTypeId : -1
-  const isCall = msgType === 'TYPE_VOICE_CALL' || msgType === 'TYPE_CALL' || msgType === 'CALL'
-    || msgType === 'TYPE_VOICE' || msgType === 'VOICE'
-    || numType === 25 || numType === 26 || numType === 1 || numType === 7
-    || !!(msg.callStatus || msg.callDuration || msg.meta?.call)
+  const typeId = typeof msg.messageTypeId === 'number' ? msg.messageTypeId : -1
+  const isCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+    || !!(msg.callDuration || msg.callStatus || msg.meta?.call)
 
   if (!isCall) return // skip SMS, email, chat
 
-  // Extract what we can from the webhook — duration/status may NOT be present
+  // Extract call metadata
   const callDuration = msg.callDuration ?? msg.meta?.call?.duration ?? 0
   const callStatus = (msg.callStatus ?? msg.meta?.call?.status ?? '').toLowerCase()
-  // Direction: GHL type 26 = inbound, type 25 = outbound. Also check string field.
-  const direction = numType === 26 ? 'INBOUND'
-    : numType === 25 ? 'OUTBOUND'
-    : (msg.direction ?? '').toLowerCase() === 'inbound' ? 'INBOUND' : 'OUTBOUND'
+  // Direction: GHL uses string field "inbound" / "outbound" (verified from docs)
+  const direction = (msg.direction ?? '').toLowerCase() === 'inbound' ? 'INBOUND' : 'OUTBOUND'
   const messageId = msg.id ?? msg.messageId ?? msg.altId ?? ''
   const recordingUrl = extractRecordingUrl(msg)
 
-  console.log(`[GHL Webhook] Call: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}, recording=${!!recordingUrl}`)
+  console.log(`[GHL Webhook] Call detected: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}, recording=${!!recordingUrl}`)
 
   // GHL sends callDuration=0 or null even for long calls — duration isn't known at webhook time.
   // Only skip if the call explicitly FAILED (status=failed/busy/no-answer).
