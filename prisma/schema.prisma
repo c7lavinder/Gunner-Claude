@@ -37,6 +37,11 @@ model Tenant {
   // Call export cursor — tracks last processed message for reliable call ingestion
   lastCallExportCursor String? @map("last_call_export_cursor")
 
+  // AI Knowledge — company-specific context for grading/coaching
+  scripts          Json    @default("{}") @map("scripts")           // keyed by call type: {cold_call: "...", ...}
+  companyStandards String? @map("company_standards") @db.Text       // company rules/standards
+  calibrationCalls Json    @default("[]") @map("calibration_calls") // [{callId, type: "good"|"bad", notes}]
+
   // Property trigger config
   propertyPipelineId    String? @map("property_pipeline_id")    // which GHL pipeline (acquisition)
   propertyTriggerStage  String? @map("property_trigger_stage")  // which stage creates a property
@@ -89,6 +94,11 @@ model Tenant {
   milestones          PropertyMilestone[]
   propertyBuyerStages PropertyBuyerStage[]
   propertyTeamMembers PropertyTeamMember[]
+  knowledgeDocuments  KnowledgeDocument[]
+  userProfiles        UserProfile[]
+  assistantMessages   AssistantMessage[]
+  actionLogs          ActionLog[]
+  aiLogs              AiLog[]
 
   @@map("tenants")
 }
@@ -147,6 +157,9 @@ model User {
   loggedMilestones   PropertyMilestone[] @relation("MilestoneLoggedBy")
   outreachLogs       OutreachLog[] @relation("OutreachLogUser")
   propertyTeamMembers PropertyTeamMember[] @relation("PropertyTeamMembers")
+  userProfile         UserProfile?
+  assistantMessages   AssistantMessage[] @relation("AssistantMessages")
+  actionLogs          ActionLog[] @relation("ActionLogs")
 
   @@map("users")
 }
@@ -491,6 +504,10 @@ model Call {
   aiNextSteps      Json?     @map("ai_next_steps") // [{type, label, reasoning, status, pushedAt}]
   // Deal intel proposed changes from this call — [{field, label, currentValue, proposedValue, confidence, evidence, category, decision, decidedAt}]
   dealIntelHistory  Json?     @map("deal_intel_history")
+
+  // Calibration — mark as good/bad example for grading baseline
+  isCalibration    Boolean @default(false) @map("is_calibration")
+  calibrationNotes String? @map("calibration_notes")
 
   @@map("calls")
 }
@@ -979,4 +996,140 @@ model OutreachLog {
   loggedAt         DateTime @default(now()) @map("logged_at")
 
   @@map("outreach_logs")
+}
+
+// ─────────────────────────────────────────
+// KNOWLEDGE DOCUMENTS — scripts, playbooks, standards, training
+// Searchable by assistant via pgvector embeddings
+// ─────────────────────────────────────────
+
+model KnowledgeDocument {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title    String                // "Cold Call Script v3"
+  type     String                // script | standard | playbook | training | market | objection | industry
+  callType String? @map("call_type") // cold_call | qualification_call | offer_call | etc
+  role     String?               // LEAD_MANAGER | ACQUISITION_MANAGER | ALL | etc
+  content  String  @db.Text      // full markdown content
+  source   String  @default("upload") // upload | playbook | system
+  isActive Boolean @default(true) @map("is_active")
+
+  @@map("knowledge_documents")
+}
+
+// ─────────────────────────────────────────
+// USER PROFILES — auto-generated performance analysis
+// Updated weekly from call grading history
+// ─────────────────────────────────────────
+
+model UserProfile {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scoringPatterns     Json @default("{}") @map("scoring_patterns")      // avg per rubric category
+  strengths           Json @default("[]") @map("strengths")             // string array
+  weaknesses          Json @default("[]") @map("weaknesses")            // string array
+  commonMistakes      Json @default("[]") @map("common_mistakes")       // string array
+  communicationStyle  String? @map("communication_style")               // warm/direct/analytical/etc
+  improvementVelocity Json @default("{}") @map("improvement_velocity")  // 30/60/90 day trends
+  preferredActions    Json @default("{}") @map("preferred_actions")     // action type approval rates
+  coachingPriorities  Json @default("[]") @map("coaching_priorities")   // ranked focus areas
+  totalCallsGraded    Int @default(0) @map("total_calls_graded")
+  profileSource       String @default("auto") @map("profile_source")   // auto | playbook | manual
+
+  @@unique([tenantId, userId])
+  @@map("user_profiles")
+}
+
+// ─────────────────────────────────────────
+// ASSISTANT MESSAGES — daily persistent conversations
+// ─────────────────────────────────────────
+
+model AssistantMessage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId    String   @map("tenant_id")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId      String   @map("user_id")
+  user        User     @relation("AssistantMessages", fields: [userId], references: [id], onDelete: Cascade)
+
+  sessionDate String   @map("session_date") // YYYY-MM-DD — conversations persist within a day
+  role        String                         // user | assistant | tool_call | tool_result
+  content     String   @db.Text             // message text
+  toolCalls   Json?    @map("tool_calls")   // actions proposed/executed
+  pageContext String?  @map("page_context") // property:abc123 | call:xyz | dayhub | etc
+
+  @@index([tenantId, userId, sessionDate])
+  @@map("assistant_messages")
+}
+
+// ─────────────────────────────────────────
+// ACTION LOG — tracks every AI action proposal + user decision
+// ─────────────────────────────────────────
+
+model ActionLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId    String @map("tenant_id")
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId      String @map("user_id")
+  user        User   @relation("ActionLogs", fields: [userId], references: [id], onDelete: Cascade)
+
+  actionType  String  @map("action_type")  // send_sms | create_task | change_stage | etc
+  proposed    Json                          // what AI suggested
+  executed    Json?                         // what was actually executed (after edits)
+  wasEdited   Boolean @default(false) @map("was_edited")
+  wasRejected Boolean @default(false) @map("was_rejected")
+  editDiff    Json?   @map("edit_diff")    // what fields changed
+  pageContext String? @map("page_context")
+
+  @@map("action_logs")
+}
+
+// ─────────────────────────────────────────
+// AI LOG — every AI call for admin debugging
+// ─────────────────────────────────────────
+
+model AiLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId     String  @map("tenant_id")
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId       String? @map("user_id") // null for system (auto-grading)
+  type         String                   // assistant_chat | call_grading | deal_intel | next_steps | blast_gen | buyer_scoring | property_enrich | action_execution
+  pageContext  String? @map("page_context")
+  inputSummary String  @map("input_summary") @db.Text  // first 500 chars
+  inputFull    String? @map("input_full") @db.Text      // full prompt (large)
+  outputSummary String @map("output_summary") @db.Text  // first 500 chars
+  outputFull   String? @map("output_full") @db.Text     // full response (large)
+  toolsCalled  Json?   @map("tools_called")             // array of tool names + params
+  status       String  @default("success")              // success | error | rejected | edited
+  errorMessage String? @map("error_message") @db.Text
+  tokensIn     Int?    @map("tokens_in")
+  tokensOut    Int?    @map("tokens_out")
+  estimatedCost Float? @map("estimated_cost")
+  durationMs   Int?    @map("duration_ms")
+  model        String?                                   // claude-sonnet-4-6, etc
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, type])
+  @@map("ai_logs")
 }
