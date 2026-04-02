@@ -172,6 +172,9 @@ export async function gradeCall(callId: string): Promise<void> {
     const callWithTranscript = { ...call, transcript }
     const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext, knowledgeContext)
 
+    const { logAiCall, startTimer } = await import('@/lib/ai/log')
+    const timer = startTimer()
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
@@ -181,6 +184,20 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const content = response.content[0]
     if (content.type !== 'text') throw new Error('Unexpected response type from Claude')
+
+    // Log the AI call
+    logAiCall({
+      tenantId: call.tenantId,
+      userId: call.assignedToId,
+      type: 'call_grading',
+      pageContext: `call:${callId}`,
+      input: userPrompt.slice(0, 5000),
+      output: content.text.slice(0, 5000),
+      tokensIn: response.usage?.input_tokens,
+      tokensOut: response.usage?.output_tokens,
+      durationMs: timer(),
+      model: 'claude-sonnet-4-6',
+    }).catch(() => {})
 
     const grading = parseGradingResponse(content.text)
 
