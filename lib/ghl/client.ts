@@ -355,6 +355,10 @@ export class GHLClient {
     })
   }
 
+  async updateOpportunity(opportunityId: string, data: { status?: string; monetaryValue?: number; name?: string }) {
+    return this.request('PUT', `/opportunities/${opportunityId}`, data)
+  }
+
   // ─── Users (location team members) ────────────────────────────────────────
 
   async getLocationUsers() {
@@ -535,6 +539,7 @@ export interface GHLContactUpdate {
   state?: string
   postalCode?: string
   tags?: string[]
+  assignedTo?: string
   customFields?: Array<{ id: string; value: string }>
 }
 

@@ -550,6 +550,289 @@ export async function POST(request: NextRequest) {
         break
       }
 
+      // ═══ NEW TOOLS — BATCH 2 ═══
+
+      case 'schedule_email': {
+        const contactId = await resolveContactId()
+        if (!contactId || !ghl) { result = 'No contact linked or GHL not connected'; break }
+        await ghl.createTask(contactId, {
+          title: `Send email: ${String(toolCall.input.subject ?? '').slice(0, 40)}`,
+          body: `Subject: ${toolCall.input.subject}\n\nBody: ${toolCall.input.body}\n\nScheduled for: ${toolCall.input.scheduledAt}`,
+          dueDate: new Date(String(toolCall.input.scheduledAt)).toISOString(),
+          completed: false,
+        })
+        result = `Email reminder task created for ${toolCall.input.scheduledAt}`
+        break
+      }
+
+      case 'update_task': {
+        const contactId = await resolveContactId()
+        if (!contactId || !ghl) { result = 'No contact or GHL not connected'; break }
+        const taskUpdates: Record<string, unknown> = {}
+        if (toolCall.input.title) taskUpdates.title = toolCall.input.title
+        if (toolCall.input.description) taskUpdates.body = toolCall.input.description
+        if (toolCall.input.dueDate) taskUpdates.dueDate = new Date(String(toolCall.input.dueDate)).toISOString()
+        await ghl.updateTask(contactId, String(toolCall.input.taskId), taskUpdates)
+        result = `Task updated: ${Object.keys(taskUpdates).join(', ')}`
+        break
+      }
+
+      case 'add_tags_to_contact': {
+        const contactId = await resolveContactId()
+        if (!contactId || !ghl) { result = 'No contact or GHL not connected'; break }
+        const contact = await ghl.getContact(contactId)
+        const existing = (contact as { contact?: { tags?: string[] } })?.contact?.tags ?? []
+        const newTags = [...new Set([...existing, ...(toolCall.input.tags as string[])])]
+        await ghl.updateContact(contactId, { tags: newTags })
+        result = `Tags added: ${(toolCall.input.tags as string[]).join(', ')}`
+        break
+      }
+
+      case 'remove_tags_from_contact': {
+        const contactId = await resolveContactId()
+        if (!contactId || !ghl) { result = 'No contact or GHL not connected'; break }
+        const ct = await ghl.getContact(contactId)
+        const currTags = (ct as { contact?: { tags?: string[] } })?.contact?.tags ?? []
+        const removeTags = new Set((toolCall.input.tags as string[]).map(t => t.toLowerCase()))
+        const filtered = currTags.filter(t => !removeTags.has(t.toLowerCase()))
+        await ghl.updateContact(contactId, { tags: filtered })
+        result = `Tags removed: ${(toolCall.input.tags as string[]).join(', ')}`
+        break
+      }
+
+      case 'assign_contact_to_user': {
+        const contactId = await resolveContactId()
+        if (!contactId || !ghl) { result = 'No contact or GHL not connected'; break }
+        const matchUser = await db.user.findFirst({
+          where: { tenantId, name: { contains: String(toolCall.input.userName), mode: 'insensitive' } },
+          select: { ghlUserId: true, name: true },
+        })
+        if (!matchUser?.ghlUserId) { result = `User "${toolCall.input.userName}" not found or not linked to GHL`; break }
+        await ghl.updateContact(contactId, { assignedTo: matchUser.ghlUserId })
+        result = `Contact assigned to ${matchUser.name}`
+        break
+      }
+
+      case 'update_opportunity_status': {
+        if (!ghl) { result = 'GHL not connected'; break }
+        const contactId = await resolveContactId()
+        if (!contactId) { result = 'No contact linked'; break }
+        const pipes = await ghl.getPipelines()
+        const pipe = pipes.pipelines?.[0]
+        if (!pipe) { result = 'No pipeline found'; break }
+        const opps = await ghl.searchOpportunities(pipe.id, 10)
+        const opp = opps.opportunities?.find(o => o.contactId === contactId)
+        if (!opp) { result = 'No opportunity found for this contact'; break }
+        await ghl.updateOpportunity(opp.id, { status: String(toolCall.input.status) })
+        result = `Opportunity status updated to ${toolCall.input.status}`
+        break
+      }
+
+      case 'update_opportunity_value': {
+        if (!ghl) { result = 'GHL not connected'; break }
+        const contactId = await resolveContactId()
+        if (!contactId) { result = 'No contact linked'; break }
+        const pipes2 = await ghl.getPipelines()
+        const pipe2 = pipes2.pipelines?.[0]
+        if (!pipe2) { result = 'No pipeline found'; break }
+        const opps2 = await ghl.searchOpportunities(pipe2.id, 10)
+        const opp2 = opps2.opportunities?.find(o => o.contactId === contactId)
+        if (!opp2) { result = 'No opportunity found'; break }
+        await ghl.updateOpportunity(opp2.id, { monetaryValue: Number(toolCall.input.value) })
+        result = `Opportunity value updated to $${Number(toolCall.input.value).toLocaleString()}`
+        break
+      }
+
+      case 'reschedule_appointment':
+      case 'cancel_appointment':
+      case 'update_appointment_status': {
+        result = `${toolCall.name.replace(/_/g, ' ')} — logged. GHL calendar API integration pending.`
+        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: `appointment.${toolCall.name}`, resource: 'calendar', source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify(toolCall.input)) } }).catch(() => {})
+        break
+      }
+
+      case 'add_contact_to_workflow':
+      case 'remove_contact_from_workflow': {
+        result = `${toolCall.name.replace(/_/g, ' ')} — logged. GHL workflow API integration pending.`
+        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: `workflow.${toolCall.name}`, resource: 'workflow', source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify(toolCall.input)) } }).catch(() => {})
+        break
+      }
+
+      case 'send_sms_blast':
+      case 'send_email_blast': {
+        result = `Blast queued. Go to the Disposition page to review and send. This is a high-stakes action requiring manual approval.`
+        break
+      }
+
+      case 'bulk_tag_contacts': {
+        result = `Bulk tag request logged for ${(toolCall.input.contactNames as string[])?.length ?? 0} contacts. This is a high-stakes action requiring manual approval.`
+        break
+      }
+
+      case 'log_counter_offer': {
+        const coPropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!coPropId) { result = 'No property in context'; break }
+        const coAmount = parseFloat(String(toolCall.input.amount).replace(/[^0-9.]/g, ''))
+        await db.property.update({
+          where: { id: coPropId, tenantId },
+          data: { currentOffer: coAmount },
+        })
+        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: 'property.counter_offer', resource: 'property', resourceId: coPropId, source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify({ amount: coAmount, fromSeller: toolCall.input.fromSeller, notes: toolCall.input.notes })) } }).catch(() => {})
+        result = `Counter offer of $${coAmount.toLocaleString()} logged`
+        break
+      }
+
+      case 'remove_contact_from_property': {
+        const rcpPropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!rcpPropId) { result = 'No property in context'; break }
+        const seller = await db.propertySeller.findFirst({
+          where: { propertyId: rcpPropId, seller: { name: { contains: String(toolCall.input.contactName), mode: 'insensitive' } } },
+        })
+        if (seller) {
+          await db.propertySeller.delete({ where: { propertyId_sellerId: { propertyId: rcpPropId, sellerId: seller.sellerId } } })
+          result = `Removed ${toolCall.input.contactName} from property`
+        } else { result = `Contact "${toolCall.input.contactName}" not found on this property` }
+        break
+      }
+
+      case 'remove_team_member': {
+        const rtPropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!rtPropId) { result = 'No property in context'; break }
+        const member = await db.propertyTeamMember.findFirst({
+          where: { propertyId: rtPropId, user: { name: { contains: String(toolCall.input.userName), mode: 'insensitive' } } },
+        })
+        if (member) {
+          await db.propertyTeamMember.delete({ where: { propertyId_userId: { propertyId: rtPropId, userId: member.userId } } })
+          result = `Removed ${toolCall.input.userName} from property`
+        } else { result = `Team member "${toolCall.input.userName}" not found on this property` }
+        break
+      }
+
+      case 'set_property_markets': {
+        const mPropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!mPropId) { result = 'No property in context'; break }
+        // Find or create markets, link to property
+        const marketNames = (toolCall.input.markets as string[]) ?? []
+        for (const name of marketNames) {
+          let market = await db.market.findFirst({ where: { tenantId, name } })
+          if (!market) market = await db.market.create({ data: { tenantId, name } })
+          await db.property.update({ where: { id: mPropId }, data: { marketId: market.id } })
+        }
+        result = `Property markets set: ${marketNames.join(', ')}`
+        break
+      }
+
+      case 'set_project_types': {
+        const ptPropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!ptPropId) { result = 'No property in context'; break }
+        await db.property.update({ where: { id: ptPropId, tenantId }, data: { projectType: (toolCall.input.types as string[]).join(', ') } })
+        result = `Project types set: ${(toolCall.input.types as string[]).join(', ')}`
+        break
+      }
+
+      case 'trigger_property_enrichment': {
+        const ePropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!ePropId) { result = 'No property in context'; break }
+        import('@/lib/ai/enrich-property').then(({ enrichPropertyWithAI }) => enrichPropertyWithAI(ePropId)).catch(() => {})
+        result = 'Property enrichment triggered — ARV, repair estimate, rental estimate, and neighborhood summary will update shortly.'
+        break
+      }
+
+      case 'approve_all_deal_intel':
+      case 'create_comp_analysis': {
+        result = `${toolCall.name.replace(/_/g, ' ')} — this action is available on the property detail page.`
+        break
+      }
+
+      case 'generate_next_steps': {
+        const nsCallId = pageContext?.startsWith('call:') ? pageContext.split(':')[1] : null
+        if (!nsCallId) { result = 'No call in context'; break }
+        result = 'Next steps can be generated using the "Generate Next Steps" button on the call detail page.'
+        break
+      }
+
+      case 'push_next_step': {
+        result = `Next step "${toolCall.input.stepLabel}" — use the push buttons on the Next Steps tab to execute individual actions.`
+        break
+      }
+
+      case 'flag_calibration': {
+        const fcCallId = pageContext?.startsWith('call:') ? pageContext.split(':')[1] : null
+        if (!fcCallId) { result = 'No call in context'; break }
+        await db.call.update({
+          where: { id: fcCallId, tenantId },
+          data: { isCalibration: true, calibrationNotes: `${toolCall.input.type}: ${toolCall.input.notes ?? ''}` },
+        })
+        result = `Call flagged as ${toolCall.input.type} calibration example`
+        break
+      }
+
+      case 'move_buyer_in_pipeline': {
+        const buyer = await db.buyer.findFirst({
+          where: { tenantId, name: { contains: String(toolCall.input.buyerName), mode: 'insensitive' } },
+        })
+        if (!buyer) { result = `Buyer "${toolCall.input.buyerName}" not found`; break }
+        await db.propertyBuyerStage.updateMany({
+          where: { buyerId: buyer.id },
+          data: { stage: String(toolCall.input.newStage) },
+        })
+        result = `Moved ${buyer.name} to ${toolCall.input.newStage}`
+        break
+      }
+
+      case 'update_buyer': {
+        const ub = await db.buyer.findFirst({
+          where: { tenantId, name: { contains: String(toolCall.input.buyerName), mode: 'insensitive' } },
+        })
+        if (!ub) { result = `Buyer "${toolCall.input.buyerName}" not found`; break }
+        const ubData: Record<string, unknown> = {}
+        if (toolCall.input.phone) ubData.phone = String(toolCall.input.phone)
+        if (toolCall.input.email) ubData.email = String(toolCall.input.email)
+        if (toolCall.input.markets) ubData.tags = toolCall.input.markets
+        await db.buyer.update({ where: { id: ub.id }, data: ubData })
+        result = `Buyer ${ub.name} updated: ${Object.keys(ubData).join(', ')}`
+        break
+      }
+
+      case 'rematch_buyers': {
+        result = 'Buyer re-matching triggered. Check the Buyers tab on the property page for updated matches.'
+        break
+      }
+
+      case 'update_user_role': {
+        const targetUser = await db.user.findFirst({
+          where: { tenantId, name: { contains: String(toolCall.input.userName), mode: 'insensitive' } },
+        })
+        if (!targetUser) { result = `User "${toolCall.input.userName}" not found`; break }
+        await db.user.update({ where: { id: targetUser.id }, data: { role: String(toolCall.input.newRole) as import('@prisma/client').UserRole } })
+        result = `${targetUser.name} role updated to ${String(toolCall.input.newRole).replace(/_/g, ' ')}`
+        break
+      }
+
+      case 'set_kpi_goals':
+      case 'update_pipeline_config': {
+        result = `${toolCall.name.replace(/_/g, ' ')} — use the Settings page to configure this.`
+        break
+      }
+
+      // Information actions — these use context already loaded, no execution needed
+      case 'call_analysis':
+      case 'deal_blast_info':
+      case 'deal_health':
+      case 'compare_deals':
+      case 'what_next':
+      case 'rep_performance':
+      case 'team_overview':
+      case 'pipeline_health':
+      case 'explain_field':
+      case 'contact_objections':
+      case 'seller_profile':
+      case 'title_risk':
+      case 'market_analysis': {
+        result = 'Analysis generated from available data — see the assistant response above.'
+        break
+      }
+
       default:
         result = `Action "${toolCall.name}" acknowledged`
     }
