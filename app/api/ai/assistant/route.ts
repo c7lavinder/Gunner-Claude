@@ -107,6 +107,17 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
     })
     const knowledgeBlock = formatKnowledgeForPrompt(knowledge, 8000)
 
+    // Load recent rejected actions for learning (last 30 days)
+    const recentRejections = await db.actionLog.findMany({
+      where: { tenantId, userId, wasRejected: true, createdAt: { gte: new Date(Date.now() - 30 * 86400000) } },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { actionType: true, proposed: true },
+    })
+    const rejectionContext = recentRejections.length > 0
+      ? `\nRECENTLY REJECTED ACTIONS — the user has rejected these, avoid suggesting similar:\n${recentRejections.map(r => `- ${r.actionType}: ${JSON.stringify(r.proposed).slice(0, 100)}`).join('\n')}`
+      : ''
+
     const roleName = user?.role?.replace(/_/g, ' ') ?? 'Team Member'
     const timer = startTimer()
 
@@ -131,7 +142,7 @@ RULES:
 
 ${pageData ? `\n${pageData}` : ''}
 
-${knowledgeBlock}`
+${knowledgeBlock}${rejectionContext}`
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',

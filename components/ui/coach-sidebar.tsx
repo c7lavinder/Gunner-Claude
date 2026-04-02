@@ -155,6 +155,13 @@ export function CoachSidebar() {
           }
         }))
       }
+    } else {
+      // Log rejection for AI learning — helps future suggestions
+      fetch('/api/ai/assistant/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolCallId: toolId, pageContext: getPageContext(), rejected: true }),
+      }).catch(() => {})
     }
   }
 

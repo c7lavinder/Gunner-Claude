@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { toolCallId, pageContext } = await request.json()
+  const { toolCallId, pageContext, rejected } = await request.json()
   if (!toolCallId) return NextResponse.json({ error: 'toolCallId required' }, { status: 400 })
 
   const tenantId = session.tenantId
@@ -32,6 +32,20 @@ export async function POST(request: NextRequest) {
   }
 
   if (!toolCall) return NextResponse.json({ error: 'Tool call not found' }, { status: 404 })
+
+  // Handle rejection — log for AI learning and return
+  if (rejected) {
+    await db.actionLog.create({
+      data: {
+        tenantId, userId: sessionUserId,
+        actionType: toolCall.name,
+        proposed: JSON.parse(JSON.stringify(toolCall.input)),
+        wasEdited: false, wasRejected: true,
+        pageContext,
+      },
+    }).catch(() => {})
+    return NextResponse.json({ result: 'Rejection logged' })
+  }
 
   // Helper: resolve contact ID from name or page context
   async function resolveContactId(): Promise<string | null> {
