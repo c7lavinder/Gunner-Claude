@@ -90,8 +90,10 @@ VALID ACTION TYPES (use these exact strings):
 RULES:
 - Every action must reference REAL specific data from the call (names, addresses, amounts, outcomes)
 - Labels must be specific: "Drema Wrye: Follow up on 225 Edgewater Dr after offer rejection" NOT "Follow up with seller"
-- Do NOT suggest the same action type for the same purpose twice
+- Each action type can only appear ONCE. Do NOT generate two actions of the same type.
 - Only suggest actions the transcript actually supports
+- For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
+- For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
 
 Return JSON array only, no other text:
 [{ "type": "<action_type>", "label": "<specific action description>", "reasoning": "<why this action based on the call>" }]

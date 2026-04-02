@@ -152,6 +152,26 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [editFields, setEditFields] = useState<Record<string, string>>({})
   const audioRef = useRef<HTMLAudioElement>(null)
 
+  // Data for next steps edit forms
+  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; phone: string | null; userId: string }>>([])
+  const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>>([])
+  const [workflows, setWorkflows] = useState<Array<{ id: string; name: string }>>([])
+
+  useEffect(() => {
+    // Fetch team members
+    fetch(`/api/${tenantSlug}/dayhub/team-numbers`).then(r => r.json())
+      .then(d => setTeamMembers(d.numbers ?? []))
+      .catch(() => {})
+    // Fetch pipelines + stages
+    fetch(`/api/ghl/pipelines`).then(r => r.json())
+      .then(d => setPipelines(d.pipelines ?? []))
+      .catch(() => {})
+    // Fetch workflows
+    fetch(`/api/workflows`).then(r => r.json())
+      .then(d => setWorkflows((d.definitions ?? d.workflows ?? []).map((w: { id: string; name: string }) => ({ id: w.id, name: w.name }))))
+      .catch(() => {})
+  }, [tenantSlug])
+
   const grade = gradeInfo(call.score)
   const outcome = call.callOutcome ?? call.property?.status ?? null
 
@@ -859,23 +879,19 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                         {/* Edit panel — per-action-type fields + AI change box */}
                         {isEditing && (
                           <div className="border-t pt-3 mb-3 space-y-2.5" style={{ borderColor: 'var(--border-light)' }}>
-                            {/* Common: editable note/description */}
-                            {(step.type === 'add_note' || step.type === 'send_sms' || step.type === 'schedule_sms') && (
+                            {/* ── ADD NOTE ── */}
+                            {step.type === 'add_note' && (
                               <div>
-                                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">
-                                  {step.type === 'add_note' ? 'Note to Push' : 'Message'}
-                                </label>
-                                <textarea
-                                  value={editFields.label ?? step.label}
+                                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Note to Push</label>
+                                <textarea value={editFields.label ?? step.label}
                                   onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
-                                  rows={3}
+                                  rows={4}
                                   className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
-                                  style={{ borderColor: 'var(--border-medium)' }}
-                                />
+                                  style={{ borderColor: 'var(--border-medium)' }} />
                               </div>
                             )}
 
-                            {/* Create Task fields */}
+                            {/* ── CREATE TASK ── */}
                             {step.type === 'create_task' && (
                               <>
                                 <div>
@@ -903,19 +919,59 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                                   </div>
                                   <div>
                                     <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Assigned To</label>
-                                    <select value={editFields.assignedTo ?? ''}
+                                    <select value={editFields.assignedTo ?? call.assignedTo?.id ?? ''}
                                       onChange={e => setEditFields(prev => ({ ...prev, assignedTo: e.target.value }))}
                                       className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
                                       style={{ borderColor: 'var(--border-medium)' }}>
                                       <option value="">Select team member...</option>
-                                      {call.assignedTo && <option value={call.assignedTo.id}>{call.assignedTo.name}</option>}
+                                      {teamMembers.map(m => <option key={m.userId} value={m.userId}>{m.name}</option>)}
                                     </select>
                                   </div>
                                 </div>
                               </>
                             )}
 
-                            {/* Change Stage fields */}
+                            {/* ── CHECK OFF TASK ── */}
+                            {step.type === 'check_off_task' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Task Title</label>
+                                  <input value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Description</label>
+                                  <textarea value={editFields.description ?? ''}
+                                    onChange={e => setEditFields(prev => ({ ...prev, description: e.target.value }))}
+                                    rows={2}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none resize-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Due Date</label>
+                                    <input type="date" value={editFields.dueDate ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, dueDate: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }} />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Assigned To</label>
+                                    <select value={editFields.assignedTo ?? call.assignedTo?.id ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, assignedTo: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Select team member...</option>
+                                      {teamMembers.map(m => <option key={m.userId} value={m.userId}>{m.name}</option>)}
+                                    </select>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {/* ── CHANGE STAGE ── */}
                             {step.type === 'change_stage' && (
                               <>
                                 <div>
@@ -925,11 +981,152 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                                     className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
                                     style={{ borderColor: 'var(--border-medium)' }} />
                                 </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Pipeline</label>
+                                    <select value={editFields.pipelineId ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, pipelineId: e.target.value, stageId: '' }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Select pipeline...</option>
+                                      {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Move to Stage</label>
+                                    <select value={editFields.stageId ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, stageId: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Select stage...</option>
+                                      {(pipelines.find(p => p.id === editFields.pipelineId)?.stages ?? []).map(s => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
                               </>
                             )}
 
-                            {/* Generic edit for other types */}
-                            {!['add_note', 'send_sms', 'schedule_sms', 'create_task', 'change_stage'].includes(step.type) && (
+                            {/* ── SEND SMS ── */}
+                            {step.type === 'send_sms' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Message</label>
+                                  <textarea value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    rows={3}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">To</label>
+                                    <p className="text-[11px] text-txt-primary bg-surface-secondary rounded-[6px] px-2.5 py-1.5">
+                                      {call.contactName ?? 'Unknown'} {call.contactPhone ? `(${call.contactPhone})` : ''}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Send From</label>
+                                    <select value={editFields.fromUser ?? call.assignedTo?.id ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, fromUser: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Select sender...</option>
+                                      {teamMembers.map(m => <option key={m.userId} value={m.userId}>{m.name}{m.phone ? ` (${m.phone})` : ''}</option>)}
+                                    </select>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {/* ── SCHEDULE SMS ── */}
+                            {step.type === 'schedule_sms' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Message</label>
+                                  <textarea value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    rows={3}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">To</label>
+                                    <p className="text-[11px] text-txt-primary bg-surface-secondary rounded-[6px] px-2.5 py-1.5">
+                                      {call.contactName ?? 'Unknown'} {call.contactPhone ? `(${call.contactPhone})` : ''}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Send From</label>
+                                    <select value={editFields.fromUser ?? call.assignedTo?.id ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, fromUser: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Select sender...</option>
+                                      {teamMembers.map(m => <option key={m.userId} value={m.userId}>{m.name}{m.phone ? ` (${m.phone})` : ''}</option>)}
+                                    </select>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Send At</label>
+                                  <input type="datetime-local" value={editFields.sendAt ?? ''}
+                                    onChange={e => setEditFields(prev => ({ ...prev, sendAt: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                              </>
+                            )}
+
+                            {/* ── ADD TO WORKFLOW ── */}
+                            {step.type === 'add_to_workflow' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Action</label>
+                                  <input value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Workflow</label>
+                                  <select value={editFields.workflowId ?? ''}
+                                    onChange={e => setEditFields(prev => ({ ...prev, workflowId: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }}>
+                                    <option value="">Select workflow...</option>
+                                    {workflows.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                  </select>
+                                </div>
+                              </>
+                            )}
+
+                            {/* ── REMOVE FROM WORKFLOW ── */}
+                            {step.type === 'remove_from_workflow' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Action</label>
+                                  <input value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Workflow</label>
+                                  <select value={editFields.workflowId ?? ''}
+                                    onChange={e => setEditFields(prev => ({ ...prev, workflowId: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }}>
+                                    <option value="">Select workflow...</option>
+                                    {workflows.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                  </select>
+                                </div>
+                              </>
+                            )}
+
+                            {/* ── GENERIC (update_task, create_appointment, etc.) ── */}
+                            {!['add_note', 'create_task', 'check_off_task', 'change_stage', 'send_sms', 'schedule_sms', 'add_to_workflow', 'remove_from_workflow'].includes(step.type) && (
                               <div>
                                 <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Action</label>
                                 <input value={editFields.label ?? step.label}
@@ -997,7 +1194,23 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                             {actionLoading === `step-${i}` ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
                             Push to CRM
                           </button>
-                          <button onClick={() => { setEditingStep(isEditing ? null : i); setEditFields({ label: step.label }) }}
+                          <button onClick={() => {
+                            if (isEditing) { setEditingStep(null); setEditFields({}); return }
+                            // Pre-populate fields based on action type
+                            const fields: Record<string, string> = { label: step.label }
+                            if (step.type === 'create_task' || step.type === 'check_off_task') {
+                              fields.assignedTo = call.assignedTo?.id ?? ''
+                              fields.description = step.reasoning ?? ''
+                              // Default due date: tomorrow
+                              const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
+                              fields.dueDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
+                            }
+                            if (step.type === 'send_sms' || step.type === 'schedule_sms') {
+                              fields.fromUser = call.assignedTo?.id ?? ''
+                            }
+                            setEditingStep(i)
+                            setEditFields(fields)
+                          }}
                             className="text-[12px] text-txt-secondary hover:text-txt-primary">
                             {isEditing ? 'Close' : 'Edit'}
                           </button>

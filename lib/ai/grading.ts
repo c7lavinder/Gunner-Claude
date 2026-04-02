@@ -865,6 +865,8 @@ CRITICAL RULES:
 - Each action type can only appear ONCE. Do NOT generate two actions of the same type.
 - Every label must be specific with real names, addresses, and details from the call.
 - Only suggest actions the call actually supports.
+- For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
+- For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
 
 Call summary: ${gradingResult.summary}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
