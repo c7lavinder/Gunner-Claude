@@ -72,28 +72,41 @@ async function pollCalls() {
 
         const cutoff = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000)
 
-        // Fetch recent conversations — paginate to get all
+        // Fetch recent conversations — two passes to catch all calls
+        // Pass 1: TYPE_CALL filter (gets call-specific conversations)
+        // Pass 2: All conversations (catches calls that GHL doesn't tag as TYPE_CALL)
         type ConvItem = { id: string; contactId?: string; contactName?: string; fullName?: string; phone?: string; userId?: string; assignedTo?: string }
+        const seenConvIds = new Set<string>()
         const conversations: ConvItem[] = []
-        let startAfterId: string | undefined
-        for (let page = 0; page < 10; page++) { // max 10 pages = 1000 conversations
-          const params = new URLSearchParams({ locationId: freshTenant.ghlLocationId!, limit: String(CONVERSATION_LIMIT) })
-          if (startAfterId) params.set('startAfterId', startAfterId)
-          const convRes = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
-          if (!convRes.ok) {
-            const errorBody = await convRes.text().catch(() => 'unknown')
-            console.error(`[poll-calls] Conversations fetch failed (${convRes.status}): ${errorBody.slice(0, 200)}`)
-            break
+
+        for (const searchType of ['TYPE_CALL', 'ALL']) {
+          let startAfterId: string | undefined
+          const maxPages = searchType === 'TYPE_CALL' ? 20 : 10
+          for (let page = 0; page < maxPages; page++) {
+            const params = new URLSearchParams({ locationId: freshTenant.ghlLocationId!, limit: String(CONVERSATION_LIMIT) })
+            if (startAfterId) params.set('startAfterId', startAfterId)
+            if (searchType === 'TYPE_CALL') params.set('type', 'TYPE_CALL')
+            const convRes = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
+            if (!convRes.ok) {
+              const errorBody = await convRes.text().catch(() => 'unknown')
+              console.error(`[poll-calls] Conversations fetch failed (${convRes.status}, type=${searchType}): ${errorBody.slice(0, 200)}`)
+              break
+            }
+            const convData = await convRes.json() as { conversations?: ConvItem[]; total?: number }
+            const batch = convData.conversations ?? []
+            for (const c of batch) {
+              if (!seenConvIds.has(c.id)) {
+                seenConvIds.add(c.id)
+                conversations.push(c)
+              }
+            }
+            if (batch.length < CONVERSATION_LIMIT) break
+            startAfterId = batch[batch.length - 1]?.id
+            if (!startAfterId) break
+            await sleep(200)
           }
-          const convData = await convRes.json() as { conversations?: ConvItem[]; total?: number }
-          const batch = convData.conversations ?? []
-          conversations.push(...batch)
-          if (batch.length < CONVERSATION_LIMIT) break // no more pages
-          startAfterId = batch[batch.length - 1]?.id
-          if (!startAfterId) break
-          await sleep(200)
         }
-        console.log(`[poll-calls] Tenant ${tenant.id}: ${conversations.length} conversations fetched`)
+        console.log(`[poll-calls] Tenant ${tenant.id}: ${conversations.length} unique conversations fetched`)
 
         // Log contact names for debugging missed calls
         if (conversations.length > 0) {
