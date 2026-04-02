@@ -114,7 +114,15 @@ Transcript: ${transcriptExcerpt}${correctionContext}`,
     const jsonMatch = text.text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) throw new Error('No JSON array found in response')
 
-    const steps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>
+    const rawSteps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>
+
+    // Server-side dedup: only keep one action per type
+    const seenTypes = new Set<string>()
+    const steps = rawSteps.filter(s => {
+      if (seenTypes.has(s.type)) return false
+      seenTypes.add(s.type)
+      return true
+    })
 
     // Persist generated steps to DB (merge with existing if adding single action)
     if (requestedType) {

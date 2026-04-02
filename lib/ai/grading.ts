@@ -861,6 +861,11 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
         role: 'user',
         content: `You are a real estate wholesaling CRM assistant. Based on this graded call, generate 3-5 specific next step actions the rep should take.
 
+CRITICAL RULES:
+- Each action type can only appear ONCE. Do NOT generate two actions of the same type.
+- Every label must be specific with real names, addresses, and details from the call.
+- Only suggest actions the call actually supports.
+
 Call summary: ${gradingResult.summary}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
 Call type: ${call.callType ?? 'Unknown'}
@@ -883,13 +888,22 @@ Return JSON array only:
     if (!jsonMatch) return
 
     const steps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>
-    const stepsWithStatus = steps.map(s => ({ ...s, status: 'pending', pushedAt: null }))
+
+    // Server-side dedup: only keep one action per type
+    const seenTypes = new Set<string>()
+    const dedupedSteps = steps.filter(s => {
+      if (seenTypes.has(s.type)) return false
+      seenTypes.add(s.type)
+      return true
+    })
+
+    const stepsWithStatus = dedupedSteps.map(s => ({ ...s, status: 'pending', pushedAt: null }))
 
     await db.call.update({
       where: { id: callId },
       data: { aiNextSteps: stepsWithStatus },
     })
-    console.log(`[Grading] Generated ${steps.length} next steps for call ${callId}`)
+    console.log(`[Grading] Generated ${dedupedSteps.length} next steps for call ${callId} (${steps.length - dedupedSteps.length} duplicates removed)`)
   } catch (err) {
     console.error('[Grading] Next steps generation error:', err instanceof Error ? err.message : err)
   }
