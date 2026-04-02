@@ -971,21 +971,31 @@ function DrawerTeam({ propertyId, tenantSlug }: { propertyId: string; tenantSlug
         <p className="text-[10px] text-txt-muted italic">No team members assigned</p>
       ) : (
         <div className="space-y-1">
-          {members.map(m => (
-            <div key={m.userId} className="group flex items-center gap-2 bg-surface-secondary rounded-[8px] px-2.5 py-1.5">
-              <Users size={11} className="text-txt-muted shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-medium text-txt-primary truncate">{m.name}</p>
-                <p className="text-[9px] text-txt-muted">{m.role}</p>
+          {members.map(m => {
+            const roleLabel = m.role.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+            const roleColor = m.role.includes('LEAD') || m.role === 'Lead Manager' ? 'bg-blue-100 text-blue-700'
+              : m.role.includes('ACQUISITION') || m.role === 'Acquisition Manager' ? 'bg-green-100 text-green-700'
+              : m.role.includes('DISPOSITION') || m.role === 'Disposition Manager' ? 'bg-orange-100 text-orange-700'
+              : m.role.includes('ADMIN') || m.role === 'Admin' ? 'bg-gray-100 text-gray-700'
+              : 'bg-gray-100 text-gray-600'
+            return (
+            <div key={m.userId} className="group flex items-center gap-2 bg-surface-secondary rounded-[8px] px-2.5 py-1.5 border-[0.5px]" style={{ borderColor: 'var(--border-light)' }}>
+              <div className="w-5 h-5 rounded-full bg-white border-[0.5px] flex items-center justify-center shrink-0" style={{ borderColor: 'var(--border-medium)' }}>
+                <Users size={9} className="text-txt-muted" />
               </div>
-              {m.source !== 'migration' && (
-                <button onClick={() => removeMember(m.userId)}
-                  className="opacity-0 group-hover:opacity-100 text-txt-muted hover:text-semantic-red transition-all shrink-0">
-                  <X size={10} />
-                </button>
-              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold text-txt-primary truncate">{m.name}</p>
+                <span className={`text-[7px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleColor}`}>
+                  {roleLabel.includes('Acquisition') ? 'Acq. Manager' : roleLabel.includes('Disposition') ? 'Dispo Manager' : roleLabel}
+                </span>
+              </div>
+              <button onClick={() => removeMember(m.userId)}
+                className="opacity-0 group-hover:opacity-100 text-txt-muted hover:text-semantic-red transition-all shrink-0">
+                <X size={10} />
+              </button>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

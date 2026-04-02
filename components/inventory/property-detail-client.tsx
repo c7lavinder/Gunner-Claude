@@ -1307,6 +1307,24 @@ function TagRow({ label, values, options, field, propertyId, allowCustom, source
 
 const TEAM_ROLE_OPTIONS = ['Admin', 'Lead Manager', 'Acquisition Manager', 'Disposition Manager']
 
+const ROLE_DISPLAY: Record<string, { label: string; color: string }> = {
+  OWNER: { label: 'Owner', color: 'bg-purple-100 text-purple-700' },
+  ADMIN: { label: 'Admin', color: 'bg-gray-100 text-gray-700' },
+  Admin: { label: 'Admin', color: 'bg-gray-100 text-gray-700' },
+  TEAM_LEAD: { label: 'Team Lead', color: 'bg-indigo-100 text-indigo-700' },
+  LEAD_MANAGER: { label: 'Lead Manager', color: 'bg-blue-100 text-blue-700' },
+  'Lead Manager': { label: 'Lead Manager', color: 'bg-blue-100 text-blue-700' },
+  ACQUISITION_MANAGER: { label: 'Acq. Manager', color: 'bg-green-100 text-green-700' },
+  'Acquisition Manager': { label: 'Acq. Manager', color: 'bg-green-100 text-green-700' },
+  DISPOSITION_MANAGER: { label: 'Dispo Manager', color: 'bg-orange-100 text-orange-700' },
+  'Disposition Manager': { label: 'Dispo Manager', color: 'bg-orange-100 text-orange-700' },
+  Team: { label: 'Team', color: 'bg-gray-100 text-gray-600' },
+}
+
+function formatRole(role: string): { label: string; color: string } {
+  return ROLE_DISPLAY[role] ?? { label: role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), color: 'bg-gray-100 text-gray-600' }
+}
+
 function TeamSection({ propertyId, tenantSlug }: { propertyId: string; tenantSlug: string }) {
   const [members, setMembers] = useState<Array<{ id: string; userId: string; name: string; role: string; source: string }>>([])
   const [allUsers, setAllUsers] = useState<Array<{ id: string; name: string }>>([])
@@ -1389,20 +1407,27 @@ function TeamSection({ propertyId, tenantSlug }: { propertyId: string; tenantSlu
       ) : members.length === 0 ? (
         <p className="text-ds-fine text-txt-muted italic">No team members assigned</p>
       ) : (
-        <div className="space-y-1">
-          {members.map(m => (
-            <div key={m.userId} className="group flex items-center gap-2 bg-surface-secondary rounded-[8px] px-3 py-2">
-              <User size={12} className="text-txt-muted shrink-0" />
+        <div className="space-y-1.5">
+          {members.map(m => {
+            const roleInfo = formatRole(m.role)
+            return (
+            <div key={m.userId} className="group flex items-center gap-2.5 bg-surface-secondary rounded-[10px] px-3 py-2.5 border-[0.5px]" style={{ borderColor: 'var(--border-light)' }}>
+              <div className="w-7 h-7 rounded-full bg-white border-[0.5px] flex items-center justify-center shrink-0" style={{ borderColor: 'var(--border-medium)' }}>
+                <User size={13} className="text-txt-muted" />
+              </div>
               <div className="min-w-0 flex-1">
-                <p className="text-ds-fine font-medium text-txt-primary truncate">{m.name}</p>
-                <p className="text-[9px] text-txt-muted">{m.role}</p>
+                <p className="text-ds-fine font-semibold text-txt-primary truncate">{m.name}</p>
+                <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${roleInfo.color}`}>
+                  {roleInfo.label}
+                </span>
               </div>
               <button onClick={() => removeMember(m.userId)}
                 className="opacity-0 group-hover:opacity-100 text-txt-muted hover:text-semantic-red transition-all shrink-0">
                 <X size={10} />
               </button>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
