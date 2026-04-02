@@ -150,12 +150,14 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [addingAction, setAddingAction] = useState(false)
   const [editingStep, setEditingStep] = useState<number | null>(null)
   const [editFields, setEditFields] = useState<Record<string, string>>({})
+  const [propertyPendingCount, setPropertyPendingCount] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // Data for next steps edit forms
   const [teamMembers, setTeamMembers] = useState<Array<{ name: string; phone: string | null; userId: string }>>([])
   const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>>([])
   const [workflows, setWorkflows] = useState<Array<{ id: string; name: string }>>([])
+  const [calendars, setCalendars] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => {
     // Fetch team members
@@ -170,6 +172,10 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     fetch(`/api/workflows`).then(r => r.json())
       .then(d => setWorkflows((d.definitions ?? d.workflows ?? []).map((w: { id: string; name: string }) => ({ id: w.id, name: w.name }))))
       .catch(() => {})
+    // Fetch calendars
+    fetch(`/api/ghl/calendars`).then(r => r.json())
+      .then(d => setCalendars((d.calendars ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))))
+      .catch(() => {})
   }, [tenantSlug])
 
   const grade = gradeInfo(call.score)
@@ -182,7 +188,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     { id: 'criteria', label: 'Criteria', icon: <Target size={14} /> },
     { id: 'transcript', label: 'Transcript', icon: <FileText size={14} /> },
     { id: 'next-steps', label: 'Next Steps', icon: <Zap size={14} />, badge: generatedSteps.filter(s => s.status === 'pending').length || undefined },
-    { id: 'property', label: 'Property', icon: <Home size={14} /> },
+    { id: 'property', label: 'Property', icon: <Home size={14} />, badge: propertyPendingCount || undefined },
   ]
 
   function seekTo(timestamp: string) {
@@ -1127,8 +1133,51 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                               </>
                             )}
 
-                            {/* ── GENERIC (update_task, create_appointment, etc.) ── */}
-                            {!['add_note', 'create_task', 'check_off_task', 'change_stage', 'send_sms', 'schedule_sms', 'add_to_workflow', 'remove_from_workflow'].includes(step.type) && (
+                            {/* ── CREATE APPOINTMENT ── */}
+                            {step.type === 'create_appointment' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Appointment Title</label>
+                                  <input value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Calendar</label>
+                                  <select value={editFields.calendarId ?? ''}
+                                    onChange={e => setEditFields(prev => ({ ...prev, calendarId: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }}>
+                                    <option value="">Select calendar...</option>
+                                    {calendars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                  </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Date & Time (CT)</label>
+                                    <input type="datetime-local" value={editFields.appointmentTime ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, appointmentTime: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }} />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Assigned To</label>
+                                    <select value={editFields.assignedTo ?? call.assignedTo?.id ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, assignedTo: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Select team member...</option>
+                                      {teamMembers.map(m => <option key={m.userId} value={m.userId}>{m.name}</option>)}
+                                    </select>
+                                  </div>
+                                </div>
+                                <p className="text-[9px] text-txt-muted">All times in Central Time (America/Chicago)</p>
+                              </>
+                            )}
+
+                            {/* ── GENERIC (update_task, etc.) ── */}
+                            {!['add_note', 'create_task', 'check_off_task', 'change_stage', 'send_sms', 'schedule_sms', 'add_to_workflow', 'remove_from_workflow', 'create_appointment'].includes(step.type) && (
                               <div>
                                 <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Action</label>
                                 <input value={editFields.label ?? step.label}
@@ -1270,7 +1319,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* ── PROPERTY TAB ───────────────────────────────────────── */}
           {tab === 'property' && (
-            <PropertyDataTab call={call} tenantSlug={tenantSlug} />
+            <PropertyDataTab call={call} tenantSlug={tenantSlug} onPendingCount={setPropertyPendingCount} />
           )}
         </div>
       </div>
@@ -1418,7 +1467,7 @@ const FIELD_OPTIONS: Record<string, string[]> = {
   previousDealFellThrough: ['Yes', 'No', 'Unknown'],
 }
 
-function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: string }) {
+function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetail; tenantSlug: string; onPendingCount?: (count: number) => void }) {
   const [changes, setChanges] = useState<DealIntelChange[]>([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
@@ -1431,7 +1480,11 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
     fetch(`/api/${tenantSlug}/calls/${call.id}/deal-intel`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.changes) setChanges(data.changes)
+        if (data?.changes) {
+          setChanges(data.changes)
+          const pendingCount = (data.changes as DealIntelChange[]).filter((c: DealIntelChange) => !c.decision).length
+          onPendingCount?.(pendingCount)
+        }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -1457,6 +1510,9 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
           decidedAt: new Date().toISOString(),
         } : c))
         setEditingField(null)
+        // Update pending count
+        const newPending = changes.filter(c => c.field !== field && !c.decision).length
+        onPendingCount?.(newPending)
         toast(decision === 'skipped' ? 'Skipped' : `Updated ${field}`, 'success')
       }
     } catch { toast('Failed', 'error') }
@@ -1475,6 +1531,7 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
     }
     setChanges(prev => prev.map(c => !c.decision ? { ...c, decision: 'approved', decidedAt: new Date().toISOString() } : c))
     setActing(null)
+    onPendingCount?.(0)
     toast(`Approved ${pending.length} updates`, 'success')
   }
 
