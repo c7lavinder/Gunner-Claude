@@ -108,9 +108,12 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
   // Log full payload for debugging
   console.log(`[GHL Webhook] Message: ${JSON.stringify(event).slice(0, 600)}`)
 
-  // Check if this is a call message
+  // Check if this is a call message — GHL uses various type identifiers
   const msgType = (msg.messageType ?? '').toUpperCase()
-  const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msg.messageTypeId === 1
+  const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msgType === 'TYPE_VOICE'
+    || msgType === 'VOICE' || msgType === 'PHONE' || msgType === 'TYPE_PHONE'
+    || msg.messageTypeId === 1 || msg.messageTypeId === 7
+    || !!(msg.callStatus || msg.callDuration || msg.meta?.call)
 
   if (!isCall) return // skip SMS, email, chat
 

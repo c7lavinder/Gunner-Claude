@@ -13,7 +13,7 @@ import { transcribeRecording } from '../lib/ai/transcribe'
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
 const MIN_CALL_DURATION_FOR_GRADING = 45 // only grade calls >= 45s
 const CONVERSATION_LIMIT = 100
-const LOOKBACK_HOURS = 12 // full business day coverage
+const LOOKBACK_HOURS = 24 // full day coverage — dedup prevents reprocessing
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
 
@@ -32,6 +32,10 @@ async function pollCalls() {
     }
 
     let totalNew = 0
+    let totalCallMessages = 0
+    let totalSkippedOld = 0
+    let totalSkippedStatus = 0
+    let totalDeduped = 0
 
     for (const tenant of tenants) {
       try {
@@ -110,9 +114,11 @@ async function pollCalls() {
 
         // Log contact names for debugging missed calls
         if (conversations.length > 0) {
-          const names = conversations.slice(0, 10).map(c => c.contactName || c.fullName || c.phone || '?').join(', ')
-          console.log(`[poll-calls] Recent contacts: ${names}${conversations.length > 10 ? ` ... +${conversations.length - 10} more` : ''}`)
+          const names = conversations.slice(0, 20).map(c => c.contactName || c.fullName || c.phone || '?').join(', ')
+          console.log(`[poll-calls] Recent contacts: ${names}${conversations.length > 20 ? ` ... +${conversations.length - 20} more` : ''}`)
         }
+
+        // Counters tracked at outer scope
 
         for (const conv of conversations) {
           await sleep(50)
@@ -133,11 +139,16 @@ async function pollCalls() {
 
               for (const msg of msgs) {
                 const msgType = String(msg.messageType ?? '').toUpperCase()
-                const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msg.type === 1
+                const numType = typeof msg.type === 'number' ? msg.type : parseInt(String(msg.type), 10)
+                const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msgType === 'TYPE_VOICE'
+                  || msgType === 'VOICE' || msgType === 'PHONE' || msgType === 'TYPE_PHONE'
+                  || numType === 1 || numType === 7
+                  || !!(msg.callStatus || msg.callDuration || (msg.meta as Record<string, unknown>)?.call)
                 if (!isCall) continue
+                totalCallMessages++
 
                 const msgDate = new Date(String(msg.dateAdded))
-                if (msgDate < cutoff) { hitOld = true; continue }
+                if (msgDate < cutoff) { hitOld = true; totalSkippedOld++; continue }
 
                 // Extract duration — check every possible GHL source, take highest non-zero
                 let meta: Record<string, unknown> = {}
@@ -164,7 +175,7 @@ async function pollCalls() {
                 const status = String((msg.callStatus ?? (msg.meta as { call?: { status?: string } })?.call?.status ?? msg.status) ?? '').toLowerCase()
                 // Save all calls including failed/short — they count as dials
                 // Only skip 'initiated' and 'ringing' (not yet connected)
-                if (['initiated', 'ringing'].includes(status)) continue
+                if (['initiated', 'ringing'].includes(status)) { totalSkippedStatus++; continue }
 
                 const dedupeId = String(msg.altId || msg.id)
                 if (existingIds.has(dedupeId)) {
@@ -205,6 +216,7 @@ async function pollCalls() {
                       }
                     }
                   }
+                  totalDeduped++
                   continue
                 }
                 existingIds.add(dedupeId)
@@ -292,7 +304,7 @@ async function pollCalls() {
       }
     }
 
-    console.log(`[poll-calls] Done. New calls: ${totalNew}`)
+    console.log(`[poll-calls] Done. New: ${totalNew} | Call messages found: ${totalCallMessages} | Deduped: ${totalDeduped} | Old: ${totalSkippedOld} | Status-skipped: ${totalSkippedStatus}`)
 
     // ─── Retry failed transcriptions ──────────────────────────────────
     // Find calls with recordings that failed to transcribe (FAILED status, has recording URL,
