@@ -1303,6 +1303,112 @@ function TagRow({ label, values, options, field, propertyId, allowCustom, source
   )
 }
 
+// ─── Team Members Section ────────────────────────────────────────────────────
+
+const TEAM_ROLE_OPTIONS = ['Admin', 'Lead Manager', 'Acquisition Manager', 'Disposition Manager']
+
+function TeamSection({ propertyId, tenantSlug }: { propertyId: string; tenantSlug: string }) {
+  const [members, setMembers] = useState<Array<{ id: string; userId: string; name: string; role: string; source: string }>>([])
+  const [allUsers, setAllUsers] = useState<Array<{ id: string; name: string }>>([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [selectedRole, setSelectedRole] = useState('Lead Manager')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    setShowAdd(false)
+    fetch(`/api/properties/${propertyId}/team`)
+      .then(r => r.json())
+      .then(d => { setMembers(d.members ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [propertyId])
+
+  useEffect(() => {
+    fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
+      .then(r => r.json())
+      .then(d => setAllUsers((d.numbers ?? []).map((n: { name: string; userId: string }) => ({ id: n.userId, name: n.name }))))
+      .catch(() => {})
+  }, [tenantSlug])
+
+  async function addMember() {
+    if (!selectedUserId) return
+    const res = await fetch(`/api/properties/${propertyId}/team`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: selectedUserId, role: selectedRole }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setMembers(prev => [...prev.filter(m => m.userId !== selectedUserId), data.member])
+      setShowAdd(false)
+      setSelectedUserId('')
+    }
+  }
+
+  async function removeMember(userId: string) {
+    await fetch(`/api/properties/${propertyId}/team`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    })
+    setMembers(prev => prev.filter(m => m.userId !== userId))
+  }
+
+  const availableUsers = allUsers.filter(u => !members.some(m => m.userId === u.id))
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Team</p>
+        <button onClick={() => setShowAdd(!showAdd)} className="text-txt-muted hover:text-gunner-red transition-colors">
+          <Plus size={12} />
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="bg-surface-secondary rounded-[10px] p-3 mb-2 space-y-2">
+          <select value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}
+            className="w-full text-ds-fine bg-white border-[0.5px] rounded-[8px] px-3 py-1.5" style={{ borderColor: 'var(--border-medium)' }}>
+            <option value="">Select team member...</option>
+            {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+          <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
+            className="w-full text-ds-fine bg-white border-[0.5px] rounded-[8px] px-3 py-1.5" style={{ borderColor: 'var(--border-medium)' }}>
+            {TEAM_ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button onClick={addMember} disabled={!selectedUserId}
+            className="w-full text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-50 rounded-[8px] py-1.5 transition-colors">
+            Add to Team
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-ds-fine text-txt-muted">Loading...</p>
+      ) : members.length === 0 ? (
+        <p className="text-ds-fine text-txt-muted italic">No team members assigned</p>
+      ) : (
+        <div className="space-y-1">
+          {members.map(m => (
+            <div key={m.userId} className="group flex items-center gap-2 bg-surface-secondary rounded-[8px] px-3 py-2">
+              <User size={12} className="text-txt-muted shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-ds-fine font-medium text-txt-primary truncate">{m.name}</p>
+                <p className="text-[9px] text-txt-muted">{m.role}</p>
+              </div>
+              <button onClick={() => removeMember(m.userId)}
+                className="opacity-0 group-hover:opacity-100 text-txt-muted hover:text-semantic-red transition-all shrink-0">
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Inline AI Actions ───────────────────────────────────────────────────────
 
 function InlineAI({ propertyId }: { propertyId: string }) {
@@ -1679,26 +1785,33 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   sending: boolean; actionMsg: string; ghlContactId: string | null
   projectTypeOptions?: string[]
 }) {
-  // Appointments for this property's contact
+  // Appointments for this property's contact — fetch past 7 days + next 7 days
   const [appointments, setAppointments] = useState<Array<{ id: string; startTime: string; calendarName: string; status: string }>>([])
   useEffect(() => {
     if (!ghlContactId) return
-    // Fetch appointments for the last 30 days and next 30 days
     const now = new Date()
-    const past30 = new Date(now.getTime() - 30 * 86400000)
+    // Build date strings for 14 days centered on today
     const dates: string[] = []
-    for (let d = past30; d <= new Date(now.getTime() + 30 * 86400000); d = new Date(d.getTime() + 86400000)) {
+    for (let offset = -7; offset <= 7; offset++) {
+      const d = new Date(now.getTime() + offset * 86400000)
       dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
     }
-    // Fetch current day appointments and filter by contactId
-    const fetchDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    fetch(`/api/${tenantSlug}/dayhub/appointments?date=${fetchDate}`)
-      .then(r => r.json())
-      .then(d => {
-        const all = (d.appointments ?? []) as Array<{ id: string; contactId: string; startTime: string; calendarName: string; status: string }>
-        setAppointments(all.filter(a => a.contactId === ghlContactId))
-      })
-      .catch(() => {})
+    // Fetch all dates in parallel and merge
+    Promise.all(dates.map(date =>
+      fetch(`/api/${tenantSlug}/dayhub/appointments?date=${date}`)
+        .then(r => r.json())
+        .then(d => (d.appointments ?? []) as Array<{ id: string; contactId: string; startTime: string; calendarName: string; status: string }>)
+        .catch(() => [] as Array<{ id: string; contactId: string; startTime: string; calendarName: string; status: string }>)
+    )).then(results => {
+      const allAppts = results.flat()
+      // Filter to this contact and dedup by id
+      const seen = new Set<string>()
+      const filtered = allAppts
+        .filter(a => a.contactId === ghlContactId)
+        .filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true })
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+      setAppointments(filtered)
+    })
   }, [tenantSlug, ghlContactId])
 
   // Local editable state — updates on save without page reload
@@ -1932,14 +2045,8 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
           {/* Contacts (linked GHL contacts) */}
           <ContactsSection propertyId={property.id} initialSellers={property.sellers} />
 
-          {/* Assigned */}
-          {property.assignedTo && (
-            <div>
-              <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Assigned To</p>
-              <p className="text-ds-body text-txt-primary">{property.assignedTo.name}</p>
-              <p className="text-ds-fine text-txt-muted">{property.assignedTo.role.replace(/_/g, ' ').toLowerCase()}</p>
-            </div>
-          )}
+          {/* Team Members */}
+          <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />
 
           {/* AI Actions */}
           <InlineAI propertyId={property.id} />
@@ -2012,7 +2119,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
               <Calendar size={10} className="inline -mt-0.5 text-semantic-purple" /> Appointments ({appointments.length})
             </p>
             {appointments.length === 0 ? (
-              <p className="text-ds-fine text-txt-muted">No appointments</p>
+              <p className="text-ds-fine text-txt-muted">{ghlContactId ? 'No appointments in the last 7 days or next 7 days' : 'No GHL contact linked'}</p>
             ) : (
               <div className="space-y-1">
                 {appointments.map(a => {

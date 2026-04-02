@@ -770,7 +770,9 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                     />
                   </div>
                   <div className="max-h-[400px] overflow-y-auto">
-                    <TranscriptView transcript={call.transcript} searchQuery={searchQuery} />
+                    <TranscriptView transcript={call.transcript} searchQuery={searchQuery}
+                      repName={call.assignedTo?.name ?? 'Rep'} contactName={call.contactName ?? 'Seller'}
+                      direction={call.direction} />
                   </div>
                 </div>
               ) : call.recordingUrl ? (
@@ -1651,7 +1653,25 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
   )
 }
 
-function TranscriptView({ transcript, searchQuery }: { transcript: string; searchQuery: string }) {
+function TranscriptView({ transcript, searchQuery, repName, contactName, direction }: {
+  transcript: string; searchQuery: string
+  repName?: string; contactName?: string; direction?: string
+}) {
+  // Map generic speaker labels to real names
+  // For outbound calls: Speaker 0 = Rep, Speaker 1 = Contact
+  // For inbound calls: Speaker 0 = Contact, Speaker 1 = Rep
+  const isOutbound = direction === 'OUTBOUND'
+  function mapSpeaker(raw: string): string {
+    if (raw === 'Speaker 0') return isOutbound ? (repName ?? 'Rep') : (contactName ?? 'Seller')
+    if (raw === 'Speaker 1') return isOutbound ? (contactName ?? 'Seller') : (repName ?? 'Rep')
+    if (/^Speaker \d+$/.test(raw)) {
+      const num = parseInt(raw.split(' ')[1])
+      return num % 2 === 0 ? (isOutbound ? (repName ?? 'Rep') : (contactName ?? 'Seller')) : (isOutbound ? (contactName ?? 'Seller') : (repName ?? 'Rep'))
+    }
+    if (raw.toLowerCase() === 'rep' || raw.toLowerCase() === 'agent') return repName ?? 'Rep'
+    if (raw.toLowerCase() === 'seller' || raw.toLowerCase() === 'customer') return contactName ?? 'Seller'
+    return raw
+  }
   // Parse transcript into speaker turns — handles both pre-formatted (line-per-turn)
   // and raw Deepgram output (single block, speaker labels inline or missing)
   const speakerPattern = /(?:^|\n)(Speaker \d+|Rep|Seller|Agent|Customer|Unknown|[A-Z][a-z]+ ?[A-Z]?[a-z]*):\s*/gi
@@ -1716,18 +1736,19 @@ function TranscriptView({ transcript, searchQuery }: { transcript: string; searc
     <div className="space-y-3">
       {searchQuery && <p className="text-[10px] text-txt-muted mb-2">{filtered.length} matches</p>}
       {filtered.map((turn, i) => {
-        const isRep = turn.speaker?.toLowerCase().includes('rep') || turn.speaker?.toLowerCase().includes('agent') || turn.speaker === 'Speaker 0'
+        const displayName = turn.speaker ? mapSpeaker(turn.speaker) : null
+        const isRep = displayName === (repName ?? 'Rep') || turn.speaker?.toLowerCase().includes('rep') || turn.speaker?.toLowerCase().includes('agent')
 
         return (
           <div key={i} className="flex gap-2">
-            {turn.speaker && (
+            {displayName && (
               <div className={`shrink-0 w-[70px] text-right pt-0.5`}>
                 <span className={`text-[10px] font-semibold ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
-                  {turn.speaker}
+                  {displayName}
                 </span>
               </div>
             )}
-            <div className={`flex-1 ${turn.speaker ? 'border-l-2 pl-3' : ''} ${isRep ? 'border-semantic-blue/20' : 'border-gunner-red/20'}`}>
+            <div className={`flex-1 ${displayName ? 'border-l-2 pl-3' : ''} ${isRep ? 'border-semantic-blue/20' : 'border-gunner-red/20'}`}>
               <p className="text-[11px] text-txt-secondary leading-relaxed">
                 {searchQuery ? highlightText(turn.text, searchQuery) : turn.text}
               </p>
