@@ -488,24 +488,61 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 - All Gunner actions wired (property updates, milestones, team members)
 - Action cards inline with Approve/Reject/Edit
 
+### Session 32 — Fix Railway build + complete NAH playbook integration (2026-04-02)
+**What was done:**
+
+**Railway Build Fix:**
+- ESLint error in app/api/admin/ai-logs/route.ts — `@typescript-eslint/no-explicit-any` rule doesn't exist in project config. Removed bad directive, replaced `any` cast with proper typing.
+
+**AI Logging — All Touchpoints Wired (was 3/11, now 11/11):**
+- generate-next-steps → `next_steps`
+- property-suggestions → `property_enrich`
+- ai-edit → `action_execution`
+- blast generation → `blast_gen`
+- outreach action → `action_execution`
+- buyer response classification → `buyer_scoring`
+- property enrichment → `property_enrich`
+- AI coach → `assistant_chat`
+- Added AI Logs link to admin nav bar
+
+**NAH Playbook — All AI Touchpoints Now Playbook-Aware (was 1/5, now 5/5):**
+- Added `buildKnowledgeContext()` + `formatKnowledgeForPrompt()` to context-builder.ts — lightweight knowledge loader with token budget control
+- Role Assistant: loads scripts, objection handling, training, industry knowledge, user profile for user's role
+- AI Coach: replaced hardcoded "what you know" with real playbook docs filtered by role
+- Next Steps: injects playbook context so follow-up suggestions reference company scripts
+- Blast Generation: loads company overview + standards for company voice
+- Call Grading: already had full 7-layer context (unchanged)
+
+**Weekly User Profile Auto-Generation:**
+- lib/ai/generate-user-profiles.ts: analyzes 90 days of rubric scores + coaching feedback per user → Claude synthesizes personalized profiles
+- POST /api/admin/generate-profiles: admin trigger
+- scripts/generate-profiles.ts: weekly cron (Sunday 3am UTC)
+- "Regen Profiles" button in Settings → Knowledge tab
+- Railway cron added to railway.toml
+
+**Calibration Call UI:**
+- Star/Flag button on call detail header to mark calls as calibration examples
+- POST /api/[tenant]/calls/[id]/calibration: toggle endpoint with audit logging
+- Calibration calls already feed into grading via context-builder
+- isCalibration + calibrationNotes passed from server page to client
+
+**Playbook files added to git:**
+- All 42 NAH Wholesale Playbook files now in repo (docs/NAH-Wholesale-Playbook/)
+- Load Playbook button reads from filesystem on Railway
+
 ## Next Session — Start Exactly Here
 
-**Task:** Test and fix deployed AI intelligence layer + Role Assistant
+**Task:** Test live deployment + audit remaining features
 
-**First message to Claude Code:**
-
-Read CLAUDE.md, PROGRESS.md, and memory/project_current_state.md first.
-
-Major deployment just went live. Need to:
-1. Run playbook loader (Settings → Knowledge → Load Playbook)
-2. Test Role Assistant on live site
-3. Test grading with playbook knowledge
-4. Fix any issues found
-5. Wire AI logging into remaining touchpoints (coach, blasts, buyer scoring)
-6. Consider: pgvector for knowledge search, weekly user profile auto-generation
-2. Test: Dashboard, Day Hub, Training, Disposition, ROI, AI Coach, Workflows
-3. Test password reset flow
-4. When ready for monetization, activate Stripe (see Session 17)
+1. On Railway: Settings → Knowledge → Load Playbook (loads 42 docs + 3 profiles)
+2. On Railway: Settings → Knowledge → Regen Profiles (generates profiles from real call data)
+3. Test Role Assistant — should reference NAH scripts/playbook when coaching
+4. Regrade a call — verify coaching references playbook scripts
+5. Test calibration flag on a call — star should toggle
+6. Test AI Logs page — should show all AI calls with cost/tokens
+7. Audit remaining pages: Dashboard, Day Hub, Calls, Inventory, KPIs, Buyers, ROI
+8. Consider: pgvector embeddings for semantic search (currently exact type/role matching)
+9. When ready for monetization, activate Stripe (see Session 17)
 
 ---
 
