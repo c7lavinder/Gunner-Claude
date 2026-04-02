@@ -1562,6 +1562,8 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
   const [playbookMsg, setPlaybookMsg] = useState('')
   const [generatingProfiles, setGeneratingProfiles] = useState(false)
   const [profileMsg, setProfileMsg] = useState('')
+  const [embedding, setEmbedding] = useState(false)
+  const [embedMsg, setEmbedMsg] = useState('')
 
   useEffect(() => {
     fetch(`/api/admin/knowledge`)
@@ -1583,6 +1585,18 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
       setDocs(refreshData.documents ?? [])
     } catch { setPlaybookMsg('Failed to load playbook') }
     setLoadingPlaybook(false)
+  }
+
+  async function embedKnowledge() {
+    setEmbedding(true)
+    setEmbedMsg('')
+    try {
+      const res = await fetch('/api/admin/embed-knowledge', { method: 'POST' })
+      const data = await res.json()
+      if (data.error) setEmbedMsg(data.error)
+      else setEmbedMsg(`Embedded ${data.embedded ?? 0} documents, skipped ${data.skipped ?? 0}`)
+    } catch { setEmbedMsg('Failed to generate embeddings') }
+    setEmbedding(false)
   }
 
   async function regenerateProfiles() {
@@ -1664,11 +1678,18 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
             {generatingProfiles ? <Loader2 size={12} className="animate-spin" /> : <Users size={12} />}
             {generatingProfiles ? 'Generating...' : 'Regen Profiles'}
           </button>
+          <button onClick={embedKnowledge} disabled={embedding}
+            className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
+            style={{ borderColor: 'var(--border-medium)' }}>
+            {embedding ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+            {embedding ? 'Embedding...' : 'Embed Docs'}
+          </button>
         </div>
       </div>
 
       {playbookMsg && <p className="text-ds-fine text-semantic-green font-medium">{playbookMsg}</p>}
       {profileMsg && <p className="text-ds-fine text-semantic-green font-medium">{profileMsg}</p>}
+      {embedMsg && <p className="text-ds-fine text-semantic-green font-medium">{embedMsg}</p>}
 
       {/* Add document form */}
       {showAdd && (

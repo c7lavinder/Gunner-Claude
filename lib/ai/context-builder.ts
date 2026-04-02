@@ -244,8 +244,21 @@ export async function buildKnowledgeContext(params: {
   userId?: string
   userRole?: string | null
   callType?: string | null
+  query?: string // Optional: semantic search query for pgvector
 }): Promise<KnowledgeContext> {
-  const { tenantId, userId, userRole, callType } = params
+  const { tenantId, userId, userRole, callType, query } = params
+
+  // If query provided and embeddings enabled, use semantic search
+  let semanticDocs: Array<{ title: string; type: string; callType: string | null; role: string | null; content: string }> = []
+  if (query) {
+    try {
+      const { searchKnowledgeBySimilarity, isEmbeddingsEnabled } = await import('@/lib/ai/embeddings')
+      if (isEmbeddingsEnabled()) {
+        const results = await searchKnowledgeBySimilarity(tenantId, query, 8)
+        semanticDocs = results.filter(r => r.similarity > 0.3) // Only include relevant results
+      }
+    } catch {}
+  }
 
   const [allDocs, tenant, userProfileRecord] = await Promise.all([
     db.knowledgeDocument.findMany({
@@ -262,21 +275,45 @@ export async function buildKnowledgeContext(params: {
     }) : null,
   ])
 
+  // Merge semantic results with type-filtered results (dedup by title)
+  const seenTitles = new Set<string>()
+  const mergedScripts: string[] = []
+  const mergedObjections: string[] = []
+  const mergedTraining: string[] = []
+  const mergedIndustry: string[] = []
+
+  // Semantic results first (higher relevance)
+  for (const doc of semanticDocs) {
+    if (seenTitles.has(doc.title)) continue
+    seenTitles.add(doc.title)
+    const formatted = `### ${doc.title}\n${doc.content}`
+    if (doc.type === 'script') mergedScripts.push(formatted)
+    else if (doc.type === 'objection') mergedObjections.push(formatted)
+    else if (doc.type === 'training') mergedTraining.push(formatted)
+    else if (doc.type === 'industry') mergedIndustry.push(formatted)
+  }
+
+  // Then type-filtered results (standard matching)
+  for (const d of allDocs.filter(d => d.type === 'script' && matchesCallTypeOrRole(d, callType, userRole))) {
+    if (!seenTitles.has(d.title)) { seenTitles.add(d.title); mergedScripts.push(`### ${d.title}\n${d.content}`) }
+  }
+  for (const d of allDocs.filter(d => d.type === 'objection' && matchesCallTypeOrRole(d, callType, userRole))) {
+    if (!seenTitles.has(d.title)) { seenTitles.add(d.title); mergedObjections.push(`### ${d.title}\n${d.content}`) }
+  }
+  for (const d of allDocs.filter(d => d.type === 'training' && matchesCallTypeOrRole(d, callType, userRole))) {
+    if (!seenTitles.has(d.title)) { seenTitles.add(d.title); mergedTraining.push(`### ${d.title}\n${d.content}`) }
+  }
+  for (const d of allDocs.filter(d => d.type === 'industry' && (d.role === 'ALL' || d.role === userRole || !d.role))) {
+    if (!seenTitles.has(d.title)) { seenTitles.add(d.title); mergedIndustry.push(`### ${d.title}\n${d.content}`) }
+  }
+
   return {
     companyOverview: allDocs.find(d => d.title.includes('Company Overview'))?.content ?? null,
     companyStandards: tenant?.companyStandards ?? null,
-    scripts: allDocs
-      .filter(d => d.type === 'script' && matchesCallTypeOrRole(d, callType, userRole))
-      .map(d => `### ${d.title}\n${d.content}`),
-    objectionHandling: allDocs
-      .filter(d => d.type === 'objection' && matchesCallTypeOrRole(d, callType, userRole))
-      .map(d => `### ${d.title}\n${d.content}`),
-    trainingMaterials: allDocs
-      .filter(d => d.type === 'training' && matchesCallTypeOrRole(d, callType, userRole))
-      .map(d => `### ${d.title}\n${d.content}`),
-    industryKnowledge: allDocs
-      .filter(d => d.type === 'industry' && (d.role === 'ALL' || d.role === userRole || !d.role))
-      .map(d => `### ${d.title}\n${d.content}`),
+    scripts: mergedScripts,
+    objectionHandling: mergedObjections,
+    trainingMaterials: mergedTraining,
+    industryKnowledge: mergedIndustry,
     userProfile: userProfileRecord ? {
       strengths: (userProfileRecord.strengths as string[]) ?? [],
       weaknesses: (userProfileRecord.weaknesses as string[]) ?? [],

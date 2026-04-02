@@ -268,4 +268,116 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
       required: [],
     },
   },
+
+  // ─── Scheduling + Calendar Actions ───
+  {
+    name: 'schedule_sms',
+    description: 'Schedule an SMS to be sent at a future date/time.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        contactName: { type: 'string', description: 'Contact name' },
+        message: { type: 'string', description: 'SMS message text' },
+        scheduledAt: { type: 'string', description: 'When to send (YYYY-MM-DD HH:MM CT)' },
+      },
+      required: ['message', 'scheduledAt'],
+    },
+  },
+
+  // ─── Property Intelligence Actions ───
+  {
+    name: 'add_internal_note',
+    description: 'Add an internal note to the current property. Not visible to contacts — for team use only.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        note: { type: 'string', description: 'Internal note text — include dates, amounts, key decisions' },
+      },
+      required: ['note'],
+    },
+  },
+  {
+    name: 'update_deal_intel',
+    description: 'Update a specific deal intelligence field on the current property.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        field: { type: 'string', description: 'Deal intel field name (e.g., sellerMotivationLevel, timelineUrgency, competingOfferCount, decisionMakersConfirmed, dealHealthScore)' },
+        value: { type: 'string', description: 'New value' },
+        evidence: { type: 'string', description: 'What supports this update (call quote, observation)' },
+      },
+      required: ['field', 'value'],
+    },
+  },
+  {
+    name: 'calculate_mao',
+    description: 'Calculate Maximum Allowable Offer (MAO) for a property. MAO = ARV × (1 - profit margin) - repair costs - wholesale fee.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        arv: { type: 'number', description: 'After Repair Value in dollars' },
+        repairCost: { type: 'number', description: 'Estimated repair costs' },
+        wholesaleFee: { type: 'number', description: 'Desired wholesale/assignment fee (default $10,000)' },
+        profitMargin: { type: 'number', description: 'Target profit margin as decimal (default 0.30 = 30%)' },
+      },
+      required: ['arv'],
+    },
+  },
+
+  // ─── Call Actions ───
+  {
+    name: 'reclassify_call',
+    description: 'Change the call type classification (cold call, qualification, offer, follow-up, etc.).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        newCallType: { type: 'string', description: 'New call type: cold_call | qualification_call | offer_call | follow_up_call | dispo_call | admin_call | purchase_agreement_call' },
+        reason: { type: 'string', description: 'Why reclassifying' },
+      },
+      required: ['newCallType'],
+    },
+  },
+  {
+    name: 'mark_call_reviewed',
+    description: 'Mark a call as reviewed by a manager. Useful for quality assurance tracking.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        notes: { type: 'string', description: 'Review notes' },
+      },
+      required: [],
+    },
+  },
+
+  // ─── Buyer Actions ───
+  {
+    name: 'add_buyer',
+    description: 'Add a new buyer to the system for deal blasting.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: { type: 'string', description: 'Buyer name' },
+        phone: { type: 'string', description: 'Phone number' },
+        email: { type: 'string', description: 'Email address' },
+        markets: { type: 'array', items: { type: 'string' }, description: 'Markets they buy in' },
+        buyBox: { type: 'string', description: 'Buy box criteria (price range, property types, etc.)' },
+      },
+      required: ['name'],
+    },
+  },
+
+  // ─── Team/Admin Actions ───
+  {
+    name: 'invite_team_member',
+    description: 'Send an invite email to add a new team member.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        email: { type: 'string', description: 'Email address to invite' },
+        role: { type: 'string', description: 'Role: LEAD_GENERATOR | LEAD_MANAGER | ACQUISITION_MANAGER | DISPOSITION_MANAGER | ADMIN' },
+        name: { type: 'string', description: 'Person name' },
+      },
+      required: ['email', 'role'],
+    },
+  },
 ]

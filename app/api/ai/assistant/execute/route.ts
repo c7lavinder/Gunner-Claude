@@ -413,9 +413,140 @@ export async function POST(request: NextRequest) {
       }
 
       case 'summarize_property': {
-        const propertyId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
-        if (!propertyId) { result = 'No property in context'; break }
+        const propId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!propId) { result = 'No property in context'; break }
         result = 'Property summary is displayed in the page data above. Ask me specific questions about this deal.'
+        break
+      }
+
+      case 'schedule_sms': {
+        const contactId = await resolveContactId()
+        if (!contactId || !ghl) { result = 'No contact linked or GHL not connected'; break }
+        // GHL doesn't have native scheduled SMS — create a task as reminder
+        await ghl.createTask(contactId, {
+          title: `Send SMS: ${String(toolCall.input.message ?? '').slice(0, 50)}`,
+          body: `Scheduled SMS content: ${toolCall.input.message}\n\nScheduled for: ${toolCall.input.scheduledAt}`,
+          dueDate: new Date(String(toolCall.input.scheduledAt)).toISOString(),
+          completed: false,
+        })
+        result = `SMS reminder task created for ${toolCall.input.scheduledAt}. Message: "${String(toolCall.input.message ?? '').slice(0, 60)}..."`
+        break
+      }
+
+      case 'add_internal_note': {
+        const notePropertyId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!notePropertyId) { result = 'No property in context'; break }
+        const existingNotes = (await db.property.findUnique({
+          where: { id: notePropertyId },
+          select: { internalNotes: true },
+        }))?.internalNotes ?? ''
+        const timestamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        const newNotes = `[${timestamp} via AI] ${toolCall.input.note}\n\n${existingNotes}`
+        await db.property.update({
+          where: { id: notePropertyId, tenantId },
+          data: { internalNotes: newNotes },
+        })
+        result = `Internal note added to property`
+        break
+      }
+
+      case 'update_deal_intel': {
+        const diPropertyId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (!diPropertyId) { result = 'No property in context'; break }
+        const prop = await db.property.findUnique({
+          where: { id: diPropertyId },
+          select: { dealIntel: true },
+        })
+        const intel = (prop?.dealIntel ?? {}) as Record<string, unknown>
+        intel[String(toolCall.input.field)] = {
+          value: toolCall.input.value,
+          source: 'assistant',
+          evidence: toolCall.input.evidence ?? null,
+          updatedAt: new Date().toISOString(),
+        }
+        await db.property.update({
+          where: { id: diPropertyId, tenantId },
+          data: { dealIntel: JSON.parse(JSON.stringify(intel)) },
+        })
+        result = `Deal intel updated: ${toolCall.input.field} = ${toolCall.input.value}`
+        break
+      }
+
+      case 'calculate_mao': {
+        const arv = Number(toolCall.input.arv ?? 0)
+        const repairCost = Number(toolCall.input.repairCost ?? 0)
+        const wholesaleFee = Number(toolCall.input.wholesaleFee ?? 10000)
+        const profitMargin = Number(toolCall.input.profitMargin ?? 0.30)
+        const mao = arv * (1 - profitMargin) - repairCost - wholesaleFee
+        // Save MAO to property if on a property page
+        const maoPropertyId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
+        if (maoPropertyId && mao > 0) {
+          await db.property.update({
+            where: { id: maoPropertyId, tenantId },
+            data: { mao },
+          }).catch(() => {})
+        }
+        result = `MAO = $${Math.round(mao).toLocaleString()}\n(ARV $${arv.toLocaleString()} × ${((1 - profitMargin) * 100).toFixed(0)}% - $${repairCost.toLocaleString()} repairs - $${wholesaleFee.toLocaleString()} fee)${maoPropertyId ? '\nSaved to property record.' : ''}`
+        break
+      }
+
+      case 'reclassify_call': {
+        const rcCallId = pageContext?.startsWith('call:') ? pageContext.split(':')[1] : null
+        if (!rcCallId) { result = 'No call in context'; break }
+        await db.call.update({
+          where: { id: rcCallId, tenantId },
+          data: { callType: String(toolCall.input.newCallType) },
+        })
+        result = `Call reclassified as ${String(toolCall.input.newCallType).replace(/_/g, ' ')}`
+        break
+      }
+
+      case 'mark_call_reviewed': {
+        const reviewCallId = pageContext?.startsWith('call:') ? pageContext.split(':')[1] : null
+        if (!reviewCallId) { result = 'No call in context'; break }
+        await db.auditLog.create({
+          data: {
+            tenantId, userId: sessionUserId,
+            action: 'call.reviewed', resource: 'call', resourceId: reviewCallId,
+            source: 'USER', severity: 'INFO',
+            payload: { notes: toolCall.input.notes ?? '', via: 'assistant' },
+          },
+        })
+        result = `Call marked as reviewed${toolCall.input.notes ? `: ${toolCall.input.notes}` : ''}`
+        break
+      }
+
+      case 'add_buyer': {
+        await db.buyer.create({
+          data: {
+            tenantId,
+            name: String(toolCall.input.name ?? ''),
+            phone: toolCall.input.phone ? String(toolCall.input.phone) : null,
+            email: toolCall.input.email ? String(toolCall.input.email) : null,
+            tags: toolCall.input.markets ? (toolCall.input.markets as string[]) : [],
+            isActive: true,
+          },
+        })
+        result = `Buyer added: ${toolCall.input.name}${toolCall.input.phone ? ` (${toolCall.input.phone})` : ''}`
+        break
+      }
+
+      case 'invite_team_member': {
+        try {
+          const inviteRes = await fetch(`${process.env.NEXTAUTH_URL ?? ''}/api/tenants/invite`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: toolCall.input.email,
+              role: toolCall.input.role,
+              name: toolCall.input.name,
+            }),
+          })
+          if (inviteRes.ok) result = `Invite sent to ${toolCall.input.email} as ${String(toolCall.input.role).replace(/_/g, ' ')}`
+          else result = 'Failed to send invite — check the email address'
+        } catch {
+          result = 'Invite failed'
+        }
         break
       }
 

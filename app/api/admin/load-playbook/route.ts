@@ -163,9 +163,19 @@ export async function POST() {
     results.profiles++
   }
 
+  // Auto-embed documents if OPENAI_API_KEY is set (non-blocking)
+  let embeddingResults: { embedded: number } | null = null
+  try {
+    const { embedAllDocuments, isEmbeddingsEnabled } = await import('@/lib/ai/embeddings')
+    if (isEmbeddingsEnabled()) {
+      embeddingResults = await embedAllDocuments(tenantId)
+    }
+  } catch {}
+
   return NextResponse.json({
     status: 'success',
     loaded: { documents: results.docs, profiles: results.profiles },
+    embedded: embeddingResults?.embedded ?? 0,
     errors: results.errors.length > 0 ? results.errors : undefined,
   })
 }

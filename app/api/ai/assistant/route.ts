@@ -100,10 +100,11 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
       }
     }
 
-    // Load playbook knowledge for this user's role
+    // Load playbook knowledge for this user's role (with semantic search if embeddings available)
     const { buildKnowledgeContext, formatKnowledgeForPrompt } = await import('@/lib/ai/context-builder')
     const knowledge = await buildKnowledgeContext({
       tenantId, userId, userRole: user?.role ?? null,
+      query: message, // Semantic search: finds relevant playbook docs for the user's question
     })
     const knowledgeBlock = formatKnowledgeForPrompt(knowledge, 8000)
 
