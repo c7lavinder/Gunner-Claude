@@ -29,6 +29,16 @@ export async function POST(
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
+  // Load playbook knowledge for better next step suggestions
+  const { buildKnowledgeContext, formatKnowledgeForPrompt } = await import('@/lib/ai/context-builder')
+  const knowledge = await buildKnowledgeContext({
+    tenantId: session.tenantId,
+    userId: session.userId,
+    userRole: call.assignedTo?.role ?? null,
+    callType: call.callType,
+  })
+  const knowledgeBlock = formatKnowledgeForPrompt(knowledge, 3000)
+
   try {
     // AI Learning: fetch recent corrections from this tenant (last 30 days)
     const recentCorrections = await db.auditLog.findMany({
@@ -109,7 +119,9 @@ Pipeline stage: ${call.property?.ghlPipelineStage ?? 'Unknown'}
 Call summary: ${call.aiSummary ?? 'No summary'}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
 Call type: ${call.callType ?? 'Unknown'}
-Transcript: ${transcriptExcerpt}${correctionContext}`,
+Transcript: ${transcriptExcerpt}${correctionContext}
+
+${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your action suggestions:\n${knowledgeBlock}` : ''}`,
       }],
     })
 

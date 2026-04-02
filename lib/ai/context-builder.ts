@@ -219,6 +219,103 @@ export async function buildGradingContext(params: {
   }
 }
 
+// ── Lightweight knowledge context for non-grading touchpoints ──
+// Used by: assistant, coach, next steps, deal intel, blast gen
+// Loads relevant playbook docs filtered by role + optional call type
+// Returns a single text block ready for prompt injection
+
+export interface KnowledgeContext {
+  companyOverview: string | null
+  companyStandards: string | null
+  scripts: string[]
+  objectionHandling: string[]
+  trainingMaterials: string[]
+  industryKnowledge: string[]
+  userProfile: {
+    strengths: string[]
+    weaknesses: string[]
+    coachingPriorities: string[]
+    communicationStyle: string | null
+  } | null
+}
+
+export async function buildKnowledgeContext(params: {
+  tenantId: string
+  userId?: string
+  userRole?: string | null
+  callType?: string | null
+}): Promise<KnowledgeContext> {
+  const { tenantId, userId, userRole, callType } = params
+
+  const [allDocs, tenant, userProfileRecord] = await Promise.all([
+    db.knowledgeDocument.findMany({
+      where: { tenantId, isActive: true },
+      select: { title: true, type: true, callType: true, role: true, content: true },
+    }),
+    db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { companyStandards: true },
+    }),
+    userId ? db.userProfile.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      select: { strengths: true, weaknesses: true, coachingPriorities: true, communicationStyle: true },
+    }) : null,
+  ])
+
+  return {
+    companyOverview: allDocs.find(d => d.title.includes('Company Overview'))?.content ?? null,
+    companyStandards: tenant?.companyStandards ?? null,
+    scripts: allDocs
+      .filter(d => d.type === 'script' && matchesCallTypeOrRole(d, callType, userRole))
+      .map(d => `### ${d.title}\n${d.content}`),
+    objectionHandling: allDocs
+      .filter(d => d.type === 'objection' && matchesCallTypeOrRole(d, callType, userRole))
+      .map(d => `### ${d.title}\n${d.content}`),
+    trainingMaterials: allDocs
+      .filter(d => d.type === 'training' && matchesCallTypeOrRole(d, callType, userRole))
+      .map(d => `### ${d.title}\n${d.content}`),
+    industryKnowledge: allDocs
+      .filter(d => d.type === 'industry' && (d.role === 'ALL' || d.role === userRole || !d.role))
+      .map(d => `### ${d.title}\n${d.content}`),
+    userProfile: userProfileRecord ? {
+      strengths: (userProfileRecord.strengths as string[]) ?? [],
+      weaknesses: (userProfileRecord.weaknesses as string[]) ?? [],
+      coachingPriorities: (userProfileRecord.coachingPriorities as string[]) ?? [],
+      communicationStyle: userProfileRecord.communicationStyle,
+    } : null,
+  }
+}
+
+// Format KnowledgeContext into a prompt section (capped at tokenBudget chars)
+export function formatKnowledgeForPrompt(ctx: KnowledgeContext, tokenBudget = 6000): string {
+  const sections: string[] = []
+  let charCount = 0
+
+  function addIfRoom(label: string, content: string) {
+    if (charCount + content.length > tokenBudget) return
+    sections.push(`${label}:\n${content}`)
+    charCount += label.length + content.length + 2
+  }
+
+  if (ctx.companyOverview) addIfRoom('COMPANY OVERVIEW', ctx.companyOverview)
+  if (ctx.companyStandards) addIfRoom('COMPANY STANDARDS', ctx.companyStandards)
+  if (ctx.scripts.length > 0) addIfRoom('COMPANY SCRIPTS', ctx.scripts.slice(0, 2).join('\n\n'))
+  if (ctx.objectionHandling.length > 0) addIfRoom('OBJECTION HANDLING', ctx.objectionHandling.slice(0, 2).join('\n\n'))
+  if (ctx.trainingMaterials.length > 0) addIfRoom('TRAINING', ctx.trainingMaterials.slice(0, 2).join('\n\n'))
+  if (ctx.industryKnowledge.length > 0) addIfRoom('INDUSTRY KNOWLEDGE', ctx.industryKnowledge.slice(0, 2).join('\n\n'))
+
+  if (ctx.userProfile) {
+    addIfRoom('USER PROFILE', [
+      `Strengths: ${ctx.userProfile.strengths.join('; ')}`,
+      `Areas for Growth: ${ctx.userProfile.weaknesses.join('; ')}`,
+      `Coaching Focus: ${ctx.userProfile.coachingPriorities.join('; ')}`,
+      ctx.userProfile.communicationStyle ? `Style: ${ctx.userProfile.communicationStyle}` : '',
+    ].filter(Boolean).join('\n'))
+  }
+
+  return sections.join('\n\n')
+}
+
 function matchesCallTypeOrRole(
   doc: { callType: string | null; role: string | null },
   callType: string | null | undefined,

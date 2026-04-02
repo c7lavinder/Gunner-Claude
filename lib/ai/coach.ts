@@ -204,6 +204,11 @@ When the user asks about "this property" or "this deal", they mean the property 
     } catch {}
   }
 
+  // Load playbook knowledge for coaching context
+  const { buildKnowledgeContext, formatKnowledgeForPrompt } = await import('@/lib/ai/context-builder')
+  const knowledge = await buildKnowledgeContext({ tenantId, userId, userRole })
+  const knowledgeBlock = formatKnowledgeForPrompt(knowledge, 6000)
+
   const systemPrompt = `You are Gunner, an elite AI coach for real estate wholesaling teams.
 
 You are talking with ${userName}, who is a ${formatRole(userRole)} on their wholesaling team.
@@ -235,18 +240,12 @@ ${recentCalls.map((c, i) => {
   ${c.transcript ? `Transcript excerpt: "${c.transcript.slice(0, 300)}..."` : ''}`
 }).join('\n\n')}` : ''}
 
-WHAT YOU KNOW:
-- Deep expertise in real estate wholesaling: cold calling, acquisitions, dispositions, ARV calculations, MAO, assigning contracts
-- Lead manager best practices: quick qualification, setting appointments
-- Acquisition manager best practices: building rapport with sellers, uncovering motivation, making offers
-- Disposition manager best practices: building buyer lists, marketing deals, fast closings
-- GHL CRM optimization for wholesaling workflows
-- Objection handling scripts specific to motivated sellers
-- KPIs and metrics that matter in wholesaling
+${knowledgeBlock}
 
 RULES:
 - Never make up specific market data or prices
 - If they ask about their calls/scores, reference the context above
+- When coaching, reference SPECIFIC scripts and techniques from the playbook above. Quote exact phrases and steps the rep should use.
 - Keep answers conversational, not listy unless a list is truly the best format
 - If they ask you to take an action in GHL (send SMS, create task, etc), tell them to use the Actions button in the interface
 `

@@ -61,6 +61,15 @@ export async function POST(
 
     // Generate blast content
     if (action === 'generate') {
+      // Load playbook knowledge for company voice in blast messaging
+      const { buildKnowledgeContext } = await import('@/lib/ai/context-builder')
+      const knowledge = await buildKnowledgeContext({
+        tenantId, userRole: 'DISPOSITION_MANAGER',
+      })
+      const companyVoice = [
+        knowledge.companyOverview ? `Company: ${knowledge.companyOverview.slice(0, 500)}` : '',
+        knowledge.companyStandards ? `Standards: ${knowledge.companyStandards.slice(0, 300)}` : '',
+      ].filter(Boolean).join('\n')
       const selectedTiers = (tiers as string[]) ?? []
       const results: Record<string, { emailSubject: string; emailBody: string; smsBody: string }> = {}
 
@@ -110,9 +119,10 @@ export async function POST(
 ${propertyContext}
 
 Tier tone: ${tierContext[t] ?? tierContext.unqualified}
+${companyVoice ? `\n${companyVoice}` : ''}
 
 Include the property specs (beds/baths/sqft/year) and key deal numbers in the email body.
-Keep subject line under 60 chars. Email under 300 words. Professional but urgent.
+Keep subject line under 60 chars. Email under 300 words. Professional but urgent. Match the company voice above.
 Return ONLY JSON: {"subject":"...","body":"..."}`
 
         const smsPrompt = `Write a wholesale deal alert SMS for ${t} buyers.

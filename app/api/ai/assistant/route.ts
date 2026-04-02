@@ -100,11 +100,12 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
       }
     }
 
-    // Load user profile for personalization
-    const userProfile = await db.userProfile.findUnique({
-      where: { tenantId_userId: { tenantId, userId } },
-      select: { strengths: true, weaknesses: true, coachingPriorities: true, communicationStyle: true },
+    // Load playbook knowledge for this user's role
+    const { buildKnowledgeContext, formatKnowledgeForPrompt } = await import('@/lib/ai/context-builder')
+    const knowledge = await buildKnowledgeContext({
+      tenantId, userId, userRole: user?.role ?? null,
     })
+    const knowledgeBlock = formatKnowledgeForPrompt(knowledge, 8000)
 
     const roleName = user?.role?.replace(/_/g, ' ') ?? 'Team Member'
     const timer = startTimer()
@@ -126,16 +127,11 @@ RULES:
 - When the user asks you to DO something (send SMS, create task, etc.), use the appropriate tool. Don't just describe what to do.
 - When proposing actions, fill in ALL fields with real data from context. Never leave placeholders.
 - You are AI-assisted, not autonomous. Always propose actions for user approval before executing.
+- When coaching on calls or objections, reference the SPECIFIC scripts and techniques from the playbook below. Quote exact phrases and steps.
 
 ${pageData ? `\n${pageData}` : ''}
 
-${userProfile ? `USER PERFORMANCE PROFILE:
-Strengths: ${(userProfile.strengths as string[]).join(', ')}
-Areas for Growth: ${(userProfile.weaknesses as string[]).join(', ')}
-Coaching Focus: ${(userProfile.coachingPriorities as string[]).join(', ')}
-Style: ${userProfile.communicationStyle ?? 'Unknown'}` : ''}
-
-${tenant?.companyStandards ? `\nCOMPANY STANDARDS:\n${tenant.companyStandards}` : ''}`
+${knowledgeBlock}`
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
