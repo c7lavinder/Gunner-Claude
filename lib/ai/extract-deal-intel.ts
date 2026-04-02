@@ -148,6 +148,8 @@ IMPORTANT:
 - The rolling deal summary should read like a CRM note that gives anyone full context on the deal in 30 seconds.
 - Be generous with extractions but honest with confidence levels.
 - Do NOT propose a change if the exact same value is already stored.
+- For any deadline or time-relative field (promiseDeadlines, sellerTimeline, nextStepAgreed), ALWAYS include the actual date, not just "same day" or "tomorrow". Use the Call Date provided to calculate absolute dates.
+- For list/array fields (topics, green flags, red flags, etc.), use short clear items — each item should be a concise phrase, not a full sentence.
 ${learningContext}`
 }
 
@@ -155,7 +157,7 @@ function buildExtractionUserPrompt(
   call: {
     id: string; transcript: string | null; aiSummary: string | null
     callOutcome: string | null; callType: string | null; direction: string
-    durationSeconds: number | null; contactName: string | null
+    durationSeconds: number | null; contactName: string | null; calledAt: Date | string | null
     sentiment: number | null; sellerMotivation: number | null
     assignedTo: { id: string; name: string } | null
     property: {
@@ -172,9 +174,13 @@ function buildExtractionUserPrompt(
 ): string {
   const sections: string[] = []
 
+  const callDate = call.calledAt ? new Date(call.calledAt) : new Date()
+  const callDateStr = `${callDate.getFullYear()}-${String(callDate.getMonth() + 1).padStart(2, '0')}-${String(callDate.getDate()).padStart(2, '0')}`
+
   sections.push(`CALL DETAILS:
 - Contact: ${call.contactName ?? 'Unknown'}
 - Rep: ${call.assignedTo?.name ?? 'Unknown'}
+- Call Date: ${callDateStr}
 - Type: ${call.callType ?? 'Unknown'} | Direction: ${call.direction} | Duration: ${call.durationSeconds ?? 0}s
 - Outcome: ${call.callOutcome ?? 'Unknown'}
 - Call Score: ${call.sentiment !== null ? `Sentiment ${call.sentiment}` : 'N/A'}

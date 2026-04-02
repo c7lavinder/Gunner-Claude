@@ -1573,9 +1573,23 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
                           style={{ borderColor: 'var(--border-medium)' }} />
                       )
                     ) : (
-                      <p className="text-[11px] text-txt-primary font-medium leading-snug">
-                        {typeof c.proposedValue === 'object' ? JSON.stringify(c.proposedValue) : String(c.proposedValue)}
-                      </p>
+                      Array.isArray(c.proposedValue) ? (
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {(c.proposedValue as string[]).map((item, idx) => (
+                            <span key={idx} className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${catConfig.bg} ${catConfig.text}`}>
+                              {String(item)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-txt-primary font-medium leading-snug">
+                          {String(c.proposedValue)}
+                          {/* Add call date context for time-relative fields */}
+                          {(c.field.includes('deadline') || c.field.includes('Deadline') || c.field.includes('timeline') || c.field.includes('Timeline')) && call.calledAt && (
+                            <span className="text-[9px] text-txt-muted ml-1.5">(call: {format(new Date(call.calledAt), 'MMM d, yyyy')})</span>
+                          )}
+                        </p>
+                      )
                     )}
 
                     {/* Evidence quote — compact */}
@@ -1594,7 +1608,12 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
                       <button onClick={() => {
                         if (isEditing) { setEditingField(null); return }
                         setEditingField(c.field)
-                        setEditValue(typeof c.proposedValue === 'object' ? JSON.stringify(c.proposedValue) : String(c.proposedValue))
+                        // Arrays → comma-separated for easier editing; objects → JSON; else string
+                        setEditValue(
+                          Array.isArray(c.proposedValue) ? (c.proposedValue as string[]).join(', ')
+                          : typeof c.proposedValue === 'object' ? JSON.stringify(c.proposedValue)
+                          : String(c.proposedValue)
+                        )
                       }} className="text-[10px] font-medium text-txt-secondary hover:text-txt-primary">
                         {isEditing ? 'Cancel' : 'Edit'}
                       </button>
