@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 
 export async function POST(req: Request) {
   try {
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
     if (message && process.env.ANTHROPIC_API_KEY) {
       try {
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+        const timer = startTimer()
         const res = await anthropic.messages.create({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 100,
@@ -68,6 +70,14 @@ export async function POST(req: Request) {
         const aiText = res.content[0].type === 'text' ? res.content[0].text : '{}'
         const parsed = JSON.parse(aiText.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as { intent?: string; confidence?: number }
         const intent = parsed.intent
+
+        logAiCall({
+          tenantId: buyer.tenantId, userId: null,
+          type: 'buyer_scoring', pageContext: `buyer:${buyer.id}`,
+          input: `Buyer response: "${message}"`, output: aiText.slice(0, 500),
+          tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
+          durationMs: timer(), model: 'claude-haiku-4-5-20251001',
+        }).catch(() => {})
 
         if (intent) {
           await db.propertyBuyerStage.updateMany({

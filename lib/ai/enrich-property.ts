@@ -6,6 +6,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -21,6 +22,7 @@ export async function enrichPropertyWithAI(propertyId: string) {
     const property = await db.property.findUnique({
       where: { id: propertyId },
       select: {
+        tenantId: true,
         address: true, city: true, state: true, zip: true,
         beds: true, baths: true, sqft: true, yearBuilt: true,
         propertyType: true, description: true, fieldSources: true,
@@ -28,6 +30,9 @@ export async function enrichPropertyWithAI(propertyId: string) {
       },
     })
     if (!property) return
+
+    const tenantId = property.tenantId
+    const timer = startTimer()
 
     // Use Claude to generate estimates
     const prompt = `You are a real estate analyst. For this property, provide estimates:
@@ -52,6 +57,15 @@ Base estimates on the location, size, and year. If insufficient data, use null.`
     })
 
     const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
+
+    logAiCall({
+      tenantId, userId: null,
+      type: 'property_enrich', pageContext: `property:${propertyId}`,
+      input: `Enrich ${property.address}`, output: text.slice(0, 5000),
+      tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
+      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+    }).catch(() => {})
+
     const match = text.match(/\{[\s\S]*\}/)
     if (!match) throw new Error('No JSON in response')
 

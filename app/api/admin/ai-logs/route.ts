@@ -29,12 +29,9 @@ export async function GET(req: Request) {
     ]
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const whereTyped = where as any
-
   const [logs, total, stats] = await Promise.all([
     db.aiLog.findMany({
-      where: whereTyped,
+      where: where as Parameters<typeof db.aiLog.findMany>[0] extends { where?: infer W } ? W : never,
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset,
@@ -45,7 +42,7 @@ export async function GET(req: Request) {
         estimatedCost: true, durationMs: true, model: true,
       },
     }),
-    db.aiLog.count({ where: whereTyped }),
+    db.aiLog.count({ where: where as Parameters<typeof db.aiLog.count>[0] extends { where?: infer W } ? W : never }),
     // Stats
     Promise.all([
       db.aiLog.count({ where: { tenantId: session.tenantId, createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } } }),

@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import Anthropic from '@anthropic-ai/sdk'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 
 export async function POST(
   req: Request,
@@ -18,6 +19,7 @@ export async function POST(
 
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+    const timer = startTimer()
     const res = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
@@ -33,6 +35,15 @@ Updated action:`,
     })
 
     const newLabel = res.content[0].type === 'text' ? res.content[0].text.trim().replace(/^["']|["']$/g, '') : currentLabel
+
+    logAiCall({
+      tenantId: session.tenantId, userId: session.userId,
+      type: 'action_execution', pageContext: `call:${params.id}`,
+      input: `Edit: "${currentLabel}" → "${instruction}"`, output: newLabel,
+      tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
+      durationMs: timer(), model: 'claude-haiku-4-5-20251001',
+    }).catch(() => {})
+
     return NextResponse.json({ newLabel })
   } catch {
     return NextResponse.json({ error: 'AI edit failed' }, { status: 500 })

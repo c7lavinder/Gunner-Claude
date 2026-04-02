@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -51,6 +52,7 @@ export async function POST(
 
     const prop = call.property
     const transcript = call.transcript?.slice(0, 3000) ?? call.aiSummary ?? ''
+    const timer = startTimer()
 
     const res = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -81,6 +83,15 @@ Return ONLY the JSON array, no other text.`,
     })
 
     const text = res.content[0].type === 'text' ? res.content[0].text : '[]'
+
+    logAiCall({
+      tenantId: session.tenantId, userId: session.userId,
+      type: 'property_enrich', pageContext: `call:${params.id}`,
+      input: `Property suggestions for ${prop.address}`, output: text.slice(0, 5000),
+      tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
+      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+    }).catch(() => {})
+
     const match = text.match(/\[[\s\S]*\]/)
     const suggestions = match
       ? JSON.parse(match[0]).map((s: Record<string, unknown>) => ({ ...s, applied: false }))

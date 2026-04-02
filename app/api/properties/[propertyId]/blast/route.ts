@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -95,6 +96,7 @@ export async function POST(
         property.description ? `Description: ${property.description}` : null,
       ].filter(Boolean).join('\n')
 
+      const blastTimer = startTimer()
       for (const t of selectedTiers) {
         const tierContext: Record<string, string> = {
           priority: 'Priority Buyer: exclusive early access, urgency, high confidence tone. Emphasize scarcity and deal quality.',
@@ -146,6 +148,16 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
           }
 
           results[t] = { emailSubject, emailBody, smsBody: smsText.trim() }
+
+          logAiCall({
+            tenantId, userId: session.userId,
+            type: 'blast_gen', pageContext: `property:${params.propertyId}`,
+            input: `Blast gen for ${property.address} tier=${t}`,
+            output: `Email: ${emailSubject} | SMS: ${smsText.trim().slice(0, 100)}`,
+            tokensIn: (emailRes.usage?.input_tokens ?? 0) + (smsRes.usage?.input_tokens ?? 0),
+            tokensOut: (emailRes.usage?.output_tokens ?? 0) + (smsRes.usage?.output_tokens ?? 0),
+            durationMs: blastTimer(), model: 'claude-sonnet-4-20250514',
+          }).catch(() => {})
         } catch {
           results[t] = {
             emailSubject: `Investment Opportunity: ${property.address}`,

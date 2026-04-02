@@ -7,6 +7,7 @@ import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import type { UserRole } from '@/types/roles'
 import { subDays, startOfWeek } from 'date-fns'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -250,6 +251,7 @@ RULES:
 - If they ask you to take an action in GHL (send SMS, create task, etc), tell them to use the Actions button in the interface
 `
 
+  const timer = startTimer()
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
@@ -259,6 +261,15 @@ RULES:
 
   const content = response.content[0]
   if (content.type !== 'text') throw new Error('Unexpected response type')
+
+  const lastUserContent = messages.filter(m => m.role === 'user').pop()?.content ?? ''
+  logAiCall({
+    tenantId, userId,
+    type: 'assistant_chat', pageContext: 'coach',
+    input: lastUserContent.slice(0, 5000), output: content.text.slice(0, 5000),
+    tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
+    durationMs: timer(), model: 'claude-sonnet-4-6',
+  }).catch(() => {})
 
   // Save to coach_logs
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()

@@ -67,6 +67,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as never },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
+    { href: `${base}/ai-logs`, label: 'AI Logs', adminOnly: true },
     // { href: `${base}/training`, label: 'Training', permission: 'calls.view.own' as never },
   ]
 

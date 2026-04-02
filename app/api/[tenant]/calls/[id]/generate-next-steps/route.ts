@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -68,6 +69,8 @@ export async function POST(
       ? `Generate exactly 1 action of type "${requestedType}". ${userSummary ? `User's description: "${userSummary}"` : ''}`
       : `Generate 3-5 specific next step actions. Do NOT duplicate action types already generated: ${existingTypes.join(', ') || 'none yet'}.`
 
+    const timer = startTimer()
+    const userContent = `You are a real estate wholesaling CRM assistant. Based on this call, ${typeInstruction}`
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1500,
@@ -112,6 +115,14 @@ Transcript: ${transcriptExcerpt}${correctionContext}`,
 
     const text = response.content[0]
     if (text.type !== 'text') throw new Error('Unexpected response')
+
+    logAiCall({
+      tenantId: session.tenantId, userId: session.userId,
+      type: 'next_steps', pageContext: `call:${params.id}`,
+      input: userContent.slice(0, 5000), output: text.text.slice(0, 5000),
+      tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
+      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+    }).catch(() => {})
 
     const jsonMatch = text.text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) throw new Error('No JSON array found in response')
