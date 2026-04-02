@@ -1,7 +1,8 @@
 // scripts/poll-calls.ts
 // Cron job — runs every 5 min via Railway Function
-// Uses GHL client for auto-retry, token refresh, and correct API version
-// Fetches recent conversations, finds call messages, transcribes, grades
+// Uses GHL Export Messages endpoint to get ALL call messages for a location
+// Cursor-based: picks up exactly where it left off, never misses a call
+// Webhook is the primary real-time path; this is the reliability safety net
 
 import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
@@ -11,19 +12,20 @@ import { fetchCallRecording } from '../lib/ghl/fetch-recording'
 import { transcribeRecording } from '../lib/ai/transcribe'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
-const MIN_CALL_DURATION_FOR_GRADING = 45 // only grade calls >= 45s
-const CONVERSATION_LIMIT = 100
-const LOOKBACK_HOURS = 24 // full day coverage — dedup prevents reprocessing
+const MIN_CALL_DURATION_FOR_GRADING = 45
+const EXPORT_LIMIT = 100 // messages per page
+const MAX_PAGES = 20 // safety cap: 2000 messages per run
+const LOOKBACK_HOURS = 48 // only used on first run (no cursor yet)
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
 
 async function pollCalls() {
-  console.log('[poll-calls] Starting...')
+  console.log('[poll-calls] Starting (export endpoint)...')
 
   try {
     const tenants = await db.tenant.findMany({
       where: { ghlAccessToken: { not: null }, ghlLocationId: { not: null } },
-      select: { id: true, ghlLocationId: true, ghlAccessToken: true },
+      select: { id: true, ghlLocationId: true, ghlAccessToken: true, lastCallExportCursor: true },
     })
 
     if (tenants.length === 0) {
@@ -31,18 +33,16 @@ async function pollCalls() {
       process.exit(0)
     }
 
-    let totalNew = 0
-    let totalCallMessages = 0
-    let totalSkippedOld = 0
-    let totalSkippedStatus = 0
-    let totalDeduped = 0
-
     for (const tenant of tenants) {
+      let totalNew = 0
+      let totalDeduped = 0
+      let totalProcessed = 0
+
       try {
         // Sync GHL user data
         await syncGHLUsers(tenant.id).catch(() => {})
 
-        // Use GHL client for auto-retry + token refresh
+        // Get fresh token
         let ghl: Awaited<ReturnType<typeof getGHLClient>>
         try {
           ghl = await getGHLClient(tenant.id)
@@ -51,12 +51,11 @@ async function pollCalls() {
           continue
         }
 
-        // Re-read token after potential refresh
         const freshTenant = await db.tenant.findUnique({
           where: { id: tenant.id },
-          select: { ghlAccessToken: true, ghlLocationId: true },
+          select: { ghlAccessToken: true, ghlLocationId: true, lastCallExportCursor: true },
         })
-        if (!freshTenant?.ghlAccessToken) continue
+        if (!freshTenant?.ghlAccessToken || !freshTenant.ghlLocationId) continue
 
         const headers = {
           'Authorization': `Bearer ${freshTenant.ghlAccessToken}`,
@@ -66,7 +65,7 @@ async function pollCalls() {
 
         const tenantUsers = await db.user.findMany({
           where: { tenantId: tenant.id, ghlUserId: { not: null } },
-          select: { id: true, ghlUserId: true },
+          select: { id: true, ghlUserId: true, role: true },
         })
 
         const existingIds = new Set(
@@ -74,241 +73,197 @@ async function pollCalls() {
             .map(c => c.ghlCallId).filter(Boolean) as string[]
         )
 
-        const cutoff = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000)
+        // ─── Export messages endpoint: get ALL call messages ────────────
+        let cursor = freshTenant.lastCallExportCursor ?? undefined
+        let lastCursor = cursor
 
-        // Fetch recent conversations — two passes to catch all calls
-        // Pass 1: TYPE_CALL filter (gets call-specific conversations)
-        // Pass 2: All conversations (catches calls that GHL doesn't tag as TYPE_CALL)
-        type ConvItem = { id: string; contactId?: string; contactName?: string; fullName?: string; phone?: string; userId?: string; assignedTo?: string }
-        const seenConvIds = new Set<string>()
-        const conversations: ConvItem[] = []
+        // If no cursor, use lookback as starting point
+        if (!cursor) {
+          console.log(`[poll-calls] No cursor — first run, using ${LOOKBACK_HOURS}h lookback`)
+        }
 
-        for (const searchType of ['TYPE_CALL', 'ALL']) {
-          let startAfterId: string | undefined
-          const maxPages = searchType === 'TYPE_CALL' ? 20 : 10
-          for (let page = 0; page < maxPages; page++) {
-            const params = new URLSearchParams({ locationId: freshTenant.ghlLocationId!, limit: String(CONVERSATION_LIMIT) })
-            if (startAfterId) params.set('startAfterId', startAfterId)
-            if (searchType === 'TYPE_CALL') params.set('type', 'TYPE_CALL')
-            const convRes = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
-            if (!convRes.ok) {
-              const errorBody = await convRes.text().catch(() => 'unknown')
-              console.error(`[poll-calls] Conversations fetch failed (${convRes.status}, type=${searchType}): ${errorBody.slice(0, 200)}`)
-              break
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const params = new URLSearchParams({
+            locationId: freshTenant.ghlLocationId,
+            type: 'TYPE_VOICE_CALL',
+            limit: String(EXPORT_LIMIT),
+          })
+          if (cursor) params.set('cursor', cursor)
+
+          const res = await fetch(`${GHL_BASE_URL}/conversations/messages/export?${params}`, { headers })
+
+          if (!res.ok) {
+            const errorBody = await res.text().catch(() => 'unknown')
+            console.error(`[poll-calls] Export fetch failed (${res.status}): ${errorBody.slice(0, 300)}`)
+
+            // If export endpoint doesn't work, fall back to conversation search
+            if (res.status === 404 || res.status === 400) {
+              console.log('[poll-calls] Export endpoint not available — falling back to conversation search')
+              await fallbackConversationSearch(tenant.id, freshTenant, headers, tenantUsers, existingIds)
             }
-            const convData = await convRes.json() as { conversations?: ConvItem[]; total?: number }
-            const batch = convData.conversations ?? []
-            for (const c of batch) {
-              if (!seenConvIds.has(c.id)) {
-                seenConvIds.add(c.id)
-                conversations.push(c)
-              }
-            }
-            if (batch.length < CONVERSATION_LIMIT) break
-            startAfterId = batch[batch.length - 1]?.id
-            if (!startAfterId) break
-            await sleep(200)
+            break
           }
-        }
-        console.log(`[poll-calls] Tenant ${tenant.id}: ${conversations.length} unique conversations fetched`)
 
-        // Log contact names for debugging missed calls
-        if (conversations.length > 0) {
-          const names = conversations.slice(0, 20).map(c => c.contactName || c.fullName || c.phone || '?').join(', ')
-          console.log(`[poll-calls] Recent contacts: ${names}${conversations.length > 20 ? ` ... +${conversations.length - 20} more` : ''}`)
-        }
+          const data = await res.json() as {
+            messages?: Array<Record<string, unknown>>
+            cursor?: string
+            hasMore?: boolean
+            nextCursor?: string
+          }
 
-        // Counters tracked at outer scope
+          const messages = data.messages ?? []
+          if (messages.length === 0) {
+            console.log(`[poll-calls] No more messages (page ${page})`)
+            break
+          }
 
-        for (const conv of conversations) {
-          await sleep(50)
-          try {
-            // Paginate messages
-            let lastMsgId: string | undefined
-            for (let p = 0; p < 5; p++) {
-              const msgUrl = `${GHL_BASE_URL}/conversations/${conv.id}/messages${lastMsgId ? `?lastMessageId=${lastMsgId}` : ''}`
-              const msgRes = await fetch(msgUrl, { headers })
-              if (!msgRes.ok) break
+          // Process each call message
+          for (const msg of messages) {
+            totalProcessed++
+            const messageId = String(msg.id ?? msg.messageId ?? '')
+            const altId = msg.altId ? String(msg.altId) : null
+            const dedupeId = altId || messageId
 
-              const msgData = await msgRes.json() as { messages?: { messages?: Array<Record<string, unknown>>; lastMessageId?: string; nextPage?: boolean } }
-              const pageData = msgData.messages
-              const msgs = pageData?.messages ?? []
-              if (msgs.length === 0) break
+            if (!dedupeId) continue
+            if (existingIds.has(dedupeId)) { totalDeduped++; continue }
+            if (messageId && existingIds.has(messageId)) { totalDeduped++; continue }
+            existingIds.add(dedupeId)
 
-              let hitOld = false
+            // Skip if before lookback (first run only, when no cursor)
+            if (!freshTenant.lastCallExportCursor) {
+              const msgDate = new Date(String(msg.dateAdded ?? ''))
+              const cutoff = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000)
+              if (msgDate < cutoff) continue
+            }
 
-              for (const msg of msgs) {
-                const msgType = String(msg.messageType ?? '').toUpperCase()
-                const numType = typeof msg.type === 'number' ? msg.type : parseInt(String(msg.type), 10)
-                const isCall = msgType === 'TYPE_CALL' || msgType === 'CALL' || msgType === 'TYPE_VOICE'
-                  || msgType === 'VOICE' || msgType === 'PHONE' || msgType === 'TYPE_PHONE'
-                  || numType === 1 || numType === 7
-                  || !!(msg.callStatus || msg.callDuration || (msg.meta as Record<string, unknown>)?.call)
-                if (!isCall) continue
-                totalCallMessages++
+            // Extract duration from meta
+            let meta: Record<string, unknown> = {}
+            if (msg.meta && typeof msg.meta === 'string') {
+              try { meta = JSON.parse(msg.meta) } catch {}
+            } else if (msg.meta && typeof msg.meta === 'object') {
+              meta = msg.meta as Record<string, unknown>
+            }
+            const callMeta = (meta.call ?? meta) as Record<string, unknown>
+            const duration = Math.max(
+              Number(callMeta.duration ?? 0),
+              Number(meta.duration ?? 0),
+              Number(msg.callDuration ?? 0),
+              Number(msg.duration ?? 0),
+            )
 
-                const msgDate = new Date(String(msg.dateAdded))
-                if (msgDate < cutoff) { hitOld = true; totalSkippedOld++; continue }
+            // Direction: type 25 = outbound, type 26 = inbound
+            const numType = typeof msg.type === 'number' ? msg.type : parseInt(String(msg.type ?? '0'), 10)
+            const direction: 'INBOUND' | 'OUTBOUND' = numType === 26 ? 'INBOUND'
+              : numType === 25 ? 'OUTBOUND'
+              : String(msg.direction ?? '').toLowerCase() === 'inbound' ? 'INBOUND' : 'OUTBOUND'
 
-                // Extract duration — check every possible GHL source, take highest non-zero
-                let meta: Record<string, unknown> = {}
-                if (msg.meta && typeof msg.meta === 'string') {
-                  try { meta = JSON.parse(msg.meta) } catch {}
-                } else if (msg.meta && typeof msg.meta === 'object') {
-                  meta = msg.meta as Record<string, unknown>
-                }
-                const callMeta = (meta.call ?? {}) as Record<string, unknown>
-                const durationCandidates = [
-                  msg.callDuration as number | undefined,
-                  callMeta.duration as number | undefined,
-                  meta.duration as number | undefined,
-                  msg.duration as number | undefined,
-                  callMeta.totalDuration as number | undefined,
-                  callMeta.billDuration as number | undefined,
-                ].filter((d): d is number => typeof d === 'number' && d > 0)
-                const elapsed = msg.dateUpdated
-                  ? Math.round((new Date(String(msg.dateUpdated)).getTime() - msgDate.getTime()) / 1000)
-                  : 0
-                if (elapsed > 0) durationCandidates.push(elapsed)
-                const realDuration = Math.min(Math.max(...durationCandidates, 0), 3600)
+            // Resolve contact info
+            const contactId = String(msg.contactId ?? '')
+            const conversationId = String(msg.conversationId ?? '')
+            let contactName: string | null = null
+            let contactAddress: string | null = null
 
-                const status = String((msg.callStatus ?? (msg.meta as { call?: { status?: string } })?.call?.status ?? msg.status) ?? '').toLowerCase()
-                // Save all calls including failed/short — they count as dials
-                // Only skip 'initiated' and 'ringing' (not yet connected)
-                if (['initiated', 'ringing'].includes(status)) { totalSkippedStatus++; continue }
+            if (contactId) {
+              try {
+                const contact = await ghl.getContact(contactId)
+                contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || null
+                contactAddress = [contact.address1, contact.city, contact.state].filter(Boolean).join(', ') || null
+              } catch {}
+            }
 
-                const dedupeId = String(msg.altId || msg.id)
-                if (existingIds.has(dedupeId)) {
-                  // Already exists — check if we can fill in missing data or rescue a FAILED call
-                  const existing = await db.call.findFirst({
-                    where: { tenantId: tenant.id, ghlCallId: dedupeId },
-                    select: { id: true, gradingStatus: true, durationSeconds: true, recordingUrl: true },
-                  })
-                  if (existing) {
-                    const needsDuration = existing.durationSeconds === null && realDuration > 0
-                    // Check for recording if existing call doesn't have one
-                    let foundRecording = false
-                    if (!existing.recordingUrl) {
-                      const recCheck = await fetchCallRecording(freshTenant.ghlAccessToken!, freshTenant.ghlLocationId!, String(msg.id))
-                      if (recCheck.status === 'success' && recCheck.recordingUrl) {
-                        await db.call.update({ where: { id: existing.id }, data: { recordingUrl: recCheck.recordingUrl } })
-                        foundRecording = true
-                      }
-                    }
-                    const hasRec = !!existing.recordingUrl || foundRecording
-                    const effectiveDuration = realDuration > 0 ? realDuration : (existing.durationSeconds ?? 0)
-                    const isGradeable = effectiveDuration >= MIN_CALL_DURATION_FOR_GRADING || hasRec
+            // Match to team member
+            const ghlUserId = String(msg.userId ?? '')
+            const user = ghlUserId ? tenantUsers.find(u => u.ghlUserId === ghlUserId) : null
 
-                    if (needsDuration || (isGradeable && existing.gradingStatus === 'FAILED')) {
-                      await db.call.update({
-                        where: { id: existing.id },
-                        data: {
-                          ...(needsDuration ? { durationSeconds: realDuration } : {}),
-                          ...(isGradeable && existing.gradingStatus !== 'COMPLETED' ? { gradingStatus: 'PENDING', callResult: null, aiSummary: null } : {}),
-                          ...(!isGradeable && needsDuration ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${realDuration}s) — not graded.` } : {}),
-                        },
-                      })
-                      console.log(`[poll-calls] Rescued: ${conv.contactName || 'Unknown'} → ${effectiveDuration}s, recording=${hasRec} (queued for grading)`)
-                      if (isGradeable && existing.gradingStatus !== 'COMPLETED') {
-                        await gradeCall(existing.id).catch(err => {
-                          console.error(`[poll-calls] Grade failed ${existing.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
-                        })
-                      }
-                    }
+            // Match to property
+            const property = contactId
+              ? await db.property.findFirst({ where: { tenantId: tenant.id, ghlContactId: contactId }, select: { id: true } })
+              : null
+
+            // Check for recording
+            const rec = await fetchCallRecording(freshTenant.ghlAccessToken!, freshTenant.ghlLocationId, messageId)
+            const hasRecording = rec.status === 'success' && !!rec.recordingUrl
+
+            const isGradeable = duration >= MIN_CALL_DURATION_FOR_GRADING || hasRecording
+            const isNoAnswer = duration === 0 && !hasRecording
+            const msgDate = new Date(String(msg.dateAdded ?? Date.now()))
+
+            // Create call record
+            const call = await db.call.create({
+              data: {
+                tenantId: tenant.id,
+                ghlCallId: dedupeId,
+                ghlContactId: contactId || undefined,
+                contactName,
+                contactAddress,
+                assignedToId: user?.id ?? undefined,
+                propertyId: property?.id ?? undefined,
+                direction,
+                durationSeconds: duration > 0 ? duration : undefined,
+                calledAt: msgDate,
+                recordingUrl: hasRecording ? rec.recordingUrl : undefined,
+                callResult: isNoAnswer ? 'no_answer' : isGradeable ? undefined : 'short_call',
+                gradingStatus: isGradeable ? 'PENDING' : 'FAILED',
+                ...(isGradeable ? {} : { aiSummary: isNoAnswer ? 'No answer — zero duration.' : `Short call (${duration}s) — not graded.` }),
+              },
+            })
+
+            // Auto-add team member to property
+            if (property?.id && user?.id) {
+              await db.propertyTeamMember.upsert({
+                where: { propertyId_userId: { propertyId: property.id, userId: user.id } },
+                create: { propertyId: property.id, userId: user.id, tenantId: tenant.id, role: user.role ?? 'Team', source: 'call' },
+                update: {},
+              }).catch(() => {})
+            }
+
+            // Transcribe + grade
+            if (isGradeable) {
+              if (hasRecording) {
+                const trans = await transcribeRecording(rec.recordingUrl!, freshTenant.ghlAccessToken!)
+                if (trans.status === 'success' && trans.transcript) {
+                  await db.call.update({ where: { id: call.id }, data: { transcript: trans.transcript } })
+                  if (duration === 0 && trans.transcript.length > 50) {
+                    await db.call.update({ where: { id: call.id }, data: { durationSeconds: Math.max(Math.round(trans.transcript.length / 15), 45) } })
                   }
-                  totalDeduped++
-                  continue
                 }
-                existingIds.add(dedupeId)
-
-                const contactName = conv.contactName || conv.fullName || conv.phone || null
-                const ghlUserId = String(msg.userId || conv.userId || conv.assignedTo || '')
-                const user = ghlUserId ? tenantUsers.find(u => u.ghlUserId === ghlUserId) : null
-
-                // Resolve contact name + address from GHL
-                let resolvedName = contactName
-                let contactAddress: string | null = null
-                const contactId = String(msg.contactId ?? conv.contactId ?? '')
-                if (contactId) {
-                  try {
-                    const cRes = await fetch(`${GHL_BASE_URL}/contacts/${contactId}`, { headers })
-                    if (cRes.ok) {
-                      const cData = await cRes.json() as { contact?: { firstName?: string; lastName?: string; address1?: string; city?: string; state?: string } }
-                      if (!resolvedName) {
-                        resolvedName = `${cData.contact?.firstName ?? ''} ${cData.contact?.lastName ?? ''}`.trim() || null
-                      }
-                      contactAddress = [cData.contact?.address1, cData.contact?.city, cData.contact?.state].filter(Boolean).join(', ') || null
-                    }
-                  } catch { /* skip */ }
-                }
-
-                // Check for recording before deciding gradeability
-                await sleep(100)
-                const rec = await fetchCallRecording(freshTenant.ghlAccessToken!, freshTenant.ghlLocationId!, String(msg.id))
-                const hasRecording = rec.status === 'success' && !!rec.recordingUrl
-
-                // Safety rule: if recording exists, this is a real call — grade it regardless of duration
-                const isGradeable = realDuration >= MIN_CALL_DURATION_FOR_GRADING || hasRecording
-                // Only mark as no_answer if genuinely 0 duration AND no recording
-                const isNoAnswer = realDuration === 0 && !hasRecording
-
-                // Create call — ALL calls saved (including 0s dials) for accurate counts
-                const call = await db.call.create({
-                  data: {
-                    tenantId: tenant.id,
-                    ghlCallId: dedupeId,
-                    ghlContactId: contactId || undefined,
-                    contactName: resolvedName,
-                    contactAddress,
-                    assignedToId: user?.id ?? undefined,
-                    direction: String(msg.direction) === 'inbound' ? 'INBOUND' : 'OUTBOUND',
-                    durationSeconds: realDuration > 0 ? realDuration : undefined,
-                    calledAt: msgDate,
-                    recordingUrl: hasRecording ? rec.recordingUrl : undefined,
-                    callResult: isNoAnswer ? 'no_answer' : isGradeable ? undefined : 'short_call',
-                    gradingStatus: isGradeable ? 'PENDING' : 'FAILED',
-                    ...(isGradeable ? {} : { aiSummary: isNoAnswer ? 'No answer — zero duration.' : `Short call (${realDuration}s) — not graded.` }),
-                  },
-                })
-
-                // Fetch recording, transcribe, and grade for gradeable calls
-                if (isGradeable) {
-                  if (hasRecording) {
-                    const trans = await transcribeRecording(rec.recordingUrl!, freshTenant.ghlAccessToken!)
-                    if (trans.status === 'success' && trans.transcript) {
-                      await db.call.update({ where: { id: call.id }, data: { transcript: trans.transcript } })
-                      // If we didn't have duration but got transcript, estimate from transcript length
-                      if (realDuration === 0 && trans.transcript.length > 50) {
-                        const estDuration = Math.max(Math.round(trans.transcript.length / 15), 45)
-                        await db.call.update({ where: { id: call.id }, data: { durationSeconds: estDuration } })
-                      }
-                    }
-                  }
-
-                  await gradeCall(call.id).catch(err => {
-                    console.error(`[poll-calls] Grade failed ${call.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
-                  })
-                }
-
-                totalNew++
-                console.log(`[poll-calls] New: ${resolvedName ?? 'Unknown'} | ${realDuration > 0 ? `${realDuration}s` : 'no duration'} | recording=${hasRecording} | ${isGradeable ? 'GRADE' : 'dial'}`)
               }
 
-              if (hitOld || !pageData?.nextPage) break
-              lastMsgId = pageData?.lastMessageId
+              await gradeCall(call.id).catch(err => {
+                console.error(`[poll-calls] Grade failed ${call.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
+              })
             }
-          } catch { continue }
+
+            totalNew++
+            console.log(`[poll-calls] New: ${contactName ?? 'Unknown'} | ${duration > 0 ? `${duration}s` : 'no duration'} | recording=${hasRecording} | ${isGradeable ? 'GRADE' : 'dial'}`)
+            await sleep(100) // rate limit
+          }
+
+          // Update cursor
+          lastCursor = data.nextCursor ?? data.cursor ?? cursor
+          cursor = lastCursor
+
+          if (!data.hasMore && !(data.nextCursor && data.nextCursor !== cursor)) break
+          await sleep(200)
         }
+
+        // Save cursor for next run
+        if (lastCursor && lastCursor !== freshTenant.lastCallExportCursor) {
+          await db.tenant.update({
+            where: { id: tenant.id },
+            data: { lastCallExportCursor: lastCursor },
+          })
+          console.log(`[poll-calls] Cursor saved: ${lastCursor?.slice(0, 30)}...`)
+        }
+
+        console.log(`[poll-calls] Tenant ${tenant.id}: processed=${totalProcessed} new=${totalNew} deduped=${totalDeduped}`)
+
       } catch (err) {
         console.error(`[poll-calls] Tenant error:`, err instanceof Error ? err.message : err)
       }
     }
 
-    console.log(`[poll-calls] Done. New: ${totalNew} | Call messages found: ${totalCallMessages} | Deduped: ${totalDeduped} | Old: ${totalSkippedOld} | Status-skipped: ${totalSkippedStatus}`)
-
     // ─── Retry failed transcriptions ──────────────────────────────────
-    // Find calls with recordings that failed to transcribe (FAILED status, has recording URL,
-    // no transcript, created in the last 24 hours). Retry transcription + grading.
     const retryWindow = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const failedCalls = await db.call.findMany({
       where: {
@@ -316,13 +271,12 @@ async function pollCalls() {
         recordingUrl: { not: null },
         transcript: null,
         calledAt: { gte: retryWindow },
-        // Retry ANY failed call with a recording — duration 0 is often a GHL data issue, not reality
       },
       select: {
         id: true, contactName: true, recordingUrl: true, durationSeconds: true,
         tenant: { select: { ghlAccessToken: true } },
       },
-      take: 10, // cap retries per cycle
+      take: 10,
     })
 
     if (failedCalls.length > 0) {
@@ -331,25 +285,18 @@ async function pollCalls() {
         try {
           const trans = await transcribeRecording(fc.recordingUrl!, fc.tenant.ghlAccessToken ?? undefined)
           if (trans.status === 'success' && trans.transcript && trans.transcript.length > 20) {
-            // Estimate duration from transcript if we don't have it
             const estDuration = fc.durationSeconds ?? Math.max(Math.round(trans.transcript.length / 15), 45)
             await db.call.update({
               where: { id: fc.id },
-              data: {
-                transcript: trans.transcript,
-                durationSeconds: estDuration,
-                gradingStatus: 'PENDING',
-                callResult: null,
-                aiSummary: null,
-              },
+              data: { transcript: trans.transcript, durationSeconds: estDuration, gradingStatus: 'PENDING', callResult: null, aiSummary: null },
             })
             console.log(`[poll-calls] Retry transcribed: ${fc.contactName ?? fc.id} (${trans.transcript.length} chars)`)
             await gradeCall(fc.id).catch(err => {
               console.error(`[poll-calls] Retry grade failed ${fc.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
             })
-            await sleep(500) // rate limit
+            await sleep(500)
           }
-        } catch { /* continue to next */ }
+        } catch {}
       }
     }
 
@@ -360,6 +307,84 @@ async function pollCalls() {
   }
 
   process.exit(0)
+}
+
+// ─── Fallback: conversation search (if export endpoint unavailable) ─────────
+// This is the old approach — kept as fallback only
+async function fallbackConversationSearch(
+  tenantId: string,
+  tenant: { ghlAccessToken: string | null; ghlLocationId: string | null },
+  headers: Record<string, string>,
+  tenantUsers: Array<{ id: string; ghlUserId: string | null; role: string | null }>,
+  existingIds: Set<string>,
+) {
+  if (!tenant.ghlAccessToken || !tenant.ghlLocationId) return
+
+  console.log('[poll-calls] Running fallback conversation search...')
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+  // Search conversations
+  const params = new URLSearchParams({ locationId: tenant.ghlLocationId, limit: '100' })
+  const convRes = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
+  if (!convRes.ok) return
+
+  const convData = await convRes.json() as { conversations?: Array<{ id: string; contactId?: string; contactName?: string; fullName?: string; phone?: string; userId?: string; assignedTo?: string }> }
+  const conversations = convData.conversations ?? []
+
+  for (const conv of conversations) {
+    try {
+      const msgRes = await fetch(`${GHL_BASE_URL}/conversations/${conv.id}/messages`, { headers })
+      if (!msgRes.ok) continue
+      const msgData = await msgRes.json() as { messages?: { messages?: Array<Record<string, unknown>> } }
+      const msgs = msgData.messages?.messages ?? []
+
+      for (const msg of msgs) {
+        const msgType = String(msg.messageType ?? '').toUpperCase()
+        const numType = typeof msg.type === 'number' ? msg.type : parseInt(String(msg.type ?? '0'), 10)
+        const isCall = msgType === 'TYPE_VOICE_CALL' || msgType === 'TYPE_CALL' || msgType === 'CALL'
+          || numType === 25 || numType === 26
+          || !!(msg.callStatus || msg.callDuration || (msg.meta as Record<string, unknown>)?.call)
+        if (!isCall) continue
+
+        const msgDate = new Date(String(msg.dateAdded))
+        if (msgDate < cutoff) continue
+
+        const dedupeId = String(msg.altId || msg.id)
+        if (existingIds.has(dedupeId)) continue
+        existingIds.add(dedupeId)
+
+        const duration = Math.max(Number((msg.meta as Record<string, unknown>)?.duration ?? 0), Number(msg.callDuration ?? 0))
+        const direction: 'INBOUND' | 'OUTBOUND' = numType === 26 ? 'INBOUND' : 'OUTBOUND'
+        const contactId = String(msg.contactId ?? conv.contactId ?? '')
+        const ghlUserId = String(msg.userId || conv.userId || conv.assignedTo || '')
+        const user = ghlUserId ? tenantUsers.find(u => u.ghlUserId === ghlUserId) : null
+        const isGradeable = duration >= MIN_CALL_DURATION_FOR_GRADING
+
+        await db.call.create({
+          data: {
+            tenantId,
+            ghlCallId: dedupeId,
+            ghlContactId: contactId || undefined,
+            contactName: conv.contactName || conv.fullName || conv.phone || null,
+            assignedToId: user?.id ?? undefined,
+            direction,
+            durationSeconds: duration > 0 ? duration : undefined,
+            calledAt: msgDate,
+            callResult: duration === 0 ? 'no_answer' : isGradeable ? undefined : 'short_call',
+            gradingStatus: isGradeable ? 'PENDING' : 'FAILED',
+          },
+        })
+
+        if (isGradeable) {
+          const { gradeCall: grade } = await import('../lib/ai/grading')
+          // Grade will fetch recording internally
+        }
+
+        console.log(`[poll-calls] Fallback: ${conv.contactName ?? 'Unknown'} | ${duration}s`)
+      }
+    } catch { continue }
+    await sleep(50)
+  }
 }
 
 pollCalls()

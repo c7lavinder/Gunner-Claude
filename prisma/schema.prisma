@@ -34,6 +34,9 @@ model Tenant {
   ghlTokenExpiry   DateTime? @map("ghl_token_expiry")
   ghlWebhookId     String? @map("ghl_webhook_id")
 
+  // Call export cursor — tracks last processed message for reliable call ingestion
+  lastCallExportCursor String? @map("last_call_export_cursor")
+
   // Property trigger config
   propertyPipelineId    String? @map("property_pipeline_id")    // which GHL pipeline (acquisition)
   propertyTriggerStage  String? @map("property_trigger_stage")  // which stage creates a property
