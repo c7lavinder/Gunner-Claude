@@ -133,22 +133,28 @@ export async function syncAllBuyersFromGHL(tenantId: string): Promise<number> {
   console.log(`[BuyerSync] Found ${contactIds.length} contacts`)
 
   let synced = 0
+  let errors = 0
   for (let i = 0; i < contactIds.length; i += 20) {
     const batch = contactIds.slice(i, i + 20)
     const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
     for (const c of contacts) {
       if (!c) continue
       try {
-        await syncBuyerFromGHL(tenantId, {
+        const parsed = await syncBuyerFromGHL(tenantId, {
           id: c.id, firstName: c.firstName, lastName: c.lastName,
           phone: c.phone, email: c.email, city: c.city, state: c.state,
           tags: c.tags ?? [], customFields: c.customFields ?? [],
         })
         synced++
-      } catch {}
+        if (synced <= 3) console.log(`[BuyerSync] Sample: ${parsed.name} | markets=[${parsed.markets}] | tier=${parsed.criteria.tier}`)
+      } catch (err) {
+        errors++
+        if (errors <= 5) console.error(`[BuyerSync] Failed to sync ${c.firstName} ${c.lastName}:`, err instanceof Error ? err.message : err)
+      }
     }
     if ((i + 20) % 100 === 0) console.log(`[BuyerSync] Progress: ${Math.min(i + 20, contactIds.length)}/${contactIds.length}`)
   }
+  if (errors > 0) console.warn(`[BuyerSync] ${errors} sync errors`)
 
   console.log(`[BuyerSync] Synced ${synced} buyers`)
   return synced

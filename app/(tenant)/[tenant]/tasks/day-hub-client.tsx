@@ -357,7 +357,7 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
 
   // SMS confirm modal
   const [showSendConfirm, setShowSendConfirm] = useState(false)
-  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; id: string }>>([])
+  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; phone: string | null; userId: string }>>([])
   const [selectedFromUser, setSelectedFromUser] = useState('')
   const [fromSearch, setFromSearch] = useState('')
   const [fromDropdownOpen, setFromDropdownOpen] = useState(false)
@@ -407,7 +407,11 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
     fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
       .then(r => r.json())
       .then(d => {
-        const members = (d.numbers ?? []).map((n: { name: string; phone: string }) => ({ name: n.name, id: n.phone }))
+        const members = (d.numbers ?? []).map((n: { name: string; phone: string | null; userId: string }) => ({
+          name: n.name,
+          phone: n.phone ?? null,
+          userId: n.userId,
+        }))
         setTeamMembers(members)
       })
       .catch(() => {})
@@ -556,6 +560,9 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
 
   async function confirmSendReply() {
     if (!selectedContact || !replyText.trim() || sendingReply) return
+    // Find the selected team member's phone number to send from
+    const fromMember = teamMembers.find(m => m.name === selectedFromUser)
+    const fromNumber = fromMember?.phone ?? undefined
     setSendingReply(true)
     setShowSendConfirm(false)
     try {
@@ -565,6 +572,7 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
         body: JSON.stringify({
           contactId: selectedContact.contactId,
           message: replyText.trim(),
+          fromNumber,
         }),
       })
       if (res.ok) {
@@ -980,17 +988,18 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
                     style={{ borderColor: 'var(--border-medium)' }}
                   />
                   {fromDropdownOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-surface-primary border rounded-[8px] shadow-ds-float max-h-[120px] overflow-y-auto z-10" style={{ borderColor: 'var(--border-medium)' }}>
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-surface-primary border rounded-[8px] shadow-ds-float max-h-[160px] overflow-y-auto z-10" style={{ borderColor: 'var(--border-medium)' }}>
                       {teamMembers
                         .filter(m => !fromSearch || m.name.toLowerCase().includes(fromSearch.toLowerCase()))
                         .map(m => (
                           <button
-                            key={m.id}
+                            key={m.userId}
                             onMouseDown={e => e.preventDefault()}
                             onClick={() => { setSelectedFromUser(m.name); setFromSearch(''); setFromDropdownOpen(false) }}
-                            className={`w-full text-left px-2.5 py-1.5 text-[10px] hover:bg-surface-secondary ${selectedFromUser === m.name ? 'text-gunner-red font-medium' : 'text-txt-primary'}`}
+                            className={`w-full text-left px-2.5 py-1.5 hover:bg-surface-secondary flex items-center justify-between ${selectedFromUser === m.name ? 'text-gunner-red font-medium' : 'text-txt-primary'}`}
                           >
-                            {m.name}
+                            <span className="text-[10px]">{m.name}</span>
+                            <span className="text-[9px] text-txt-muted ml-2">{m.phone ?? 'No number'}</span>
                           </button>
                         ))}
                       {teamMembers.filter(m => !fromSearch || m.name.toLowerCase().includes(fromSearch.toLowerCase())).length === 0 && (
@@ -999,7 +1008,7 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
                     </div>
                   )}
                 </div>
-                <p className="text-[9px] text-txt-muted mt-0.5">GHL routes to the number used in this conversation</p>
+                <p className="text-[9px] text-txt-muted mt-0.5">SMS will send from the selected team member&apos;s GHL number</p>
               </div>
 
               {/* TO */}

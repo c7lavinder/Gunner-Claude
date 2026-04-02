@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
-  ExternalLink, X, Send, Users, AlertTriangle,
+  ExternalLink, X, Send, Users, AlertTriangle, Flag,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { formatPhone, titleCase } from '@/lib/format'
@@ -556,6 +556,12 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
   })
   const [sources, setSources] = useState<Record<string, string>>(p.fieldSources ?? {})
 
+  // Address editing state
+  const [editingAddress, setEditingAddress] = useState(false)
+  const [addrFields, setAddrFields] = useState({ address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', zip: p.zip ?? '' })
+  const [addrMarket, setAddrMarket] = useState(p.market ?? '')
+  const [savingAddress, setSavingAddress] = useState(false)
+
   // Reset all local state when the selected property changes
   useEffect(() => {
     setVals({
@@ -564,7 +570,47 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
       assignmentFee: p.assignmentFee, finalProfit: p.finalProfit,
     })
     setSources(p.fieldSources ?? {})
+    setEditingAddress(false)
+    setAddrFields({ address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', zip: p.zip ?? '' })
+    setAddrMarket(p.market ?? '')
   }, [p.id])
+
+  // Auto-populate market when zip changes
+  useEffect(() => {
+    if (addrFields.zip && addrFields.zip.length === 5) {
+      fetch(`/api/properties/market-lookup?zip=${addrFields.zip}`)
+        .then(r => r.json())
+        .then(d => { if (d.market) setAddrMarket(d.market) })
+        .catch(() => {})
+    }
+  }, [addrFields.zip])
+
+  async function saveAddress() {
+    setSavingAddress(true)
+    try {
+      const res = await fetch(`/api/properties/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: addrFields.address || undefined,
+          city: addrFields.city || undefined,
+          state: addrFields.state || undefined,
+          zip: addrFields.zip || undefined,
+          market: addrMarket || undefined,
+        }),
+      })
+      if (res.ok) {
+        setEditingAddress(false)
+        // Update local display
+        p.address = addrFields.address
+        p.city = addrFields.city
+        p.state = addrFields.state
+        p.zip = addrFields.zip
+        p.market = addrMarket
+      }
+    } catch {}
+    setSavingAddress(false)
+  }
 
   function handleSaved(field: string, val: string | null, src: string) {
     setVals(prev => ({ ...prev, [field]: val }))
@@ -599,8 +645,40 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
             </button>
           </div>
         </div>
-        <h2 className="text-ds-label font-semibold text-txt-primary">{p.address}</h2>
-        <p className="text-ds-fine text-txt-secondary">{p.city}, {p.state} {p.zip}</p>
+        {editingAddress ? (
+          <div className="space-y-1.5 mt-1">
+            <input value={addrFields.address} onChange={e => setAddrFields(f => ({ ...f, address: e.target.value }))}
+              placeholder="Street address" className="w-full text-ds-fine bg-surface-secondary border rounded-[6px] px-2 py-1" style={{ borderColor: 'var(--border-medium)' }} />
+            <div className="flex gap-1.5">
+              <input value={addrFields.city} onChange={e => setAddrFields(f => ({ ...f, city: e.target.value }))}
+                placeholder="City" className="flex-1 text-ds-fine bg-surface-secondary border rounded-[6px] px-2 py-1" style={{ borderColor: 'var(--border-medium)' }} />
+              <input value={addrFields.state} onChange={e => setAddrFields(f => ({ ...f, state: e.target.value }))}
+                placeholder="ST" className="w-12 text-ds-fine bg-surface-secondary border rounded-[6px] px-2 py-1 text-center" style={{ borderColor: 'var(--border-medium)' }} />
+              <input value={addrFields.zip} onChange={e => setAddrFields(f => ({ ...f, zip: e.target.value }))}
+                placeholder="Zip" className="w-16 text-ds-fine bg-surface-secondary border rounded-[6px] px-2 py-1" style={{ borderColor: 'var(--border-medium)' }} />
+            </div>
+            {addrMarket && <p className="text-[9px] text-txt-muted">Market: <span className="font-medium text-txt-primary">{addrMarket}</span></p>}
+            <div className="flex gap-1.5">
+              <button onClick={saveAddress} disabled={savingAddress}
+                className="text-[10px] font-medium text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-1 rounded-[6px] transition-colors">
+                {savingAddress ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={() => { setEditingAddress(false); setAddrFields({ address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', zip: p.zip ?? '' }) }}
+                className="text-[10px] text-txt-muted hover:text-txt-primary px-2 py-1">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-1.5">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-ds-label font-semibold text-txt-primary">{p.address || <span className="italic text-amber-600">No address</span>}</h2>
+              <p className="text-ds-fine text-txt-secondary">{[p.city, p.state].filter(Boolean).join(', ')} {p.zip ?? ''}</p>
+            </div>
+            <button onClick={() => setEditingAddress(true)} title="Edit address"
+              className="text-txt-muted hover:text-amber-600 transition-colors mt-0.5 shrink-0">
+              <Flag size={13} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Body — scrollable */}
@@ -643,13 +721,8 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
         {/* Contacts — with add */}
         <DrawerContacts propertyId={p.id} initialSellers={p.sellers} />
 
-        {/* Assigned */}
-        {p.assignedTo && (
-          <div>
-            <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Assigned To</p>
-            <p className="text-ds-fine text-txt-primary font-medium">{p.assignedTo.name}</p>
-          </div>
-        )}
+        {/* Team Members — with add/remove */}
+        <DrawerTeam propertyId={p.id} tenantSlug={tenantSlug} />
 
         {/* AI Actions */}
         <DrawerInlineAI propertyId={p.id} />
@@ -796,6 +869,121 @@ function DrawerContacts({ propertyId, initialSellers }: {
                   <X size={10} />
                 </button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Drawer Team Members (with add/remove) ─────────────────────────────────
+
+const TEAM_ROLES = ['Admin', 'Lead Manager', 'Acquisition Manager', 'Disposition Manager']
+
+function DrawerTeam({ propertyId, tenantSlug }: { propertyId: string; tenantSlug: string }) {
+  const [members, setMembers] = useState<Array<{ id: string; userId: string; name: string; role: string; userRole: string; source: string }>>([])
+  const [allUsers, setAllUsers] = useState<Array<{ id: string; name: string; role: string }>>([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [selectedRole, setSelectedRole] = useState('Lead Manager')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    setShowAdd(false)
+    fetch(`/api/properties/${propertyId}/team`)
+      .then(r => r.json())
+      .then(d => { setMembers(d.members ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [propertyId])
+
+  useEffect(() => {
+    fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
+      .then(r => r.json())
+      .then(d => {
+        setAllUsers((d.numbers ?? []).map((n: { name: string; userId: string }) => ({
+          id: n.userId, name: n.name, role: '',
+        })))
+      })
+      .catch(() => {})
+  }, [tenantSlug])
+
+  async function addMember() {
+    if (!selectedUserId) return
+    const res = await fetch(`/api/properties/${propertyId}/team`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: selectedUserId, role: selectedRole }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setMembers(prev => [...prev.filter(m => m.userId !== selectedUserId), data.member])
+      setShowAdd(false)
+      setSelectedUserId('')
+    }
+  }
+
+  async function removeMember(userId: string) {
+    await fetch(`/api/properties/${propertyId}/team`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    })
+    setMembers(prev => prev.filter(m => m.userId !== userId))
+  }
+
+  // Users not yet on the team
+  const availableUsers = allUsers.filter(u => !members.some(m => m.userId === u.id))
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Team</p>
+        <button onClick={() => setShowAdd(!showAdd)} className="text-txt-muted hover:text-gunner-red transition-colors">
+          <Plus size={12} />
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="bg-surface-secondary rounded-[8px] p-2.5 mb-2 space-y-1.5">
+          <select value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}
+            className="w-full text-[10px] bg-white border rounded-[6px] px-2 py-1.5" style={{ borderColor: 'var(--border-medium)' }}>
+            <option value="">Select team member...</option>
+            {availableUsers.map(u => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+          <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
+            className="w-full text-[10px] bg-white border rounded-[6px] px-2 py-1.5" style={{ borderColor: 'var(--border-medium)' }}>
+            {TEAM_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button onClick={addMember} disabled={!selectedUserId}
+            className="w-full text-[10px] font-medium text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-50 rounded-[6px] py-1.5 transition-colors">
+            Add to Team
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-[10px] text-txt-muted">Loading...</p>
+      ) : members.length === 0 ? (
+        <p className="text-[10px] text-txt-muted italic">No team members assigned</p>
+      ) : (
+        <div className="space-y-1">
+          {members.map(m => (
+            <div key={m.userId} className="group flex items-center gap-2 bg-surface-secondary rounded-[8px] px-2.5 py-1.5">
+              <Users size={11} className="text-txt-muted shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-medium text-txt-primary truncate">{m.name}</p>
+                <p className="text-[9px] text-txt-muted">{m.role}</p>
+              </div>
+              {m.source !== 'migration' && (
+                <button onClick={() => removeMember(m.userId)}
+                  className="opacity-0 group-hover:opacity-100 text-txt-muted hover:text-semantic-red transition-all shrink-0">
+                  <X size={10} />
+                </button>
+              )}
             </div>
           ))}
         </div>

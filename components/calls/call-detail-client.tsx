@@ -11,7 +11,7 @@ import {
   CheckCircle, Send, ChevronRight, ShieldCheck, CalendarCheck, DollarSign,
   Heart, AlertTriangle, Target, RotateCcw, Tag, MessageSquare, X, Loader2,
   User, MapPin, Clipboard, PhoneOutgoing, PhoneIncoming, Plus, RefreshCw,
-  Play, Pause, SkipBack, SkipForward, Volume2, ChevronDown, Home, Sparkles,
+  Play, Pause, SkipBack, SkipForward, Volume2, ChevronDown, Home, Sparkles, Info,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -123,13 +123,22 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [generatedSteps, setGeneratedSteps] = useState<NextStep[]>(() => {
     if (call.aiNextSteps && call.aiNextSteps.length > 0) {
-      return call.aiNextSteps.map(s => ({
-        type: s.type,
-        label: s.label,
-        reasoning: s.reasoning,
-        status: s.status as 'pending' | 'pushed' | 'skipped',
-        pushedAt: s.pushedAt ?? undefined,
-      }))
+      // Dedup: same type + similar label → keep only the first
+      const seen = new Map<string, boolean>()
+      return call.aiNextSteps
+        .map(s => ({
+          type: s.type,
+          label: s.label,
+          reasoning: s.reasoning,
+          status: s.status as 'pending' | 'pushed' | 'skipped',
+          pushedAt: s.pushedAt ?? undefined,
+        }))
+        .filter(s => {
+          const key = `${s.type}::${s.label.toLowerCase().replace(/\s+/g, ' ').trim()}`
+          if (seen.has(key)) return false
+          seen.set(key, true)
+          return true
+        })
     }
     return []
   })
@@ -209,7 +218,15 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
       if (res.ok) {
         const data = await res.json()
         if (data.steps) {
-          const newSteps = data.steps.map((s: { type: string; label: string; reasoning: string }) => ({ ...s, originalLabel: s.label, status: 'pending' as const }))
+          const seen = new Map<string, boolean>()
+          const newSteps = data.steps
+            .map((s: { type: string; label: string; reasoning: string }) => ({ ...s, originalLabel: s.label, status: 'pending' as const }))
+            .filter((s: { type: string; label: string }) => {
+              const key = `${s.type}::${s.label.toLowerCase().replace(/\s+/g, ' ').trim()}`
+              if (seen.has(key)) return false
+              seen.set(key, true)
+              return true
+            })
           setGeneratedSteps(newSteps)
           toast('Next steps generated', 'success')
         }
@@ -366,13 +383,9 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           </Pill>
         )}
         {outcome && (
-          <Pill color="border-semantic-green text-semantic-green">
+          <Pill color={outcome === 'follow_up_scheduled' ? 'border-semantic-amber text-semantic-amber' : 'border-semantic-green text-semantic-green'}
+            icon={outcome === 'follow_up_scheduled' ? <Clock size={9} /> : undefined}>
             {RESULT_NAMES[outcome] ?? outcome.replace(/_/g, ' ')}
-          </Pill>
-        )}
-        {call.callOutcome === 'follow_up_scheduled' && (
-          <Pill icon={<Clock size={9} />} color="border-semantic-amber text-semantic-amber">
-            Follow-Up Scheduled
           </Pill>
         )}
         {call.property && (
@@ -411,13 +424,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* STRENGTHS card — only visible on Coaching tab */}
           {tab === 'coaching' && strengths.length > 0 && (
-            <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
-              <h3 className="text-[14px] font-semibold text-semantic-green flex items-center gap-2 mb-3">
-                <CheckCircle size={14} /> STRENGTHS
+            <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
+              <h3 className="text-[12px] font-semibold text-semantic-green flex items-center gap-2 mb-2">
+                <CheckCircle size={12} /> STRENGTHS
               </h3>
-              <ul className="space-y-2.5">
+              <ul className="space-y-1.5">
                 {strengths.map((s, i) => (
-                  <li key={i} className="text-[13px] text-txt-secondary leading-relaxed flex items-start gap-2">
+                  <li key={i} className="text-[11px] text-txt-secondary leading-relaxed flex items-start gap-2">
                     <span className="text-semantic-green mt-0.5 shrink-0">•</span>
                     {s}
                   </li>
@@ -428,13 +441,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* RED FLAGS card — only visible on Coaching tab */}
           {tab === 'coaching' && redFlags.length > 0 && (
-            <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
-              <h3 className="text-[14px] font-semibold text-semantic-amber flex items-center gap-2 mb-3">
-                <AlertTriangle size={14} /> RED FLAGS
+            <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
+              <h3 className="text-[12px] font-semibold text-semantic-amber flex items-center gap-2 mb-2">
+                <AlertTriangle size={12} /> RED FLAGS
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {redFlags.map((flag, i) => (
-                  <li key={i} className="text-[13px] text-txt-secondary leading-relaxed flex items-start gap-2">
+                  <li key={i} className="text-[11px] text-txt-secondary leading-relaxed flex items-start gap-2">
                     <span className="text-semantic-amber mt-0.5 shrink-0">•</span>
                     {flag}
                   </li>
@@ -468,44 +481,44 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* ── COACHING TAB ─────────────────────────────────────── */}
           {tab === 'coaching' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* Summary */}
               {call.aiSummary && (
-                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
-                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase flex items-center gap-2 mb-3">
-                    <FileText size={12} /> Summary
+                <div className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase flex items-center gap-2 mb-2">
+                    <FileText size={11} /> Summary
                   </h3>
-                  <p className="text-[13px] text-txt-secondary leading-relaxed">{call.aiSummary}</p>
+                  <p className="text-[11px] text-txt-secondary leading-relaxed">{call.aiSummary}</p>
                 </div>
               )}
 
               {/* Areas for Improvement — each item is its own card */}
               {improvements.length > 0 && (
                 <div>
-                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-amber uppercase flex items-center gap-2 mb-3 px-1">
-                    <Target size={12} /> Areas for Improvement
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-amber uppercase flex items-center gap-2 mb-2 px-1">
+                    <Target size={11} /> Areas for Improvement
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {improvements.map((item, i) => (
-                      <div key={i} className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                      <div key={i} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
                         {/* What went wrong */}
-                        <p className="text-[13px] text-txt-primary leading-relaxed mb-3">{item.what_went_wrong}</p>
+                        <p className="text-[11px] text-txt-primary leading-relaxed mb-2">{item.what_went_wrong}</p>
 
                         {/* Call example — blockquote style */}
                         {item.call_example && (
-                          <div className="flex gap-2 mb-3 pl-1">
-                            <span className="text-[20px] text-txt-muted leading-none shrink-0 -mt-1">&ldquo;</span>
-                            <p className="text-[12px] text-txt-muted italic leading-relaxed">{item.call_example}</p>
+                          <div className="flex gap-2 mb-2 pl-1">
+                            <span className="text-[16px] text-txt-muted leading-none shrink-0 -mt-0.5">&ldquo;</span>
+                            <p className="text-[10px] text-txt-muted italic leading-relaxed">{item.call_example}</p>
                           </div>
                         )}
 
                         {/* Coaching tip — accent border card */}
                         {item.coaching_tip && (
-                          <div className="border-l-[3px] border-semantic-blue bg-semantic-blue/5 rounded-r-[10px] px-4 py-3">
-                            <p className="text-[10px] font-medium tracking-[0.08em] text-semantic-blue uppercase mb-1.5">
-                              <Lightbulb size={10} className="inline -mt-0.5 mr-1" />Script Suggestion
+                          <div className="border-l-[3px] border-semantic-blue bg-semantic-blue/5 rounded-r-[10px] px-3 py-2">
+                            <p className="text-[9px] font-medium tracking-[0.08em] text-semantic-blue uppercase mb-1">
+                              <Lightbulb size={9} className="inline -mt-0.5 mr-1" />Script Suggestion
                             </p>
-                            <p className="text-[13px] text-txt-secondary leading-relaxed">{item.coaching_tip}</p>
+                            <p className="text-[11px] text-txt-secondary leading-relaxed">{item.coaching_tip}</p>
                           </div>
                         )}
                       </div>
@@ -518,33 +531,33 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               {objectionReplies.length > 0 && (
                 <div>
                   <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-purple uppercase flex items-center gap-2 mb-1 px-1">
-                    <ShieldCheck size={12} /> Potential Replies to Objections
+                    <ShieldCheck size={11} /> Potential Replies to Objections
                   </h3>
-                  <p className="text-[11px] text-txt-muted mb-3 px-1">Objections identified in this call with suggested responses</p>
-                  <div className="space-y-3">
+                  <p className="text-[10px] text-txt-muted mb-2 px-1">Objections identified in this call with suggested responses</p>
+                  <div className="space-y-2">
                     {objectionReplies.map((obj, i) => (
-                      <div key={i} className="bg-surface-primary border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                      <div key={i} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
                         {/* Objection label chip */}
-                        <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-semantic-purple-bg text-semantic-purple mb-3 inline-block">
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-semantic-purple-bg text-semantic-purple mb-2 inline-block">
                           {obj.objection_label}
                         </span>
 
                         {/* Call quote — blockquote style */}
                         {obj.call_quote && (
-                          <div className="flex gap-2 mb-3 pl-1 mt-2">
-                            <span className="text-[20px] text-txt-muted leading-none shrink-0 -mt-1">&ldquo;</span>
-                            <p className="text-[12px] text-txt-muted italic leading-relaxed">{obj.call_quote}</p>
+                          <div className="flex gap-2 mb-2 pl-1 mt-1.5">
+                            <span className="text-[16px] text-txt-muted leading-none shrink-0 -mt-0.5">&ldquo;</span>
+                            <p className="text-[10px] text-txt-muted italic leading-relaxed">{obj.call_quote}</p>
                           </div>
                         )}
 
                         {/* Suggested responses */}
                         {obj.suggested_responses.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-[9px] font-medium tracking-[0.1em] text-txt-muted uppercase mb-2">Suggested Responses</p>
-                            <div className="space-y-2">
+                          <div className="mt-2">
+                            <p className="text-[9px] font-medium tracking-[0.1em] text-txt-muted uppercase mb-1.5">Suggested Responses</p>
+                            <div className="space-y-1.5">
                               {obj.suggested_responses.map((resp, ri) => (
-                                <div key={ri} className="border-l-[3px] border-semantic-blue bg-semantic-blue/5 rounded-r-[10px] px-4 py-3">
-                                  <p className="text-[13px] text-txt-secondary leading-relaxed">{resp}</p>
+                                <div key={ri} className="border-l-[3px] border-semantic-blue bg-semantic-blue/5 rounded-r-[10px] px-3 py-2">
+                                  <p className="text-[11px] text-txt-secondary leading-relaxed">{resp}</p>
                                 </div>
                               ))}
                             </div>
@@ -843,17 +856,119 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                           <p className="text-[12px] text-txt-muted italic mb-3">{step.reasoning}</p>
                         )}
 
-                        {/* Edit panel — inline accordion */}
+                        {/* Edit panel — per-action-type fields + AI change box */}
                         {isEditing && (
-                          <div className="border-t pt-3 mb-3 space-y-2" style={{ borderColor: 'var(--border-light)' }}>
-                            <input
-                              value={editFields.label ?? step.label}
-                              onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
-                              className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[13px] text-txt-primary focus:outline-none"
-                              style={{ borderColor: 'var(--border-medium)' }}
-                              placeholder="Action description..."
-                            />
-                            <div className="flex gap-2">
+                          <div className="border-t pt-3 mb-3 space-y-2.5" style={{ borderColor: 'var(--border-light)' }}>
+                            {/* Common: editable note/description */}
+                            {(step.type === 'add_note' || step.type === 'send_sms' || step.type === 'schedule_sms') && (
+                              <div>
+                                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">
+                                  {step.type === 'add_note' ? 'Note to Push' : 'Message'}
+                                </label>
+                                <textarea
+                                  value={editFields.label ?? step.label}
+                                  onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                  rows={3}
+                                  className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
+                                  style={{ borderColor: 'var(--border-medium)' }}
+                                />
+                              </div>
+                            )}
+
+                            {/* Create Task fields */}
+                            {step.type === 'create_task' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Task Title</label>
+                                  <input value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Description</label>
+                                  <textarea value={editFields.description ?? ''}
+                                    onChange={e => setEditFields(prev => ({ ...prev, description: e.target.value }))}
+                                    rows={2}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none resize-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Due Date</label>
+                                    <input type="date" value={editFields.dueDate ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, dueDate: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }} />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Assigned To</label>
+                                    <select value={editFields.assignedTo ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, assignedTo: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Select team member...</option>
+                                      {call.assignedTo && <option value={call.assignedTo.id}>{call.assignedTo.name}</option>}
+                                    </select>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {/* Change Stage fields */}
+                            {step.type === 'change_stage' && (
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Action</label>
+                                  <input value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                              </>
+                            )}
+
+                            {/* Generic edit for other types */}
+                            {!['add_note', 'send_sms', 'schedule_sms', 'create_task', 'change_stage'].includes(step.type) && (
+                              <div>
+                                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Action</label>
+                                <input value={editFields.label ?? step.label}
+                                  onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                  className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                  style={{ borderColor: 'var(--border-medium)' }} />
+                              </div>
+                            )}
+
+                            {/* AI Change Box — for all action types */}
+                            <div>
+                              <label className="text-[9px] font-semibold text-semantic-purple uppercase tracking-wider block mb-1">&#x2726; Tell AI what to change</label>
+                              <div className="flex gap-1.5">
+                                <input value={editFields.aiInstruction ?? ''}
+                                  onChange={e => setEditFields(prev => ({ ...prev, aiInstruction: e.target.value }))}
+                                  placeholder="e.g. Make it more urgent, change to next Tuesday..."
+                                  className="flex-1 bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                  style={{ borderColor: 'var(--border-medium)' }} />
+                                <button
+                                  onClick={async () => {
+                                    if (!editFields.aiInstruction?.trim()) return
+                                    try {
+                                      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/ai-edit`, {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ stepIndex: i, instruction: editFields.aiInstruction, currentLabel: editFields.label ?? step.label }),
+                                      })
+                                      if (res.ok) {
+                                        const data = await res.json()
+                                        if (data.newLabel) setEditFields(prev => ({ ...prev, label: data.newLabel, aiInstruction: '' }))
+                                      }
+                                    } catch {}
+                                  }}
+                                  className="text-[10px] font-semibold text-white bg-semantic-purple hover:bg-semantic-purple/80 px-3 py-1.5 rounded-[8px] shrink-0 transition-colors">
+                                  Apply
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-1">
                               <button
                                 onClick={() => {
                                   const updatedSteps = generatedSteps.map((s, si) => si === i ? { ...s, label: editFields.label ?? s.label } : s)
@@ -865,10 +980,10 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                                   setEditingStep(null)
                                   setEditFields({})
                                 }}
-                                className="text-[11px] font-semibold text-white bg-gunner-red px-3 py-1 rounded-[8px]"
+                                className="text-[10px] font-semibold text-white bg-gunner-red px-3 py-1.5 rounded-[8px]"
                               >Save Changes</button>
                               <button onClick={() => { setEditingStep(null); setEditFields({}) }}
-                                className="text-[11px] text-txt-secondary px-3 py-1">Cancel</button>
+                                className="text-[10px] text-txt-secondary px-3 py-1">Cancel</button>
                             </div>
                           </div>
                         )}
@@ -1050,6 +1165,44 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; label: string 
   marketing:           { bg: 'bg-pink-50',    text: 'text-pink-700',    label: 'Marketing' },
 }
 
+// Field info tooltips — explains what each deal intel field means
+const FIELD_INFO: Record<string, string> = {
+  sellerMotivationLevel: 'How motivated is the seller to sell (1=low, 10=desperate)',
+  sellerMotivationReason: 'The primary reason driving seller to sell',
+  sellerTimeline: 'When the seller wants/needs to close',
+  timelineUrgency: 'How urgent is the timeline (Urgent / Moderate / Low)',
+  sellerKnowledgeLevel: 'How well does seller understand the process',
+  sellerCommunicationStyle: 'How the seller prefers to communicate',
+  sellerContactPreference: 'Best way to reach this seller',
+  decisionMakers: 'Who needs to approve the deal',
+  decisionMakersConfirmed: 'Have all decision makers been identified',
+  documentReadiness: 'Are docs ready for closing',
+  sellerAskingHistory: 'History of seller price expectations',
+  competingOffers: 'Other offers seller has received',
+  conditionNotesFromSeller: 'Property condition as described by seller',
+  tenantSituation: 'Current tenant status if occupied',
+  titleIssuesMentioned: 'Title problems mentioned by seller',
+  liensMentioned: 'Liens or encumbrances on the property',
+  whatNotToSay: 'Topics or phrases to avoid with this seller',
+  rollingDealSummary: 'Current state of the deal negotiations',
+  relationshipRapportLevel: 'Quality of relationship with seller',
+  howTheyFoundUs: 'Marketing channel that brought this lead',
+}
+
+// Fields that should be dropdowns instead of free text
+const FIELD_OPTIONS: Record<string, string[]> = {
+  sellerMotivationLevel: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+  timelineUrgency: ['Urgent', 'Moderate', 'Low', 'Unknown'],
+  sellerKnowledgeLevel: ['High', 'Medium', 'Low'],
+  sellerCommunicationStyle: ['Direct', 'Conversational', 'Guarded', 'Emotional', 'Analytical'],
+  sellerContactPreference: ['Phone', 'Text', 'Email', 'In Person'],
+  decisionMakersConfirmed: ['Yes', 'No', 'Partially'],
+  documentReadiness: ['Ready', 'Partial', 'Not Ready', 'Unknown'],
+  relationshipRapportLevel: ['Strong', 'Good', 'Neutral', 'Weak', 'Hostile'],
+  sellerPreviousInvestorContact: ['Yes', 'No', 'Unknown'],
+  previousDealFellThrough: ['Yes', 'No', 'Unknown'],
+}
+
 function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: string }) {
   const [changes, setChanges] = useState<DealIntelChange[]>([])
   const [loading, setLoading] = useState(true)
@@ -1155,74 +1308,85 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
       {Object.entries(grouped).map(([cat, items]) => {
         const catConfig = CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.deal_status
         return (
-          <div key={cat}>
-            <p className={`text-[10px] font-semibold uppercase tracking-wider mb-2 ${catConfig.text}`}>
-              {catConfig.label} ({items.length})
-            </p>
-            <div className="space-y-2">
+          <div key={cat} className="bg-surface-primary border-[0.5px] rounded-[14px] overflow-hidden" style={{ borderColor: 'var(--border-light)' }}>
+            {/* Category header */}
+            <div className={`${catConfig.bg} px-4 py-2 border-b-[0.5px] flex items-center gap-2`} style={{ borderColor: 'var(--border-light)' }}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${catConfig.text}`}>
+                {catConfig.label}
+              </span>
+              <span className="text-[9px] text-txt-muted bg-white/60 px-1.5 py-0.5 rounded-full">{items.length}</span>
+            </div>
+            <div className="divide-y" style={{ borderColor: 'var(--border-light)' }}>
               {items.map(c => {
                 const isEditing = editingField === c.field
+                const fieldInfo = FIELD_INFO[c.field]
+                const selectOptions = FIELD_OPTIONS[c.field]
                 return (
-                  <div key={c.field} className={`border-[0.5px] rounded-[12px] p-4 ${catConfig.bg}`} style={{ borderColor: 'var(--border-light)' }}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[13px] font-medium text-txt-primary">{c.label}</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  <div key={c.field} className="px-4 py-3">
+                    {/* Title row: label + info icon + confidence */}
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className={`text-[11px] font-semibold ${catConfig.text}`}>{c.label}</span>
+                      {fieldInfo && (
+                        <span className="group relative">
+                          <Info size={10} className="text-txt-muted cursor-help" />
+                          <span className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[9px] px-2 py-1 rounded-[6px] whitespace-nowrap z-10 shadow-lg">
+                            {fieldInfo}
+                          </span>
+                        </span>
+                      )}
+                      <span className={`ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
                         c.confidence === 'high' ? 'bg-green-100 text-green-700'
                         : c.confidence === 'medium' ? 'bg-amber-100 text-amber-700'
                         : 'bg-gray-100 text-gray-600'
                       }`}>{c.confidence}</span>
                     </div>
 
+                    {/* Current value — muted, smaller */}
                     {c.currentValue != null && (
-                      <p className="text-[11px] text-txt-muted mb-0.5">Current: {typeof c.currentValue === 'object' ? JSON.stringify(c.currentValue) : String(c.currentValue)}</p>
+                      <p className="text-[9px] text-txt-muted mb-1">was: {typeof c.currentValue === 'object' ? JSON.stringify(c.currentValue) : String(c.currentValue)}</p>
                     )}
 
+                    {/* Proposed/Edit value */}
                     {isEditing ? (
-                      <textarea
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        rows={2}
-                        className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[12px] text-txt-primary mt-1 focus:outline-none resize-none"
-                        style={{ borderColor: 'var(--border-medium)' }}
-                      />
+                      selectOptions ? (
+                        <select value={editValue} onChange={e => setEditValue(e.target.value)}
+                          className="w-full bg-white border-[0.5px] rounded-[6px] px-2.5 py-1.5 text-[11px] text-txt-primary mt-0.5 focus:outline-none"
+                          style={{ borderColor: 'var(--border-medium)' }}>
+                          {selectOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      ) : (
+                        <textarea value={editValue} onChange={e => setEditValue(e.target.value)} rows={2}
+                          className="w-full bg-white border-[0.5px] rounded-[6px] px-2.5 py-1.5 text-[11px] text-txt-primary mt-0.5 focus:outline-none resize-none"
+                          style={{ borderColor: 'var(--border-medium)' }} />
+                      )
                     ) : (
-                      <p className="text-[12px] text-txt-primary font-medium">
+                      <p className="text-[11px] text-txt-primary font-medium leading-snug">
                         {typeof c.proposedValue === 'object' ? JSON.stringify(c.proposedValue) : String(c.proposedValue)}
                       </p>
                     )}
 
-                    {c.evidence && (
-                      <div className="flex gap-1.5 mt-1.5 pl-0.5">
-                        <span className="text-[14px] text-txt-muted leading-none shrink-0">&ldquo;</span>
-                        <p className="text-[11px] text-txt-muted italic leading-relaxed">{c.evidence}</p>
-                      </div>
+                    {/* Evidence quote — compact */}
+                    {c.evidence && !isEditing && (
+                      <p className="text-[9px] text-txt-muted italic mt-1 pl-2 border-l-2 border-gray-200">{c.evidence}</p>
                     )}
 
-                    <div className="flex items-center gap-2 mt-2.5">
-                      <button
-                        onClick={() => handleDecision(c.field, isEditing ? 'edited' : 'approved')}
+                    {/* Action buttons — tighter */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button onClick={() => handleDecision(c.field, isEditing ? 'edited' : 'approved')}
                         disabled={acting === c.field}
-                        className="flex items-center gap-1 bg-semantic-green hover:opacity-90 text-white text-[11px] font-semibold px-2.5 py-1 rounded-[8px]"
-                      >
-                        {acting === c.field ? <Loader2 size={9} className="animate-spin" /> : <CheckCircle size={9} />}
+                        className="flex items-center gap-1 bg-semantic-green hover:opacity-90 text-white text-[10px] font-semibold px-2 py-1 rounded-[6px]">
+                        {acting === c.field ? <Loader2 size={8} className="animate-spin" /> : <CheckCircle size={8} />}
                         {isEditing ? 'Save' : 'Approve'}
                       </button>
-                      <button
-                        onClick={() => {
-                          if (isEditing) { setEditingField(null); return }
-                          setEditingField(c.field)
-                          setEditValue(typeof c.proposedValue === 'object' ? JSON.stringify(c.proposedValue) : String(c.proposedValue))
-                        }}
-                        className="text-[11px] font-medium text-txt-secondary hover:text-txt-primary px-2.5 py-1"
-                      >
+                      <button onClick={() => {
+                        if (isEditing) { setEditingField(null); return }
+                        setEditingField(c.field)
+                        setEditValue(typeof c.proposedValue === 'object' ? JSON.stringify(c.proposedValue) : String(c.proposedValue))
+                      }} className="text-[10px] font-medium text-txt-secondary hover:text-txt-primary">
                         {isEditing ? 'Cancel' : 'Edit'}
                       </button>
-                      <button
-                        onClick={() => handleDecision(c.field, 'skipped')}
-                        className="text-[11px] text-txt-muted hover:text-txt-secondary px-2.5 py-1"
-                      >
-                        Skip
-                      </button>
+                      <button onClick={() => handleDecision(c.field, 'skipped')}
+                        className="text-[10px] text-txt-muted hover:text-txt-secondary">Skip</button>
                     </div>
                   </div>
                 )
@@ -1256,32 +1420,86 @@ function PropertyDataTab({ call, tenantSlug }: { call: CallDetail; tenantSlug: s
 }
 
 function TranscriptView({ transcript, searchQuery }: { transcript: string; searchQuery: string }) {
-  const lines = transcript.split('\n').filter(l => l.trim())
-  const filtered = searchQuery ? lines.filter(l => l.toLowerCase().includes(searchQuery.toLowerCase())) : lines
+  // Parse transcript into speaker turns — handles both pre-formatted (line-per-turn)
+  // and raw Deepgram output (single block, speaker labels inline or missing)
+  const speakerPattern = /(?:^|\n)(Speaker \d+|Rep|Seller|Agent|Customer|Unknown|[A-Z][a-z]+ ?[A-Z]?[a-z]*):\s*/gi
+
+  let turns: Array<{ speaker: string | null; text: string }> = []
+  const rawLines = transcript.split('\n').filter(l => l.trim())
+
+  if (rawLines.length > 3) {
+    // Multi-line transcript — parse each line for speaker labels
+    for (const line of rawLines) {
+      const match = line.match(/^(Speaker \d+|Rep|Seller|Agent|Customer|Unknown|[A-Z][a-z]+ ?[A-Z]?[a-z]*):\s*/i)
+      const speaker = match?.[1] ?? null
+      const content = speaker ? line.substring(match![0].length).trim() : line.trim()
+      if (content) turns.push({ speaker, text: content })
+    }
+  } else {
+    // Single block or very few lines — try to split on inline speaker labels
+    const fullText = rawLines.join(' ')
+    const parts = fullText.split(speakerPattern).filter(Boolean)
+
+    if (parts.length > 1) {
+      // Has inline speaker labels — pair them up
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i].trim()
+        if (!part) continue
+        const nextPart = parts[i + 1]?.trim()
+        if (nextPart && /^(Speaker \d+|Rep|Seller|Agent|Customer|Unknown|[A-Z][a-z]+ ?[A-Z]?[a-z]*)$/i.test(part)) {
+          turns.push({ speaker: part, text: nextPart })
+          i++ // skip the content part
+        } else {
+          turns.push({ speaker: null, text: part })
+        }
+      }
+    } else {
+      // No speaker labels at all — break long text into ~3-sentence chunks and alternate speakers
+      const sentences = fullText.match(/[^.!?]+[.!?]+/g) ?? [fullText]
+      let chunk = ''
+      let speakerIdx = 0
+      for (let i = 0; i < sentences.length; i++) {
+        chunk += sentences[i]
+        if ((i + 1) % 3 === 0 || i === sentences.length - 1) {
+          turns.push({ speaker: `Speaker ${speakerIdx}`, text: chunk.trim() })
+          chunk = ''
+          speakerIdx = speakerIdx === 0 ? 1 : 0
+        }
+      }
+    }
+  }
+
+  // Remove empty turns
+  turns = turns.filter(t => t.text.length > 0)
+
+  const filtered = searchQuery
+    ? turns.filter(t => t.text.toLowerCase().includes(searchQuery.toLowerCase()))
+    : turns
 
   if (searchQuery && filtered.length === 0) {
-    return <p className="text-[13px] text-txt-muted">No matches for &ldquo;{searchQuery}&rdquo;</p>
+    return <p className="text-[11px] text-txt-muted">No matches for &ldquo;{searchQuery}&rdquo;</p>
   }
 
   return (
-    <div className="space-y-4">
-      {searchQuery && <p className="text-[11px] text-txt-muted mb-2">{filtered.length} matches</p>}
-      {filtered.map((line, i) => {
-        const match = line.match(/^(Speaker \d+|Rep|Seller|Agent|Customer|Unknown|[A-Z][a-z]+ ?[A-Z]?[a-z]*):\s*/i)
-        const speaker = match?.[1] ?? null
-        const content = speaker ? line.substring(match![0].length) : line
-        const isRep = speaker?.toLowerCase().includes('rep') || speaker?.toLowerCase().includes('agent') || speaker === 'Speaker 0'
+    <div className="space-y-3">
+      {searchQuery && <p className="text-[10px] text-txt-muted mb-2">{filtered.length} matches</p>}
+      {filtered.map((turn, i) => {
+        const isRep = turn.speaker?.toLowerCase().includes('rep') || turn.speaker?.toLowerCase().includes('agent') || turn.speaker === 'Speaker 0'
 
         return (
-          <div key={i} className="text-[13px] leading-relaxed">
-            {speaker && (
-              <p className={`text-[12px] font-semibold mb-0.5 ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
-                {speaker}
-              </p>
+          <div key={i} className="flex gap-2">
+            {turn.speaker && (
+              <div className={`shrink-0 w-[70px] text-right pt-0.5`}>
+                <span className={`text-[10px] font-semibold ${isRep ? 'text-semantic-blue' : 'text-gunner-red'}`}>
+                  {turn.speaker}
+                </span>
+              </div>
             )}
-            <p className="text-txt-secondary">
-              {searchQuery ? highlightText(content, searchQuery) : content}
-            </p>
+            <div className={`flex-1 ${turn.speaker ? 'border-l-2 pl-3' : ''} ${isRep ? 'border-semantic-blue/20' : 'border-gunner-red/20'}`}>
+              <p className="text-[11px] text-txt-secondary leading-relaxed">
+                {searchQuery ? highlightText(turn.text, searchQuery) : turn.text}
+              </p>
+            </div>
           </div>
         )
       })}

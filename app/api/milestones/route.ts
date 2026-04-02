@@ -55,12 +55,20 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Auto-add milestone creator to property team
+    const milestoneUserId = loggedById || session.userId
+    await db.propertyTeamMember.upsert({
+      where: { propertyId_userId: { propertyId, userId: milestoneUserId } },
+      create: { propertyId, userId: milestoneUserId, tenantId, role: 'Team', source: 'milestone' },
+      update: {},
+    }).catch(() => {})
+
     const milestone = await db.propertyMilestone.create({
       data: {
         tenantId,
         propertyId,
         type: type as MilestoneType,
-        loggedById: loggedById || session.userId,
+        loggedById: milestoneUserId,
         source: 'MANUAL',
         notes: notes ?? null,
         ...(date ? { createdAt: new Date(date) } : {}),

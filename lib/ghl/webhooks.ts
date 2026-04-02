@@ -209,6 +209,15 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
 
   console.log(`[GHL Webhook] Created call ${call.id}: recording=${!!recordingUrl}, contact=${contactName}`)
 
+  // Auto-add team member when a call is tied to a property
+  if (property?.id && user?.id) {
+    await db.propertyTeamMember.upsert({
+      where: { propertyId_userId: { propertyId: property.id, userId: user.id } },
+      create: { propertyId: property.id, userId: user.id, tenantId, role: user.role ?? 'Team', source: 'call' },
+      update: {},
+    }).catch(() => {}) // ignore if already exists
+  }
+
   await db.auditLog.create({
     data: {
       tenantId,

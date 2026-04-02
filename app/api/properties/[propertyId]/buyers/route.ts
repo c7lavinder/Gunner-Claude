@@ -94,6 +94,13 @@ function parseBuyerFields(contact: {
   }
 }
 
+// Normalize market name for comparison — strip common suffixes, trim, lowercase
+function normalizeMarket(m: string): string {
+  return m.trim().toLowerCase()
+    .replace(/,?\s*(tn|tennessee|tx|texas|fl|florida|ga|georgia|al|alabama|ms|mississippi)$/i, '')
+    .trim()
+}
+
 // Check if a buyer's markets match the property
 function buyerMatchesMarket(
   buyer: { markets: string[]; secondaryMarkets: string[] },
@@ -101,17 +108,23 @@ function buyerMatchesMarket(
 ): boolean {
   // Combine all buyer markets (primary + secondary) for matching
   const allBuyerMarkets = [...buyer.markets, ...buyer.secondaryMarkets]
-    .filter(m => m.toLowerCase() !== 'other') // "Other" is not a real market
+    .filter(m => m && normalizeMarket(m) !== 'other') // "Other" is not a real market
+
+  if (allBuyerMarkets.length === 0) return false
 
   // "Nationwide" matches everything
-  if (allBuyerMarkets.some(m => m.toLowerCase() === 'nationwide')) return true
+  if (allBuyerMarkets.some(m => normalizeMarket(m) === 'nationwide')) return true
 
-  // Check if any buyer market matches any property market (substring both ways)
-  return allBuyerMarkets.some(m =>
-    matchTargets.some(pm =>
-      pm.toLowerCase().includes(m.toLowerCase()) || m.toLowerCase().includes(pm.toLowerCase())
+  const normalizedTargets = matchTargets.map(normalizeMarket).filter(Boolean)
+  if (normalizedTargets.length === 0) return false
+
+  // Check if any buyer market matches any property market (substring both ways, normalized)
+  return allBuyerMarkets.some(m => {
+    const nm = normalizeMarket(m)
+    return normalizedTargets.some(pm =>
+      pm.includes(nm) || nm.includes(pm)
     )
-  )
+  })
 }
 
 // LLM-powered buyer scoring — batched in groups of 50 to fit response tokens
@@ -282,11 +295,15 @@ export async function GET(
 
     // Step 1: Market is the BASE filter — no market match = not shown
     const marketMatched = allBuyers.filter(b => buyerMatchesMarket(b, allPropertyMarkets))
-    console.log(`[Buyers] Market filter: ${allBuyers.length} total → ${marketMatched.length} in market`)
+    console.log(`[Buyers] Market filter: ${allBuyers.length} total → ${marketMatched.length} in market. Property targets: [${allPropertyMarkets}]`)
     if (marketMatched.length === 0 && allBuyers.length > 0) {
-      // Debug: log first 5 buyers' markets for troubleshooting
-      const sample = allBuyers.slice(0, 5).map(b => `${b.name}: markets=[${b.markets}] secondary=[${b.secondaryMarkets}]`)
-      console.log(`[Buyers] No matches! Property targets: [${allPropertyMarkets}]. Sample buyers:`, sample)
+      // Debug: log first 10 buyers' markets for troubleshooting
+      const sample = allBuyers.slice(0, 10).map(b => `${b.name}: markets=[${b.markets}] secondary=[${b.secondaryMarkets}]`)
+      console.log(`[Buyers] No matches! Normalized targets: [${allPropertyMarkets.map(normalizeMarket)}]`)
+      console.log(`[Buyers] Sample buyers:`, sample)
+      // Count how many buyers have ANY markets set
+      const withMarkets = allBuyers.filter(b => b.markets.length > 0 || b.secondaryMarkets.length > 0).length
+      console.log(`[Buyers] Buyers with markets: ${withMarkets}/${allBuyers.length}`)
     }
 
     // Step 2: LLM scores all market-matched buyers (one call)

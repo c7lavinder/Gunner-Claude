@@ -12,6 +12,7 @@ const updateSchema = z.object({
   city: z.string().min(1).optional(),
   state: z.string().optional(),
   zip: z.string().optional(),
+  market: z.string().nullable().optional(),
   status: z.string().optional(),
   arv: z.string().nullable().optional(),
   askingPrice: z.string().nullable().optional(),
@@ -119,14 +120,32 @@ export async function PATCH(
     sellerMotivation, sellerTimeline, propertyCondition, sellerAskingReason,
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
+    market: marketName,
   } = parsed.data
 
   try {
+    // Resolve market name → Market record (find or create)
+    let marketId: string | undefined
+    if (marketName) {
+      const existing = await db.market.findFirst({
+        where: { tenantId: session.tenantId, name: { equals: marketName, mode: 'insensitive' } },
+      })
+      if (existing) {
+        marketId = existing.id
+      } else {
+        const created = await db.market.create({
+          data: { tenantId: session.tenantId, name: marketName },
+        })
+        marketId = created.id
+      }
+    }
+
     await db.$transaction(async (tx) => {
       // Update property
       await tx.property.update({
         where: { id: params.propertyId, tenantId: session.tenantId },
         data: {
+          ...(marketId && { marketId }),
           ...(rawAddress && { address: standardizeStreet(rawAddress) }),
           ...(rawCity && { city: standardizeCity(rawCity) }),
           ...(rawState && { state: standardizeState(rawState) }),

@@ -85,6 +85,7 @@ model Tenant {
   dealBlasts          DealBlast[]
   milestones          PropertyMilestone[]
   propertyBuyerStages PropertyBuyerStage[]
+  propertyTeamMembers PropertyTeamMember[]
 
   @@map("tenants")
 }
@@ -142,6 +143,7 @@ model User {
   dealBlasts         DealBlast[] @relation("BlastCreatedBy")
   loggedMilestones   PropertyMilestone[] @relation("MilestoneLoggedBy")
   outreachLogs       OutreachLog[] @relation("OutreachLogUser")
+  propertyTeamMembers PropertyTeamMember[] @relation("PropertyTeamMembers")
 
   @@map("users")
 }
@@ -294,6 +296,7 @@ model Property {
 
   // Relations
   sellers    PropertySeller[]
+  teamMembers PropertyTeamMember[]
   calls      Call[]
   tasks      Task[]
   dealBlasts DealBlast[]
@@ -404,6 +407,30 @@ model PropertySeller {
 
   @@id([propertyId, sellerId])
   @@map("property_sellers")
+}
+
+// ─────────────────────────────────────────
+// PROPERTY TEAM MEMBERS — multiple users per property
+// ─────────────────────────────────────────
+
+model PropertyTeamMember {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  propertyId String   @map("property_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id")
+  user   User   @relation("PropertyTeamMembers", fields: [userId], references: [id], onDelete: Cascade)
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  role   String // ADMIN, LEAD_MANAGER, ACQUISITION_MANAGER, DISPOSITION_MANAGER, etc.
+  source String @default("manual") // manual, call, milestone
+
+  @@unique([propertyId, userId])
+  @@map("property_team_members")
 }
 
 // ─────────────────────────────────────────

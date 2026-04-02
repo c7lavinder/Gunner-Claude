@@ -76,16 +76,22 @@ export async function GET(
     const start = startCentral.getTime() - offsetMs
     const end = endCentral.getTime() - offsetMs
 
-    // Get all calendars
-    const calRes = await fetch(
-      `https://services.leadconnectorhq.com/calendars/?locationId=${tenant.ghlLocationId}`,
-      { headers }
-    )
-    if (!calRes.ok) {
-      return NextResponse.json({ appointments: [], error: 'Failed to fetch calendars' })
+    // Get all calendars (retry once if empty — GHL cold cache can return partial)
+    let calendars: Array<{ id: string; name: string }> = []
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const calRes = await fetch(
+        `https://services.leadconnectorhq.com/calendars/?locationId=${tenant.ghlLocationId}`,
+        { headers }
+      )
+      if (!calRes.ok) {
+        if (attempt === 0) { await new Promise(r => setTimeout(r, 500)); continue }
+        return NextResponse.json({ appointments: [], error: 'Failed to fetch calendars' })
+      }
+      const calData = await calRes.json() as { calendars?: Array<{ id: string; name: string }> }
+      calendars = calData.calendars ?? []
+      if (calendars.length > 0) break
+      if (attempt === 0) await new Promise(r => setTimeout(r, 500))
     }
-    const calData = await calRes.json() as { calendars?: Array<{ id: string; name: string }> }
-    const calendars = calData.calendars ?? []
 
     // Resolve effective user (supports admin View As via ?asUserId=)
     const asUserId = url.searchParams.get('asUserId')
@@ -106,37 +112,57 @@ export async function GET(
       }
     } catch {}
 
-    // Fetch events from each calendar
+    // Fetch events from ALL calendars in parallel (prevents partial loads from sequential timeouts)
     interface RawAppt {
       id: string; title: string; startTime: string; endTime: string
       status: string; calendarName: string; assignedUserId: string | null; contactId: string
     }
-    const allAppts: RawAppt[] = []
 
-    for (const cal of calendars) {
-      try {
-        const p = new URLSearchParams({
-          locationId: tenant.ghlLocationId,
-          calendarId: cal.id,
-          startTime: String(start),
-          endTime: String(end),
-        })
-        const evRes = await fetch(`https://services.leadconnectorhq.com/calendars/events?${p}`, { headers })
-        if (!evRes.ok) continue
-        const evData = await evRes.json() as { events?: Array<Record<string, unknown>> }
-        for (const e of (evData.events ?? [])) {
-          allAppts.push({
-            id: String(e.id ?? ''),
-            title: String(e.title ?? cal.name),
-            startTime: String(e.startTime ?? ''),
-            endTime: String(e.endTime ?? ''),
-            status: String(e.appointmentStatus ?? e.status ?? 'confirmed').toLowerCase(),
-            calendarName: cal.name,
-            assignedUserId: e.assignedUserId ? String(e.assignedUserId) : null,
-            contactId: String(e.contactId ?? ''),
-          })
-        }
-      } catch { continue }
+    async function fetchCalendarEvents(cal: { id: string; name: string }): Promise<RawAppt[]> {
+      const p = new URLSearchParams({
+        locationId: tenant!.ghlLocationId!,
+        calendarId: cal.id,
+        startTime: String(start),
+        endTime: String(end),
+      })
+      const evRes = await fetch(`https://services.leadconnectorhq.com/calendars/events?${p}`, { headers })
+      if (!evRes.ok) throw new Error(`Calendar ${cal.name} fetch failed: ${evRes.status}`)
+      const evData = await evRes.json() as { events?: Array<Record<string, unknown>> }
+      return (evData.events ?? []).map(e => ({
+        id: String(e.id ?? ''),
+        title: String(e.title ?? cal.name),
+        startTime: String(e.startTime ?? ''),
+        endTime: String(e.endTime ?? ''),
+        status: String(e.appointmentStatus ?? e.status ?? 'confirmed').toLowerCase(),
+        calendarName: cal.name,
+        assignedUserId: e.assignedUserId ? String(e.assignedUserId) : null,
+        contactId: String(e.contactId ?? ''),
+      }))
+    }
+
+    // Parallel fetch all calendars
+    const results = await Promise.allSettled(calendars.map(cal => fetchCalendarEvents(cal)))
+    const allAppts: RawAppt[] = []
+    const failedCals: Array<{ id: string; name: string }> = []
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]
+      if (result.status === 'fulfilled') {
+        allAppts.push(...result.value)
+      } else {
+        failedCals.push(calendars[i])
+      }
+    }
+
+    // Retry failed calendars once (sequential is fine for retries)
+    if (failedCals.length > 0) {
+      await new Promise(r => setTimeout(r, 300))
+      for (const cal of failedCals) {
+        try {
+          const events = await fetchCalendarEvents(cal)
+          allAppts.push(...events)
+        } catch { /* second failure — skip this calendar */ }
+      }
     }
 
     // Sort by time

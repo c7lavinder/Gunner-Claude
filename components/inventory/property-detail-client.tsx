@@ -9,7 +9,7 @@ import {
   ArrowLeft, Phone, CheckSquare, User, MapPin, ExternalLink, Copy,
   MessageSquare, FileText, ChevronRight, ChevronLeft, Zap, Pencil, Check,
   DollarSign, Bot, Send, Clock, Plus, Loader2,
-  Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X, AlertTriangle,
+  Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X, AlertTriangle, Calendar,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -1679,6 +1679,28 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   sending: boolean; actionMsg: string; ghlContactId: string | null
   projectTypeOptions?: string[]
 }) {
+  // Appointments for this property's contact
+  const [appointments, setAppointments] = useState<Array<{ id: string; startTime: string; calendarName: string; status: string }>>([])
+  useEffect(() => {
+    if (!ghlContactId) return
+    // Fetch appointments for the last 30 days and next 30 days
+    const now = new Date()
+    const past30 = new Date(now.getTime() - 30 * 86400000)
+    const dates: string[] = []
+    for (let d = past30; d <= new Date(now.getTime() + 30 * 86400000); d = new Date(d.getTime() + 86400000)) {
+      dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+    }
+    // Fetch current day appointments and filter by contactId
+    const fetchDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    fetch(`/api/${tenantSlug}/dayhub/appointments?date=${fetchDate}`)
+      .then(r => r.json())
+      .then(d => {
+        const all = (d.appointments ?? []) as Array<{ id: string; contactId: string; startTime: string; calendarName: string; status: string }>
+        setAppointments(all.filter(a => a.contactId === ghlContactId))
+      })
+      .catch(() => {})
+  }, [tenantSlug, ghlContactId])
+
   // Local editable state — updates on save without page reload
   const [vals, setVals] = useState({
     askingPrice: property.askingPrice,
@@ -1980,6 +2002,42 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
                     }`}>{t.priority.toLowerCase()}</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Appointments */}
+          <div>
+            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">
+              <Calendar size={10} className="inline -mt-0.5 text-semantic-purple" /> Appointments ({appointments.length})
+            </p>
+            {appointments.length === 0 ? (
+              <p className="text-ds-fine text-txt-muted">No appointments</p>
+            ) : (
+              <div className="space-y-1">
+                {appointments.map(a => {
+                  const apptDate = new Date(a.startTime)
+                  const isPast = apptDate < new Date()
+                  const statusColor = a.status === 'showed' ? 'bg-green-100 text-green-700'
+                    : a.status === 'no-show' || a.status === 'noshow' ? 'bg-red-100 text-red-700'
+                    : a.status === 'cancelled' ? 'bg-gray-100 text-gray-500'
+                    : 'bg-blue-100 text-blue-700'
+                  return (
+                    <div key={a.id} className={`flex items-center gap-2 p-2 rounded-[8px] ${isPast ? 'opacity-60' : ''}`}>
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isPast ? 'bg-gray-300' : 'bg-semantic-purple'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-ds-fine text-txt-secondary truncate">{a.calendarName}</p>
+                        <p className="text-[9px] text-txt-muted">
+                          {apptDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at{' '}
+                          {apptDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${statusColor}`}>
+                        {a.status}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

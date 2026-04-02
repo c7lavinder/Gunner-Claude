@@ -126,7 +126,7 @@ async function pollCalls() {
                 const msgDate = new Date(String(msg.dateAdded))
                 if (msgDate < cutoff) { hitOld = true; continue }
 
-                // Extract duration — meta can be object or JSON string
+                // Extract duration — check every possible GHL source, take highest non-zero
                 let meta: Record<string, unknown> = {}
                 if (msg.meta && typeof msg.meta === 'string') {
                   try { meta = JSON.parse(msg.meta) } catch {}
@@ -134,11 +134,19 @@ async function pollCalls() {
                   meta = msg.meta as Record<string, unknown>
                 }
                 const callMeta = (meta.call ?? {}) as Record<string, unknown>
-                const metaDur = (msg.callDuration ?? callMeta.duration ?? 0) as number
+                const durationCandidates = [
+                  msg.callDuration as number | undefined,
+                  callMeta.duration as number | undefined,
+                  meta.duration as number | undefined,
+                  msg.duration as number | undefined,
+                  callMeta.totalDuration as number | undefined,
+                  callMeta.billDuration as number | undefined,
+                ].filter((d): d is number => typeof d === 'number' && d > 0)
                 const elapsed = msg.dateUpdated
                   ? Math.round((new Date(String(msg.dateUpdated)).getTime() - msgDate.getTime()) / 1000)
                   : 0
-                const realDuration = Math.min(Math.max(metaDur, elapsed), 1800)
+                if (elapsed > 0) durationCandidates.push(elapsed)
+                const realDuration = Math.min(Math.max(...durationCandidates, 0), 3600)
 
                 const status = String((msg.callStatus ?? (msg.meta as { call?: { status?: string } })?.call?.status ?? msg.status) ?? '').toLowerCase()
                 // Save all calls including failed/short — they count as dials
@@ -147,25 +155,36 @@ async function pollCalls() {
 
                 const dedupeId = String(msg.altId || msg.id)
                 if (existingIds.has(dedupeId)) {
-                  // Already exists — but if duration was null (from webhook), fill it in now
-                  if (realDuration > 0) {
-                    const existing = await db.call.findFirst({
-                      where: { tenantId: tenant.id, ghlCallId: dedupeId, durationSeconds: null },
-                      select: { id: true, gradingStatus: true },
-                    })
-                    if (existing) {
-                      const isGradeable = realDuration >= MIN_CALL_DURATION_FOR_GRADING
+                  // Already exists — check if we can fill in missing data or rescue a FAILED call
+                  const existing = await db.call.findFirst({
+                    where: { tenantId: tenant.id, ghlCallId: dedupeId },
+                    select: { id: true, gradingStatus: true, durationSeconds: true, recordingUrl: true },
+                  })
+                  if (existing) {
+                    const needsDuration = existing.durationSeconds === null && realDuration > 0
+                    // Check for recording if existing call doesn't have one
+                    let foundRecording = false
+                    if (!existing.recordingUrl) {
+                      const recCheck = await fetchCallRecording(freshTenant.ghlAccessToken!, freshTenant.ghlLocationId!, String(msg.id))
+                      if (recCheck.status === 'success' && recCheck.recordingUrl) {
+                        await db.call.update({ where: { id: existing.id }, data: { recordingUrl: recCheck.recordingUrl } })
+                        foundRecording = true
+                      }
+                    }
+                    const hasRec = !!existing.recordingUrl || foundRecording
+                    const effectiveDuration = realDuration > 0 ? realDuration : (existing.durationSeconds ?? 0)
+                    const isGradeable = effectiveDuration >= MIN_CALL_DURATION_FOR_GRADING || hasRec
+
+                    if (needsDuration || (isGradeable && existing.gradingStatus === 'FAILED')) {
                       await db.call.update({
                         where: { id: existing.id },
                         data: {
-                          durationSeconds: realDuration,
-                          // If now gradeable and wasn't graded yet, queue for grading
-                          ...(isGradeable && existing.gradingStatus !== 'COMPLETED' ? { gradingStatus: 'PENDING' } : {}),
-                          ...(!isGradeable ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${realDuration}s) — not graded.` } : {}),
+                          ...(needsDuration ? { durationSeconds: realDuration } : {}),
+                          ...(isGradeable && existing.gradingStatus !== 'COMPLETED' ? { gradingStatus: 'PENDING', callResult: null, aiSummary: null } : {}),
+                          ...(!isGradeable && needsDuration ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${realDuration}s) — not graded.` } : {}),
                         },
                       })
-                      console.log(`[poll-calls] Updated duration: ${conv.contactName || 'Unknown'} → ${realDuration}s${isGradeable ? ' (queued for grading)' : ''}`)
-                      // Grade if now qualifies
+                      console.log(`[poll-calls] Rescued: ${conv.contactName || 'Unknown'} → ${effectiveDuration}s, recording=${hasRec} (queued for grading)`)
                       if (isGradeable && existing.gradingStatus !== 'COMPLETED') {
                         await gradeCall(existing.id).catch(err => {
                           console.error(`[poll-calls] Grade failed ${existing.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
@@ -198,8 +217,15 @@ async function pollCalls() {
                   } catch { /* skip */ }
                 }
 
-                // Determine if this call is long enough to grade
-                const isGradeable = realDuration >= MIN_CALL_DURATION_FOR_GRADING
+                // Check for recording before deciding gradeability
+                await sleep(100)
+                const rec = await fetchCallRecording(freshTenant.ghlAccessToken!, freshTenant.ghlLocationId!, String(msg.id))
+                const hasRecording = rec.status === 'success' && !!rec.recordingUrl
+
+                // Safety rule: if recording exists, this is a real call — grade it regardless of duration
+                const isGradeable = realDuration >= MIN_CALL_DURATION_FOR_GRADING || hasRecording
+                // Only mark as no_answer if genuinely 0 duration AND no recording
+                const isNoAnswer = realDuration === 0 && !hasRecording
 
                 // Create call — ALL calls saved (including 0s dials) for accurate counts
                 const call = await db.call.create({
@@ -211,24 +237,26 @@ async function pollCalls() {
                     contactAddress,
                     assignedToId: user?.id ?? undefined,
                     direction: String(msg.direction) === 'inbound' ? 'INBOUND' : 'OUTBOUND',
-                    durationSeconds: realDuration,
+                    durationSeconds: realDuration > 0 ? realDuration : undefined,
                     calledAt: msgDate,
-                    callResult: realDuration === 0 ? 'no_answer' : isGradeable ? undefined : 'short_call',
+                    recordingUrl: hasRecording ? rec.recordingUrl : undefined,
+                    callResult: isNoAnswer ? 'no_answer' : isGradeable ? undefined : 'short_call',
                     gradingStatus: isGradeable ? 'PENDING' : 'FAILED',
-                    ...(isGradeable ? {} : { aiSummary: realDuration === 0 ? 'No answer — zero duration.' : `Short call (${realDuration}s) — not graded.` }),
+                    ...(isGradeable ? {} : { aiSummary: isNoAnswer ? 'No answer — zero duration.' : `Short call (${realDuration}s) — not graded.` }),
                   },
                 })
 
-                // Only fetch recording + transcribe + grade for calls >= 45s
+                // Fetch recording, transcribe, and grade for gradeable calls
                 if (isGradeable) {
-                  await sleep(100)
-                  const rec = await fetchCallRecording(freshTenant.ghlAccessToken!, freshTenant.ghlLocationId!, String(msg.id))
-
-                  if (rec.status === 'success' && rec.recordingUrl) {
-                    await db.call.update({ where: { id: call.id }, data: { recordingUrl: rec.recordingUrl } })
-                    const trans = await transcribeRecording(rec.recordingUrl, freshTenant.ghlAccessToken!)
+                  if (hasRecording) {
+                    const trans = await transcribeRecording(rec.recordingUrl!, freshTenant.ghlAccessToken!)
                     if (trans.status === 'success' && trans.transcript) {
                       await db.call.update({ where: { id: call.id }, data: { transcript: trans.transcript } })
+                      // If we didn't have duration but got transcript, estimate from transcript length
+                      if (realDuration === 0 && trans.transcript.length > 50) {
+                        const estDuration = Math.max(Math.round(trans.transcript.length / 15), 45)
+                        await db.call.update({ where: { id: call.id }, data: { durationSeconds: estDuration } })
+                      }
                     }
                   }
 
@@ -238,7 +266,7 @@ async function pollCalls() {
                 }
 
                 totalNew++
-                console.log(`[poll-calls] New: ${resolvedName ?? 'Unknown'} | ${realDuration}s | ${isGradeable ? 'GRADE' : 'dial'}`)
+                console.log(`[poll-calls] New: ${resolvedName ?? 'Unknown'} | ${realDuration > 0 ? `${realDuration}s` : 'no duration'} | recording=${hasRecording} | ${isGradeable ? 'GRADE' : 'dial'}`)
               }
 
               if (hitOld || !pageData?.nextPage) break
@@ -262,8 +290,8 @@ async function pollCalls() {
         gradingStatus: 'FAILED',
         recordingUrl: { not: null },
         transcript: null,
-        durationSeconds: { not: 0 },
         calledAt: { gte: retryWindow },
+        // Retry ANY failed call with a recording — duration 0 is often a GHL data issue, not reality
       },
       select: {
         id: true, contactName: true, recordingUrl: true, durationSeconds: true,
