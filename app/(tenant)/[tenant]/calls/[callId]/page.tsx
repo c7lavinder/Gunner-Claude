@@ -106,6 +106,8 @@ export default async function CallDetailPage({
           sellerName: call.property.sellers[0]?.seller.name ?? null,
         } : null,
         aiNextSteps,
+        isCalibration: call.isCalibration,
+        calibrationNotes: call.calibrationNotes,
       }}
       tenantSlug={params.tenant}
       isOwn={isOwn}

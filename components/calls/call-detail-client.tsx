@@ -46,6 +46,8 @@ interface CallDetail {
   assignedTo: { id: string; name: string; role: string } | null
   property: { id: string; address: string; city: string; state: string; status: string; sellerName: string | null } | null
   aiNextSteps: Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null
+  isCalibration: boolean
+  calibrationNotes: string | null
 }
 
 type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps' | 'property'
@@ -151,6 +153,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [editingStep, setEditingStep] = useState<number | null>(null)
   const [editFields, setEditFields] = useState<Record<string, string>>({})
   const [propertyPendingCount, setPropertyPendingCount] = useState(0)
+  const [isCalibration, setIsCalibration] = useState(call.isCalibration)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // Data for next steps edit forms
@@ -221,6 +224,20 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
       else toast('Failed to reprocess', 'error')
     } catch { toast('Failed to reprocess', 'error') }
     setActionLoading(null)
+  }
+
+  async function toggleCalibration() {
+    const newValue = !isCalibration
+    setIsCalibration(newValue)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/calibration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isCalibration: newValue }),
+      })
+      if (res.ok) toast(newValue ? 'Marked as calibration example' : 'Removed calibration flag', 'success')
+      else { setIsCalibration(!newValue); toast('Failed to update', 'error') }
+    } catch { setIsCalibration(!newValue); toast('Failed to update', 'error') }
   }
 
   async function reclassify(callType: string) {
@@ -390,6 +407,19 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               </>
             )}
           </div>
+          <button
+            onClick={toggleCalibration}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium transition-all ${
+              isCalibration
+                ? 'text-semantic-purple bg-semantic-purple-bg border-semantic-purple/30'
+                : 'text-txt-secondary hover:text-txt-primary'
+            }`}
+            style={!isCalibration ? { borderColor: 'var(--border-medium)' } : undefined}
+            title={isCalibration ? 'Remove calibration flag' : 'Flag as calibration example (good/bad reference for AI grading)'}
+          >
+            <Star size={13} fill={isCalibration ? 'currentColor' : 'none'} />
+            {isCalibration ? 'Calibration' : 'Flag'}
+          </button>
         </div>
       </div>
 

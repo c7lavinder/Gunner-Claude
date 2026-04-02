@@ -1560,6 +1560,8 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
   const [saving, setSaving] = useState(false)
   const [loadingPlaybook, setLoadingPlaybook] = useState(false)
   const [playbookMsg, setPlaybookMsg] = useState('')
+  const [generatingProfiles, setGeneratingProfiles] = useState(false)
+  const [profileMsg, setProfileMsg] = useState('')
 
   useEffect(() => {
     fetch(`/api/admin/knowledge`)
@@ -1581,6 +1583,17 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
       setDocs(refreshData.documents ?? [])
     } catch { setPlaybookMsg('Failed to load playbook') }
     setLoadingPlaybook(false)
+  }
+
+  async function regenerateProfiles() {
+    setGeneratingProfiles(true)
+    setProfileMsg('')
+    try {
+      const res = await fetch('/api/admin/generate-profiles', { method: 'POST' })
+      const data = await res.json()
+      setProfileMsg(`Updated ${data.updated ?? 0} profiles, skipped ${data.skipped ?? 0}${data.errors?.length ? ` (${data.errors.length} errors)` : ''}`)
+    } catch { setProfileMsg('Failed to generate profiles') }
+    setGeneratingProfiles(false)
   }
 
   async function saveDoc() {
@@ -1645,10 +1658,17 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
             {loadingPlaybook ? <Loader2 size={12} className="animate-spin" /> : <BookOpen size={12} />}
             {loadingPlaybook ? 'Loading...' : 'Load Playbook'}
           </button>
+          <button onClick={regenerateProfiles} disabled={generatingProfiles}
+            className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
+            style={{ borderColor: 'var(--border-medium)' }}>
+            {generatingProfiles ? <Loader2 size={12} className="animate-spin" /> : <Users size={12} />}
+            {generatingProfiles ? 'Generating...' : 'Regen Profiles'}
+          </button>
         </div>
       </div>
 
       {playbookMsg && <p className="text-ds-fine text-semantic-green font-medium">{playbookMsg}</p>}
+      {profileMsg && <p className="text-ds-fine text-semantic-green font-medium">{profileMsg}</p>}
 
       {/* Add document form */}
       {showAdd && (

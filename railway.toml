@@ -36,3 +36,9 @@ command = "npx tsx scripts/audit.ts"
 name = "daily-kpi-snapshot"
 schedule = "0 0 * * *"
 command = "npx tsx scripts/kpi-snapshot.ts"
+
+# Cron job: weekly user profile generation (Sunday 3am UTC)
+[[cron]]
+name = "weekly-profiles"
+schedule = "0 3 * * 0"
+command = "npx tsx scripts/generate-profiles.ts"
