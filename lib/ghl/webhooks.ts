@@ -5,6 +5,7 @@
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { gradeCall } from '@/lib/ai/grading'
+import { getGHLClient } from '@/lib/ghl/client'
 import { createPropertyFromContact } from '@/lib/properties'
 import { awardTaskXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
@@ -390,8 +391,26 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
   }
 
   const user = callData.userId
-    ? await db.user.findFirst({ where: { tenantId, ghlUserId: callData.userId } })
+    ? await db.user.findFirst({ where: { tenantId, ghlUserId: String(callData.userId) } })
     : null
+
+  // Look up contact name from GHL (or from workflow payload)
+  let contactName: string | null = (event as { fullName?: string; full_name?: string }).fullName
+    ?? (event as { full_name?: string }).full_name ?? null
+  let contactAddress: string | null = null
+  const contactId = callData.contactId ? String(callData.contactId) : null
+
+  if (!contactName && contactId) {
+    try {
+      const ghl = await getGHLClient(tenantId)
+      const contact = await ghl.getContact(contactId)
+      const c = (contact as { contact?: { firstName?: string; lastName?: string; address1?: string; city?: string; state?: string } }).contact ?? contact as { firstName?: string; lastName?: string; address1?: string; city?: string; state?: string }
+      contactName = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || null
+      contactAddress = [c.address1, c.city, c.state].filter(Boolean).join(', ') || null
+    } catch {
+      // GHL lookup failed — contact name stays null, poll-calls will fill it later
+    }
+  }
 
   const isGradeable = duration >= 45
 
@@ -400,7 +419,9 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     data: {
       tenantId,
       ghlCallId: messageId,
-      ghlContactId: callData.contactId ?? undefined,
+      ghlContactId: contactId ?? undefined,
+      contactName: contactName ?? undefined,
+      contactAddress: contactAddress ?? undefined,
       assignedToId: user?.id,
       direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
       durationSeconds: duration > 0 ? duration : undefined,
@@ -414,6 +435,8 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       }),
     },
   })
+
+  console.log(`[GHL Webhook] Created call ${call.id}: ${contactName ?? 'Unknown'} | ${duration}s | ${isGradeable ? 'GRADE' : 'dial'}`)
 
   // Only fetch recording + grade for calls >= 45s
   if (isGradeable) {
