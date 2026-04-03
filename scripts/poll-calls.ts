@@ -222,7 +222,103 @@ async function tryExportEndpoint(
   return { success: false, newCursor: null, totalNew: 0 }
 }
 
-// ─── Strategy 2: Per-user conversation search ───────────────────────────────
+// ─── Strategy 2: Call-type conversation search ──────────────────────────────
+// Searches for conversations where the last message type is a call.
+// More reliable than per-user search because it asks GHL directly for calls.
+
+async function callTypeConversationSearch(
+  tenantId: string,
+  accessToken: string,
+  locationId: string,
+  headers: Record<string, string>,
+  ghl: Awaited<ReturnType<typeof getGHLClient>>,
+  tenantUsers: Array<{ id: string; ghlUserId: string | null; role: string | null }>,
+  existingIds: Set<string>,
+): Promise<number> {
+  let totalNew = 0
+  const cutoff = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000)
+
+  // Try searching for call-type conversations directly
+  for (let page = 0; page < 10; page++) {
+    try {
+      const params = new URLSearchParams({
+        locationId,
+        limit: '100',
+        type: 'TYPE_CALL',
+        sortBy: 'last_message_date',
+        sortOrder: 'desc',
+      })
+      if (page > 0) params.set('startAfter', String(page * 100))
+
+      const res = await fetch(`${GHL_BASE_URL}/conversations/search?${params}`, { headers })
+      if (!res.ok) {
+        console.log(`[poll-calls] Call-type search returned ${res.status}, trying alternate type filter...`)
+        // Try without type filter but sort by recent
+        const altParams = new URLSearchParams({ locationId, limit: '100', sortBy: 'last_message_date', sortOrder: 'desc' })
+        const altRes = await fetch(`${GHL_BASE_URL}/conversations/search?${altParams}`, { headers })
+        if (!altRes.ok) break
+        // Fall through to process — we'll filter for calls in the message fetch
+      }
+
+      const data = await (res.ok ? res : await fetch(`${GHL_BASE_URL}/conversations/search?${new URLSearchParams({ locationId, limit: '100', sortBy: 'last_message_date', sortOrder: 'desc' })}`, { headers })).json() as {
+        conversations?: Array<{ id: string; contactId?: string; contactName?: string; fullName?: string; phone?: string; userId?: string; assignedTo?: string; lastMessageDate?: string; type?: string }>
+      }
+
+      const conversations = data.conversations ?? []
+      if (conversations.length === 0) break
+
+      // Check if we've gone past the lookback window
+      const lastConvDate = conversations[conversations.length - 1]?.lastMessageDate
+      if (lastConvDate && new Date(lastConvDate) < cutoff) {
+        // Process remaining conversations in this batch, then stop
+      }
+
+      for (const conv of conversations) {
+        try {
+          // Skip if conversation is too old
+          if (conv.lastMessageDate && new Date(conv.lastMessageDate) < cutoff) continue
+
+          // Get messages for this conversation — look for calls
+          const msgRes = await fetch(`${GHL_BASE_URL}/conversations/${conv.id}/messages?limit=50`, { headers })
+          if (!msgRes.ok) continue
+
+          const msgData = await msgRes.json() as { messages?: { messages?: Array<Record<string, unknown>> } }
+          const msgs = msgData.messages?.messages ?? []
+
+          for (const msg of msgs) {
+            const msgType = String(msg.messageType ?? '').toUpperCase()
+            const typeId = typeof msg.messageTypeId === 'number' ? msg.messageTypeId : -1
+            const isCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+              || !!(msg.callDuration || msg.callStatus || (msg.meta as Record<string, unknown>)?.call)
+            if (!isCall) continue
+
+            const msgDate = new Date(String(msg.dateAdded ?? ''))
+            if (msgDate < cutoff) continue
+
+            if (!msg.contactId && conv.contactId) msg.contactId = conv.contactId
+            if (!msg.userId) msg.userId = conv.userId ?? conv.assignedTo
+
+            const result = await processCallMessage(msg, tenantId, ghl, accessToken, locationId, tenantUsers, existingIds)
+            if (result === 'new') totalNew++
+            await sleep(50)
+          }
+        } catch { continue }
+      }
+
+      // If all conversations in batch are before cutoff, stop
+      if (lastConvDate && new Date(lastConvDate) < cutoff) break
+      if (conversations.length < 100) break
+      await sleep(300)
+    } catch (err) {
+      console.error(`[poll-calls] Call-type search error:`, err instanceof Error ? err.message : err)
+      break
+    }
+  }
+
+  return totalNew
+}
+
+// ─── Strategy 3: Per-user conversation search ───────────────────────────────
 
 async function perUserConversationSearch(
   tenantId: string,
@@ -350,10 +446,9 @@ async function pollCalls() {
           select: { id: true, ghlUserId: true, role: true },
         })
 
-        const existingIds = new Set(
-          (await db.call.findMany({ where: { tenantId: tenant.id }, select: { ghlCallId: true } }))
-            .map(c => c.ghlCallId).filter(Boolean) as string[]
-        )
+        const existingCalls = await db.call.findMany({ where: { tenantId: tenant.id }, select: { ghlCallId: true } })
+        const existingIds = new Set(existingCalls.map(c => c.ghlCallId).filter(Boolean) as string[])
+        console.log(`[poll-calls] ${existingIds.size} existing calls in DB, ${tenantUsers.length} users mapped`)
 
         // ── Strategy 1: Try export endpoint ──
         const exportResult = await tryExportEndpoint(
@@ -371,7 +466,16 @@ async function pollCalls() {
           }
         }
 
-        // ── Strategy 2: Per-user search (runs ALWAYS as backup) ──
+        // ── Strategy 2: Call-type conversation search (most reliable for built-in dialer) ──
+        const callConvNew = await callTypeConversationSearch(
+          tenant.id, freshTenant.ghlAccessToken, freshTenant.ghlLocationId,
+          headers, ghl, tenantUsers, existingIds,
+        )
+        if (callConvNew > 0) {
+          console.log(`[poll-calls] Call-type search found ${callConvNew} additional calls`)
+        }
+
+        // ── Strategy 3: Per-user conversation search (catches anything else) ──
         const searchNew = await perUserConversationSearch(
           tenant.id, freshTenant.ghlAccessToken, freshTenant.ghlLocationId,
           headers, ghl, tenantUsers, existingIds,
