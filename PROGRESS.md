@@ -530,19 +530,44 @@ Trigger stage: f919c1a7-17da-456f-b8f9-10c1aca62691
 - All 42 NAH Wholesale Playbook files now in repo (docs/NAH-Wholesale-Playbook/)
 - Load Playbook button reads from filesystem on Railway
 
+### Session 32 continued — Deep audit + fixes (2026-04-02)
+**What was done:**
+
+**Nav Cleanup:**
+- AI Logs moved to Bot icon (next to Settings gear)
+- Training, ROI, Disposition hidden from nav
+
+**Deep Site Audit — 30 issues found across 4 areas:**
+- Day Hub + Dashboard: 2 bugs, 5 fragile, 5 gaps
+- Calls + Call Detail: 2 broken, 4 fragile, 3 gaps
+- Inventory + Property Detail: 3 fragile, 8 gaps
+- KPIs + Settings + API routes: 3 broken, 5 fragile, 7 gaps
+
+**Fixes Applied:**
+- BROKEN: Calls tab grid dynamic Tailwind class → inline style
+- BROKEN: "Flag scoring issue" button no onClick → wired to feedback modal
+- BROKEN: KPI spend card hardcoded $0 → sums monthlySpend
+- BUG: Day Hub appointment toast on failed requests → checks response.ok
+- BUG: GHL pipelines returns 200 on error → returns 503
+- SAFETY: SMS send had no confirmation → added window.confirm + toast
+- SAFETY: Blast send had no recipient count preview → added confirmation with count
+- UX: BuyersTab had no toast feedback → added useToast
+
+**Remaining from audit (not yet fixed):**
+- Inventory list has no pagination (all properties loaded at once)
+- Inventory empty state missing
+- Blast overrides not used in AI generation
+- Offer status not enum-validated on backend
+- TODO: offer_update logic creates duplicates
+- Several silent .catch({}) across property detail (low priority inline editors)
+
 ## Next Session — Start Exactly Here
 
-**Task:** Test live deployment + audit remaining features
+**Task:** Continue audit fixes + test on Railway
 
-1. On Railway: Settings → Knowledge → Load Playbook (loads 42 docs + 3 profiles)
-2. On Railway: Settings → Knowledge → Regen Profiles (generates profiles from real call data)
-3. Test Role Assistant — should reference NAH scripts/playbook when coaching
-4. Regrade a call — verify coaching references playbook scripts
-5. Test calibration flag on a call — star should toggle
-6. Test AI Logs page — should show all AI calls with cost/tokens
-7. Audit remaining pages: Dashboard, Day Hub, Calls, Inventory, KPIs, Buyers, ROI
-8. Consider: pgvector embeddings for semantic search (currently exact type/role matching)
-9. When ready for monetization, activate Stripe (see Session 17)
+1. Test all pages on Railway — verify fixes deployed correctly
+2. Fix remaining audit items if needed
+3. When ready for monetization, activate Stripe (see Session 17)
 
 ---
 
