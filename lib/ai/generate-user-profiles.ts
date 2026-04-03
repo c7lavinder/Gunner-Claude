@@ -183,13 +183,30 @@ Each array should have 3-5 items. Be specific to wholesale real estate. If data 
         model: 'claude-sonnet-4-6',
       }).catch(() => {})
 
-      const match = text.match(/\{[\s\S]*\}/)
+      // Strip markdown fences if present
+      const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+      const match = cleaned.match(/\{[\s\S]*\}/)
       if (!match) {
+        // Fallback: if we already have a playbook profile, keep it
+        if (existingProfile && (existingProfile.strengths as string[]).length > 0) {
+          results.skipped++
+          continue
+        }
         results.errors.push(`${user.name}: No JSON in AI response`)
         continue
       }
 
-      const profile = JSON.parse(match[0]) as ProfileAnalysis
+      let profile: ProfileAnalysis
+      try {
+        profile = JSON.parse(match[0]) as ProfileAnalysis
+      } catch {
+        if (existingProfile && (existingProfile.strengths as string[]).length > 0) {
+          results.skipped++
+          continue
+        }
+        results.errors.push(`${user.name}: Invalid JSON in AI response`)
+        continue
+      }
 
       // Upsert the profile
       await db.userProfile.upsert({
