@@ -45,6 +45,7 @@ export async function getInventoryKPIs(filters: KPIFilters) {
       contractPrice: true,
       askingPrice: true,
       leadSource: true,
+      marketId: true,
       city: true,
       state: true,
       createdAt: true,
@@ -82,7 +83,7 @@ export async function getInventoryKPIs(filters: KPIFilters) {
 
   // Data quality
   const missingSourceCount = properties.filter(p => !p.leadSource).length
-  const missingMarketCount = 0 // TODO: implement when market system is built
+  const missingMarketCount = properties.filter(p => !p.marketId).length
 
   // Breakdowns by lead source
   const sourceMap = new Map<string, { leads: number; apptSet: number; offers: number; contracted: number; closed: number; revenue: number }>()

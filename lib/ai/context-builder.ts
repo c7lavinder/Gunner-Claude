@@ -109,7 +109,7 @@ export async function buildGradingContext(params: {
     // Calibration calls
     db.call.findMany({
       where: { tenantId, isCalibration: true },
-      select: { score: true, aiSummary: true, calibrationNotes: true, isCalibration: true },
+      select: { id: true, score: true, aiSummary: true, calibrationNotes: true, isCalibration: true },
       take: 10,
     }),
 
@@ -188,12 +188,15 @@ export async function buildGradingContext(params: {
 
   // ── Calibration examples ──
   const tenantCalibration = (tenant?.calibrationCalls ?? []) as Array<{ callId: string; type: string; notes: string }>
-  const calibrationExamples = calibrationCalls.map(c => ({
-    type: 'good' as const, // TODO: cross-reference with tenant.calibrationCalls
+  const calibrationExamples = calibrationCalls.map(c => {
+    const match = tenantCalibration.find(tc => tc.callId === c.id)
+    return {
+    type: (match?.type === 'bad' ? 'bad' : 'good') as 'good' | 'bad',
     score: c.score,
     summary: c.aiSummary,
     notes: c.calibrationNotes,
-  }))
+  }
+  })
 
   // ── Feedback corrections ──
   const feedbackCorrections = recentFeedback.length > 0

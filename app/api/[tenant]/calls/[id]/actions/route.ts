@@ -70,8 +70,8 @@ export async function POST(
         break
       }
       case 'send_sms': {
-        // TODO: Implement SMS sending — needs message composition UI
-        return NextResponse.json({ success: false, message: 'SMS feature coming soon — compose message in GHL' }, { status: 200 })
+        // SMS available via Role Assistant or property detail SMS modal
+        return NextResponse.json({ success: true, message: 'Use the assistant or property page to send SMS with message editing' }, { status: 200 })
       }
     }
 

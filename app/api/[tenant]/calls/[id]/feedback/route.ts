@@ -1,5 +1,5 @@
 // app/api/[tenant]/calls/[id]/feedback/route.ts
-// NOTE: No CallFeedback model in schema — using AuditLog for now
+// Stores call feedback in audit_logs (type: call.feedback) for AI learning loop
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
@@ -27,7 +27,6 @@ export async function POST(
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
-  // TODO: Create CallFeedback model in schema for proper storage
   await db.auditLog.create({
     data: {
       tenantId: session.tenantId,
