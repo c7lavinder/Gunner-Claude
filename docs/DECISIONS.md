@@ -224,12 +224,51 @@ Each entry: **Decision** → **Why** → **Alternatives considered** → **Date 
 
 ---
 
-## Decisions Still Open — need resolution before Phase 2
+### D-017 — pgvector for knowledge search over keyword matching
+
+**Decision:** Use pgvector (Supabase built-in) with OpenAI text-embedding-3-small for semantic search of playbook documents. Falls back to exact type/role matching if no OpenAI key set.
+
+**Why:** 42 playbook docs with type/role filtering works but misses relevant content. Semantic search finds "how to handle price objections" even if the doc is categorized as "training" not "objection." Cost is negligible (~$0.001 for all 42 docs).
+
+**Date:** 2026-04-02 | Active
+
+---
+
+### D-018 — Role Assistant with 74 tools over fewer, broader tools
+
+**Decision:** Define all 74 actions from the architecture plan as individual Claude tools, each with specific input schemas.
+
+**Why:** Specific tool definitions give Claude clear intent signals. "calculate_mao" with ARV/repair/fee params produces better results than a generic "run_calculation" tool. Users see exactly what the AI proposes before approving.
+
+**Date:** 2026-04-02 | Active
+
+---
+
+### D-019 — Weekly auto-generated user profiles over manual-only
+
+**Decision:** Auto-generate performance profiles from call data weekly (Sunday 3am cron), but never overwrite manually edited profiles.
+
+**Why:** Profiles personalize AI coaching. Auto-generation ensures profiles stay current as reps improve. Manual edits take priority so managers can correct the AI's analysis.
+
+**Date:** 2026-04-02 | Active
+
+---
+
+### D-020 — Lead Quality section for ad agency feedback
+
+**Decision:** Add Lead Quality as a dedicated deal intel category with A-F grade, quality score, seller responsiveness, financial distress, DQ risks, and ad campaign attribution.
+
+**Why:** Meta ads agency needs structured feedback on lead quality to optimize targeting. Having this data per-property lets the team say "Campaign X leads are 80% junk" with actual data.
+
+**Date:** 2026-04-02 | Active
+
+---
+
+## Decisions Still Open
 
 | # | Question | Options | Notes |
 |---|---|---|---|
 | D-012 | Email provider | Resend vs Postmark vs SendGrid | Resend is simplest to integrate, good free tier |
-| D-013 | Call transcript source | GHL native vs Deepgram vs AssemblyAI | GHL has native transcription in some plans — check first |
-| D-014 | Property enrichment | Zillow API vs RapidAPI vs county scraping | Zillow API is expensive at scale, RapidAPI has cheaper alternatives |
+| D-013 | Call transcript source | GHL native vs Deepgram vs AssemblyAI | Deepgram integrated (D-006), GHL native not available |
 | D-015 | Queue system for grading | BullMQ (Redis) vs SQS vs none | Add when volume exceeds ~100 calls/day/tenant |
 | D-016 | GHL Marketplace submission | Submit now vs wait for MVP validation | Wait — needs real user testing first |

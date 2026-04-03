@@ -37,3 +37,9 @@ next-env.d.ts
 
 # Audit outputs
 audit-results/
+
+# Claude Code local state (worktrees are per-machine)
+.claude/
+
+# Editor config (personal preferences)
+.vscode/

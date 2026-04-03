@@ -97,7 +97,7 @@ Prompt instructions alone are not sufficient security boundaries.
 | Webhook registration/deregistration | Log + confirm |
 | Bulk GHL contact update | Preview diff + confirm |
 
-Implementation: lib/gates/requireApproval.ts (not yet built)
+Implementation: lib/gates/requireApproval.ts
 
 Pattern:
 ```typescript
@@ -232,19 +232,27 @@ Critical files to re-inject at start of any new context window:
 
 | Tool | Location | Purpose |
 |---|---|---|
-| GHL client | lib/ghl/client.ts | All GHL API calls |
+| GHL client | lib/ghl/client.ts | All GHL API calls (contacts, tasks, SMS, email, pipelines, calendars) |
 | Session helper | lib/auth/session.ts | Auth in API routes |
 | Settings writer | lib/db/settings.ts | All tenant settings writes |
 | GHL dropdown | components/ui/ghl-dropdown.tsx | Reusable GHL entity dropdown (Rule 2) |
-| Call grader | lib/ai/grading.ts | Claude-powered call scoring |
-| Call poller | scripts/poll-calls.ts | Polling fallback for call grading (every 60s cron) |
-| TCP scorer | lib/ai/scoring.ts | Lead conversion probability (v1 built — 8-factor ensemble) |
-| AI coach | lib/ai/coach.ts | User-facing coaching chat |
-| Approval gates | lib/gates/requireApproval.ts | High-stakes action gates (not yet built — Phase 4A) |
+| Call grader | lib/ai/grading.ts | Claude-powered call scoring (7-layer playbook context) |
+| Call poller | scripts/poll-calls.ts | 3-layer call ingestion: webhook + export + per-user search |
+| TCP scorer | lib/ai/scoring.ts | Lead conversion probability (8-factor weighted ensemble) |
+| AI coach | lib/ai/coach.ts | User-facing coaching chat (playbook-aware) |
+| Role Assistant | app/api/ai/assistant/ | 74-tool AI assistant with action approval flow |
+| Context builder | lib/ai/context-builder.ts | Central knowledge assembly (exact + pgvector semantic search) |
+| Embeddings | lib/ai/embeddings.ts | pgvector embedding generation + similarity search |
+| Deal intel extractor | lib/ai/extract-deal-intel.ts | Extracts 100+ fields from call transcripts |
+| Profile generator | lib/ai/generate-user-profiles.ts | Weekly auto-generated coaching profiles |
+| Property enricher | lib/ai/enrich-property.ts | AI property valuation + neighborhood analysis |
+| Approval gates | lib/gates/requireApproval.ts | High-stakes action gates (SMS blast, bulk updates) |
+| AI logger | lib/ai/log.ts | All AI call logging (11 touchpoints) |
 | Audit logger | lib/db/client.ts | All action logging |
 | Self-audit agent | scripts/audit.ts | Scheduled code review |
 | Stripe | lib/stripe/index.ts | Subscription management, plan definitions |
-| Historical import | scripts/import-historical-calls.ts | Bulk import + grade GHL call history |
+| Gamification | lib/gamification/xp.ts | XP, badges, leaderboard |
+| Workflow engine | lib/workflows/engine.ts | Trigger-based automation workflows |
 
 ---
 
