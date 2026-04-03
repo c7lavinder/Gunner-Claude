@@ -2882,28 +2882,74 @@ const INTEL_FIELD_LABELS: Record<string, string> = {
   whichMarketingMessageResonated: 'Message Resonated',
 }
 
+// Placeholder values that should render as blank
+const BLANK_PLACEHOLDERS = new Set([
+  'unknown', 'unknown - not discussed', 'not discussed', 'n/a', 'none', 'null', 'undefined',
+])
+
 function formatIntelValue(val: unknown): string {
   if (val === null || val === undefined) return ''
+
+  // Unwrap FieldValue wrapper: { value, updatedAt, sourceCallId, confidence }
   if (typeof val === 'object' && 'value' in (val as Record<string, unknown>)) {
     return formatIntelValue((val as { value: unknown }).value)
   }
+
+  // Unwrap AccumulatedField wrapper: { items, updatedAt }
   if (typeof val === 'object' && 'items' in (val as Record<string, unknown>)) {
     const items = (val as { items: unknown[] }).items
-    return items.map(i => {
-      if (typeof i === 'string') return i
-      if (typeof i === 'object' && i !== null) {
-        const o = i as Record<string, unknown>
-        return String(o.what ?? o.objection ?? o.event ?? o.name ?? o.amount ?? o.phrase ?? JSON.stringify(o))
-      }
-      return String(i)
-    }).join(', ')
+    return items.map(i => formatSingleItem(i)).filter(Boolean).join('\n')
   }
-  if (Array.isArray(val)) return val.join(', ')
+
+  // Plain array
+  if (Array.isArray(val)) return val.map(i => formatSingleItem(i)).filter(Boolean).join('\n')
+
+  // Plain object (not a wrapper)
   if (typeof val === 'object') {
-    const o = val as Record<string, unknown>
-    return String(o.action ?? o.value ?? o.notes ?? JSON.stringify(val))
+    return formatSingleItem(val)
   }
-  return String(val)
+
+  const str = String(val)
+  if (BLANK_PLACEHOLDERS.has(str.toLowerCase().trim())) return ''
+  return str
+}
+
+function formatSingleItem(item: unknown): string {
+  if (item === null || item === undefined) return ''
+  if (typeof item === 'string') {
+    if (BLANK_PLACEHOLDERS.has(item.toLowerCase().trim())) return ''
+    return item
+  }
+  if (typeof item === 'number' || typeof item === 'boolean') return String(item)
+  if (typeof item === 'object') {
+    const o = item as Record<string, unknown>
+    // Strip internal tracking fields
+    const display: string[] = []
+    for (const [k, v] of Object.entries(o)) {
+      if (['_addedAt', '_sourceCallId', 'sourceCallId', 'updatedAt', 'confidence', 'callId'].includes(k)) continue
+      if (v === null || v === undefined) continue
+      const sv = typeof v === 'object' ? JSON.stringify(v) : String(v)
+      if (BLANK_PLACEHOLDERS.has(sv.toLowerCase().trim())) continue
+      // Use known display keys directly
+      if (k === 'objection' || k === 'what' || k === 'event' || k === 'name' || k === 'phrase' || k === 'item') {
+        display.unshift(sv) // Put the main value first
+      } else if (k === 'whatWorked' && sv) {
+        display.push(`→ What worked: ${sv}`)
+      } else if (k === 'whatDidntWork' && sv) {
+        display.push(`→ What didn't work: ${sv}`)
+      } else if (k === 'effectivenessRating' && sv) {
+        display.push(`(${sv})`)
+      } else if (k === 'amount' && sv) {
+        display.push(`$${Number(sv).toLocaleString()}`)
+      } else if (k === 'date' && sv) {
+        display.push(sv)
+      } else {
+        display.push(`${k}: ${sv}`)
+      }
+    }
+    return display.join(' ')
+  }
+  return String(item)
 }
 
 function DealIntelSection({ dealIntel }: { dealIntel: Record<string, unknown> | null }) {
@@ -2913,6 +2959,8 @@ function DealIntelSection({ dealIntel }: { dealIntel: Record<string, unknown> | 
     section.fields.some(f => {
       const val = dealIntel[f]
       if (!val) return false
+      // Skip placeholder values
+      if (typeof val === 'string' && BLANK_PLACEHOLDERS.has(val.toLowerCase().trim())) return false
       const formatted = formatIntelValue(val)
       return formatted !== '' && formatted !== '[]' && formatted !== '{}'
     })
@@ -2961,7 +3009,18 @@ function DealIntelSection({ dealIntel }: { dealIntel: Record<string, unknown> | 
                     <p className={`text-[8px] font-semibold uppercase tracking-wider ${c.text}`}>
                       {INTEL_FIELD_LABELS[field] ?? field}
                     </p>
-                    <p className="text-[11px] text-txt-primary mt-0.5 leading-relaxed">{formatted}</p>
+                    <div className="text-[11px] text-txt-primary mt-0.5 leading-relaxed">
+                      {formatted.includes('\n') ? (
+                        <ul className="space-y-0.5">
+                          {formatted.split('\n').filter(Boolean).map((line, li) => (
+                            <li key={li} className="flex items-start gap-1.5">
+                              <span className="text-txt-muted mt-1 shrink-0">·</span>
+                              <span>{line}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : formatted}
+                    </div>
                   </div>
                 )
               })}
