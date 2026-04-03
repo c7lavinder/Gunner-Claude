@@ -1,162 +1,146 @@
 // app/api/webhooks/ghl/route.ts
-// Receives GHL webhook events from:
-// 1. Marketplace App webhooks (standard event format)
-// 2. GHL Workflow automations (contact/call data format)
-// Handles both payload formats and routes to appropriate handler
+// Receives ALL GHL webhook events — Marketplace App OR Workflow Automations
+// Accepts ANY payload format. Logs everything. Never rejects.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { handleGHLWebhook } from '@/lib/ghl/webhooks'
+import { handleGHLWebhook, GHLWebhookEvent } from '@/lib/ghl/webhooks'
 import { db } from '@/lib/db/client'
-import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
+  let rawBody = ''
   try {
-    const body = await request.text()
+    rawBody = await request.text()
+    const event = JSON.parse(rawBody)
 
-    // Verify GHL webhook signature (skip if no real secret or workflow webhook)
-    const signature = request.headers.get('x-ghl-signature') ?? ''
-    const secret = process.env.GHL_WEBHOOK_SECRET ?? ''
-    const hasRealSecret = secret && secret !== 'placeholder-will-set-later'
+    // Find tenant from ANY location field GHL might send
+    const locObj = (event.location && typeof event.location === 'object') ? event.location as Record<string, unknown> : {}
+    const locationId = String(
+      event.locationId ?? event.location_id ?? locObj.id ??
+      event.companyId ?? event.company_id ?? ''
+    )
 
-    if (hasRealSecret && signature && !verifySignature(body, signature, secret)) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+    // If no location in payload, try to find tenant from contactId
+    let tenantId: string | null = null
+    if (locationId) {
+      const tenant = await db.tenant.findUnique({ where: { ghlLocationId: locationId }, select: { id: true } })
+      tenantId = tenant?.id ?? null
+    }
+    if (!tenantId) {
+      // Try finding tenant from any contact reference
+      const ctObj = (event.contact && typeof event.contact === 'object') ? event.contact as Record<string, unknown> : {}
+      const contactId = String(event.contactId ?? event.contact_id ?? ctObj.id ?? '')
+      if (contactId) {
+        const callWithTenant = await db.call.findFirst({ where: { ghlContactId: contactId }, select: { tenantId: true } })
+        tenantId = callWithTenant?.tenantId ?? null
+      }
+    }
+    if (!tenantId) {
+      // Last resort — use first tenant (single-tenant for now)
+      const firstTenant = await db.tenant.findFirst({ select: { id: true } })
+      tenantId = firstTenant?.id ?? null
     }
 
-    const event = JSON.parse(body)
-
-    // ── Detect payload format ──
-    // Marketplace webhooks have: { type: "InboundMessage", locationId: "xxx", ... }
-    // Workflow webhooks have: { contact_id: "xxx", location_id: "xxx", ... } or { type: "workflow", ... }
-    // Normalize to standard format
-
-    const normalized = normalizeWebhookPayload(event)
-
-    // Find tenant
-    const locationId = String(normalized.locationId ?? '')
-    if (!locationId) {
-      console.warn('[GHL Webhook] No locationId in payload:', JSON.stringify(event).slice(0, 300))
-      return NextResponse.json({ received: true, warning: 'no locationId' }, { status: 200 })
+    // Log EVERY webhook — raw payload preserved for debugging
+    if (tenantId) {
+      await db.auditLog.create({
+        data: {
+          tenantId,
+          action: 'webhook.received',
+          resource: 'webhook',
+          source: 'GHL_WEBHOOK',
+          severity: 'INFO',
+          payload: JSON.parse(JSON.stringify({
+            rawKeys: Object.keys(event),
+            type: event.type,
+            messageType: event.messageType,
+            call_status: event.call_status ?? event.callStatus,
+            direction: event.direction,
+            contactId: event.contactId ?? event.contact_id,
+            locationId,
+            body: rawBody.slice(0, 1500),
+          })),
+        },
+      }).catch(() => {})
     }
 
-    const tenant = await db.tenant.findUnique({ where: { ghlLocationId: locationId }, select: { id: true, slug: true } })
-    if (!tenant) {
-      console.warn(`[GHL Webhook] No tenant for locationId: ${locationId}`)
-      return NextResponse.json({ received: true, warning: 'unknown tenant' }, { status: 200 })
-    }
+    // Normalize to standard format — handles ANY GHL payload shape
+    const normalized = normalizeToEvent(event, locationId)
 
-    // Log every webhook for debugging
-    await db.auditLog.create({
-      data: {
-        tenantId: tenant.id,
-        action: 'webhook.received',
-        resource: 'webhook',
-        source: 'GHL_WEBHOOK',
-        severity: 'INFO',
-        payload: JSON.parse(JSON.stringify({
-          type: normalized.type,
-          originalType: event.type,
-          isWorkflowWebhook: normalized.isWorkflowWebhook,
-          messageType: normalized.messageType,
-          direction: normalized.direction,
-          contactId: normalized.contactId,
-          callStatus: normalized.callStatus,
-          callDuration: normalized.callDuration,
-          hasRecordingUrl: !!(normalized.recordingUrl),
-          bodyPreview: body.slice(0, 800),
-        })),
-      },
-    }).catch(() => {})
+    console.log(`[Webhook] type=${normalized.type} | loc=${locationId} | contact=${normalized.contactId ?? 'none'} | callDuration=${normalized.callDuration ?? 'n/a'}`)
 
-    console.log(`[GHL Webhook] ${normalized.type} | tenant=${tenant.slug} | workflow=${normalized.isWorkflowWebhook} | contact=${normalized.contactId} | callStatus=${normalized.callStatus ?? 'n/a'}`)
-
-    // Process — return 200 immediately so GHL doesn't retry
-    handleGHLWebhook({ type: String(normalized.type ?? 'unknown'), locationId: String(normalized.locationId ?? ''), ...normalized } as import('@/lib/ghl/webhooks').GHLWebhookEvent).catch((err) => {
-      console.error('[GHL Webhook] Processing error:', err)
+    // Process
+    handleGHLWebhook(normalized).catch((err) => {
+      console.error('[Webhook] Error:', err instanceof Error ? err.message : err)
     })
 
     return NextResponse.json({ received: true }, { status: 200 })
   } catch (err) {
-    console.error('[GHL Webhook] Parse error:', err)
-    return NextResponse.json({ error: 'Bad request' }, { status: 400 })
+    console.error('[Webhook] Parse error:', err, 'body:', rawBody.slice(0, 300))
+    return NextResponse.json({ received: true }, { status: 200 }) // Always 200 so GHL doesn't retry
   }
 }
 
-// ── Normalize different GHL webhook payload formats ──
+// Also accept GET for webhook verification (some GHL configs send a verification GET)
+export async function GET() {
+  return NextResponse.json({ status: 'ok', endpoint: 'ghl-webhook' })
+}
 
-function normalizeWebhookPayload(event: Record<string, unknown>): Record<string, unknown> & { isWorkflowWebhook: boolean } {
-  // Standard Marketplace webhook — already has type + locationId
-  if (event.type && event.locationId && typeof event.type === 'string' &&
-      ['InboundMessage', 'OutboundMessage', 'CallCompleted', 'call.completed',
-       'OpportunityStageChanged', 'OpportunityCreate', 'OpportunityUpdate',
-       'ContactCreated', 'ContactUpdate', 'TaskCompleted', 'AppointmentCreated',
-       'contact.created', 'contact.updated', 'opportunity.stageChanged', 'task.completed',
-      ].includes(event.type as string)) {
-    return { ...event, isWorkflowWebhook: false }
+// ── Accept ANY GHL payload and turn it into something our handler understands ──
+
+function normalizeToEvent(raw: Record<string, unknown>, locationId: string): GHLWebhookEvent {
+  // Already standard format
+  if (raw.type && typeof raw.type === 'string' && raw.locationId) {
+    return raw as unknown as GHLWebhookEvent
   }
 
-  // GHL Workflow webhook — various formats
-  // Common fields: contact_id, location_id, full_name, phone, email
-  // Call-specific: call_status, call_duration, direction, recording_url
+  // Detect call data from ANY field combination
+  const hasCallSignals = !!(
+    raw.call_status ?? raw.callStatus ?? raw.call_duration ?? raw.callDuration ??
+    raw.recording_url ?? raw.recordingUrl ??
+    (raw.messageType && String(raw.messageType).toUpperCase() === 'CALL') ??
+    (typeof raw.messageTypeId === 'number' && (raw.messageTypeId === 1 || raw.messageTypeId === 10))
+  )
 
-  const contactId = event.contact_id ?? event.contactId ?? (event.contact as Record<string, unknown>)?.id ?? null
-  const locationId = event.location_id ?? event.locationId ?? (event.location as Record<string, unknown>)?.id ?? null
+  const contactObj = (raw.contact && typeof raw.contact === 'object') ? raw.contact as Record<string, unknown> : {}
+  const contactId = String(raw.contactId ?? raw.contact_id ?? contactObj.id ?? '')
+  const direction = String(raw.direction ?? raw.call_direction ?? 'outbound')
 
-  // Detect if this is a call event from workflow
-  const callStatus = event.call_status ?? event.callStatus ?? event.status ?? null
-  const callDuration = Number(event.call_duration ?? event.callDuration ?? event.duration ?? 0)
-  const direction = event.direction ?? event.call_direction ?? null
-  const recordingUrl = event.recording_url ?? event.recordingUrl ?? null
-  const hasCallData = !!(callStatus || callDuration > 0 || recordingUrl || direction)
-
-  if (hasCallData) {
-    // This is a call event from a workflow automation
-    const callStatusStr = String(callStatus ?? '').toLowerCase()
-    const isCompleted = ['completed', 'answered', 'connected', 'busy', 'no-answer', 'voicemail', 'failed', ''].includes(callStatusStr)
-
+  if (hasCallSignals) {
     return {
-      type: isCompleted ? 'CallCompleted' : 'InboundMessage',
-      locationId: String(locationId ?? ''),
-      contactId: String(contactId ?? ''),
-      callStatus: callStatusStr,
-      callDuration,
-      direction: String(direction ?? 'outbound'),
-      recordingUrl: recordingUrl ? String(recordingUrl) : undefined,
-      recording_url: recordingUrl ? String(recordingUrl) : undefined,
-      // Pass through all original fields for the handler
+      type: 'CallCompleted',
+      locationId,
+      contactId,
       messageType: 'CALL',
       messageTypeId: 1,
-      id: event.message_id ?? event.id ?? `wf_${Date.now()}`,
-      userId: event.assigned_to ?? event.userId ?? null,
-      fullName: event.full_name ?? event.contact_name ?? null,
-      phone: event.phone ?? null,
-      isWorkflowWebhook: true,
-      _original: event,
-    }
+      id: String(raw.id ?? raw.message_id ?? raw.messageId ?? raw.call_id ?? `wf_${Date.now()}`),
+      callDuration: Number(raw.call_duration ?? raw.callDuration ?? raw.duration ?? 0),
+      callStatus: String(raw.call_status ?? raw.callStatus ?? raw.status ?? 'completed'),
+      direction,
+      recordingUrl: raw.recording_url ?? raw.recordingUrl ?? undefined,
+      recording_url: raw.recording_url ?? raw.recordingUrl ?? undefined,
+      userId: raw.assigned_to ?? raw.userId ?? raw.user_id ?? undefined,
+      fullName: raw.full_name ?? raw.contact_name ?? raw.name ?? undefined,
+      phone: raw.phone ?? raw.contact_phone ?? undefined,
+      attachments: raw.attachments ?? undefined,
+      meta: raw.meta ?? undefined,
+    } as unknown as GHLWebhookEvent
   }
 
-  // Non-call workflow event (contact update, opportunity change, etc.)
-  // Try to determine type from payload shape
-  let eventType = String(event.type ?? event.event ?? event.workflow_trigger ?? 'unknown')
-
-  if (event.opportunity_id || event.pipeline_id || event.stage_id) {
-    eventType = 'OpportunityStageChanged'
-  } else if (contactId && !hasCallData) {
-    eventType = 'ContactUpdate'
+  // Opportunity events
+  if (raw.opportunity_id ?? raw.opportunityId ?? raw.pipeline_id ?? raw.pipelineId ?? raw.stage_id ?? raw.stageId) {
+    return {
+      type: String(raw.type ?? 'OpportunityStageChanged'),
+      locationId,
+      contactId,
+      ...raw,
+    } as unknown as GHLWebhookEvent
   }
 
+  // Fallback — pass through with best-guess type
   return {
-    ...event,
-    type: eventType,
-    locationId: String(locationId ?? ''),
-    contactId: String(contactId ?? ''),
-    isWorkflowWebhook: true,
-  }
-}
-
-function verifySignature(body: string, signature: string, secret: string): boolean {
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    type: String(raw.type ?? raw.event ?? raw.event_type ?? 'unknown'),
+    locationId,
+    contactId,
+    ...raw,
+  } as unknown as GHLWebhookEvent
 }
