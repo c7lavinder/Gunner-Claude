@@ -88,22 +88,45 @@ export async function GET() {
 // ── Accept ANY GHL payload and turn it into something our handler understands ──
 
 function normalizeToEvent(raw: Record<string, unknown>, locationId: string): GHLWebhookEvent {
-  // Already standard format
+  // Extract customData (GHL workflow webhooks put call data here)
+  const cd = (raw.customData && typeof raw.customData === 'object') ? raw.customData as Record<string, unknown> : {}
+  const userObj = (raw.user && typeof raw.user === 'object') ? raw.user as Record<string, unknown> : {}
+
+  // Already standard OAuth app format with type + locationId
+  // BUT check if it's a call — even standard OutboundMessage can be a call
   if (raw.type && typeof raw.type === 'string' && raw.locationId) {
+    const msgType = String(raw.messageType ?? '').toUpperCase()
+    const typeId = typeof raw.messageTypeId === 'number' ? raw.messageTypeId : -1
+    const isStandardCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+
+    if (isStandardCall) {
+      // It's a call from OAuth app — enrich with any customData if available
+      return {
+        ...raw,
+        type: 'CallCompleted', // Re-type so it routes to handleCallCompleted
+        callDuration: Number(raw.callDuration ?? cd.callDuration ?? 0),
+        callStatus: String(raw.callStatus ?? cd.callStatus ?? 'completed'),
+      } as unknown as GHLWebhookEvent
+    }
+
+    // Non-call standard event — pass through
     return raw as unknown as GHLWebhookEvent
   }
 
-  // Detect call data from ANY field combination
+  // Workflow automation payload — call data in customData or top-level
   const hasCallSignals = !!(
     raw.call_status ?? raw.callStatus ?? raw.call_duration ?? raw.callDuration ??
+    cd.callStatus ?? cd.callDuration ?? cd.callDirection ??
     raw.recording_url ?? raw.recordingUrl ??
     (raw.messageType && String(raw.messageType).toUpperCase() === 'CALL') ??
-    (typeof raw.messageTypeId === 'number' && (raw.messageTypeId === 1 || raw.messageTypeId === 10))
+    ((raw.message as Record<string, unknown>)?.type === 1) // workflow message.type=1 means call
   )
 
   const contactObj = (raw.contact && typeof raw.contact === 'object') ? raw.contact as Record<string, unknown> : {}
   const contactId = String(raw.contactId ?? raw.contact_id ?? contactObj.id ?? '')
-  const direction = String(raw.direction ?? raw.call_direction ?? 'outbound')
+  const direction = String(raw.direction ?? raw.call_direction ?? cd.callDirection ?? 'outbound')
+  const duration = Number(cd.callDuration ?? raw.call_duration ?? raw.callDuration ?? raw.duration ?? 0)
+  const userId = String(cd.callUserId ?? raw.assigned_to ?? raw.userId ?? raw.user_id ?? '')
 
   if (hasCallSignals) {
     return {
@@ -112,15 +135,15 @@ function normalizeToEvent(raw: Record<string, unknown>, locationId: string): GHL
       contactId,
       messageType: 'CALL',
       messageTypeId: 1,
-      id: String(raw.id ?? raw.message_id ?? raw.messageId ?? raw.call_id ?? `wf_${Date.now()}`),
-      callDuration: Number(raw.call_duration ?? raw.callDuration ?? raw.duration ?? 0),
-      callStatus: String(raw.call_status ?? raw.callStatus ?? raw.status ?? 'completed'),
+      id: String(raw.id ?? raw.message_id ?? raw.messageId ?? cd.callSid ?? `wf_${Date.now()}`),
+      callDuration: duration,
+      callStatus: String(cd.callStatus ?? raw.call_status ?? raw.callStatus ?? raw.status ?? 'completed'),
       direction,
-      recordingUrl: raw.recording_url ?? raw.recordingUrl ?? undefined,
-      recording_url: raw.recording_url ?? raw.recordingUrl ?? undefined,
-      userId: raw.assigned_to ?? raw.userId ?? raw.user_id ?? undefined,
+      recordingUrl: cd.recordingUrl ?? raw.recording_url ?? raw.recordingUrl ?? undefined,
+      recording_url: cd.recordingUrl ?? raw.recording_url ?? raw.recordingUrl ?? undefined,
+      userId: userId || undefined,
       fullName: raw.full_name ?? raw.contact_name ?? raw.name ?? undefined,
-      phone: raw.phone ?? raw.contact_phone ?? undefined,
+      phone: raw.phone ?? raw.contact_phone ?? cd.callTo ?? cd.callFrom ?? undefined,
       attachments: raw.attachments ?? undefined,
       meta: raw.meta ?? undefined,
     } as unknown as GHLWebhookEvent

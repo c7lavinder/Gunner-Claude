@@ -342,24 +342,47 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
 
   const duration = callData.callDuration ?? callData.duration ?? 0
 
-  // Deduplicate
-  const existing = await db.call.findFirst({
+  // Deduplicate — check by messageId first
+  let existing = await db.call.findFirst({
     where: { tenantId, ghlCallId: messageId },
-    select: { id: true, durationSeconds: true, gradingStatus: true },
+    select: { id: true, durationSeconds: true, gradingStatus: true, recordingUrl: true },
   })
+
+  // If not found by messageId, check by contactId + recent time (workflow events have different IDs)
+  if (!existing && callData.contactId) {
+    existing = await db.call.findFirst({
+      where: {
+        tenantId,
+        ghlContactId: callData.contactId,
+        calledAt: { gte: new Date(Date.now() - 5 * 60 * 1000) }, // within last 5 minutes
+      },
+      orderBy: { calledAt: 'desc' },
+      select: { id: true, durationSeconds: true, gradingStatus: true, recordingUrl: true },
+    })
+  }
+
   if (existing) {
-    // If existing call has null duration and we now have a real one, update it
-    if (existing.durationSeconds === null && duration > 0) {
-      const isGradeable = duration >= 45
+    // Update existing call with any new data we have (duration, recording)
+    const updates: Record<string, unknown> = {}
+    if (existing.durationSeconds === null && duration > 0) updates.durationSeconds = duration
+    if (!existing.recordingUrl) {
+      const rec = extractRecordingUrl(callData)
+      if (rec) updates.recordingUrl = rec
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const finalDuration = (updates.durationSeconds ?? existing.durationSeconds ?? 0) as number
+      const isGradeable = finalDuration >= 45
       await db.call.update({
         where: { id: existing.id },
         data: {
-          durationSeconds: duration,
+          ...updates,
           ...(isGradeable && existing.gradingStatus !== 'COMPLETED' ? { gradingStatus: 'PENDING' } : {}),
-          ...(!isGradeable ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${duration}s) — not graded.` } : {}),
+          ...(!isGradeable && finalDuration > 0 ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${finalDuration}s) — not graded.` } : {}),
         },
       })
       if (isGradeable && existing.gradingStatus !== 'COMPLETED') {
+        console.log(`[GHL Webhook] Updated call ${existing.id} with duration=${finalDuration}s, triggering grade`)
         gradeCall(existing.id).catch(() => {})
       }
     }
