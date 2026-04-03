@@ -164,7 +164,12 @@ commitmentsWeMade, promisesTheyMade, promiseDeadlines, nextStepAgreed, triggerEv
 objectionsEncountered (include whatWorked, whatDidntWork, effectivenessRating: resolved|partially|unresolved),
 relationshipRapportLevel, bestRepForThisSeller,
 dealRedFlags, dealGreenFlags, dealHealthTrajectory (improving|stable|declining), dealRiskLevel (low|medium|high),
-howTheyFoundUs, referralSource, referralChain, firstMarketingPieceReceived, whichMarketingMessageResonated
+howTheyFoundUs, referralSource, referralChain, firstMarketingPieceReceived, whichMarketingMessageResonated,
+leadGrade (A|B|C|D|F — composite based on motivation + timeline + equity + responsiveness + deal viability),
+leadQualityScore (1-100 composite), sellerResponsiveness (highly_responsive|responsive|slow|ghosting|unknown),
+financialDistressLevel (none|mild|moderate|severe|foreclosure_imminent), financialDistressDetails,
+disqualificationRisks, isDisqualified (true only if deal is clearly dead), disqualificationReason,
+qualificationCallCompleted (boolean), qualificationOutcome (qualified|nurture|disqualified|no_contact)
 
 IMPORTANT:
 - Extract EVERYTHING mentioned. More data points = better. Don't leave value on the table.

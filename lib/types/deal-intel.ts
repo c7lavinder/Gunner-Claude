@@ -111,6 +111,25 @@ export interface DealIntel {
   referralChain?: AccumulatedField<string>              // Network effects: "John told me, neighbor Mary also called"
   firstMarketingPieceReceived?: FieldValue<string>      // "Yellow letter in January"
   whichMarketingMessageResonated?: FieldValue<string>   // What about our marketing made them respond
+
+  // ── Lead Quality (for ad agency feedback + internal scoring) ──────────
+  leadGrade?: FieldValue<'A' | 'B' | 'C' | 'D' | 'F'> // Composite letter grade
+  leadQualityScore?: FieldValue<number>                 // 1-100 composite score
+  sellerResponsiveness?: FieldValue<'highly_responsive' | 'responsive' | 'slow' | 'ghosting' | 'unknown'>
+  financialDistressLevel?: FieldValue<'none' | 'mild' | 'moderate' | 'severe' | 'foreclosure_imminent'>
+  financialDistressDetails?: FieldValue<string>         // "3 months behind on mortgage, tax lien filed"
+  disqualificationRisks?: AccumulatedField<string>      // "Unrealistic price expectations", "Title in probate — 6+ month timeline"
+  isDisqualified?: FieldValue<boolean>                  // Hard DQ — not a viable deal
+  disqualificationReason?: FieldValue<string>           // Why DQ'd
+  leadSourceFeedback?: FieldValue<'great' | 'good' | 'okay' | 'bad' | 'junk'>  // Was this lead worth the ad spend?
+  leadSourceFeedbackNotes?: FieldValue<string>          // "Seller had no motivation, just fishing for offers"
+  adCampaignName?: FieldValue<string>                   // Which Facebook/Google campaign
+  adSetName?: FieldValue<string>                        // Which ad set
+  adCreative?: FieldValue<string>                       // Which ad creative
+  leadFormSubmittedAt?: FieldValue<string>              // When the lead came in
+  speedToFirstContact?: FieldValue<number>              // Minutes from lead form to first call
+  qualificationCallCompleted?: FieldValue<boolean>      // Did we complete a full qual call?
+  qualificationOutcome?: FieldValue<'qualified' | 'nurture' | 'disqualified' | 'no_contact'>
 }
 
 // ─── Field wrapper types ────────────────────────────────────────────────────
@@ -156,6 +175,7 @@ export type DealIntelCategory =
   | 'communication_intel'
   | 'deal_status'
   | 'marketing'
+  | 'lead_quality'
 
 // ─── Category display config ────────────────────────────────────────────────
 
@@ -168,6 +188,7 @@ export const DEAL_INTEL_CATEGORIES: Record<DealIntelCategory, { label: string; i
   communication_intel: { label: 'Communication Intel',      icon: 'MessageSquare', color: 'text-teal-600' },
   deal_status:         { label: 'Deal Status & Promises',   icon: 'CheckCircle',   color: 'text-orange-600' },
   marketing:           { label: 'Marketing Attribution',    icon: 'Target',        color: 'text-pink-600' },
+  lead_quality:        { label: 'Lead Quality',              icon: 'BarChart',      color: 'text-indigo-600' },
 }
 
 // ─── Field → Category mapping ───────────────────────────────────────────────
@@ -223,6 +244,15 @@ export const FIELD_CATEGORY: Record<string, DealIntelCategory> = {
   howTheyFoundUs: 'marketing', referralSource: 'marketing',
   referralChain: 'marketing', firstMarketingPieceReceived: 'marketing',
   whichMarketingMessageResonated: 'marketing',
+  // Lead Quality
+  leadGrade: 'lead_quality', leadQualityScore: 'lead_quality',
+  sellerResponsiveness: 'lead_quality', financialDistressLevel: 'lead_quality',
+  financialDistressDetails: 'lead_quality', disqualificationRisks: 'lead_quality',
+  isDisqualified: 'lead_quality', disqualificationReason: 'lead_quality',
+  leadSourceFeedback: 'lead_quality', leadSourceFeedbackNotes: 'lead_quality',
+  adCampaignName: 'lead_quality', adSetName: 'lead_quality', adCreative: 'lead_quality',
+  leadFormSubmittedAt: 'lead_quality', speedToFirstContact: 'lead_quality',
+  qualificationCallCompleted: 'lead_quality', qualificationOutcome: 'lead_quality',
 }
 
 // ─── Field labels for UI ────────────────────────────────────────────────────
@@ -300,6 +330,15 @@ export const FIELD_LABELS: Record<string, string> = {
   referralChain: 'Referral Chain',
   firstMarketingPieceReceived: 'First Marketing Piece',
   whichMarketingMessageResonated: 'Message That Resonated',
+  // Lead Quality
+  leadGrade: 'Lead Grade', leadQualityScore: 'Lead Quality Score (1-100)',
+  sellerResponsiveness: 'Seller Responsiveness', financialDistressLevel: 'Financial Distress',
+  financialDistressDetails: 'Distress Details', disqualificationRisks: 'DQ Risks',
+  isDisqualified: 'Disqualified?', disqualificationReason: 'DQ Reason',
+  leadSourceFeedback: 'Lead Source Quality', leadSourceFeedbackNotes: 'Source Feedback Notes',
+  adCampaignName: 'Ad Campaign', adSetName: 'Ad Set', adCreative: 'Ad Creative',
+  leadFormSubmittedAt: 'Lead Form Submitted', speedToFirstContact: 'Speed to First Contact (min)',
+  qualificationCallCompleted: 'Qual Call Done?', qualificationOutcome: 'Qualification Outcome',
   // Deal Health & Engagement
   dealRedFlags: 'Deal Red Flags',
   dealGreenFlags: 'Deal Green Flags',

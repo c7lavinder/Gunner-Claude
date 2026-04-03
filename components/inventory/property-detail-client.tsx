@@ -2760,6 +2760,13 @@ function ComputedMetricsSection({ propertyId }: { propertyId: string }) {
 // ─── Deal Intel Display (Research tab) ──────────────────────────────────────
 
 const INTEL_SECTIONS: Array<{ key: string; label: string; color: string; fields: string[] }> = [
+  { key: 'lead_quality', label: 'Lead Quality', color: 'indigo', fields: [
+    'leadGrade', 'leadQualityScore', 'sellerResponsiveness', 'financialDistressLevel', 'financialDistressDetails',
+    'disqualificationRisks', 'isDisqualified', 'disqualificationReason',
+    'qualificationCallCompleted', 'qualificationOutcome',
+    'leadSourceFeedback', 'leadSourceFeedbackNotes',
+    'adCampaignName', 'adSetName', 'adCreative', 'leadFormSubmittedAt', 'speedToFirstContact',
+  ]},
   { key: 'seller', label: 'Seller Profile', color: 'blue', fields: [
     'sellerMotivationLevel', 'sellerMotivationReason', 'costOfInaction', 'painQuantification', 'costOfInactionMonthly',
     'statedVsImpliedMotivation', 'sellerWhySelling',
@@ -2812,6 +2819,15 @@ const INTEL_FIELD_LABELS: Record<string, string> = {
   sellerAlternativePlan: 'Alternative Plan',
   sellerPersonalityProfile: 'Personality Profile', sellerOnlineBehavior: 'Online Behavior',
   costOfInaction: 'Cost of Inaction', costOfInactionMonthly: 'Monthly Cost of Not Selling ($)', painQuantification: 'Pain Quantification',
+  // Lead Quality
+  leadGrade: 'Lead Grade', leadQualityScore: 'Quality Score (1-100)',
+  sellerResponsiveness: 'Seller Responsiveness', financialDistressLevel: 'Financial Distress',
+  financialDistressDetails: 'Distress Details', disqualificationRisks: 'DQ Risks',
+  isDisqualified: 'Disqualified?', disqualificationReason: 'DQ Reason',
+  leadSourceFeedback: 'Lead Source Quality', leadSourceFeedbackNotes: 'Source Feedback',
+  adCampaignName: 'Ad Campaign', adSetName: 'Ad Set', adCreative: 'Ad Creative',
+  leadFormSubmittedAt: 'Lead Form Submitted', speedToFirstContact: 'Speed to Contact (min)',
+  qualificationCallCompleted: 'Qual Call Done?', qualificationOutcome: 'Qualification Outcome',
   decisionMakers: 'Decision Makers', decisionMakersConfirmed: 'DM Confirmed',
   decisionMakerNotes: 'DM Notes', documentReadiness: 'Document Readiness',
   sellerAskingHistory: 'Asking History', offersWeHaveMade: 'Our Offers',
