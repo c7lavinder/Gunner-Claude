@@ -117,11 +117,15 @@ export async function generateUserProfiles(tenantId: string): Promise<{
         count90: calls.length,
       }
 
-      // Also check for existing playbook profile to merge with
+      // Check for existing profile — skip if manually edited (preserve user's changes)
       const existingProfile = await db.userProfile.findUnique({
         where: { tenantId_userId: { tenantId, userId: user.id } },
         select: { strengths: true, weaknesses: true, commonMistakes: true, communicationStyle: true, coachingPriorities: true, profileSource: true },
       })
+      if (existingProfile?.profileSource === 'manual') {
+        results.skipped++
+        continue // Don't overwrite manually edited profiles
+      }
       const existingContext = existingProfile
         ? `\nEXISTING PROFILE (from ${existingProfile.profileSource}):\nStrengths: ${(existingProfile.strengths as string[]).join('; ')}\nWeaknesses: ${(existingProfile.weaknesses as string[]).join('; ')}\nStyle: ${existingProfile.communicationStyle ?? 'Unknown'}\nUpdate this profile with any new patterns from the call data. Keep existing insights that still apply.`
         : ''

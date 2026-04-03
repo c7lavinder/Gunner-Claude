@@ -40,6 +40,11 @@ export async function POST(request: NextRequest) {
     select: { id: true, title: true, type: true, callType: true, role: true, source: true, isActive: true, updatedAt: true },
   })
 
+  // Auto-embed the new document (non-blocking)
+  import('@/lib/ai/embeddings').then(({ embedDocument, isEmbeddingsEnabled }) => {
+    if (isEmbeddingsEnabled()) embedDocument(document.id).catch(() => {})
+  }).catch(() => {})
+
   return NextResponse.json({ document })
 }
 
@@ -58,6 +63,13 @@ export async function PATCH(request: NextRequest) {
       ...(content ? { content } : {}),
     },
   })
+
+  // Re-embed if content changed (non-blocking)
+  if (content) {
+    import('@/lib/ai/embeddings').then(({ embedDocument, isEmbeddingsEnabled }) => {
+      if (isEmbeddingsEnabled()) embedDocument(id).catch(() => {})
+    }).catch(() => {})
+  }
 
   return NextResponse.json({ status: 'success' })
 }
