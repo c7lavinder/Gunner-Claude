@@ -1504,11 +1504,29 @@ function InlineAI({ propertyId }: { propertyId: string }) {
         payload.offerAmount = a.offerAmount
         payload.channel = a.channel ?? 'offer'
       } else if (a.type === 'offer_update') {
-        payload.action = 'update'
-        payload.offerStatus = a.offerStatus
-        payload.offerAmount = a.offerAmount
-        // TODO: find logId by recipientName — for now just log new
-        payload.type = 'offer'
+        // Find the most recent offer log for this recipient to update it
+        try {
+          const logsRes = await fetch(`/api/properties/${propertyId}/outreach`)
+          const logsData = await logsRes.json()
+          const existingOffer = (logsData.logs ?? []).find(
+            (l: { type: string; recipientName: string }) => l.type === 'offer' && l.recipientName?.toLowerCase() === (a.recipientName ?? '').toLowerCase()
+          )
+          if (existingOffer) {
+            payload.action = 'update'
+            payload.logId = existingOffer.id
+            payload.offerStatus = a.offerStatus
+            payload.offerAmount = a.offerAmount
+          } else {
+            // No existing offer found — create new with status
+            payload.type = 'offer'
+            payload.offerAmount = a.offerAmount
+            payload.channel = 'offer'
+          }
+        } catch {
+          payload.type = 'offer'
+          payload.offerAmount = a.offerAmount
+          payload.channel = 'offer'
+        }
       } else if (a.type === 'showing') {
         payload.type = 'showing'
         if (a.showingDate) {
@@ -3764,6 +3782,7 @@ function BuyerRow({ buyer: b, tierColors }: {
 // ─── Outreach Tab ────────────────────────────────────────────────────────────
 
 function OutreachTab({ property }: { property: PropertyDetail }) {
+  const { toast } = useToast()
   const [subTab, setSubTab] = useState<'send' | 'offer' | 'showing'>('send')
   const [logs, setLogs] = useState<Array<{
     id: string; type: string; channel: string; recipientName: string; recipientContact: string
@@ -3844,16 +3863,18 @@ function OutreachTab({ property }: { property: PropertyDetail }) {
         }
       }
 
-      await fetch(`/api/properties/${property.id}/outreach`, {
+      const saveRes = await fetch(`/api/properties/${property.id}/outreach`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
+      if (!saveRes.ok) { toast('Failed to save', 'error'); setSaving(false); return }
+      toast('Logged successfully', 'success')
       const res = await fetch(`/api/properties/${property.id}/outreach`)
       const d = await res.json()
       setLogs(d.logs ?? [])
       resetForm()
-    } catch {}
+    } catch { toast('Failed to save', 'error') }
     setSaving(false)
   }
 

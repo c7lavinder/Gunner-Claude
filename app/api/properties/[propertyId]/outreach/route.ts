@@ -124,14 +124,26 @@ export async function POST(
     const body = await req.json()
     const { type, channel, recipientName, recipientContact, ghlContactId, notes, offerAmount, showingDate, source } = body
 
+    const VALID_OFFER_STATUSES = ['Pending', 'Accepted', 'Rejected', 'Countered', 'Expired']
+    const VALID_SHOWING_STATUSES = ['Scheduled', 'Showed', 'No-Show', 'Cancelled']
+
     // PATCH action — update existing log
     if (body.action === 'update' && body.logId) {
       const updateData: Record<string, unknown> = {}
       if (body.notes !== undefined) updateData.notes = body.notes
       if (body.offerAmount !== undefined) updateData.offerAmount = body.offerAmount ? parseFloat(body.offerAmount) : null
-      if (body.offerStatus !== undefined) updateData.offerStatus = body.offerStatus
+      if (body.offerStatus !== undefined) {
+        // Normalize case and validate
+        const normalized = VALID_OFFER_STATUSES.find(s => s.toLowerCase() === String(body.offerStatus).toLowerCase())
+        if (!normalized) return NextResponse.json({ error: `Invalid offer status. Must be: ${VALID_OFFER_STATUSES.join(', ')}` }, { status: 400 })
+        updateData.offerStatus = normalized
+      }
       if (body.showingDate !== undefined) updateData.showingDate = body.showingDate ? new Date(body.showingDate) : null
-      if (body.showingStatus !== undefined) updateData.showingStatus = body.showingStatus
+      if (body.showingStatus !== undefined) {
+        const normalizedShowing = VALID_SHOWING_STATUSES.find(s => s.toLowerCase() === String(body.showingStatus).toLowerCase())
+        if (!normalizedShowing) return NextResponse.json({ error: `Invalid showing status. Must be: ${VALID_SHOWING_STATUSES.join(', ')}` }, { status: 400 })
+        updateData.showingStatus = normalizedShowing
+      }
       if (body.channel !== undefined) updateData.channel = body.channel
 
       await db.outreachLog.update({

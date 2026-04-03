@@ -26,6 +26,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
       ...(!canViewAll ? { assignedToId: userId } : {}),
     },
     orderBy: { createdAt: 'desc' },
+    take: 500,
     include: {
       sellers: {
         include: { seller: { select: { id: true, name: true, phone: true, email: true, ghlContactId: true } } },

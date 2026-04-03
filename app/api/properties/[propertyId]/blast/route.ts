@@ -47,17 +47,28 @@ export async function POST(
     const tenantId = session.tenantId
     const { action, tiers, tier, message, channel, subject, buyerIds } = await req.json()
 
-    const property = await db.property.findUnique({
+    const propertyRaw = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
       select: {
         address: true, city: true, state: true, zip: true,
         askingPrice: true, arv: true, contractPrice: true, assignmentFee: true,
+        dealBlastAskingOverride: true, dealBlastArvOverride: true,
+        dealBlastContractOverride: true, dealBlastAssignmentFeeOverride: true,
         beds: true, baths: true, sqft: true, yearBuilt: true, lotSize: true,
         propertyType: true, description: true, status: true,
         zillowData: true,
       },
     })
-    if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
+    if (!propertyRaw) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
+
+    // Use blast overrides when set, otherwise fall back to base values
+    const property = {
+      ...propertyRaw,
+      askingPrice: propertyRaw.dealBlastAskingOverride ?? propertyRaw.askingPrice,
+      arv: propertyRaw.dealBlastArvOverride ?? propertyRaw.arv,
+      contractPrice: propertyRaw.dealBlastContractOverride ?? propertyRaw.contractPrice,
+      assignmentFee: propertyRaw.dealBlastAssignmentFeeOverride ?? propertyRaw.assignmentFee,
+    }
 
     // Generate blast content
     if (action === 'generate') {
