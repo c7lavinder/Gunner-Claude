@@ -57,9 +57,9 @@ export async function generateUserProfiles(tenantId: string): Promise<{
         },
       })
 
-      if (calls.length < 3) {
+      if (calls.length === 0) {
         results.skipped++
-        continue // Not enough data to generate a meaningful profile
+        continue // No graded calls — can't generate profile
       }
 
       // Aggregate rubric scores across all calls
@@ -217,7 +217,8 @@ RULES:
       results.updated++
       console.log(`[Profile Gen] Updated profile for ${user.name}: ${profile.strengths.length} strengths, ${profile.weaknesses.length} weaknesses`)
     } catch (err) {
-      results.errors.push(`${user.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      results.errors.push(`${user.name}: ${msg}`)
     }
   }
 

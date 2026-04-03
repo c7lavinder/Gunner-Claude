@@ -1605,7 +1605,8 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
     try {
       const res = await fetch('/api/admin/generate-profiles', { method: 'POST' })
       const data = await res.json()
-      setProfileMsg(`Updated ${data.updated ?? 0} profiles, skipped ${data.skipped ?? 0}${data.errors?.length ? ` (${data.errors.length} errors)` : ''}`)
+      const errDetail = data.errors?.length ? `\nErrors: ${(data.errors as string[]).join(' | ')}` : ''
+      setProfileMsg(`Updated ${data.updated ?? 0} profiles, skipped ${data.skipped ?? 0}${data.errors?.length ? ` (${data.errors.length} errors)` : ''}${errDetail}`)
     } catch { setProfileMsg('Failed to generate profiles') }
     setGeneratingProfiles(false)
   }
