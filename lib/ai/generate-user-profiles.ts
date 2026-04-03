@@ -117,49 +117,55 @@ export async function generateUserProfiles(tenantId: string): Promise<{
         count90: calls.length,
       }
 
+      // Also check for existing playbook profile to merge with
+      const existingProfile = await db.userProfile.findUnique({
+        where: { tenantId_userId: { tenantId, userId: user.id } },
+        select: { strengths: true, weaknesses: true, commonMistakes: true, communicationStyle: true, coachingPriorities: true, profileSource: true },
+      })
+      const existingContext = existingProfile
+        ? `\nEXISTING PROFILE (from ${existingProfile.profileSource}):\nStrengths: ${(existingProfile.strengths as string[]).join('; ')}\nWeaknesses: ${(existingProfile.weaknesses as string[]).join('; ')}\nStyle: ${existingProfile.communicationStyle ?? 'Unknown'}\nUpdate this profile with any new patterns from the call data. Keep existing insights that still apply.`
+        : ''
+
       // Use Claude to synthesize a profile from the data
       const timer = startTimer()
-      const prompt = `Analyze this sales rep's performance data and generate a coaching profile.
+      const rubricSection = Object.keys(rubricAverages).length > 0
+        ? `Rubric category averages:\n${Object.entries(rubricAverages).map(([cat, avg]) => `- ${cat}: ${avg}/100`).join('\n')}`
+        : 'No rubric scores available yet.'
+      const feedbackSection = allFeedback.length > 0
+        ? `Recent coaching feedback themes:\n${allFeedback.slice(0, 30).join('\n')}`
+        : 'No coaching feedback yet.'
+      const tipsSection = allTips.length > 0
+        ? `Recent coaching tips given:\n${allTips.slice(0, 20).join('\n')}`
+        : 'No coaching tips yet.'
 
-Rep: ${user.name} (${user.role?.replace(/_/g, ' ') ?? 'Unknown Role'})
+      const prompt = `Rep: ${user.name} (${user.role?.replace(/_/g, ' ') ?? 'Unknown Role'})
 Total graded calls (90 days): ${calls.length}
 Score trend: 30-day avg ${improvementVelocity.avg30 ?? 'N/A'} | 60-day avg ${improvementVelocity.avg60 ?? 'N/A'} | 90-day avg ${improvementVelocity.avg90 ?? 'N/A'}
 
-Rubric category averages:
-${Object.entries(rubricAverages).map(([cat, avg]) => `- ${cat}: ${avg}/100`).join('\n')}
+${rubricSection}
 
-Recent coaching feedback themes (from graded calls):
-${allFeedback.slice(0, 30).join('\n')}
+${feedbackSection}
 
-Recent coaching tips given:
-${allTips.slice(0, 20).join('\n')}
+${tipsSection}
 
-Call outcomes breakdown:
-${Object.entries(calls.reduce((acc, c) => {
+Call outcomes: ${Object.entries(calls.reduce((acc, c) => {
   const outcome = c.callOutcome ?? 'unknown'
   acc[outcome] = (acc[outcome] ?? 0) + 1
   return acc
-}, {} as Record<string, number>)).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
+}, {} as Record<string, number>)).map(([k, v]) => `${k}: ${v}`).join(', ') || 'No outcomes yet'}
+${existingContext}
 
-Based on this data, return a JSON profile:
-{
-  "strengths": ["top 3-5 specific strengths based on high rubric scores and positive feedback"],
-  "weaknesses": ["top 3-5 specific areas for improvement based on low rubric scores and repeated feedback"],
-  "commonMistakes": ["3-5 most frequently noted mistakes or bad habits"],
-  "communicationStyle": "one-sentence description of their communication style (warm/direct/analytical/etc + what types of sellers they work best with)",
-  "coachingPriorities": ["ranked list of 3-5 specific coaching actions, most impactful first"]
-}
-
-RULES:
-- Be SPECIFIC. Not "needs to improve objection handling" but "loses control when sellers raise price objection — needs to use Reversing technique"
-- Base everything on the actual data above, not generic advice
-- Strengths should acknowledge what they do well so coaching doesn't re-teach it
-- Coaching priorities should be ordered by impact: fix the biggest score-dragger first
-- Return ONLY valid JSON, no other text`
+Generate a coaching profile as JSON. If data is limited, use the existing profile and role-based defaults. Always return valid JSON.`
 
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 1000,
+        system: `You are a sales coaching AI. You MUST respond with ONLY a valid JSON object, no other text. No markdown, no explanation, no preamble.
+
+The JSON must have this exact structure:
+{"strengths":["..."],"weaknesses":["..."],"commonMistakes":["..."],"communicationStyle":"...","coachingPriorities":["..."]}
+
+Each array should have 3-5 items. Be specific to wholesale real estate. If data is limited, base your analysis on the rep's role and whatever data is available. Never say you can't generate a profile — always produce one.`,
         messages: [{ role: 'user', content: prompt }],
       })
 
