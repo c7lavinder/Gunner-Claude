@@ -473,7 +473,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               {call.score !== null ? `${Math.round(call.score)}%` : '\u2014'}
             </p>
 
-            <button className="text-[11px] text-semantic-red hover:underline mt-2">
+            <button onClick={() => setShowFeedback(true)} className="text-[11px] text-semantic-red hover:underline mt-2">
               Flag a scoring issue
             </button>
           </div>

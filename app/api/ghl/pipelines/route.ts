@@ -16,6 +16,6 @@ export async function GET(request: NextRequest) {
     const result = await ghl.getPipelines()
     return NextResponse.json(result)
   } catch (err) {
-    return NextResponse.json({ error: 'GHL not connected', pipelines: [] }, { status: 200 })
+    return NextResponse.json({ error: 'GHL not connected', pipelines: [] }, { status: 503 })
   }
 }

@@ -542,7 +542,7 @@ export function KpiDashboard({ properties, milestones, tenantSlug, initialConfig
 
         {/* Stat Cards */}
         <div className="flex gap-3 overflow-x-auto pb-1">
-          <KpiStatCard label="Spend" value={0} isCurrency showTrend={false} />
+          <KpiStatCard label="Spend" value={Object.values(monthlySpend[getMonthKey()] ?? {}).reduce((a, b) => a + b, 0)} isCurrency showTrend={false} />
           <KpiStatCard label="Lead" value={acqCounts.lead} accent="border-l-teal-400" />
           <KpiStatCard label="Apt Set" value={acqCounts.aptSet} accent="border-l-teal-400" />
           <KpiStatCard label="Offer Made" value={acqCounts.offerMade} accent="border-l-teal-400" />

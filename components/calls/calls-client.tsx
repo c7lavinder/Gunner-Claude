@@ -242,7 +242,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
         </div>
 
         {/* STATUS TABS */}
-        {tabs.length > 1 && <div className={`grid grid-cols-${tabs.length} gap-3`}>
+        {tabs.length > 1 && <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
           {tabs.map(t => (
             <button
               key={t.id}

@@ -205,7 +205,7 @@ function ApptList({ appointments, loading, expandedAppt, setExpandedAppt, apptDa
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ appointmentId: appt.id, status: key }),
-                        }).then(() => { fetchAppts(apptDate); toast(`Marked ${label}`, 'success') })
+                        }).then(r => { if (!r.ok) throw new Error(); fetchAppts(apptDate); toast(`Marked ${label}`, 'success') })
                           .catch(() => toast('Failed to update', 'error'))
                       }}
                       className={`text-[8px] font-medium px-2 py-1 rounded-full border transition-colors ${
