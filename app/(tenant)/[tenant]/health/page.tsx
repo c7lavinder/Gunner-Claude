@@ -122,7 +122,7 @@ export default async function HealthPage({ params }: { params: { tenant: string 
           <tbody>
             {recentCalls.map((c, i) => (
               <tr key={i} className="border-b last:border-b-0" style={{ borderColor: 'var(--border-light)' }}>
-                <td className="px-4 py-2 text-txt-muted">{c.calledAt?.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) ?? '—'}</td>
+                <td className="px-4 py-2 text-txt-muted">{c.calledAt?.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' }) ?? '—'}</td>
                 <td className="px-4 py-2 text-txt-primary font-medium">{c.contactName ?? '—'}</td>
                 <td className="px-4 py-2 text-txt-secondary">{c.assignedTo?.name ?? '—'}</td>
                 <td className="px-4 py-2 text-txt-secondary">{c.durationSeconds != null ? `${c.durationSeconds}s` : '—'}</td>
@@ -153,7 +153,7 @@ export default async function HealthPage({ params }: { params: { tenant: string 
             const p = w.payload as Record<string, unknown> | null
             return (
               <div key={i} className="flex items-center gap-3 text-[11px]">
-                <span className="text-txt-muted shrink-0">{w.createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
+                <span className="text-txt-muted shrink-0">{w.createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'America/Chicago' })}</span>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                   String(p?.messageType ?? '') === 'CALL' ? 'bg-green-100 text-green-700' :
                   String(p?.messageType ?? '') === 'SMS' ? 'bg-blue-100 text-blue-700' :
