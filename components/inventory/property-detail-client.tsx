@@ -2958,6 +2958,7 @@ function DealIntelSection({ dealIntel }: { dealIntel: Record<string, unknown> | 
 // ─── Buyers Tab ──────────────────────────────────────────────────────────────
 
 function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug: string }) {
+  const { toast } = useToast()
   // ── Buyer data type ────────────────────────────────────────────────
   type BuyerItem = {
     id: string; name: string; phone: string | null; email: string | null
@@ -3239,16 +3240,24 @@ function BuyersTab({ property, tenantSlug }: { property: PropertyDetail; tenantS
   // SMS send
   async function sendSms() {
     if (!smsTarget?.phone || !smsMessage.trim()) return
+    if (!window.confirm(`Send SMS to ${smsTarget.name ?? smsTarget.phone}?\n\n"${smsMessage.slice(0, 100)}${smsMessage.length > 100 ? '...' : ''}"`)) return
     setSmsSending(true)
     try {
-      await fetch('/api/ghl/actions', {
+      const res = await fetch('/api/ghl/actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'send_sms', contactId: smsTarget.ghlContactId ?? smsTarget.phone, message: smsMessage }),
       })
-      setSmsTarget(null)
-      setSmsMessage('')
-    } catch {}
+      if (res.ok) {
+        toast(`SMS sent to ${smsTarget.name ?? smsTarget.phone}`, 'success')
+        setSmsTarget(null)
+        setSmsMessage('')
+      } else {
+        toast('Failed to send SMS', 'error')
+      }
+    } catch {
+      toast('Failed to send SMS', 'error')
+    }
     setSmsSending(false)
   }
 
@@ -4589,6 +4598,8 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
   async function sendToTier(tier: string, channel: 'sms' | 'email') {
     const content = blasts[tier]
     if (!content) return
+    const buyerCount = selectedBuyerIds.size > 0 ? selectedBuyerIds.size : recipientCounts[tier] ?? 0
+    if (!window.confirm(`Send ${channel.toUpperCase()} blast to ${buyerCount} ${tier} buyers?\n\nThis will send real messages to real people.`)) return
     setSendingTier(`${tier}-${channel}`)
     setSendResult(null)
     try {
@@ -4605,11 +4616,15 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         }),
       })
       const data = await res.json()
-      setSendResult(res.ok ? `Sent to ${data.sentTo} buyers${data.skipped ? `, ${data.skipped} skipped` : ''}` : 'Send failed')
-      if (res.ok) fetchBlastHistory()
+      if (res.ok) {
+        setSendResult(`Sent to ${data.sentTo} buyers${data.skipped ? `, ${data.skipped} skipped` : ''}`)
+        fetchBlastHistory()
+      } else {
+        setSendResult('Send failed')
+      }
     } catch { setSendResult('Send failed') }
     setSendingTier(null)
-    setTimeout(() => setSendResult(null), 5000)
+    setTimeout(() => setSendResult(null), 8000)
   }
 
   function toggleTier(tier: string) {
