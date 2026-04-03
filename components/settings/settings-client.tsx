@@ -1548,8 +1548,16 @@ const DOC_TYPE_COLORS: Record<string, string> = {
   industry: 'bg-teal-100 text-teal-700',
 }
 
+interface UserProfileData {
+  id: string; userId: string; userName: string; userRole: string; userEmail: string
+  strengths: string[]; weaknesses: string[]; commonMistakes: string[]
+  communicationStyle: string | null; coachingPriorities: string[]
+  totalCallsGraded: number; profileSource: string; updatedAt: string
+}
+
 function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([])
+  const [profiles, setProfiles] = useState<UserProfileData[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [addTitle, setAddTitle] = useState('')
@@ -1564,12 +1572,20 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
   const [profileMsg, setProfileMsg] = useState('')
   const [embedding, setEmbedding] = useState(false)
   const [embedMsg, setEmbedMsg] = useState('')
+  const [editingProfile, setEditingProfile] = useState<string | null>(null)
+  const [editProfileData, setEditProfileData] = useState<Partial<UserProfileData>>({})
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [subTab, setSubTab] = useState<'playbook' | 'profiles'>('playbook')
 
   useEffect(() => {
-    fetch(`/api/admin/knowledge`)
-      .then(r => r.json())
-      .then(d => { setDocs(d.documents ?? []); setLoading(false) })
-      .catch(() => setLoading(false))
+    Promise.all([
+      fetch('/api/admin/knowledge').then(r => r.json()),
+      fetch('/api/admin/user-profiles').then(r => r.json()),
+    ]).then(([kd, up]) => {
+      setDocs(kd.documents ?? [])
+      setProfiles(up.profiles ?? [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
   async function loadPlaybook() {
@@ -1585,6 +1601,21 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
       setDocs(refreshData.documents ?? [])
     } catch { setPlaybookMsg('Failed to load playbook') }
     setLoadingPlaybook(false)
+  }
+
+  async function saveProfile(profileId: string) {
+    setSavingProfile(true)
+    try {
+      await fetch('/api/admin/user-profiles', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId, ...editProfileData }),
+      })
+      setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, ...editProfileData, profileSource: 'manual' } as UserProfileData : p))
+      setEditingProfile(null)
+      setEditProfileData({})
+    } catch {}
+    setSavingProfile(false)
   }
 
   async function embedKnowledge() {
@@ -1655,42 +1686,64 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
     grouped[key].push(d)
   }
 
+  const ROLE_LABELS: Record<string, string> = { OWNER: 'Owner', ADMIN: 'Admin', TEAM_LEAD: 'Team Lead', LEAD_MANAGER: 'Lead Manager', ACQUISITION_MANAGER: 'Acquisition Manager', DISPOSITION_MANAGER: 'Disposition Manager', LEAD_GENERATOR: 'Lead Generator' }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-ds-label font-semibold text-txt-primary">Knowledge Base</p>
-          <p className="text-ds-fine text-txt-muted">{docs.length} documents loaded — used by grading, coaching, and assistant</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-1.5 text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-2 rounded-[10px] transition-colors">
-            <Plus size={12} /> Add Document
-          </button>
-          <button onClick={loadPlaybook} disabled={loadingPlaybook}
-            className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
-            style={{ borderColor: 'var(--border-medium)' }}>
-            {loadingPlaybook ? <Loader2 size={12} className="animate-spin" /> : <BookOpen size={12} />}
-            {loadingPlaybook ? 'Loading...' : 'Load Playbook'}
-          </button>
-          <button onClick={regenerateProfiles} disabled={generatingProfiles}
-            className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
-            style={{ borderColor: 'var(--border-medium)' }}>
-            {generatingProfiles ? <Loader2 size={12} className="animate-spin" /> : <Users size={12} />}
-            {generatingProfiles ? 'Generating...' : 'Regen Profiles'}
-          </button>
-          <button onClick={embedKnowledge} disabled={embedding}
-            className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
-            style={{ borderColor: 'var(--border-medium)' }}>
-            {embedding ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-            {embedding ? 'Embedding...' : 'Embed Docs'}
-          </button>
-        </div>
+      {/* Header with explanation */}
+      <div>
+        <p className="text-ds-label font-semibold text-txt-primary">AI Knowledge & Profiles</p>
+        <p className="text-ds-fine text-txt-muted">
+          The AI reads these docs before grading calls, coaching reps, and answering questions. User profiles personalize coaching per rep.
+        </p>
       </div>
 
+      {/* Sub-tabs */}
+      <div className="flex items-center gap-1 bg-surface-secondary rounded-[10px] p-1 w-fit">
+        <button onClick={() => setSubTab('playbook')}
+          className={`px-4 py-1.5 rounded-[8px] text-ds-fine font-medium transition-all ${subTab === 'playbook' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}>
+          Playbook ({docs.length} docs)
+        </button>
+        <button onClick={() => setSubTab('profiles')}
+          className={`px-4 py-1.5 rounded-[8px] text-ds-fine font-medium transition-all ${subTab === 'profiles' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}>
+          User Profiles ({profiles.length})
+        </button>
+      </div>
+
+      {/* Status messages */}
       {playbookMsg && <p className="text-ds-fine text-semantic-green font-medium">{playbookMsg}</p>}
-      {profileMsg && <p className="text-ds-fine text-semantic-green font-medium">{profileMsg}</p>}
+      {profileMsg && <p className="text-ds-fine text-semantic-green font-medium whitespace-pre-wrap">{profileMsg}</p>}
       {embedMsg && <p className="text-ds-fine text-semantic-green font-medium">{embedMsg}</p>}
+
+      {/* ═══ PLAYBOOK TAB ═══ */}
+      {subTab === 'playbook' && (<>
+      {/* Action buttons */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={() => setShowAdd(!showAdd)}
+          className="flex items-center gap-1.5 text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-2 rounded-[10px] transition-colors">
+          <Plus size={12} /> Add Document
+        </button>
+        <button onClick={loadPlaybook} disabled={loadingPlaybook}
+          className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
+          style={{ borderColor: 'var(--border-medium)' }}>
+          {loadingPlaybook ? <Loader2 size={12} className="animate-spin" /> : <BookOpen size={12} />}
+          {loadingPlaybook ? 'Loading...' : 'Load Playbook'}
+        </button>
+        <button onClick={embedKnowledge} disabled={embedding}
+          className="flex items-center gap-1.5 text-ds-fine font-semibold text-txt-secondary bg-surface-secondary hover:bg-surface-tertiary px-3 py-2 rounded-[10px] border-[0.5px] transition-colors"
+          style={{ borderColor: 'var(--border-medium)' }}>
+          {embedding ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+          {embedding ? 'Embedding...' : 'Embed Docs'}
+        </button>
+      </div>
+
+      {/* How it works */}
+      <div className="bg-surface-secondary rounded-[12px] p-4 text-ds-fine text-txt-muted space-y-1">
+        <p><strong className="text-txt-secondary">Scripts</strong> — Your call scripts. Grading checks if reps follow them.</p>
+        <p><strong className="text-txt-secondary">Objection Handling</strong> — Response guides. Coaching references these when a rep mishandles an objection.</p>
+        <p><strong className="text-txt-secondary">Training</strong> — Best practices, methodology. Feeds into coaching tips.</p>
+        <p><strong className="text-txt-secondary">Industry / Standard</strong> — Company info, KPI frameworks, general knowledge.</p>
+      </div>
 
       {/* Add document form */}
       {showAdd && (
@@ -1784,6 +1837,134 @@ function KnowledgeTab({ tenantSlug }: { tenantSlug: string }) {
           </div>
         ))
       )}
+      </>)}
+
+      {/* ═══ PROFILES TAB ═══ */}
+      {subTab === 'profiles' && (<>
+        <div className="flex items-center gap-2">
+          <button onClick={regenerateProfiles} disabled={generatingProfiles}
+            className="flex items-center gap-1.5 text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-2 rounded-[10px] transition-colors">
+            {generatingProfiles ? <Loader2 size={12} className="animate-spin" /> : <Users size={12} />}
+            {generatingProfiles ? 'Generating...' : 'Regenerate All from Call Data'}
+          </button>
+        </div>
+
+        <div className="bg-surface-secondary rounded-[12px] p-4 text-ds-fine text-txt-muted space-y-1">
+          <p>Profiles are used by the AI when grading calls and coaching reps. Each rep gets personalized feedback based on their profile.</p>
+          <p><strong className="text-txt-secondary">Auto-generated</strong> weekly from real call scores and feedback. <strong className="text-txt-secondary">Editable</strong> — your changes override the AI.</p>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-txt-muted" /></div>
+        ) : profiles.length === 0 ? (
+          <div className="bg-white border-[0.5px] rounded-[14px] py-12 text-center" style={{ borderColor: 'var(--border-light)' }}>
+            <Users size={24} className="text-txt-muted mx-auto mb-2" />
+            <p className="text-ds-fine text-txt-muted">No profiles yet. Click &quot;Regenerate All&quot; or load the playbook first.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {profiles.map(profile => (
+              <div key={profile.id} className="bg-white border-[0.5px] rounded-[14px] p-5" style={{ borderColor: 'var(--border-light)' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-gunner-red-light flex items-center justify-center">
+                      <span className="text-gunner-red text-ds-fine font-semibold">{profile.userName?.[0] ?? '?'}</span>
+                    </div>
+                    <div>
+                      <p className="text-ds-body font-semibold text-txt-primary">{profile.userName}</p>
+                      <p className="text-[10px] text-txt-muted">
+                        {ROLE_LABELS[profile.userRole] ?? profile.userRole} · {profile.totalCallsGraded} calls graded ·
+                        Source: {profile.profileSource === 'playbook' ? 'Playbook' : profile.profileSource === 'auto' ? 'AI Generated' : 'Manually Edited'}
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => {
+                    if (editingProfile === profile.id) { setEditingProfile(null); setEditProfileData({}); return }
+                    setEditingProfile(profile.id)
+                    setEditProfileData({
+                      strengths: [...(profile.strengths as string[])],
+                      weaknesses: [...(profile.weaknesses as string[])],
+                      commonMistakes: [...(profile.commonMistakes as string[])],
+                      communicationStyle: profile.communicationStyle,
+                      coachingPriorities: [...(profile.coachingPriorities as string[])],
+                    })
+                  }}
+                    className="text-ds-fine font-medium text-txt-secondary hover:text-txt-primary px-3 py-1.5 rounded-[8px] border-[0.5px] transition-colors"
+                    style={{ borderColor: 'var(--border-medium)' }}>
+                    {editingProfile === profile.id ? 'Cancel' : 'Edit'}
+                  </button>
+                </div>
+
+                {editingProfile === profile.id ? (
+                  <div className="space-y-3">
+                    <ProfileEditField label="Strengths" value={editProfileData.strengths as string[] ?? []}
+                      onChange={v => setEditProfileData(p => ({ ...p, strengths: v }))} />
+                    <ProfileEditField label="Weaknesses" value={editProfileData.weaknesses as string[] ?? []}
+                      onChange={v => setEditProfileData(p => ({ ...p, weaknesses: v }))} />
+                    <ProfileEditField label="Common Mistakes" value={editProfileData.commonMistakes as string[] ?? []}
+                      onChange={v => setEditProfileData(p => ({ ...p, commonMistakes: v }))} />
+                    <ProfileEditField label="Coaching Priorities" value={editProfileData.coachingPriorities as string[] ?? []}
+                      onChange={v => setEditProfileData(p => ({ ...p, coachingPriorities: v }))} />
+                    <div>
+                      <p className="text-[10px] font-semibold text-txt-muted uppercase mb-1">Communication Style</p>
+                      <input value={editProfileData.communicationStyle ?? ''} onChange={e => setEditProfileData(p => ({ ...p, communicationStyle: e.target.value }))}
+                        className="w-full bg-surface-secondary border-[0.5px] rounded-[8px] px-3 py-1.5 text-ds-fine text-txt-primary" style={{ borderColor: 'var(--border-medium)' }} />
+                    </div>
+                    <button onClick={() => saveProfile(profile.id)} disabled={savingProfile}
+                      className="text-ds-fine font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-4 py-2 rounded-[10px]">
+                      {savingProfile ? 'Saving...' : 'Save Profile'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <ProfileField label="Strengths" items={profile.strengths as string[]} color="green" />
+                    <ProfileField label="Weaknesses" items={profile.weaknesses as string[]} color="red" />
+                    <ProfileField label="Common Mistakes" items={profile.commonMistakes as string[]} color="amber" />
+                    <ProfileField label="Coaching Priorities" items={profile.coachingPriorities as string[]} color="blue" />
+                    {profile.communicationStyle && (
+                      <div className="col-span-2">
+                        <p className="text-[10px] font-semibold text-txt-muted uppercase mb-1">Communication Style</p>
+                        <p className="text-ds-fine text-txt-secondary">{profile.communicationStyle}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </>)}
+    </div>
+  )
+}
+
+function ProfileField({ label, items, color }: { label: string; items: string[]; color: string }) {
+  if (!items || items.length === 0) return null
+  const colorMap: Record<string, string> = { green: 'text-semantic-green', red: 'text-semantic-red', amber: 'text-amber-600', blue: 'text-semantic-blue' }
+  return (
+    <div>
+      <p className={`text-[10px] font-semibold uppercase mb-1 ${colorMap[color] ?? 'text-txt-muted'}`}>{label}</p>
+      <ul className="space-y-0.5">
+        {items.map((item, i) => <li key={i} className="text-ds-fine text-txt-secondary">· {item}</li>)}
+      </ul>
+    </div>
+  )
+}
+
+function ProfileEditField({ label, value, onChange }: { label: string; value: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-txt-muted uppercase mb-1">{label}</p>
+      <div className="space-y-1">
+        {value.map((item, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <input value={item} onChange={e => { const n = [...value]; n[i] = e.target.value; onChange(n) }}
+              className="flex-1 bg-surface-secondary border-[0.5px] rounded-[8px] px-2 py-1 text-ds-fine text-txt-primary" style={{ borderColor: 'var(--border-medium)' }} />
+            <button onClick={() => onChange(value.filter((_, j) => j !== i))} className="text-txt-muted hover:text-semantic-red p-1"><Trash2 size={10} /></button>
+          </div>
+        ))}
+        <button onClick={() => onChange([...value, ''])} className="text-[10px] text-semantic-blue hover:underline">+ Add</button>
+      </div>
     </div>
   )
 }
