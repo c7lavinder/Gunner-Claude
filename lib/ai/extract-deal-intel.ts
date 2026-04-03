@@ -134,21 +134,36 @@ RESPONSE FORMAT — valid JSON only, no markdown:
   "dealGreenFlags": ["<specific green flags>"]
 }
 
+CRITICAL EXTRACTION PRIORITIES (these are the most valuable for deal decisions):
+1. costOfInaction — "What happens if they don't sell?" This is the #1 negotiating lever
+2. painQuantification — Specific dollar/timeline pain: "losing $2k/month", "foreclosure in 90 days"
+3. costOfInactionMonthly — Monthly cost of NOT selling (mortgage + taxes + insurance + repairs on vacant/unwanted property)
+4. dealRedFlags — Anything that reduces deal probability
+5. dealGreenFlags — Anything that increases deal probability
+6. objectionsEncountered — Include whatWorked AND whatDidntWork for each objection
+
 VALID FIELD NAMES (use these exact strings):
 sellerMotivationLevel, sellerMotivationReason, statedVsImpliedMotivation, sellerWhySelling,
 sellerTimeline, sellerTimelineUrgency, sellerKnowledgeLevel, sellerCommunicationStyle,
 sellerContactPreference, sellerPersonalityProfile, sellerEmotionalTriggers, sellerFamilySituation,
 sellerPreviousInvestorContact, sellerAlternativePlan,
-decisionMakers, decisionMakersConfirmed, decisionMakerNotes, documentReadiness,
-sellerAskingHistory, offersWeHaveMade, competingOffers, priceAnchors, stickingPoints, counterOffers,
+costOfInaction, costOfInactionMonthly, painQuantification,
+decisionMakers (include hasVetoPower, presentOnCalls, separateMotivation), decisionMakersConfirmed, decisionMakerNotes, documentReadiness,
+sellerAskingHistory, offersWeHaveMade, competingOffers (include terms), priceAnchors, stickingPoints,
+counterOffers (include from: us|seller|buyer, termsChanged, whyRejected),
 conditionNotesFromSeller, repairItemsMentioned, accessSituation, gateCodeAccessNotes,
-tenantSituation, utilityStatus, environmentalConcerns, unpermittedWork, permitHistoryFromSeller,
+tenantSituation (include leaseEnd, rentAmount, cooperative, moveOutCost, evictionRisk), utilityStatus,
+environmentalConcerns, unpermittedWork, permitHistoryFromSeller,
 insuranceSituation, neighborhoodComplaints, previousDealFellThrough,
+walkthroughNotes, walkthroughRepairList (include severity: minor|moderate|major, estimatedCost),
+walkthroughConditionVsSeller, walkthroughPhotosNotes,
 titleIssuesMentioned, legalComplications, liensMentioned, backTaxesMentioned, hoaMentioned, mortgageBalanceMentioned,
 whatNotToSay, toneShiftMoments, exactTriggerPhrases, questionsSellerAskedUs,
 infoVolunteeredVsExtracted, silencePausePatterns, appointmentLogisticsPreferences, bestApproachNotes,
 commitmentsWeMade, promisesTheyMade, promiseDeadlines, nextStepAgreed, triggerEvents,
-objectionsEncountered, relationshipRapportLevel, bestRepForThisSeller,
+objectionsEncountered (include whatWorked, whatDidntWork, effectivenessRating: resolved|partially|unresolved),
+relationshipRapportLevel, bestRepForThisSeller,
+dealRedFlags, dealGreenFlags, dealHealthTrajectory (improving|stable|declining), dealRiskLevel (low|medium|high),
 howTheyFoundUs, referralSource, referralChain, firstMarketingPieceReceived, whichMarketingMessageResonated
 
 IMPORTANT:

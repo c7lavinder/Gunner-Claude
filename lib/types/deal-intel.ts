@@ -24,9 +24,12 @@ export interface DealIntel {
   sellerPreviousInvestorContact?: AccumulatedField<string> // ["Talked to Opendoor", "had offer from wholesaler"]
   sellerAlternativePlan?: FieldValue<string>            // "I'll rent it out" vs "no other option"
   sellerOnlineBehavior?: FieldValue<string>             // If trackable
+  costOfInaction?: FieldValue<string>                   // "What happens if you don't sell?" — strongest negotiating lever
+  costOfInactionMonthly?: FieldValue<number>            // Dollar amount seller bleeds per month by NOT selling
+  painQuantification?: FieldValue<string>               // Specific pain: "lose house to foreclosure in 90 days", "paying $2k/mo on vacant house"
 
   // ── Decision Making ─────────────────────────────────────────────────────
-  decisionMakers?: AccumulatedField<{ name: string; role: string; onBoard: boolean }>
+  decisionMakers?: AccumulatedField<{ name: string; role: string; onBoard: boolean; hasVetoPower?: boolean; presentOnCalls?: boolean; separateMotivation?: string }>
   decisionMakersConfirmed?: FieldValue<boolean>
   decisionMakerNotes?: FieldValue<string>
   documentReadiness?: FieldValue<string>                // "I have the deed" / "in probate" / "need to find paperwork"
@@ -34,17 +37,17 @@ export interface DealIntel {
   // ── Price Negotiation ───────────────────────────────────────────────────
   sellerAskingHistory?: AccumulatedField<{ amount: number; date: string; callId: string }>
   offersWeHaveMade?: AccumulatedField<{ amount: number; date: string; response: string; callId: string }>
-  competingOffers?: AccumulatedField<{ amount: number; source: string; date: string; callId: string }>
+  competingOffers?: AccumulatedField<{ amount: number; source: string; date: string; terms?: string; callId: string }>
   priceAnchors?: AccumulatedField<string>               // Numbers the seller mentioned
   stickingPoints?: AccumulatedField<string>             // "Won't go below 190k", "needs 30 days post-close"
-  counterOffers?: AccumulatedField<{ from: string; amount: number; date: string; callId: string }>
+  counterOffers?: AccumulatedField<{ from: 'us' | 'seller' | 'buyer'; amount: number; termsChanged?: string; whyRejected?: string; date: string; callId: string }>
 
   // ── Property Condition (from seller) ────────────────────────────────────
   conditionNotesFromSeller?: FieldValue<string>
   repairItemsMentioned?: AccumulatedField<string>       // ["roof", "kitchen", "foundation crack"]
   accessSituation?: FieldValue<string>                  // "lockbox", "call first", "meet Tuesday"
   gateCodeAccessNotes?: FieldValue<string>              // "Gate code 1234", "dog in backyard", "enter from alley"
-  tenantSituation?: FieldValue<{ occupied: boolean; leaseEnd?: string; rentAmount?: number; cooperative?: boolean }>
+  tenantSituation?: FieldValue<{ occupied: boolean; leaseEnd?: string; rentAmount?: number; cooperative?: boolean; moveOutCost?: number; tenantContactInfo?: string; leaseTerms?: string; evictionRisk?: string }>
   utilityStatus?: FieldValue<string>                    // "Water off", "electric disconnected"
   environmentalConcerns?: AccumulatedField<string>      // Mold, asbestos, underground tanks, lead paint
   unpermittedWork?: FieldValue<string>                  // "Addition without permits"
@@ -52,6 +55,11 @@ export interface DealIntel {
   insuranceSituation?: FieldValue<string>               // "Dropped after storm"
   neighborhoodComplaints?: AccumulatedField<string>     // "Neighbor is a problem", "HOA aggressive"
   previousDealFellThrough?: FieldValue<string>          // Why prior deal fell through
+  // Walkthrough / site visit notes (from AM's on-site inspection)
+  walkthroughNotes?: FieldValue<string>                  // Full walkthrough narrative
+  walkthroughRepairList?: AccumulatedField<{ item: string; severity: 'minor' | 'moderate' | 'major'; estimatedCost?: number }>
+  walkthroughConditionVsSeller?: FieldValue<string>     // "Seller said minor repairs but foundation has major crack"
+  walkthroughPhotosNotes?: FieldValue<string>            // Notes about what was photographed
 
   // ── Legal & Title ───────────────────────────────────────────────────────
   titleIssuesMentioned?: AccumulatedField<string>
@@ -79,9 +87,23 @@ export interface DealIntel {
   nextStepAgreed?: FieldValue<{ action: string; date?: string }>
   triggerEvents?: AccumulatedField<{ event: string; date?: string; urgency: string }>
   topicsNotYetDiscussed?: FieldValue<string[]>          // Shrinks over time as topics are covered
-  objectionsEncountered?: AccumulatedField<{ objection: string; whatWorked?: string; callId: string }>
+  objectionsEncountered?: AccumulatedField<{ objection: string; whatWorked?: string; whatDidntWork?: string; effectivenessRating?: 'resolved' | 'partially' | 'unresolved'; callId: string }>
   relationshipRapportLevel?: FieldValue<'cold' | 'warming' | 'warm' | 'strong'>
   bestRepForThisSeller?: FieldValue<string>             // userId
+
+  // ── Deal Health Signals ───────────────────────────────────────────────────
+  dealRedFlags?: AccumulatedField<string>               // "Seller shopping offers", "title in probate", "unrealistic expectations"
+  dealGreenFlags?: AccumulatedField<string>             // "Motivated seller", "clear title", "vacant property", "ASAP timeline"
+  dealHealthTrajectory?: FieldValue<'improving' | 'stable' | 'declining'>
+  dealRiskLevel?: FieldValue<'low' | 'medium' | 'high'>
+
+  // ── Engagement Metrics (computed, stored for historical reference) ────────
+  totalTouchCount?: FieldValue<number>                  // Total calls + texts + emails
+  touchBreakdown?: FieldValue<{ calls: number; texts: number; emails: number; visits: number }>
+  daysSinceFirstContact?: FieldValue<number>
+  daysSinceLastContact?: FieldValue<number>
+  speedToFirstResponse?: FieldValue<number>             // Hours from lead creation to first contact
+  appointmentHistory?: AccumulatedField<{ date: string; type: 'showing' | 'closing' | 'inspection'; status: 'scheduled' | 'showed' | 'no_show' | 'cancelled' }>
 
   // ── Marketing Attribution ───────────────────────────────────────────────
   howTheyFoundUs?: FieldValue<string>                   // "Saw your mailer", "Google search"
@@ -160,6 +182,7 @@ export const FIELD_CATEGORY: Record<string, DealIntelCategory> = {
   sellerEmotionalTriggers: 'seller_profile', sellerFamilySituation: 'seller_profile',
   sellerPreviousInvestorContact: 'seller_profile', sellerAlternativePlan: 'seller_profile',
   sellerOnlineBehavior: 'seller_profile',
+  costOfInaction: 'seller_profile', costOfInactionMonthly: 'seller_profile', painQuantification: 'seller_profile',
   // Decision Making
   decisionMakers: 'decision_making', decisionMakersConfirmed: 'decision_making',
   decisionMakerNotes: 'decision_making', documentReadiness: 'decision_making',
@@ -174,6 +197,8 @@ export const FIELD_CATEGORY: Record<string, DealIntelCategory> = {
   environmentalConcerns: 'property_condition', unpermittedWork: 'property_condition',
   permitHistoryFromSeller: 'property_condition', insuranceSituation: 'property_condition',
   neighborhoodComplaints: 'property_condition', previousDealFellThrough: 'property_condition',
+  walkthroughNotes: 'property_condition', walkthroughRepairList: 'property_condition',
+  walkthroughConditionVsSeller: 'property_condition', walkthroughPhotosNotes: 'property_condition',
   // Legal & Title
   titleIssuesMentioned: 'legal_title', legalComplications: 'legal_title',
   liensMentioned: 'legal_title', backTaxesMentioned: 'legal_title',
@@ -189,6 +214,11 @@ export const FIELD_CATEGORY: Record<string, DealIntelCategory> = {
   nextStepAgreed: 'deal_status', triggerEvents: 'deal_status',
   topicsNotYetDiscussed: 'deal_status', objectionsEncountered: 'deal_status',
   relationshipRapportLevel: 'deal_status', bestRepForThisSeller: 'deal_status',
+  dealRedFlags: 'deal_status', dealGreenFlags: 'deal_status',
+  dealHealthTrajectory: 'deal_status', dealRiskLevel: 'deal_status',
+  totalTouchCount: 'deal_status', touchBreakdown: 'deal_status',
+  daysSinceFirstContact: 'deal_status', daysSinceLastContact: 'deal_status',
+  speedToFirstResponse: 'deal_status', appointmentHistory: 'deal_status',
   // Marketing
   howTheyFoundUs: 'marketing', referralSource: 'marketing',
   referralChain: 'marketing', firstMarketingPieceReceived: 'marketing',
@@ -212,6 +242,9 @@ export const FIELD_LABELS: Record<string, string> = {
   sellerFamilySituation: 'Family Situation',
   sellerPreviousInvestorContact: 'Previous Investor Contact',
   sellerAlternativePlan: 'Seller\'s Alternative Plan',
+  costOfInaction: 'Cost of Inaction',
+  costOfInactionMonthly: 'Monthly Cost of Not Selling ($)',
+  painQuantification: 'Pain Quantification',
   decisionMakers: 'Decision Makers',
   decisionMakersConfirmed: 'Decision Makers Confirmed',
   decisionMakerNotes: 'Decision Maker Notes',
@@ -234,6 +267,10 @@ export const FIELD_LABELS: Record<string, string> = {
   insuranceSituation: 'Insurance Situation',
   neighborhoodComplaints: 'Neighborhood Issues',
   previousDealFellThrough: 'Previous Deal Fell Through',
+  walkthroughNotes: 'Walkthrough Notes',
+  walkthroughRepairList: 'Walkthrough Repair List',
+  walkthroughConditionVsSeller: 'Condition vs Seller\'s Claims',
+  walkthroughPhotosNotes: 'Walkthrough Photos Notes',
   titleIssuesMentioned: 'Title Issues',
   legalComplications: 'Legal Complications',
   liensMentioned: 'Liens Mentioned',
@@ -263,4 +300,15 @@ export const FIELD_LABELS: Record<string, string> = {
   referralChain: 'Referral Chain',
   firstMarketingPieceReceived: 'First Marketing Piece',
   whichMarketingMessageResonated: 'Message That Resonated',
+  // Deal Health & Engagement
+  dealRedFlags: 'Deal Red Flags',
+  dealGreenFlags: 'Deal Green Flags',
+  dealHealthTrajectory: 'Deal Health Trajectory',
+  dealRiskLevel: 'Deal Risk Level',
+  totalTouchCount: 'Total Touch Count',
+  touchBreakdown: 'Touch Breakdown',
+  daysSinceFirstContact: 'Days Since First Contact',
+  daysSinceLastContact: 'Days Since Last Contact',
+  speedToFirstResponse: 'Speed to First Response (hrs)',
+  appointmentHistory: 'Appointment History',
 }

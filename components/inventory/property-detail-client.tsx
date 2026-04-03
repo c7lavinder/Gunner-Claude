@@ -2761,7 +2761,8 @@ function ComputedMetricsSection({ propertyId }: { propertyId: string }) {
 
 const INTEL_SECTIONS: Array<{ key: string; label: string; color: string; fields: string[] }> = [
   { key: 'seller', label: 'Seller Profile', color: 'blue', fields: [
-    'sellerMotivationLevel', 'sellerMotivationReason', 'statedVsImpliedMotivation', 'sellerWhySelling',
+    'sellerMotivationLevel', 'sellerMotivationReason', 'costOfInaction', 'painQuantification', 'costOfInactionMonthly',
+    'statedVsImpliedMotivation', 'sellerWhySelling',
     'sellerTimeline', 'sellerTimelineUrgency', 'sellerKnowledgeLevel', 'sellerCommunicationStyle',
     'sellerContactPreference', 'sellerPersonalityProfile', 'sellerEmotionalTriggers', 'sellerFamilySituation',
     'sellerPreviousInvestorContact', 'sellerAlternativePlan', 'sellerOnlineBehavior',
@@ -2772,10 +2773,11 @@ const INTEL_SECTIONS: Array<{ key: string; label: string; color: string; fields:
   { key: 'negotiation', label: 'Price Negotiation', color: 'green', fields: [
     'sellerAskingHistory', 'offersWeHaveMade', 'competingOffers', 'priceAnchors', 'stickingPoints', 'counterOffers',
   ]},
-  { key: 'condition', label: 'Property Condition (Seller)', color: 'amber', fields: [
+  { key: 'condition', label: 'Property Condition', color: 'amber', fields: [
     'conditionNotesFromSeller', 'repairItemsMentioned', 'accessSituation', 'gateCodeAccessNotes',
     'tenantSituation', 'utilityStatus', 'environmentalConcerns', 'unpermittedWork',
     'insuranceSituation', 'neighborhoodComplaints', 'previousDealFellThrough',
+    'walkthroughNotes', 'walkthroughRepairList', 'walkthroughConditionVsSeller', 'walkthroughPhotosNotes',
   ]},
   { key: 'legal', label: 'Legal & Title', color: 'red', fields: [
     'titleIssuesMentioned', 'legalComplications', 'liensMentioned', 'backTaxesMentioned',
@@ -2787,9 +2789,12 @@ const INTEL_SECTIONS: Array<{ key: string; label: string; color: string; fields:
   ]},
   { key: 'status', label: 'Deal Status', color: 'orange', fields: [
     'rollingDealSummary', 'dealHealthScore', 'dealRedFlags', 'dealGreenFlags',
+    'dealHealthTrajectory', 'dealRiskLevel',
     'commitmentsWeMade', 'promisesTheyMade', 'promiseDeadlines',
     'nextStepAgreed', 'triggerEvents', 'topicsNotYetDiscussed', 'objectionsEncountered',
     'relationshipRapportLevel', 'bestRepForThisSeller',
+    'totalTouchCount', 'touchBreakdown', 'daysSinceFirstContact', 'daysSinceLastContact',
+    'speedToFirstResponse', 'appointmentHistory',
   ]},
   { key: 'marketing', label: 'Marketing', color: 'pink', fields: [
     'howTheyFoundUs', 'referralSource', 'referralChain', 'firstMarketingPieceReceived',
@@ -2806,6 +2811,7 @@ const INTEL_FIELD_LABELS: Record<string, string> = {
   sellerFamilySituation: 'Family Situation', sellerPreviousInvestorContact: 'Previous Investors',
   sellerAlternativePlan: 'Alternative Plan',
   sellerPersonalityProfile: 'Personality Profile', sellerOnlineBehavior: 'Online Behavior',
+  costOfInaction: 'Cost of Inaction', costOfInactionMonthly: 'Monthly Cost of Not Selling ($)', painQuantification: 'Pain Quantification',
   decisionMakers: 'Decision Makers', decisionMakersConfirmed: 'DM Confirmed',
   decisionMakerNotes: 'DM Notes', documentReadiness: 'Document Readiness',
   sellerAskingHistory: 'Asking History', offersWeHaveMade: 'Our Offers',
@@ -2817,6 +2823,8 @@ const INTEL_FIELD_LABELS: Record<string, string> = {
   environmentalConcerns: 'Environmental', unpermittedWork: 'Unpermitted Work',
   insuranceSituation: 'Insurance', neighborhoodComplaints: 'Neighborhood Issues',
   previousDealFellThrough: 'Previous Deal Failed',
+  walkthroughNotes: 'Walkthrough Notes', walkthroughRepairList: 'Walkthrough Repair List',
+  walkthroughConditionVsSeller: 'Condition vs Seller Claims', walkthroughPhotosNotes: 'Photo Notes',
   titleIssuesMentioned: 'Title Issues', legalComplications: 'Legal Issues',
   liensMentioned: 'Liens', backTaxesMentioned: 'Back Taxes',
   hoaMentioned: 'HOA', mortgageBalanceMentioned: 'Mortgage (Seller Says)',
@@ -2831,6 +2839,10 @@ const INTEL_FIELD_LABELS: Record<string, string> = {
   nextStepAgreed: 'Next Step', triggerEvents: 'Trigger Events',
   topicsNotYetDiscussed: 'Topics Not Discussed', objectionsEncountered: 'Objections',
   relationshipRapportLevel: 'Rapport Level', bestRepForThisSeller: 'Best Rep for Seller',
+  dealHealthTrajectory: 'Deal Trajectory', dealRiskLevel: 'Risk Level',
+  totalTouchCount: 'Total Touches', touchBreakdown: 'Touch Breakdown',
+  daysSinceFirstContact: 'Days Since First Contact', daysSinceLastContact: 'Days Since Last Contact',
+  speedToFirstResponse: 'Speed to First Response (hrs)', appointmentHistory: 'Appointment History',
   howTheyFoundUs: 'How Found Us', referralSource: 'Referral',
   referralChain: 'Referral Chain', firstMarketingPieceReceived: 'First Marketing Piece',
   whichMarketingMessageResonated: 'Message Resonated',
