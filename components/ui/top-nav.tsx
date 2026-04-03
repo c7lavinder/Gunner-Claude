@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
-import { Bell, Settings, ChevronDown, Menu, X, MessageSquare } from 'lucide-react'
+import { Bell, Settings, ChevronDown, Menu, X, MessageSquare, Bot } from 'lucide-react'
 import { hasPermission, isRoleAtLeast, type UserRole } from '@/types/roles'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -66,11 +66,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     { href: `${base}/tasks`, label: 'Day Hub', always: true },
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as never },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
-    { href: `${base}/buyers`, label: 'Disposition', permission: 'inventory.view' as never },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
-    { href: `${base}/roi`, label: 'ROI', adminOnly: true },
-    { href: `${base}/training`, label: 'Training', adminOnly: true },
-    { href: `${base}/ai-logs`, label: 'AI Logs', adminOnly: true },
   ]
 
   const visibleItems = navItems.filter(item => {
@@ -127,6 +123,19 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
 
         {/* Right side */}
         <div className="flex items-center gap-2 md:gap-3 ml-auto">
+          {!isViewingAs && isRoleAtLeast(role, 'ADMIN') && (
+            <Link
+              href={`${base}/ai-logs`}
+              className={`p-2 rounded-[10px] transition-colors ${
+                pathname.startsWith(`${base}/ai-logs`)
+                  ? 'bg-surface-secondary text-txt-primary'
+                  : 'text-txt-muted hover:text-txt-primary hover:bg-surface-secondary'
+              }`}
+              title="AI Logs"
+            >
+              <Bot size={16} />
+            </Link>
+          )}
           {!isViewingAs && (
             <Link
               href={`${base}/settings`}
@@ -135,6 +144,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
                   ? 'bg-surface-secondary text-txt-primary'
                   : 'text-txt-muted hover:text-txt-primary hover:bg-surface-secondary'
               }`}
+              title="Settings"
             >
               <Settings size={16} />
             </Link>
