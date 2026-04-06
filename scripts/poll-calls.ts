@@ -589,6 +589,55 @@ async function pollCalls() {
       }
     }
 
+    // ─── Grade stale PENDING calls (backfill recovery + stuck calls) ──
+    // Catches calls that were flipped to PENDING by the backfill migration
+    // or got stuck in PENDING because the cursor already passed them.
+    const stalePending = await db.call.findMany({
+      where: {
+        gradingStatus: 'PENDING',
+        calledAt: { gte: retryWindow },
+      },
+      select: {
+        id: true, contactName: true, recordingUrl: true, durationSeconds: true,
+        ghlCallId: true, transcript: true,
+        tenant: { select: { ghlAccessToken: true, ghlLocationId: true } },
+      },
+      take: 20,
+    })
+
+    if (stalePending.length > 0) {
+      console.log(`[poll-calls] Grading ${stalePending.length} stale PENDING calls...`)
+      for (const pc of stalePending) {
+        try {
+          // Try to fetch recording if missing
+          if (!pc.recordingUrl && pc.ghlCallId && pc.tenant.ghlAccessToken && pc.tenant.ghlLocationId) {
+            const rec = await fetchCallRecording(pc.tenant.ghlAccessToken, pc.tenant.ghlLocationId, pc.ghlCallId)
+            if (rec.status === 'success' && rec.recordingUrl) {
+              await db.call.update({ where: { id: pc.id }, data: { recordingUrl: rec.recordingUrl } })
+              pc.recordingUrl = rec.recordingUrl
+              console.log(`[poll-calls] Fetched recording for stale PENDING ${pc.id}`)
+            }
+          }
+          // Transcribe if recording but no transcript
+          if (pc.recordingUrl && !pc.transcript) {
+            const trans = await transcribeRecording(pc.recordingUrl, pc.tenant.ghlAccessToken ?? undefined)
+            if (trans.status === 'success' && trans.transcript) {
+              await db.call.update({ where: { id: pc.id }, data: { transcript: trans.transcript } })
+              if (!pc.durationSeconds && trans.transcript.length > 50) {
+                await db.call.update({ where: { id: pc.id }, data: { durationSeconds: Math.max(Math.round(trans.transcript.length / 15), 45) } })
+              }
+            }
+          }
+          await gradeCall(pc.id).catch(err =>
+            console.error(`[poll-calls] Stale PENDING grade failed ${pc.id}:`, err instanceof Error ? err.message : err)
+          )
+          await sleep(500)
+        } catch (err) {
+          console.error(`[poll-calls] Stale PENDING error ${pc.id}:`, err instanceof Error ? err.message : err)
+        }
+      }
+    }
+
     console.log(`[poll-calls] Complete.`)
   } catch (err) {
     console.error('[poll-calls] Fatal:', err instanceof Error ? err.message : err)
