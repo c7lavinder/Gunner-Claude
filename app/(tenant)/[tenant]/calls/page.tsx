@@ -25,7 +25,7 @@ export default async function CallsPage({ params }: { params: { tenant: string }
   const calls = await db.call.findMany({
     where: whereClause,
     orderBy: { calledAt: 'desc' },
-    take: 200,
+    take: 500,
     include: {
       assignedTo: { select: { id: true, name: true, role: true } },
       property: {
