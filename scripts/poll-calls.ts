@@ -42,6 +42,70 @@ async function processCallMessage(
   if (messageId && messageId !== dedupeId && existingIds.has(messageId)) return 'deduped'
   existingIds.add(dedupeId)
 
+  // DB-level upgrade check: if call already exists, see if it needs fresh data
+  const existing = await db.call.findFirst({
+    where: {
+      tenantId,
+      OR: [
+        { ghlCallId: dedupeId },
+        ...(messageId && messageId !== dedupeId ? [{ ghlCallId: messageId }] : []),
+      ],
+    },
+    select: { id: true, durationSeconds: true, recordingUrl: true, gradingStatus: true, callResult: true },
+  })
+
+  if (existing) {
+    // Compute fresh values from the polling data
+    let freshMeta: Record<string, unknown> = {}
+    if (msg.meta && typeof msg.meta === 'string') { try { freshMeta = JSON.parse(msg.meta) } catch {} }
+    else if (msg.meta && typeof msg.meta === 'object') { freshMeta = msg.meta as Record<string, unknown> }
+    const freshCallMeta = (freshMeta.call ?? {}) as Record<string, unknown>
+    const freshDuration = Math.max(
+      Number(freshCallMeta.duration ?? 0),
+      Number(freshMeta.duration ?? 0),
+      Number(msg.callDuration ?? 0),
+      Number(msg.duration ?? 0),
+    )
+
+    const rec = await fetchCallRecording(accessToken, locationId, messageId)
+    const freshRecording = rec.status === 'success' ? rec.recordingUrl ?? null : null
+
+    const needsDurationUpdate = freshDuration > 0 && (!existing.durationSeconds || existing.durationSeconds === 0)
+    const needsRecordingUpdate = freshRecording && !existing.recordingUrl
+    const wasFalselyFailed = existing.gradingStatus === 'FAILED'
+      && (existing.callResult === 'no_answer' || existing.callResult === 'short_call')
+      && (freshDuration >= 45 || !!freshRecording)
+
+    if (needsDurationUpdate || needsRecordingUpdate || wasFalselyFailed) {
+      const updates: Record<string, unknown> = {}
+      if (needsDurationUpdate) updates.durationSeconds = freshDuration
+      if (needsRecordingUpdate) updates.recordingUrl = freshRecording
+      if (wasFalselyFailed) {
+        updates.gradingStatus = 'PENDING'
+        updates.callResult = null
+        updates.aiSummary = null
+      }
+      await db.call.update({ where: { id: existing.id }, data: updates })
+      console.log(`[poll-calls] UPGRADED call ${existing.id}: duration=${freshDuration}s, hasRec=${!!freshRecording}, wasFailed=${wasFalselyFailed}`)
+
+      if (wasFalselyFailed || needsRecordingUpdate) {
+        if (freshRecording) {
+          const trans = await transcribeRecording(freshRecording, accessToken)
+          if (trans.status === 'success' && trans.transcript) {
+            await db.call.update({ where: { id: existing.id }, data: { transcript: trans.transcript } })
+          }
+        }
+        await gradeCall(existing.id).catch(err =>
+          console.error(`[poll-calls] Re-grade failed ${existing.id}:`, err instanceof Error ? err.message : err)
+        )
+      }
+      return 'new'
+    }
+    return 'deduped'
+  }
+
+  // Not in DB — fall through to existing creation logic below
+
   // Extract duration
   let meta: Record<string, unknown> = {}
   if (msg.meta && typeof msg.meta === 'string') {

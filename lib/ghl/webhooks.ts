@@ -412,9 +412,16 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     }
   }
 
-  const isGradeable = duration >= 45
+  // At webhook time, GHL sends duration=0 for connected calls (call hasn't ended yet).
+  // Don't pre-judge — create as PENDING. Recording fetch + polling cron will upgrade later.
+  // Only mark FAILED if we have PROOF: explicit no-answer status, or non-zero duration < 45s.
+  const explicitNoAnswer = duration === 0 && ['no-answer', 'busy', 'failed', 'canceled'].includes(
+    String(callData.callStatus ?? callData.status ?? '').toLowerCase()
+  )
+  const provenShortCall = duration > 0 && duration < 45
+  const isFailed = explicitNoAnswer || provenShortCall
 
-  // Save ALL calls — short/0s count as dials, only grade >= 45s
+  // Save ALL calls — only mark FAILED when we have proof
   const call = await db.call.create({
     data: {
       tenantId,
@@ -426,20 +433,18 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
       durationSeconds: duration > 0 ? duration : undefined,
       calledAt: new Date(),
-      callResult: duration === 0 ? 'no_answer' : isGradeable ? undefined : 'short_call',
-      gradingStatus: isGradeable ? 'PENDING' : 'FAILED',
-      ...(isGradeable ? {} : {
-        aiSummary: duration === 0
-          ? 'No answer — zero duration.'
-          : `Short call (${duration}s) — not graded.`,
-      }),
+      gradingStatus: isFailed ? 'FAILED' : 'PENDING',
+      callResult: explicitNoAnswer ? 'no_answer' : provenShortCall ? 'short_call' : undefined,
+      ...(isFailed ? {
+        aiSummary: explicitNoAnswer ? 'No answer.' : `Short call (${duration}s) — not graded.`
+      } : {}),
     },
   })
 
-  console.log(`[GHL Webhook] Created call ${call.id}: ${contactName ?? 'Unknown'} | ${duration}s | ${isGradeable ? 'GRADE' : 'dial'}`)
+  console.log(`[GHL Webhook] Created call ${call.id}: ${contactName ?? 'Unknown'} | ${duration}s | ${isFailed ? 'FAILED' : 'PENDING'}`)
 
-  // Only fetch recording + grade for calls >= 45s
-  if (isGradeable) {
+  // Fetch recording + grade for any call that isn't proven failed
+  if (!isFailed) {
     const recordingUrl = extractRecordingUrl(callData)
     if (recordingUrl) {
       await db.call.update({ where: { id: call.id }, data: { recordingUrl } })
