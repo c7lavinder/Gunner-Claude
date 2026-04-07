@@ -49,6 +49,48 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 33 — Bulletproofing run + going-forward habits (2026-04-06 to 2026-04-07)
+
+All 7 critical reliability fixes shipped in one session. Original GHL ingestion pipeline
+audit found that 65% of real calls were being misclassified at webhook time. Fixed root
+cause + 6 related reliability gaps + baked operational habits into the repo.
+
+Fixes shipped:
+- #1 (7255ed9): Calls misclassification — handleCallCompleted now uses isFailed (proof-based)
+                 instead of isGradeable=duration>=45. Adds DB-level upgrade in poll-calls.
+                 Adds FAILED→PENDING flip in fetchAndStoreRecording. Backfill SQL applied.
+- #2 (7ef3eba): Recording-fetch jobs queue. Replaces in-process setTimeout(90_000) with
+                 durable RecordingFetchJob table + 1-min cron. Survives Railway restarts.
+- #3 (8b36af3 + 7fee0ca): 28 silent catches replaced with logFailure() across 5 files.
+                            25-action vocabulary defined in audit_logs.
+- #4 (7658a4a): HMAC signature verification + removed "first tenant" fallback (multi-tenant
+                 leak risk).
+- P4 (5d9911c): Caught Fix #3 miss in app/api/webhooks/ghl/route.ts during Fix #4 review.
+- #5 (814ca50): Postgres advisory lock on poll-calls.ts (prevents concurrent run races) +
+                 getGHLClient() in fetchAndStoreRecording (prevents stale token 401s).
+- #6 (c63cb03 + f484820): withTenant<TParams>() helper + refactor of 3 representative routes
+                           (properties[propertyId] PATCH, tasks[taskId]/complete POST,
+                           call-rubrics[id] DELETE/PATCH). Refactor caught a real cross-tenant
+                           leak in db.propertyMilestone.findFirst that the Session 12 audit missed.
+
+Verification:
+- Live site: All Calls today went from 8 → 23 immediately after Fix #1 + manual grading.
+- Lisa Finley 10:17 conversation moved from Skipped → graded (score 63, 617s).
+- Fix #2/#3 verified next morning via scripts/verify-bulletproofing.ts.
+
+Going-forward habits committed:
+- scripts/check-silent-catches.sh — bash scanner for .catch(() => {}) patterns (found 79 in broader codebase)
+- scripts/daily-health-check.ts — morning ritual SQL check on queue + errors + misclassifications
+- AGENTS.md route conventions — withTenant is now the default for all new routes
+
+Parked for next session (none blocking team onboarding):
+- Refactor recording-jobs script + route to share lib/jobs/process-recording-jobs.ts
+- LM tab "227" dial count not aggregating across LM role
+- Day Hub vs Calls page count source-of-truth alignment
+- Migrate the other ~22 API routes to withTenant (incremental, team work)
+- Sweep remaining 79 silent catches in broader codebase (AI pipeline, assistant, client-side)
+- Claude grading response parse failures (3 in last 12h — truncated JSON from long transcripts)
+
 ### Session 30-31 — Bug fixes + AI Intelligence Layer + Role Assistant (2026-04-01 to 2026-04-02)
 - 8 bug fixes (calendars, calls, buyers, SMS, property tabs, appointments)
 - Call ingestion rewrite (3-layer: webhook + export + per-user search)
@@ -110,10 +152,14 @@ All other bugs from sessions 1-32 are resolved.
 
 ## Next Session — Start Exactly Here
 
-**Task:** Test live deployment + activate for daily use
+**Task:** Run `npx tsx scripts/daily-health-check.ts` first. If clean, work on the LM "227"
+aggregation bug (parked item, highest team-visibility). If errors, investigate before
+touching anything else.
 
-1. Test on Railway: click through every page, verify data loads
-2. Make a test call in GHL → verify it gets graded with playbook context
-3. Test Role Assistant: ask it questions, have it send SMS, create tasks
-4. When ready for monetization: activate Stripe (see .env.example for vars needed)
-5. Consider: Next.js 14 → 15 upgrade to fix remaining npm audit vulnerabilities
+Parked items (prioritized):
+1. LM tab "227" dial count not aggregating across LM role
+2. Day Hub vs Calls page count source-of-truth alignment
+3. Claude grading parse failures (truncated JSON — consider max_tokens bump)
+4. Refactor recording-jobs script + route to share lib/jobs/
+5. Migrate ~22 remaining API routes to withTenant (incremental)
+6. Sweep 79 silent catches in broader codebase

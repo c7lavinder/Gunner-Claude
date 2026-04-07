@@ -215,6 +215,34 @@ Critical files to re-inject at start of any new context window:
 
 ---
 
+## Route Conventions (added 2026-04-07)
+
+Every new API route under app/api/[tenant]/ MUST use withTenant from lib/api/withTenant.ts.
+Routes that call getSession() directly are considered legacy and pending migration.
+
+Pattern:
+```typescript
+import { withTenant } from '@/lib/api/withTenant'
+
+export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
+  // ctx.tenantId is GUARANTEED to be a valid string
+  // Every db.* call MUST include tenantId: ctx.tenantId in its where clause
+  const updated = await db.property.update({
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
+    data: { ... },
+  })
+  return NextResponse.json(updated)
+})
+```
+
+Why: Bug #7, #13, #14, #15 (cross-tenant data leaks) and the propertyMilestone.findFirst leak
+caught during Fix #6 Phase 2 all came from manual tenantId tracking. withTenant makes
+"forget to check tenantId" structurally impossible to ship.
+
+Reference: lib/api/withTenant.ts, commit c63cb03 (helper) + f484820 (3-route refactor template)
+
+---
+
 ## Repo Conventions
 
 | Convention | Rule |
