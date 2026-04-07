@@ -271,23 +271,17 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     return
   }
 
-  // If no recording URL in the payload, fetch it after 90 second delay
+  // If no recording URL in the payload, enqueue a durable job to fetch it later
   if (!recordingUrl && messageId) {
-    console.log(`[GHL Webhook] Scheduling recording fetch in 90s for call ${call.id} (msg: ${messageId})`)
-    setTimeout(() => {
-      fetchAndStoreRecording(call.id, messageId)
-        .then(() => {
-          // After recording is fetched, trigger grading
-          gradeCall(call.id).catch(err => {
-            console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
-          })
-        })
-        .catch(err => {
-          console.error(`[Recording] Fetch failed for call ${call.id}:`, err instanceof Error ? err.message : err)
-          // Grade anyway with metadata only
-          gradeCall(call.id).catch(() => {})
-        })
-    }, 90_000) // 90 second delay
+    console.log(`[GHL Webhook] Enqueuing recording fetch job for call ${call.id} (msg: ${messageId})`)
+    await db.recordingFetchJob.create({
+      data: {
+        tenantId,
+        callId: call.id,
+        ghlMessageId: messageId,
+        nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
+      },
+    }).catch(err => console.error(`[GHL Webhook] Failed to enqueue recording job for ${call.id}:`, err instanceof Error ? err.message : err))
   } else {
     // Recording already available — grade immediately
     gradeCall(call.id).catch(err => {
@@ -451,11 +445,15 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     }
 
     if (!recordingUrl) {
-      setTimeout(() => {
-        fetchAndStoreRecording(call.id, messageId)
-          .then(() => gradeCall(call.id).catch(() => {}))
-          .catch(() => gradeCall(call.id).catch(() => {}))
-      }, 90_000)
+      console.log(`[GHL Webhook] Enqueuing recording fetch job for call ${call.id} (msg: ${messageId})`)
+      await db.recordingFetchJob.create({
+        data: {
+          tenantId,
+          callId: call.id,
+          ghlMessageId: messageId,
+          nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
+        },
+      }).catch(err => console.error(`[GHL Webhook] Failed to enqueue recording job for ${call.id}:`, err instanceof Error ? err.message : err))
     } else {
       gradeCall(call.id).catch(err => {
         console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)

@@ -99,6 +99,7 @@ model Tenant {
   assistantMessages   AssistantMessage[]
   actionLogs          ActionLog[]
   aiLogs              AiLog[]
+  recordingFetchJobs  RecordingFetchJob[]
 
   @@map("tenants")
 }
@@ -509,7 +510,33 @@ model Call {
   isCalibration    Boolean @default(false) @map("is_calibration")
   calibrationNotes String? @map("calibration_notes")
 
+  recordingFetchJob RecordingFetchJob?
+
   @@map("calls")
+}
+
+// ─────────────────────────────────────────
+// RECORDING FETCH JOBS
+// Durable job queue for delayed recording fetches (replaces setTimeout)
+// ─────────────────────────────────────────
+
+model RecordingFetchJob {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  callId        String   @unique @map("call_id")
+  ghlMessageId  String   @map("ghl_message_id")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @map("next_attempt_at")
+  status        String   @default("PENDING") // PENDING | DONE | FAILED
+  lastError     String?  @map("last_error")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  call          Call     @relation(fields: [callId], references: [id])
+
+  @@index([status, nextAttemptAt])
+  @@map("recording_fetch_jobs")
 }
 
 enum CallDirection {

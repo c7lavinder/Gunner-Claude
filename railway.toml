@@ -25,6 +25,12 @@ name = "poll-calls"
 schedule = "* * * * *"
 command = "npx tsx scripts/poll-calls.ts"
 
+# Cron job: process recording fetch jobs every minute (durable queue — replaces setTimeout)
+[[cron]]
+name = "process-recording-jobs"
+schedule = "* * * * *"
+command = "npx tsx scripts/process-recording-jobs.ts"
+
 # Cron job: daily self-audit at 2am UTC
 [[cron]]
 name = "daily-audit"
