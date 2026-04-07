@@ -5,6 +5,7 @@
 
 import { db } from '@/lib/db/client'
 import { logFailure } from '@/lib/audit'
+import { getGHLClient } from './client'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
 const GHL_RECORDING_API_VERSION = '2021-04-15'
@@ -71,31 +72,26 @@ export async function fetchCallRecording(
   }
 }
 
-// Fetch recording with retry — used after 90s delay
+// Fetch recording with retry — uses getGHLClient for auto-refreshed tokens
 export async function fetchAndStoreRecording(
   callId: string,
   messageId: string,
 ): Promise<void> {
   const call = await db.call.findUnique({
     where: { id: callId },
-    select: {
-      id: true,
-      tenantId: true,
-      recordingUrl: true,
-      tenant: {
-        select: { ghlAccessToken: true, ghlLocationId: true },
-      },
-    },
+    select: { id: true, tenantId: true, recordingUrl: true },
   })
-
   if (!call || call.recordingUrl) return // already has recording or call deleted
-  if (!call.tenant.ghlAccessToken || !call.tenant.ghlLocationId) return
 
-  const result = await fetchCallRecording(
-    call.tenant.ghlAccessToken,
-    call.tenant.ghlLocationId,
-    messageId,
-  )
+  let client
+  try {
+    client = await getGHLClient(call.tenantId)
+  } catch (err) {
+    console.error(`[Recording] No GHL client for call ${callId}:`, err instanceof Error ? err.message : err)
+    throw err // rethrow so the cron worker (Fix #2) retries with backoff
+  }
+
+  const result = await fetchCallRecording(client.accessToken, client.locationId, messageId)
 
   if (result.status === 'success' && result.recordingUrl) {
     await db.call.update({
@@ -122,5 +118,6 @@ export async function fetchAndStoreRecording(
     }
   } else {
     console.warn(`[Recording] Failed for call ${callId} (msg: ${messageId}): ${result.error ?? result.status}`)
+    throw new Error(result.error ?? `Recording fetch ${result.status}`)
   }
 }

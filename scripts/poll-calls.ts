@@ -471,6 +471,26 @@ async function perUserConversationSearch(
 async function pollCalls() {
   console.log('[poll-calls] Starting...')
 
+  // ─── Run-lock: prevent concurrent poll runs from racing ───────────────
+  // If a previous poll is still running (e.g. GHL slow, call volume spike),
+  // this run exits immediately instead of double-inserting calls.
+  const LOCK_KEY = 8472310984 // arbitrary unique int for this cron job
+  let lockAcquired = false
+  try {
+    const lockResult = await db.$queryRaw<{ pg_try_advisory_lock: boolean }[]>`
+      SELECT pg_try_advisory_lock(${LOCK_KEY})
+    `
+    lockAcquired = lockResult[0]?.pg_try_advisory_lock === true
+    if (!lockAcquired) {
+      console.log('[poll-calls] Another poll run is in progress — exiting cleanly')
+      process.exit(0)
+    }
+    console.log('[poll-calls] Lock acquired — starting poll')
+  } catch (err) {
+    console.error('[poll-calls] Failed to acquire advisory lock:', err instanceof Error ? err.message : err)
+    process.exit(1)
+  }
+
   try {
     const tenants = await db.tenant.findMany({
       where: { ghlAccessToken: { not: null }, ghlLocationId: { not: null } },
@@ -643,6 +663,13 @@ async function pollCalls() {
   } catch (err) {
     console.error('[poll-calls] Fatal:', err instanceof Error ? err.message : err)
     process.exit(1)
+  } finally {
+    if (lockAcquired) {
+      await db.$queryRaw`SELECT pg_advisory_unlock(${LOCK_KEY})`.catch(err =>
+        console.error('[poll-calls] Failed to release advisory lock:', err instanceof Error ? err.message : err)
+      )
+      console.log('[poll-calls] Lock released')
+    }
   }
 
   process.exit(0)
