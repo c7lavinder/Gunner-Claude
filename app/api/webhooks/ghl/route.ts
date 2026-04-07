@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handleGHLWebhook, GHLWebhookEvent } from '@/lib/ghl/webhooks'
 import { db } from '@/lib/db/client'
+import { logFailure } from '@/lib/audit'
 
 export async function POST(request: NextRequest) {
   let rawBody = ''
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
           body: rawBody.slice(0, 1500),
         })),
       },
-    }).catch(() => {})
+    }).catch(err => logFailure(tenantId, 'webhook.audit_log_write_failed', 'audit_log', err, { eventType: event.type, locationId }))
 
     // Normalize to standard format — handles ANY GHL payload shape
     const normalized = normalizeToEvent(event, locationId)
