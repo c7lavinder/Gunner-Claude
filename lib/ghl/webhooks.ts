@@ -10,6 +10,7 @@ import { createPropertyFromContact } from '@/lib/properties'
 import { awardTaskXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { fetchAndStoreRecording } from '@/lib/ghl/fetch-recording'
+import { logFailure } from '@/lib/audit'
 
 export type GHLWebhookEvent = {
   type: string
@@ -193,7 +194,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       const contact = await ghl.getContact(msg.contactId)
       contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || null
       contactAddress = [contact.address1, contact.city, contact.state].filter(Boolean).join(', ') || null
-    } catch { /* non-fatal */ }
+    } catch (err) { await logFailure(tenantId, 'webhook.contact_lookup_failed', 'call', err, { contactId: msg.contactId, handler: 'handleMessage' }) }
   }
 
   // Create call record — recording URL comes from attachments in webhook
@@ -222,7 +223,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       where: { propertyId_userId: { propertyId: property.id, userId: user.id } },
       create: { propertyId: property.id, userId: user.id, tenantId, role: user.role ?? 'Team', source: 'call' },
       update: {},
-    }).catch(() => {}) // ignore if already exists
+    }).catch(err => logFailure(tenantId, 'webhook.team_member_upsert_failed', 'property_team_member', err, { propertyId: property?.id, userId: user?.id, callId: call.id }))
   }
 
   await db.auditLog.create({
@@ -262,12 +263,12 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
         }
         // Grade with or without transcript
         return gradeCall(call.id)
-      }).catch(err => {
-        console.error(`[GHL Webhook] Transcription/grading failed for ${call.id}:`, err instanceof Error ? err.message : err)
+      }).catch(async err => {
+        await logFailure(tenantId, 'webhook.transcribe_grade_failed', 'call', err, { callId: call.id, recordingUrl })
         // Grade without transcript as fallback
-        gradeCall(call.id).catch(() => {})
+        gradeCall(call.id).catch(err2 => logFailure(tenantId, 'webhook.call_grade_fallback_failed', 'call', err2, { callId: call.id }))
       })
-    ).catch(() => {})
+    ).catch(err => logFailure(tenantId, 'webhook.transcribe_import_failed', 'call', err, { callId: call.id }))
     return
   }
 
@@ -281,12 +282,10 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
         ghlMessageId: messageId,
         nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
       },
-    }).catch(err => console.error(`[GHL Webhook] Failed to enqueue recording job for ${call.id}:`, err instanceof Error ? err.message : err))
+    }).catch(err => logFailure(tenantId, 'webhook.recording_enqueue_failed', 'recording_fetch_job', err, { callId: call.id, messageId }))
   } else {
     // Recording already available — grade immediately
-    gradeCall(call.id).catch(err => {
-      console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
-    })
+    gradeCall(call.id).catch(err => logFailure(tenantId, 'webhook.call_grade_failed', 'call', err, { callId: call.id }))
   }
 }
 
@@ -378,7 +377,7 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       })
       if (isGradeable && existing.gradingStatus !== 'COMPLETED') {
         console.log(`[GHL Webhook] Updated call ${existing.id} with duration=${finalDuration}s, triggering grade`)
-        gradeCall(existing.id).catch(() => {})
+        gradeCall(existing.id).catch(err => logFailure(tenantId, 'webhook.existing_call_grade_failed', 'call', err, { callId: existing.id, duration: finalDuration }))
       }
     }
     return
@@ -401,8 +400,8 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       const c = (contact as { contact?: { firstName?: string; lastName?: string; address1?: string; city?: string; state?: string } }).contact ?? contact as { firstName?: string; lastName?: string; address1?: string; city?: string; state?: string }
       contactName = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || null
       contactAddress = [c.address1, c.city, c.state].filter(Boolean).join(', ') || null
-    } catch {
-      // GHL lookup failed — contact name stays null, poll-calls will fill it later
+    } catch (err) {
+      await logFailure(tenantId, 'webhook.contact_lookup_failed', 'call', err, { contactId, handler: 'handleCallCompleted' })
     }
   }
 
@@ -453,11 +452,9 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
           ghlMessageId: messageId,
           nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
         },
-      }).catch(err => console.error(`[GHL Webhook] Failed to enqueue recording job for ${call.id}:`, err instanceof Error ? err.message : err))
+      }).catch(err => logFailure(tenantId, 'webhook.recording_enqueue_failed', 'recording_fetch_job', err, { callId: call.id, messageId }))
     } else {
-      gradeCall(call.id).catch(err => {
-        console.error(`[Call Grading] Failed for call ${call.id}:`, err instanceof Error ? err.message : err)
-      })
+      gradeCall(call.id).catch(err => logFailure(tenantId, 'webhook.call_grade_failed', 'call', err, { callId: call.id }))
     }
   }
 }
@@ -491,7 +488,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       const stage = pipeline.stages?.find((s: { id: string; name: string }) => s.id === stageId)
       if (stage) { resolvedStageName = stage.name; break }
     }
-  } catch { /* non-fatal */ }
+  } catch (err) { await logFailure(tenantId, 'webhook.pipeline_lookup_failed', 'property', err, { stageId, contactId: oppData.contactId }) }
 
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
@@ -574,7 +571,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
         if (!exists) {
           await db.propertyMilestone.create({
             data: { tenantId, propertyId: propForMilestone.id, type: mType as import('@prisma/client').MilestoneType, source: 'AUTO_WEBHOOK', loggedById: milestoneUser?.id },
-          }).catch(() => {})
+          }).catch(err => logFailure(tenantId, 'webhook.milestone_backfill_failed', 'property_milestone', err, { propertyId: propForMilestone.id, milestoneType: mType }))
           console.log(`[GHL Webhook] Backfilled ${mType} milestone for ${propForMilestone.id}`)
         }
       }
@@ -586,7 +583,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       if (!existingDispo) {
         await db.propertyMilestone.create({
           data: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', source: 'AUTO_WEBHOOK', loggedById: milestoneUser?.id },
-        }).catch(() => {})
+        }).catch(err => logFailure(tenantId, 'webhook.milestone_create_failed', 'property_milestone', err, { propertyId: propForMilestone.id, milestoneType: 'DISPO_NEW' }))
         console.log(`[GHL Webhook] Created DISPO_NEW milestone for ${propForMilestone.id}`)
       }
     }
@@ -682,14 +679,14 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
             }
           }
         } catch (err) {
-          console.warn('[GHL Webhook] Milestone auto-create failed:', err instanceof Error ? err.message : err)
+          await logFailure(tenantId, 'webhook.milestone_create_failed', 'property_milestone', err, { contactId: oppData.contactId, milestoneType, stageId })
         }
       }
     }
 
     console.log(`[GHL Webhook] Stage changed for contact ${oppData.contactId}: ${stageName ?? stageId} → ${appStage ?? 'unknown'} → ${newStatus ?? 'no update'}`)
   } catch (err) {
-    console.error('[GHL Webhook] Stage update failed:', err instanceof Error ? err.message : err)
+    await logFailure(tenantId, 'webhook.stage_update_failed', 'property', err, { contactId: oppData.contactId, stageId })
   }
 }
 

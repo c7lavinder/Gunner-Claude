@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { fetchAndStoreRecording } from '@/lib/ghl/fetch-recording'
 import { gradeCall } from '@/lib/ai/grading'
+import { logFailure } from '@/lib/audit'
 
 const MAX_ATTEMPTS = 5
 const BATCH_SIZE = 20
@@ -56,7 +57,7 @@ async function processJobs() {
           // Belt and suspenders: trigger grading if call is still PENDING and has no transcript
           if (call.gradingStatus === 'PENDING' && !call.transcript) {
             gradeCall(job.callId).catch(err =>
-              console.error(`[recording-jobs] Re-grade failed for ${job.callId}:`, err instanceof Error ? err.message : err)
+              logFailure(job.tenantId, 'recording_jobs.grade_failed', 'call', err, { callId: job.callId, jobId: job.id })
             )
           }
         } else {

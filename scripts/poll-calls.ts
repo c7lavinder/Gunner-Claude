@@ -16,6 +16,7 @@ import { gradeCall } from '../lib/ai/grading'
 import { syncGHLUsers } from '../lib/ghl/sync-users'
 import { fetchCallRecording } from '../lib/ghl/fetch-recording'
 import { transcribeRecording } from '../lib/ai/transcribe'
+import { logFailure } from '../lib/audit'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
 const MIN_CALL_DURATION_FOR_GRADING = 45
@@ -96,7 +97,7 @@ async function processCallMessage(
           }
         }
         await gradeCall(existing.id).catch(err =>
-          console.error(`[poll-calls] Re-grade failed ${existing.id}:`, err instanceof Error ? err.message : err)
+          logFailure(tenantId, 'poll.regrade_failed', 'call', err, { callId: existing.id, dedupeId })
         )
       }
       return 'new'
@@ -134,7 +135,7 @@ async function processCallMessage(
       const contact = await ghl.getContact(contactId)
       contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || null
       contactAddress = [contact.address1, contact.city, contact.state].filter(Boolean).join(', ') || null
-    } catch {}
+    } catch (err) { await logFailure(tenantId, 'poll.contact_lookup_failed', 'call', err, { contactId }) }
   }
 
   // Match team member
@@ -180,7 +181,7 @@ async function processCallMessage(
       where: { propertyId_userId: { propertyId: property.id, userId: user.id } },
       create: { propertyId: property.id, userId: user.id, tenantId, role: user.role ?? 'Team', source: 'call' },
       update: {},
-    }).catch(() => {})
+    }).catch(err => logFailure(tenantId, 'poll.team_member_upsert_failed', 'property_team_member', err, { propertyId: property?.id, userId: user?.id }))
   }
 
   // Transcribe + grade
@@ -194,9 +195,9 @@ async function processCallMessage(
         }
       }
     }
-    await gradeCall(call.id).catch(err => {
-      console.error(`[poll-calls] Grade failed ${call.id}:`, err instanceof Error ? err.message.slice(0, 80) : err)
-    })
+    await gradeCall(call.id).catch(err =>
+      logFailure(tenantId, 'poll.call_grade_failed', 'call', err, { callId: call.id, contactName, duration })
+    )
   }
 
   console.log(`[poll-calls] New: ${contactName ?? 'Unknown'} | ${duration > 0 ? `${duration}s` : '0s'} | rec=${hasRecording} | ${isGradeable ? 'GRADE' : 'dial'}`)
@@ -366,7 +367,7 @@ async function callTypeConversationSearch(
             if (result === 'new') totalNew++
             await sleep(50)
           }
-        } catch { continue }
+        } catch (err) { await logFailure(tenantId, 'poll.conversation_search_failed', 'call', err, { conversationId: conv.id }); continue }
       }
 
       // If all conversations in batch are before cutoff, stop
@@ -449,7 +450,7 @@ async function perUserConversationSearch(
               if (result === 'new') totalNew++
               await sleep(50)
             }
-          } catch { continue }
+          } catch (err) { await logFailure(tenantId, 'poll.user_conversation_failed', 'call', err, { conversationId: conv.id, ghlUserId: user.ghlUserId }); continue }
         }
 
         if (conversations.length < 100) break
@@ -483,7 +484,7 @@ async function pollCalls() {
 
     for (const tenant of tenants) {
       try {
-        await syncGHLUsers(tenant.id).catch(() => {})
+        await syncGHLUsers(tenant.id).catch(err => logFailure(tenant.id, 'poll.sync_users_failed', 'user', err))
 
         let ghl: Awaited<ReturnType<typeof getGHLClient>>
         try {
@@ -582,10 +583,10 @@ async function pollCalls() {
               where: { id: fc.id },
               data: { transcript: trans.transcript, durationSeconds: estDuration, gradingStatus: 'PENDING', callResult: null, aiSummary: null },
             })
-            await gradeCall(fc.id).catch(() => {})
+            await gradeCall(fc.id).catch(err => logFailure(null, 'poll.retry_grade_failed', 'call', err, { callId: fc.id }))
             await sleep(500)
           }
-        } catch {}
+        } catch (err) { await logFailure(null, 'poll.retry_transcription_failed', 'call', err, { callId: fc.id, contactName: fc.contactName }) }
       }
     }
 
@@ -629,11 +630,11 @@ async function pollCalls() {
             }
           }
           await gradeCall(pc.id).catch(err =>
-            console.error(`[poll-calls] Stale PENDING grade failed ${pc.id}:`, err instanceof Error ? err.message : err)
+            logFailure(null, 'poll.stale_pending_grade_failed', 'call', err, { callId: pc.id, contactName: pc.contactName })
           )
           await sleep(500)
         } catch (err) {
-          console.error(`[poll-calls] Stale PENDING error ${pc.id}:`, err instanceof Error ? err.message : err)
+          await logFailure(null, 'poll.stale_pending_error', 'call', err, { callId: pc.id, contactName: pc.contactName })
         }
       }
     }

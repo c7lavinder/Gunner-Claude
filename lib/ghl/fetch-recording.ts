@@ -4,6 +4,7 @@
 // Requires Version: 2021-04-15 header
 
 import { db } from '@/lib/db/client'
+import { logFailure } from '@/lib/audit'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
 const GHL_RECORDING_API_VERSION = '2021-04-15'
@@ -79,6 +80,7 @@ export async function fetchAndStoreRecording(
     where: { id: callId },
     select: {
       id: true,
+      tenantId: true,
       recordingUrl: true,
       tenant: {
         select: { ghlAccessToken: true, ghlLocationId: true },
@@ -115,7 +117,7 @@ export async function fetchAndStoreRecording(
       console.log(`[Recording] Flipped call ${callId} from FAILED back to PENDING — recording arrived`)
       const { gradeCall } = await import('@/lib/ai/grading')
       gradeCall(callId).catch(err =>
-        console.error(`[Recording] Re-grade failed for ${callId}:`, err instanceof Error ? err.message : err)
+        logFailure(call.tenantId, 'recording.regrade_failed', 'call', err, { callId, messageId })
       )
     }
   } else {
