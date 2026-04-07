@@ -35,7 +35,7 @@ async function main() {
     where: {
       calledAt: { gte: todayStart },
       gradingStatus: 'FAILED',
-      OR: [
+      AND: [
         { durationSeconds: { gte: 45 } },
         { recordingUrl: { not: null } },
       ],

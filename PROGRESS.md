@@ -90,6 +90,10 @@ Parked for next session (none blocking team onboarding):
 - Migrate the other ~22 API routes to withTenant (incremental, team work)
 - Sweep remaining 79 silent catches in broader codebase (AI pipeline, assistant, client-side)
 - Claude grading response parse failures (3 in last 12h — truncated JSON from long transcripts)
+- P7 (HIGH): Claude grading response parser doesn't strip ```json``` markdown fences before
+  JSON.parse. Caught by Fix #3 audit_logs surfacing — 3 instances in the last 12 hours,
+  likely many more historically. Each instance = a call that didn't get graded.
+  File: lib/ai/grading.ts. Fix: strip ```json prefix and ``` suffix before parsing.
 
 ### Session 30-31 — Bug fixes + AI Intelligence Layer + Role Assistant (2026-04-01 to 2026-04-02)
 - 8 bug fixes (calendars, calls, buyers, SMS, property tabs, appointments)
