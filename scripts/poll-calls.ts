@@ -634,7 +634,7 @@ async function pollCalls() {
           )
           await sleep(500)
         } catch (err) {
-          await logFailure(null, 'poll.stale_pending_error', 'call', err, { callId: pc.id, contactName: pc.contactName })
+          await logFailure(null, 'poll.stale_pending_failed', 'call', err, { callId: pc.id, contactName: pc.contactName })
         }
       }
     }
