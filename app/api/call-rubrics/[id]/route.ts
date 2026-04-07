@@ -1,29 +1,26 @@
 // app/api/call-rubrics/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
+import type { UserRole } from '@/types/roles'
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'settings.manage')) return forbiddenResponse()
+export const DELETE = withTenant<{ id: string }>(async (req, ctx, params) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'settings.manage')) return forbiddenResponse()
 
   const rubric = await db.callRubric.findUnique({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
   })
 
   if (!rubric) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await db.callRubric.delete({ where: { id: params.id, tenantId: session.tenantId } })
+  await db.callRubric.delete({ where: { id: params.id, tenantId: ctx.tenantId } })
 
   await db.auditLog.create({
     data: {
-      tenantId: session.tenantId,
-      userId: session.userId,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'call_rubric.deleted',
       resource: 'call_rubric',
       resourceId: params.id,
@@ -34,33 +31,28 @@ export async function DELETE(
   })
 
   return NextResponse.json({ success: true })
-}
+})
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'settings.manage')) return forbiddenResponse()
+export const PATCH = withTenant<{ id: string }>(async (req, ctx, params) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'settings.manage')) return forbiddenResponse()
 
   const rubric = await db.callRubric.findUnique({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
   })
   if (!rubric) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const body = await request.json()
+  const body = await req.json()
 
   // If setting as default, clear others for this role
   if (body.isDefault) {
     await db.callRubric.updateMany({
-      where: { tenantId: session.tenantId, role: rubric.role, isDefault: true, id: { not: params.id } },
+      where: { tenantId: ctx.tenantId, role: rubric.role, isDefault: true, id: { not: params.id } },
       data: { isDefault: false },
     })
   }
 
   const updated = await db.callRubric.update({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     data: {
       ...(body.name && { name: body.name }),
       ...(body.isDefault !== undefined && { isDefault: body.isDefault }),
@@ -69,4 +61,4 @@ export async function PATCH(
   })
 
   return NextResponse.json({ rubric: updated })
-}
+})

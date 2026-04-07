@@ -1,11 +1,13 @@
 // app/api/properties/[propertyId]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
 import { Prisma, PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
 import { awardPropertyXP } from '@/lib/gamification/xp'
+import type { UserRole } from '@/types/roles'
 
 const updateSchema = z.object({
   address: z.string().min(1).optional(),
@@ -79,20 +81,15 @@ const updateSchema = z.object({
   dealBlastAssignmentFeeOverride: z.string().nullable().optional(),
 })
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { propertyId: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'properties.edit')) return forbiddenResponse()
+export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'properties.edit')) return forbiddenResponse()
 
   const property = await db.property.findUnique({
-    where: { id: params.propertyId, tenantId: session.tenantId },
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
   })
   if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const body = await request.json()
+  const body = await req.json()
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) {
     console.error('[Properties] Validation failed:', JSON.stringify(parsed.error.issues))
@@ -128,13 +125,13 @@ export async function PATCH(
     let marketId: string | undefined
     if (marketName) {
       const existing = await db.market.findFirst({
-        where: { tenantId: session.tenantId, name: { equals: marketName, mode: 'insensitive' } },
+        where: { tenantId: ctx.tenantId, name: { equals: marketName, mode: 'insensitive' } },
       })
       if (existing) {
         marketId = existing.id
       } else {
         const created = await db.market.create({
-          data: { tenantId: session.tenantId, name: marketName },
+          data: { tenantId: ctx.tenantId, name: marketName },
         })
         marketId = created.id
       }
@@ -143,7 +140,7 @@ export async function PATCH(
     await db.$transaction(async (tx) => {
       // Update property
       await tx.property.update({
-        where: { id: params.propertyId, tenantId: session.tenantId },
+        where: { id: params.propertyId, tenantId: ctx.tenantId },
         data: {
           ...(marketId && { marketId }),
           ...(rawAddress && { address: standardizeStreet(rawAddress) }),
@@ -236,7 +233,7 @@ export async function PATCH(
         } else if (sellerName) {
           const seller = await tx.seller.create({
             data: {
-              tenantId: session.tenantId,
+              tenantId: ctx.tenantId,
               name: sellerName,
               phone: sellerPhone ?? null,
               email: sellerEmail ?? null,
@@ -251,8 +248,8 @@ export async function PATCH(
 
     await db.auditLog.create({
       data: {
-        tenantId: session.tenantId,
-        userId: session.userId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
         action: 'property.updated',
         resource: 'property',
         resourceId: params.propertyId,
@@ -264,8 +261,8 @@ export async function PATCH(
 
     // Award XP for status milestones (Under Contract, Sold)
     if (status && (status === 'UNDER_CONTRACT' || status === 'SOLD')) {
-      const assignee = property.assignedToId ?? session.userId
-      awardPropertyXP(session.tenantId, assignee, params.propertyId, status).catch((err) => {
+      const assignee = property.assignedToId ?? ctx.userId
+      awardPropertyXP(ctx.tenantId, assignee, params.propertyId, status).catch((err) => {
         console.warn(`[Properties] XP award failed:`, err)
       })
     }
@@ -273,15 +270,15 @@ export async function PATCH(
     // Auto-log CLOSED milestone when property status → SOLD
     if (status === 'SOLD') {
       const existingClose = await db.propertyMilestone.findFirst({
-        where: { propertyId: params.propertyId, type: 'CLOSED' },
+        where: { propertyId: params.propertyId, tenantId: ctx.tenantId, type: 'CLOSED' },
       })
       if (!existingClose) {
         await db.propertyMilestone.create({
           data: {
-            tenantId: session.tenantId,
+            tenantId: ctx.tenantId,
             propertyId: params.propertyId,
             type: 'CLOSED',
-            loggedById: session.userId,
+            loggedById: ctx.userId,
             source: 'AUTO_WEBHOOK',
           },
         }).catch(() => {})
@@ -293,4 +290,4 @@ export async function PATCH(
     console.error('[Properties] Update error:', err)
     return NextResponse.json({ error: 'Failed to update property' }, { status: 500 })
   }
-}
+})
