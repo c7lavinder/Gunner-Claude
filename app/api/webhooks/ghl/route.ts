@@ -10,6 +10,44 @@ export async function POST(request: NextRequest) {
   let rawBody = ''
   try {
     rawBody = await request.text()
+
+    // ─── Signature verification (when GHL_WEBHOOK_SECRET is configured) ─────
+    const secret = process.env.GHL_WEBHOOK_SECRET
+    if (secret) {
+      const signature =
+        request.headers.get('x-ghl-signature') ??
+        request.headers.get('x-wh-signature') ??
+        request.headers.get('x-hub-signature-256') ??
+        ''
+
+      if (!signature) {
+        console.warn('[Webhook] No signature header on incoming webhook — rejecting')
+        return NextResponse.json({ received: true, verified: false, reason: 'no_signature' }, { status: 200 })
+      }
+
+      try {
+        const crypto = await import('crypto')
+        // Strip "sha256=" prefix if present (GitHub-style signing)
+        const sigHex = signature.replace(/^sha256=/, '')
+        const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+
+        const sigBuf = Buffer.from(sigHex, 'hex')
+        const expBuf = Buffer.from(expected, 'hex')
+
+        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+          console.warn(`[Webhook] Signature mismatch — rejecting. Got ${sigHex.slice(0, 16)}..., expected ${expected.slice(0, 16)}...`)
+          // Return 200 so GHL doesn't retry-storm us, but DO NOT process
+          return NextResponse.json({ received: true, verified: false, reason: 'signature_mismatch' }, { status: 200 })
+        }
+      } catch (err) {
+        console.error('[Webhook] Signature verification error:', err instanceof Error ? err.message : err)
+        return NextResponse.json({ received: true, verified: false, reason: 'verify_error' }, { status: 200 })
+      }
+    } else {
+      // Secret not configured — accept but log warning so we know we're unverified
+      console.warn('[Webhook] GHL_WEBHOOK_SECRET not set — accepting unverified webhook (set the env var to enable verification)')
+    }
+
     const event = JSON.parse(rawBody)
 
     // Find tenant from ANY location field GHL might send
@@ -35,33 +73,30 @@ export async function POST(request: NextRequest) {
       }
     }
     if (!tenantId) {
-      // Last resort — use first tenant (single-tenant for now)
-      const firstTenant = await db.tenant.findFirst({ select: { id: true } })
-      tenantId = firstTenant?.id ?? null
+      console.warn(`[Webhook] No tenant resolved — locationId=${locationId} — dropping event type=${event.type ?? 'unknown'}`)
+      return NextResponse.json({ received: true, dropped: 'no_tenant' }, { status: 200 })
     }
 
     // Log EVERY webhook — raw payload preserved for debugging
-    if (tenantId) {
-      await db.auditLog.create({
-        data: {
-          tenantId,
-          action: 'webhook.received',
-          resource: 'webhook',
-          source: 'GHL_WEBHOOK',
-          severity: 'INFO',
-          payload: JSON.parse(JSON.stringify({
-            rawKeys: Object.keys(event),
-            type: event.type,
-            messageType: event.messageType,
-            call_status: event.call_status ?? event.callStatus,
-            direction: event.direction,
-            contactId: event.contactId ?? event.contact_id,
-            locationId,
-            body: rawBody.slice(0, 1500),
-          })),
-        },
-      }).catch(() => {})
-    }
+    await db.auditLog.create({
+      data: {
+        tenantId,
+        action: 'webhook.received',
+        resource: 'webhook',
+        source: 'GHL_WEBHOOK',
+        severity: 'INFO',
+        payload: JSON.parse(JSON.stringify({
+          rawKeys: Object.keys(event),
+          type: event.type,
+          messageType: event.messageType,
+          call_status: event.call_status ?? event.callStatus,
+          direction: event.direction,
+          contactId: event.contactId ?? event.contact_id,
+          locationId,
+          body: rawBody.slice(0, 1500),
+        })),
+      },
+    }).catch(() => {})
 
     // Normalize to standard format — handles ANY GHL payload shape
     const normalized = normalizeToEvent(event, locationId)
