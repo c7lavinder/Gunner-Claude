@@ -131,29 +131,12 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
 
   console.log(`[GHL Webhook] Call detected: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}, recording=${!!recordingUrl}`)
 
-  // GHL sends callDuration=0 or null even for long calls — duration isn't known at webhook time.
-  // Only skip if the call explicitly FAILED (status=failed/busy/no-answer).
-  // Completed calls with no recording will get recording fetched after a delay.
-  const skipStatuses = ['failed', 'busy', 'no-answer', 'canceled']
-  if (skipStatuses.includes(callStatus)) {
-    await db.auditLog.create({
-      data: {
-        tenantId,
-        action: 'call.skipped',
-        resource: 'call',
-        source: 'GHL_WEBHOOK',
-        severity: 'INFO',
-        payload: {
-          messageId,
-          contactId: msg.contactId,
-          duration: callDuration,
-          status: callStatus,
-          direction: msg.direction,
-        } as unknown as Prisma.InputJsonValue,
-      },
-    })
-    return
-  }
+  // Classify call: no-answer dials still get a Call row (never dropped)
+  const isNoAnswer =
+    ['failed', 'busy', 'no-answer', 'canceled'].includes(callStatus) ||
+    (callDuration === 0 && !recordingUrl)
+  const isShortCall =
+    !isNoAnswer && callDuration > 0 && callDuration < 45 && !recordingUrl
 
   // Deduplicate by messageId or altId
   const dedupeId = msg.altId || messageId
@@ -211,11 +194,17 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       direction: direction as 'INBOUND' | 'OUTBOUND',
       durationSeconds: callDuration > 0 ? callDuration : undefined, // 0 = not yet known, poll-calls fills it later
       calledAt: msg.dateAdded ? new Date(msg.dateAdded) : new Date(),
-      gradingStatus: 'PENDING',
+      gradingStatus: isNoAnswer || isShortCall ? 'FAILED' : 'PENDING',
+      callResult: isNoAnswer ? 'no_answer' : isShortCall ? 'short_call' : undefined,
+      aiSummary: isNoAnswer
+        ? 'No answer — call not connected.'
+        : isShortCall
+        ? `Short call (${callDuration}s) — not graded.`
+        : undefined,
     },
   })
 
-  console.log(`[GHL Webhook] Created call ${call.id}: recording=${!!recordingUrl}, contact=${contactName}`)
+  console.log(`[GHL Webhook] Created call ${call.id}: recording=${!!recordingUrl}, contact=${contactName}, noAnswer=${isNoAnswer}, shortCall=${isShortCall}`)
 
   // Auto-add team member when a call is tied to a property
   if (property?.id && user?.id) {
@@ -245,47 +234,42 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     },
   })
 
-  // If recording URL available (from attachments), transcribe immediately
-  // Twilio recording URLs are public — no auth needed for Deepgram
-  if (recordingUrl) {
-    // Transcribe and grade immediately (recording is already available)
-    import('../ai/transcribe').then(({ transcribeRecording }) =>
-      transcribeRecording(recordingUrl!).then(async trans => {
-        if (trans.status === 'success' && trans.transcript) {
-          await db.call.update({
-            where: { id: call.id },
-            data: {
-              transcript: trans.transcript,
-              ...(trans.duration ? { durationSeconds: trans.duration } : {}),
-            },
-          })
-          console.log(`[GHL Webhook] Transcribed call ${call.id}: ${trans.transcript.length} chars`)
-        }
-        // Grade with or without transcript
-        return gradeCall(call.id)
-      }).catch(async err => {
-        await logFailure(tenantId, 'webhook.transcribe_grade_failed', 'call', err, { callId: call.id, recordingUrl })
-        // Grade without transcript as fallback
-        gradeCall(call.id).catch(err2 => logFailure(tenantId, 'webhook.call_grade_fallback_failed', 'call', err2, { callId: call.id }))
-      })
-    ).catch(err => logFailure(tenantId, 'webhook.transcribe_import_failed', 'call', err, { callId: call.id }))
-    return
-  }
-
-  // If no recording URL in the payload, enqueue a durable job to fetch it later
-  if (!recordingUrl && messageId) {
-    console.log(`[GHL Webhook] Enqueuing recording fetch job for call ${call.id} (msg: ${messageId})`)
-    await db.recordingFetchJob.create({
-      data: {
-        tenantId,
-        callId: call.id,
-        ghlMessageId: messageId,
-        nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
-      },
-    }).catch(err => logFailure(tenantId, 'webhook.recording_enqueue_failed', 'recording_fetch_job', err, { callId: call.id, messageId }))
-  } else {
-    // Recording already available — grade immediately
-    gradeCall(call.id).catch(err => logFailure(tenantId, 'webhook.call_grade_failed', 'call', err, { callId: call.id }))
+  // Only attempt transcription/recording fetch for substantive calls
+  if (!isNoAnswer && !isShortCall) {
+    if (recordingUrl) {
+      // Transcribe and grade immediately (recording is already available)
+      import('../ai/transcribe').then(({ transcribeRecording }) =>
+        transcribeRecording(recordingUrl!).then(async trans => {
+          if (trans.status === 'success' && trans.transcript) {
+            await db.call.update({
+              where: { id: call.id },
+              data: {
+                transcript: trans.transcript,
+                ...(trans.duration ? { durationSeconds: trans.duration } : {}),
+              },
+            })
+            console.log(`[GHL Webhook] Transcribed call ${call.id}: ${trans.transcript.length} chars`)
+          }
+          // Grade with or without transcript
+          return gradeCall(call.id)
+        }).catch(async err => {
+          await logFailure(tenantId, 'webhook.transcribe_grade_failed', 'call', err, { callId: call.id, recordingUrl })
+          // Grade without transcript as fallback
+          gradeCall(call.id).catch(err2 => logFailure(tenantId, 'webhook.call_grade_fallback_failed', 'call', err2, { callId: call.id }))
+        })
+      ).catch(err => logFailure(tenantId, 'webhook.transcribe_import_failed', 'call', err, { callId: call.id }))
+    } else if (!recordingUrl && messageId) {
+      // No recording URL in the payload — enqueue a durable job to fetch it later
+      console.log(`[GHL Webhook] Enqueuing recording fetch job for call ${call.id} (msg: ${messageId})`)
+      await db.recordingFetchJob.create({
+        data: {
+          tenantId,
+          callId: call.id,
+          ghlMessageId: messageId,
+          nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
+        },
+      }).catch(err => logFailure(tenantId, 'webhook.recording_enqueue_failed', 'recording_fetch_job', err, { callId: call.id, messageId }))
+    }
   }
 }
 

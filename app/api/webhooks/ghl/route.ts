@@ -51,6 +51,31 @@ export async function POST(request: NextRequest) {
 
     const event = JSON.parse(rawBody)
 
+    // ── Raw webhook log — fires for every single GHL webhook ──────────────
+    // Visibility layer: even if everything else fails, we have a record.
+    // Fire-and-forget: never blocks the response.
+    const _rawEvent = event as Record<string, unknown>
+    db.webhookLog.create({
+      data: {
+        eventType: String(_rawEvent.type ?? 'UNKNOWN'),
+        messageId: String(
+          _rawEvent.messageId ?? _rawEvent.id ?? _rawEvent.altId ?? _rawEvent.callId ?? ''
+        ) || null,
+        locationId: String(
+          _rawEvent.locationId ?? _rawEvent.location_id ??
+          (_rawEvent.location && typeof _rawEvent.location === 'object'
+            ? (_rawEvent.location as Record<string, unknown>).id
+            : '') ??
+          'UNKNOWN'
+        ),
+        rawPayload: JSON.parse(JSON.stringify(_rawEvent)),
+        processed: false,
+      },
+    }).catch(err =>
+      console.error('[Webhook] WebhookLog write failed:', err instanceof Error ? err.message : err)
+    )
+    // ── End webhook log ───────────────────────────────────────────────────
+
     // Find tenant from ANY location field GHL might send
     const locObj = (event.location && typeof event.location === 'object') ? event.location as Record<string, unknown> : {}
     const locationId = String(

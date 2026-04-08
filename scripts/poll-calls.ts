@@ -184,21 +184,28 @@ async function processCallMessage(
     }).catch(err => logFailure(tenantId, 'poll.team_member_upsert_failed', 'property_team_member', err, { propertyId: property?.id, userId: user?.id }))
   }
 
-  // Transcribe + grade
-  if (isGradeable) {
-    if (hasRecording) {
-      const trans = await transcribeRecording(rec.recordingUrl!, accessToken)
-      if (trans.status === 'success' && trans.transcript) {
-        await db.call.update({ where: { id: call.id }, data: { transcript: trans.transcript } })
-        if (duration === 0 && trans.transcript.length > 50) {
-          await db.call.update({ where: { id: call.id }, data: { durationSeconds: Math.max(Math.round(trans.transcript.length / 15), 45) } })
-        }
-      }
+  // Transcription and grading handled separately by process-recording-jobs.ts
+  // poll-calls.ts only imports call records — nothing else.
+  if (isGradeable && !hasRecording && messageId) {
+    // No recording in payload — enqueue a job to fetch it (if not already queued)
+    const existingJob = await db.recordingFetchJob.findFirst({
+      where: { callId: call.id },
+      select: { id: true },
+    })
+    if (!existingJob) {
+      await db.recordingFetchJob.create({
+        data: {
+          tenantId,
+          callId: call.id,
+          ghlMessageId: messageId,
+          nextAttemptAt: new Date(Date.now() + 60_000), // first attempt in 60s
+        },
+      }).catch(err =>
+        console.error(`[poll-calls] Failed to create recording job for ${call.id}:`, err)
+      )
     }
-    await gradeCall(call.id).catch(err =>
-      logFailure(tenantId, 'poll.call_grade_failed', 'call', err, { callId: call.id, contactName, duration })
-    )
   }
+  // If hasRecording — process-recording-jobs.ts will find it via the PENDING gradingStatus
 
   console.log(`[poll-calls] New: ${contactName ?? 'Unknown'} | ${duration > 0 ? `${duration}s` : '0s'} | rec=${hasRecording} | ${isGradeable ? 'GRADE' : 'dial'}`)
   return 'new'
@@ -531,7 +538,15 @@ async function pollCalls() {
           select: { id: true, ghlUserId: true, role: true },
         })
 
-        const existingCalls = await db.call.findMany({ where: { tenantId: tenant.id }, select: { ghlCallId: true } })
+        // Only load recent calls for dedup — avoids loading entire call history into memory
+        const cutoffDate = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000)
+        const existingCalls = await db.call.findMany({
+          where: {
+            tenantId: tenant.id,
+            calledAt: { gte: cutoffDate },
+          },
+          select: { ghlCallId: true },
+        })
         const existingIds = new Set(existingCalls.map(c => c.ghlCallId).filter(Boolean) as string[])
         console.log(`[poll-calls] ${existingIds.size} existing calls in DB, ${tenantUsers.length} users mapped`)
 
@@ -576,88 +591,8 @@ async function pollCalls() {
       }
     }
 
-    // ─── Retry failed transcriptions ──────────────────────────────────
-    const retryWindow = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const failedCalls = await db.call.findMany({
-      where: {
-        gradingStatus: 'FAILED',
-        recordingUrl: { not: null },
-        transcript: null,
-        calledAt: { gte: retryWindow },
-      },
-      select: {
-        id: true, contactName: true, recordingUrl: true, durationSeconds: true,
-        tenant: { select: { ghlAccessToken: true } },
-      },
-      take: 10,
-    })
-
-    if (failedCalls.length > 0) {
-      console.log(`[poll-calls] Retrying ${failedCalls.length} failed transcriptions...`)
-      for (const fc of failedCalls) {
-        try {
-          const trans = await transcribeRecording(fc.recordingUrl!, fc.tenant.ghlAccessToken ?? undefined)
-          if (trans.status === 'success' && trans.transcript && trans.transcript.length > 20) {
-            const estDuration = fc.durationSeconds ?? Math.max(Math.round(trans.transcript.length / 15), 45)
-            await db.call.update({
-              where: { id: fc.id },
-              data: { transcript: trans.transcript, durationSeconds: estDuration, gradingStatus: 'PENDING', callResult: null, aiSummary: null },
-            })
-            await gradeCall(fc.id).catch(err => logFailure(null, 'poll.retry_grade_failed', 'call', err, { callId: fc.id }))
-            await sleep(500)
-          }
-        } catch (err) { await logFailure(null, 'poll.retry_transcription_failed', 'call', err, { callId: fc.id, contactName: fc.contactName }) }
-      }
-    }
-
-    // ─── Grade stale PENDING calls (backfill recovery + stuck calls) ──
-    // Catches calls that were flipped to PENDING by the backfill migration
-    // or got stuck in PENDING because the cursor already passed them.
-    const stalePending = await db.call.findMany({
-      where: {
-        gradingStatus: 'PENDING',
-        calledAt: { gte: retryWindow },
-      },
-      select: {
-        id: true, contactName: true, recordingUrl: true, durationSeconds: true,
-        ghlCallId: true, transcript: true,
-        tenant: { select: { ghlAccessToken: true, ghlLocationId: true } },
-      },
-      take: 20,
-    })
-
-    if (stalePending.length > 0) {
-      console.log(`[poll-calls] Grading ${stalePending.length} stale PENDING calls...`)
-      for (const pc of stalePending) {
-        try {
-          // Try to fetch recording if missing
-          if (!pc.recordingUrl && pc.ghlCallId && pc.tenant.ghlAccessToken && pc.tenant.ghlLocationId) {
-            const rec = await fetchCallRecording(pc.tenant.ghlAccessToken, pc.tenant.ghlLocationId, pc.ghlCallId)
-            if (rec.status === 'success' && rec.recordingUrl) {
-              await db.call.update({ where: { id: pc.id }, data: { recordingUrl: rec.recordingUrl } })
-              pc.recordingUrl = rec.recordingUrl
-              console.log(`[poll-calls] Fetched recording for stale PENDING ${pc.id}`)
-            }
-          }
-          // Transcribe if recording but no transcript
-          if (pc.recordingUrl && !pc.transcript) {
-            const trans = await transcribeRecording(pc.recordingUrl, pc.tenant.ghlAccessToken ?? undefined)
-            if (trans.status === 'success' && trans.transcript) {
-              await db.call.update({ where: { id: pc.id }, data: { transcript: trans.transcript } })
-              if (!pc.durationSeconds && trans.transcript.length > 50) {
-                await db.call.update({ where: { id: pc.id }, data: { durationSeconds: Math.max(Math.round(trans.transcript.length / 15), 45) } })
-              }
-            }
-          }
-          await gradeCall(pc.id).catch(err =>
-            logFailure(null, 'poll.stale_pending_grade_failed', 'call', err, { callId: pc.id, contactName: pc.contactName })
-          )
-          await sleep(500)
-        } catch (err) {
-          await logFailure(null, 'poll.stale_pending_failed', 'call', err, { callId: pc.id, contactName: pc.contactName })
-        }
-      }
-    }
+    // Retry failed transcriptions + grade stale PENDING calls:
+    // Handled by process-recording-jobs.ts — removed from poll-calls.ts to prevent lock blocking.
 
     console.log(`[poll-calls] Complete.`)
   } catch (err) {

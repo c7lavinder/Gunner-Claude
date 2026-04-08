@@ -100,6 +100,7 @@ model Tenant {
   actionLogs          ActionLog[]
   aiLogs              AiLog[]
   recordingFetchJobs  RecordingFetchJob[]
+  webhookLogs         WebhookLog[]
 
   @@map("tenants")
 }
@@ -1045,7 +1046,9 @@ model KnowledgeDocument {
   content  String  @db.Text      // full markdown content
   source   String  @default("upload") // upload | playbook | system
   isActive Boolean @default(true) @map("is_active")
+  embedding Unsupported("vector")?
 
+  @@index([embedding], map: "idx_knowledge_embedding_hnsw")
   @@map("knowledge_documents")
 }
 
@@ -1159,4 +1162,28 @@ model AiLog {
   @@index([tenantId, createdAt])
   @@index([tenantId, type])
   @@map("ai_logs")
+}
+
+// ─────────────────────────────────────────
+// WEBHOOK LOG
+// Every GHL webhook logged here immediately on arrival.
+// Used for deduplication, debugging, and audit.
+// ─────────────────────────────────────────
+model WebhookLog {
+  id          String   @id @default(cuid())
+  receivedAt  DateTime @default(now()) @map("received_at")
+  eventType   String   @map("event_type")
+  messageId   String?  @map("message_id")
+  locationId  String   @map("location_id")
+  rawPayload  Json     @map("raw_payload")
+  processed   Boolean  @default(false)
+  callId      String?  @map("call_id")
+  notes       String?
+
+  tenantId    String?  @map("tenant_id")
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([locationId, receivedAt])
+  @@map("webhook_logs")
 }
