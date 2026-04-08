@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import type { DealIntel, ProposedDealIntelChange, DealIntelCategory } from '@/lib/types/deal-intel'
 import { FIELD_LABELS, FIELD_CATEGORY } from '@/lib/types/deal-intel'
+import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -71,7 +72,9 @@ export async function extractDealIntel(callId: string): Promise<void> {
       pageContext: `call:${callId}`, input: userPrompt.slice(0, 3000), output: content.text.slice(0, 3000),
       tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
       durationMs: timer(), model: 'claude-sonnet-4-20250514',
-    }).catch(() => {})
+    }).catch((err) => {
+      logFailure(call.tenant.id, 'extract_deal_intel.ai_log_failed', `call:${callId}`, err)
+    })
 
     const proposedChanges = parseExtractionResponse(content.text, callId)
 
@@ -262,10 +265,19 @@ function buildExtractionUserPrompt(
   return sections.join('\n\n')
 }
 
+// ─── Utilities ─────────────────────────────────────────────────────────────
+
+function stripJsonFences(text: string): string {
+  return text
+    .replace(/^\s*```\s*json?\s*\n?/i, '')
+    .replace(/\n?\s*```\s*$/i, '')
+    .trim()
+}
+
 // ─── Response parser ────────────────────────────────────────────────────────
 
 function parseExtractionResponse(text: string, callId: string): ProposedDealIntelChange[] {
-  let clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+  let clean = stripJsonFences(text)
   const firstBrace = clean.indexOf('{')
   const lastBrace = clean.lastIndexOf('}')
   if (firstBrace >= 0 && lastBrace > firstBrace) {

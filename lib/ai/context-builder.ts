@@ -4,6 +4,7 @@
 // Pulls from: knowledge_documents, user_profiles, tenant config, property data, call history
 
 import { db } from '@/lib/db/client'
+import { logFailure } from '@/lib/audit'
 
 export interface GradingContext {
   // Company knowledge
@@ -260,7 +261,9 @@ export async function buildKnowledgeContext(params: {
         const results = await searchKnowledgeBySimilarity(tenantId, query, 8)
         semanticDocs = results.filter(r => r.similarity > 0.3) // Only include relevant results
       }
-    } catch {}
+    } catch (err) {
+      logFailure(tenantId, 'context_builder.semantic_search_failed', query, err)
+    }
   }
 
   const [allDocs, tenant, userProfileRecord] = await Promise.all([

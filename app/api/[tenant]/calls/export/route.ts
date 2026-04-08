@@ -1,7 +1,7 @@
 // app/api/[tenant]/calls/export/route.ts
 // CSV export of all graded calls
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { hasPermission, type UserRole } from '@/types/roles'
@@ -18,22 +18,16 @@ function escapeCsv(val: string): string {
   return val
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { tenant: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const role = session.role as UserRole
+export const GET = withTenant(async (request: NextRequest, ctx) => {
+  const role = ctx.userRole as UserRole
   const canViewAll = hasPermission(role, 'calls.view.all')
   const canViewTeam = hasPermission(role, 'calls.view.team')
 
   const where: Prisma.CallWhereInput = canViewAll
-    ? { tenantId: session.tenantId, gradingStatus: 'COMPLETED' }
+    ? { tenantId: ctx.tenantId, gradingStatus: 'COMPLETED' }
     : canViewTeam
-    ? { tenantId: session.tenantId, gradingStatus: 'COMPLETED', assignedTo: { OR: [{ id: session.userId }, { reportsTo: session.userId }] } }
-    : { tenantId: session.tenantId, gradingStatus: 'COMPLETED', assignedToId: session.userId }
+    ? { tenantId: ctx.tenantId, gradingStatus: 'COMPLETED', assignedTo: { OR: [{ id: ctx.userId }, { reportsTo: ctx.userId }] } }
+    : { tenantId: ctx.tenantId, gradingStatus: 'COMPLETED', assignedToId: ctx.userId }
 
   const calls = await db.call.findMany({
     where,
@@ -70,4 +64,4 @@ export async function GET(
       'Content-Disposition': `attachment; filename="gunner-calls-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   })
-}
+})

@@ -12,6 +12,7 @@ import { getCallTypeAIContext, getRubricForCallType, getResultsForCallType, getR
 import { INDUSTRY_KNOWLEDGE } from '@/lib/ai/industry-knowledge'
 import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
+import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -197,7 +198,9 @@ export async function gradeCall(callId: string): Promise<void> {
       tokensOut: response.usage?.output_tokens,
       durationMs: timer(),
       model: 'claude-sonnet-4-6',
-    }).catch(() => {})
+    }).catch((err) => {
+      logFailure(call.tenantId, 'grading.ai_log_failed', `call:${callId}`, err)
+    })
 
     const grading = parseGradingResponse(content.text)
 
@@ -264,7 +267,9 @@ export async function gradeCall(callId: string): Promise<void> {
       contactId: call.ghlCallId ?? undefined,
       propertyId: call.propertyId ?? undefined,
       score: grading.overallScore,
-    }).catch(() => {})
+    }).catch((err) => {
+      logFailure(call.tenantId, 'grading.workflows_trigger_failed', callId, err)
+    })
 
     // Auto-create milestone from AI-detected call outcome (source: 'AI', with dedup)
     if (call.propertyId && grading.callOutcome) {
@@ -751,11 +756,22 @@ Grade this call now. Provide your JSON response.`)
   return sections.join('\n\n')
 }
 
+// ─── Utilities ─────────────────────────────────────────────────────────────
+
+function stripJsonFences(text: string): string {
+  // Strip ```json ... ``` or ``` ... ``` markdown code fences from Claude responses
+  // Handles: ```json, ``` json, ```JSON, leading/trailing whitespace, nested content
+  return text
+    .replace(/^\s*```\s*json?\s*\n?/i, '')
+    .replace(/\n?\s*```\s*$/i, '')
+    .trim()
+}
+
 // ─── Response parser ────────────────────────────────────────────────────────
 
 function parseGradingResponse(text: string): GradingResult {
   // Strip markdown fences and find the JSON object
-  let clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+  let clean = stripJsonFences(text)
 
   // Extract from first { to last } in case there's extra text
   const firstBrace = clean.indexOf('{')
@@ -951,9 +967,12 @@ Return JSON array only:
       input: `Next steps for call ${callId}`, output: text.slice(0, 2000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: nsTimer(), model: 'claude-sonnet-4-20250514',
-    }).catch(() => {})
+    }).catch((err) => {
+      logFailure(tenantId, 'grading.next_steps_log_failed', `call:${callId}`, err)
+    })
 
-    const jsonMatch = text.match(/\[[\s\S]*\]/)
+    const stripped = stripJsonFences(text)
+    const jsonMatch = stripped.match(/\[[\s\S]*\]/)
     if (!jsonMatch) return
 
     const steps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>

@@ -10,6 +10,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { logAiCall, startTimer } from '@/lib/ai/log'
+import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -92,7 +93,9 @@ export async function generateUserProfiles(tenantId: string): Promise<{
             if (feedback.redFlags) allFeedback.push(...(feedback.redFlags as string[]))
             if (feedback.improvements) allFeedback.push(...(feedback.improvements as string[]))
             if (feedback.strengths) allFeedback.push(...(feedback.strengths as string[]))
-          } catch {}
+          } catch (err) {
+            logFailure(tenantId, 'generate_profiles.parse_feedback_failed', `user:${user.id}`, err)
+          }
         }
         if (call.aiCoachingTips) {
           const tips = call.aiCoachingTips as string[]
@@ -185,7 +188,9 @@ Each array should have 3-5 items. Be specific to wholesale real estate. If data 
         tokensOut: response.usage?.output_tokens,
         durationMs: timer(),
         model: 'claude-sonnet-4-6',
-      }).catch(() => {})
+      }).catch((err) => {
+        logFailure(tenantId, 'generate_profiles.profile_log_failed', `user:${user.id}`, err)
+      })
 
       // Strip markdown fences if present
       const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()

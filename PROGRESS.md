@@ -49,6 +49,30 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 34 — Autonomous audit + known bug fixes (2026-04-08)
+
+Tasks completed:
+- Task 1: Health check — HEALTHY (0 queue items, 0 errors, 0 misclassifications)
+- Task 2: P7 grading parse failure fixed (lib/ai/grading.ts + lib/ai/extract-deal-intel.ts)
+  - Added robust `stripJsonFences()` using anchored regexes (^ and $) instead of weak /g flag
+  - Applied to parseGradingResponse, next steps parser, and parseExtractionResponse
+  - Existing fence stripping had weak regex that could match mid-content; now anchored to start/end
+- Task 3: Silent catches swept from lib/ai/ and app/api/ai/ — 27 catches replaced
+  - lib/ai/: grading.ts (3), extract-deal-intel.ts (1), coach.ts (4), context-builder.ts (1),
+    enrich-property.ts (3), generate-user-profiles.ts (2) = 14
+  - app/api/ai/: assistant/execute/route.ts (10), assistant/route.ts (1), outreach-action/route.ts (1) = 12
+  - Plus 1 missed catch in execute/route.ts (getGHLClient) = 27 total
+  - Audit log .catch() cases use console.error to avoid recursion
+- Task 4: withTenant migration — 8 routes migrated (72 → 64 remaining)
+  - review-count, audit, export, feedback, skip, reclassify, calibration, actions
+- Task 5: TypeScript sweep — zero errors across entire project
+
+Also in this session (before autonomous block):
+- Call pipeline fix: WebhookLog table added, no-answer bug fixed, poll-calls stripped of
+  inline transcription/grading, existingIds scoped to 48h. Deployed to Railway (a93d5b9).
+- Restored embedding column on KnowledgeDocument (prevented 40-row data loss during db push)
+- Created .env file for local Prisma operations
+
 ### Session 33 — Bulletproofing run + going-forward habits (2026-04-06 to 2026-04-07)
 
 All 7 critical reliability fixes shipped in one session. Original GHL ingestion pipeline
@@ -163,7 +187,7 @@ touching anything else.
 Parked items (prioritized):
 1. LM tab "227" dial count not aggregating across LM role
 2. Day Hub vs Calls page count source-of-truth alignment
-3. Claude grading parse failures (truncated JSON — consider max_tokens bump)
+3. Grading truncated JSON — consider max_tokens bump in lib/ai/grading.ts (P7 fence-stripping RESOLVED Session 34, but truncation may still occur on very long transcripts)
 4. Refactor recording-jobs script + route to share lib/jobs/
-5. Migrate ~22 remaining API routes to withTenant (incremental)
-6. Sweep 79 silent catches in broader codebase
+5. Migrate ~64 remaining API routes to withTenant (was 72, 8 done in Session 34)
+6. Sweep remaining silent catches — lib/ai/ and app/api/ai/ done (Session 34). Remaining dirs: lib/workflows/, lib/ghl/, lib/properties.ts, lib/buyers/, app/(tenant)/, app/api/[tenant]/dayhub/, app/api/admin/, app/api/properties/, app/api/milestones/, scripts/

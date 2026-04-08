@@ -1,7 +1,7 @@
 // app/api/[tenant]/calls/[id]/reclassify/route.ts
 // Handles both call type reclassification and manual outcome setting
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { gradeCall } from '@/lib/ai/grading'
 import { z } from 'zod'
@@ -11,19 +11,13 @@ const schema = z.object({
   callOutcome: z.string().min(1).optional(),
 })
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const body = await request.json()
+export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
+  const body = await req.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   const call = await db.call.findFirst({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     select: { id: true },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
@@ -54,4 +48,4 @@ export async function POST(
   }
 
   return NextResponse.json({ success: true })
-}
+})

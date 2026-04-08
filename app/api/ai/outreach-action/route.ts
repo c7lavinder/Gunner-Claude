@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
+import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -54,7 +55,7 @@ RULES:
       input: message, output: text.slice(0, 500),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: timer(), model: 'claude-haiku-4-5-20251001',
-    }).catch(() => {})
+    }).catch(err => logFailure(session.tenantId, 'outreach.ai_call_log_failed', 'aiCall', err))
 
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {

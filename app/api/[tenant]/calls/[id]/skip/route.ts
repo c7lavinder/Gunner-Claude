@@ -1,17 +1,11 @@
 // app/api/[tenant]/calls/[id]/skip/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
   const call = await db.call.findFirst({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     select: { id: true },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
@@ -22,4 +16,4 @@ export async function POST(
   })
 
   return NextResponse.json({ success: true })
-}
+})

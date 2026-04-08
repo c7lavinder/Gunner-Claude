@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client'
 import type { UserRole } from '@/types/roles'
 import { subDays, startOfWeek } from 'date-fns'
 import { logAiCall, startTimer } from '@/lib/ai/log'
+import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -201,7 +202,9 @@ ${prop.internalNotes ? `- Internal Notes: ${prop.internalNotes.slice(0, 200)}` :
 
 When the user asks about "this property" or "this deal", they mean the property above. Use these numbers for analysis.`
       }
-    } catch {}
+    } catch (err) {
+      logFailure(tenantId, 'coach.property_context_failed', `user:${userId}`, err)
+    }
   }
 
   // Load playbook knowledge for coaching context
@@ -268,7 +271,9 @@ RULES:
     input: lastUserContent.slice(0, 5000), output: content.text.slice(0, 5000),
     tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
     durationMs: timer(), model: 'claude-sonnet-4-6',
-  }).catch(() => {})
+  }).catch((err) => {
+    logFailure(tenantId, 'coach.chat_log_failed', `user:${userId}`, err)
+  })
 
   // Save to coach_logs
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()
@@ -280,7 +285,9 @@ RULES:
         message: lastUserMsg.content,
         role: 'user',
       },
-    }).catch(() => {}) // non-blocking
+    }).catch((err) => {
+      logFailure(tenantId, 'coach.user_log_save_failed', `user:${userId}`, err)
+    }) // non-blocking
 
     await db.coachLog.create({
       data: {
@@ -289,7 +296,9 @@ RULES:
         message: content.text,
         role: 'assistant',
       },
-    }).catch(() => {}) // non-blocking
+    }).catch((err) => {
+      logFailure(tenantId, 'coach.assistant_log_save_failed', `user:${userId}`, err)
+    }) // non-blocking
   }
 
   return content.text

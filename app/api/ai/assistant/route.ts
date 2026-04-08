@@ -6,6 +6,7 @@ import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { ASSISTANT_TOOLS } from '@/lib/ai/assistant-tools'
+import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -194,7 +195,7 @@ ${knowledgeBlock}${rejectionContext}`
       durationMs: timer(),
       model: 'claude-sonnet-4-6',
       toolsCalled: toolCalls.length > 0 ? toolCalls : undefined,
-    }).catch(() => {})
+    }).catch(err => logFailure(tenantId, 'assistant.ai_call_log_failed', 'aiCall', err))
 
     return NextResponse.json({
       reply: replyText,

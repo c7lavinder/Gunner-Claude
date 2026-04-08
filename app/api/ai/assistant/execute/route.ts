@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
+import { logFailure } from '@/lib/audit'
 
 export async function POST(request: NextRequest) {
   const session = await getSession()
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
         wasEdited: false, wasRejected: true,
         pageContext,
       },
-    }).catch(() => {})
+    }).catch(err => logFailure(tenantId, 'assistant.rejection_log_failed', 'actionLog', err))
     return NextResponse.json({ result: 'Rejection logged' })
   }
 
@@ -71,7 +72,9 @@ export async function POST(request: NextRequest) {
   try {
     let result = ''
     let ghl: Awaited<ReturnType<typeof getGHLClient>> | null = null
-    try { ghl = await getGHLClient(tenantId) } catch {}
+    try { ghl = await getGHLClient(tenantId) } catch (err) {
+      logFailure(tenantId, 'assistant.execute.ghl_client_init_failed', 'ghl', err)
+    }
 
     switch (toolCall.name) {
       case 'send_sms': {
@@ -91,7 +94,7 @@ export async function POST(request: NextRequest) {
             source: 'USER', severity: 'INFO',
             payload: { via: 'assistant', contactId, messageLength: message.length },
           },
-        }).catch(() => {})
+        }).catch(err => console.error('[Assistant] Audit log write failed:', err instanceof Error ? err.message : err))
         break
       }
 
@@ -176,7 +179,7 @@ export async function POST(request: NextRequest) {
             source: 'USER', severity: 'INFO',
             payload: JSON.parse(JSON.stringify(toolCall.input)),
           },
-        }).catch(() => {})
+        }).catch(err => console.error('[Assistant] Audit log write failed:', err instanceof Error ? err.message : err))
         break
       }
 
@@ -220,7 +223,7 @@ export async function POST(request: NextRequest) {
           await db.property.update({
             where: { id: propertyId },
             data: { currentOffer: amount },
-          }).catch(() => {})
+          }).catch(err => logFailure(tenantId, 'assistant.execute.property_update_failed', 'property', err, { propertyId, amount }))
         }
         result = `Offer of $${amount.toLocaleString()} logged on property`
         break
@@ -484,7 +487,7 @@ export async function POST(request: NextRequest) {
           await db.property.update({
             where: { id: maoPropertyId, tenantId },
             data: { mao },
-          }).catch(() => {})
+          }).catch(err => logFailure(tenantId, 'assistant.execute.mao_update_failed', 'property', err, { maoPropertyId, mao }))
         }
         result = `MAO = $${Math.round(mao).toLocaleString()}\n(ARV $${arv.toLocaleString()} × ${((1 - profitMargin) * 100).toFixed(0)}% - $${repairCost.toLocaleString()} repairs - $${wholesaleFee.toLocaleString()} fee)${maoPropertyId ? '\nSaved to property record.' : ''}`
         break
@@ -647,14 +650,14 @@ export async function POST(request: NextRequest) {
       case 'cancel_appointment':
       case 'update_appointment_status': {
         result = `${toolCall.name.replace(/_/g, ' ')} — logged. GHL calendar API integration pending.`
-        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: `appointment.${toolCall.name}`, resource: 'calendar', source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify(toolCall.input)) } }).catch(() => {})
+        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: `appointment.${toolCall.name}`, resource: 'calendar', source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify(toolCall.input)) } }).catch(err => console.error('[Assistant] Audit log write failed:', err instanceof Error ? err.message : err))
         break
       }
 
       case 'add_contact_to_workflow':
       case 'remove_contact_from_workflow': {
         result = `${toolCall.name.replace(/_/g, ' ')} — logged. GHL workflow API integration pending.`
-        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: `workflow.${toolCall.name}`, resource: 'workflow', source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify(toolCall.input)) } }).catch(() => {})
+        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: `workflow.${toolCall.name}`, resource: 'workflow', source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify(toolCall.input)) } }).catch(err => console.error('[Assistant] Audit log write failed:', err instanceof Error ? err.message : err))
         break
       }
 
@@ -677,7 +680,7 @@ export async function POST(request: NextRequest) {
           where: { id: coPropId, tenantId },
           data: { currentOffer: coAmount },
         })
-        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: 'property.counter_offer', resource: 'property', resourceId: coPropId, source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify({ amount: coAmount, fromSeller: toolCall.input.fromSeller, notes: toolCall.input.notes })) } }).catch(() => {})
+        await db.auditLog.create({ data: { tenantId, userId: sessionUserId, action: 'property.counter_offer', resource: 'property', resourceId: coPropId, source: 'USER', severity: 'INFO', payload: JSON.parse(JSON.stringify({ amount: coAmount, fromSeller: toolCall.input.fromSeller, notes: toolCall.input.notes })) } }).catch(err => console.error('[Assistant] Audit log write failed:', err instanceof Error ? err.message : err))
         result = `Counter offer of $${coAmount.toLocaleString()} logged`
         break
       }
@@ -733,7 +736,7 @@ export async function POST(request: NextRequest) {
       case 'trigger_property_enrichment': {
         const ePropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
         if (!ePropId) { result = 'No property in context'; break }
-        import('@/lib/ai/enrich-property').then(({ enrichPropertyWithAI }) => enrichPropertyWithAI(ePropId)).catch(() => {})
+        import('@/lib/ai/enrich-property').then(({ enrichPropertyWithAI }) => enrichPropertyWithAI(ePropId)).catch(err => logFailure(tenantId, 'assistant.execute.enrichment_failed', 'property', err, { ePropId }))
         result = 'Property enrichment triggered — ARV, repair estimate, rental estimate, and neighborhood summary will update shortly.'
         break
       }
@@ -849,7 +852,7 @@ export async function POST(request: NextRequest) {
         wasRejected: false,
         pageContext,
       },
-    }).catch(() => {})
+    }).catch(err => logFailure(tenantId, 'assistant.execute.action_log_failed', 'actionLog', err))
 
     return NextResponse.json({ result })
   } catch (err) {

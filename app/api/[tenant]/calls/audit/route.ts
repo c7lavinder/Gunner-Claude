@@ -2,21 +2,17 @@
 // GET /api/[tenant]/calls/audit — find calls that may have been missed by the grading pipeline
 // Returns: calls > 45s that are PENDING/FAILED, calls with recording URL but no transcript
 import { NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { hasPermission, type UserRole } from '@/types/roles'
 
-export async function GET() {
-  try {
-    const session = await getSession()
-    if (!session) return unauthorizedResponse()
+export const GET = withTenant(async (req, ctx) => {
+  const role = ctx.userRole as UserRole
+  if (!hasPermission(role, 'calls.view.all')) {
+    return NextResponse.json({ error: 'Only admins can audit calls' }, { status: 403 })
+  }
 
-    const role = session.role as UserRole
-    if (!hasPermission(role, 'calls.view.all')) {
-      return NextResponse.json({ error: 'Only admins can audit calls' }, { status: 403 })
-    }
-
-    const tenantId = session.tenantId
+  const tenantId = ctx.tenantId
 
     // Calls > 45s that are PENDING (never graded)
     const pendingLong = await db.call.findMany({
@@ -62,23 +58,19 @@ export async function GET() {
       calledAt: c.calledAt instanceof Date ? c.calledAt.toISOString() : c.calledAt ?? null,
     })
 
-    return NextResponse.json({
-      summary: {
-        totalCalls,
-        gradedCalls,
-        totalLongCalls: totalLong,
-        pendingLongCount: pendingLong.length,
-        failedLongCount: failedLong.length,
-        noTranscriptCount: noTranscript.length,
-        zeroScoreCount: zeroScore.length,
-      },
-      pendingLong: pendingLong.map(formatCall),
-      failedLong: failedLong.map(formatCall),
-      noTranscript: noTranscript.map(formatCall),
-      zeroScore: zeroScore.map(formatCall),
-    })
-  } catch (err) {
-    console.error('[Call Audit] Error:', err instanceof Error ? err.message : err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
-  }
-}
+  return NextResponse.json({
+    summary: {
+      totalCalls,
+      gradedCalls,
+      totalLongCalls: totalLong,
+      pendingLongCount: pendingLong.length,
+      failedLongCount: failedLong.length,
+      noTranscriptCount: noTranscript.length,
+      zeroScoreCount: zeroScore.length,
+    },
+    pendingLong: pendingLong.map(formatCall),
+    failedLong: failedLong.map(formatCall),
+    noTranscript: noTranscript.map(formatCall),
+    zeroScore: zeroScore.map(formatCall),
+  })
+})

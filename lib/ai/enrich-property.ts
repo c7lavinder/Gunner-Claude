@@ -7,12 +7,15 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { logAiCall, startTimer } from '@/lib/ai/log'
+import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 })
 
 export async function enrichPropertyWithAI(propertyId: string) {
+  let tenantId: string | undefined
+
   try {
     await db.property.update({
       where: { id: propertyId },
@@ -31,7 +34,7 @@ export async function enrichPropertyWithAI(propertyId: string) {
     })
     if (!property) return
 
-    const tenantId = property.tenantId
+    tenantId = property.tenantId
     const timer = startTimer()
 
     // Use Claude to generate estimates
@@ -64,7 +67,9 @@ Base estimates on the location, size, and year. If insufficient data, use null.`
       input: `Enrich ${property.address}`, output: text.slice(0, 5000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: timer(), model: 'claude-sonnet-4-20250514',
-    }).catch(() => {})
+    }).catch((err) => {
+      logFailure(tenantId, 'enrich_property.ai_log_failed', `property:${propertyId}`, err)
+    })
 
     const match = text.match(/\{[\s\S]*\}/)
     if (!match) throw new Error('No JSON in response')
@@ -105,7 +110,10 @@ Base estimates on the location, size, and year. If insufficient data, use null.`
     // Try FEMA flood zone (free API)
     try {
       const femaUrl = `https://msc.fema.gov/arcgis/rest/services/public/NFHLWMS/MapServer/identify?geometry=${encodeURIComponent(`${property.address}, ${property.city}, ${property.state} ${property.zip}`)}&geometryType=esriGeometryPoint&f=json&tolerance=10&mapExtent=-180,-90,180,90&imageDisplay=800,600,96&returnGeometry=false&layers=all`
-      const femaRes = await fetch(femaUrl, { signal: AbortSignal.timeout(5000) }).catch(() => null)
+      const femaRes = await fetch(femaUrl, { signal: AbortSignal.timeout(5000) }).catch((err) => {
+        logFailure(tenantId, 'enrich_property.fema_api_failed', `property:${propertyId}`, err)
+        return null
+      })
       if (femaRes?.ok) {
         const femaData = await femaRes.json() as { results?: Array<{ attributes?: { FLD_ZONE?: string } }> }
         const floodZone = femaData?.results?.[0]?.attributes?.FLD_ZONE
@@ -131,6 +139,8 @@ Base estimates on the location, size, and year. If insufficient data, use null.`
         aiEnrichmentStatus: 'failed',
         aiEnrichmentError: err instanceof Error ? err.message : 'Unknown',
       },
-    }).catch(() => {})
+    }).catch((updateErr) => {
+      logFailure(tenantId, 'enrich_property.status_update_failed', `property:${propertyId}`, updateErr)
+    })
   }
 }

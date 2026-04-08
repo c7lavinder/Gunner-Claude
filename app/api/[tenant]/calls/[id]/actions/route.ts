@@ -2,7 +2,7 @@
 // Quick actions: add note, create task, send SMS from call detail page
 // PATCH: persist aiNextSteps status changes (push/skip)
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { z } from 'zod'
@@ -22,19 +22,13 @@ const patchSchema = z.object({
   })),
 })
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const body = await request.json()
+export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
+  const body = await req.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   const call = await db.call.findFirst({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     select: {
       id: true, aiSummary: true, calledAt: true, ghlCallId: true, ghlContactId: true,
       property: {
@@ -54,7 +48,7 @@ export async function POST(
   }
 
   try {
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     const callDate = call.calledAt ? format(new Date(call.calledAt), 'MMM d') : 'recent'
 
     switch (parsed.data.type) {
@@ -77,8 +71,8 @@ export async function POST(
 
     await db.auditLog.create({
       data: {
-        tenantId: session.tenantId,
-        userId: session.userId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
         action: `call.action.${parsed.data.type}`,
         resource: 'call',
         resourceId: params.id,
@@ -93,24 +87,18 @@ export async function POST(
     console.error(`[Call Action] ${parsed.data.type} failed:`, err instanceof Error ? err.message : err)
     return NextResponse.json({ success: false, message: 'GHL action failed' }, { status: 500 })
   }
-}
+})
 
 // PATCH — persist aiNextSteps status changes (push/skip)
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const body = await request.json()
+export const PATCH = withTenant<{ id: string }>(async (req, ctx, params) => {
+  const body = await req.json()
   const parsed = patchSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   try {
     // Verify call belongs to tenant before updating
     const call = await db.call.findFirst({
-      where: { id: params.id, tenantId: session.tenantId },
+      where: { id: params.id, tenantId: ctx.tenantId },
       select: { id: true },
     })
     if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
@@ -124,4 +112,4 @@ export async function PATCH(
     console.error('[Call Actions PATCH] Failed to persist next steps:', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Failed to update next steps' }, { status: 500 })
   }
-}
+})
