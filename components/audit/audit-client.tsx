@@ -48,6 +48,7 @@ interface AuditResponse {
   pipelineHealth: PipelineHealth
   hourly: HourlyBucket[] | null
   dialBreakdown: DialBreakdown | null
+  userMap: Record<string, string>
 }
 
 const TAB_LABELS: Record<AuditTab, string> = {
@@ -186,6 +187,7 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
   const health = data?.pipelineHealth
   const hourly = data?.hourly
   const dialBreakdown = data?.dialBreakdown
+  const userMap = data?.userMap ?? {}
   const rows = data?.rows ?? []
   const lastMins = minutesAgo(summary?.lastWebhookAt ?? null)
   const statusColor = lastMins === null ? 'bg-red-400' : lastMins < 60 ? 'bg-green-400' : lastMins < 240 ? 'bg-yellow-400' : 'bg-red-400'
@@ -351,10 +353,10 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
             <div className="overflow-x-auto">
               {activeTab === 'dials' && <DialsTable rows={rows} expandedRow={expandedRow} onToggle={setExpandedRow} />}
               {activeTab === 'leads' && <LeadsTable rows={rows} expandedRow={expandedRow} onToggle={setExpandedRow} />}
-              {activeTab === 'appointments' && <WebhookTable rows={rows} columns={appointmentColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
-              {activeTab === 'messages' && <WebhookTable rows={rows} columns={messageColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
-              {activeTab === 'tasks' && <WebhookTable rows={rows} columns={taskColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
-              {activeTab === 'stages' && <WebhookTable rows={rows} columns={stageColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
+              {activeTab === 'appointments' && <WebhookTable rows={rows} columns={buildAppointmentColumns()} expandedRow={expandedRow} onToggle={setExpandedRow} userMap={userMap} />}
+              {activeTab === 'messages' && <WebhookTable rows={rows} columns={buildMessageColumns()} expandedRow={expandedRow} onToggle={setExpandedRow} userMap={userMap} />}
+              {activeTab === 'tasks' && <WebhookTable rows={rows} columns={buildTaskColumns()} expandedRow={expandedRow} onToggle={setExpandedRow} userMap={userMap} />}
+              {activeTab === 'stages' && <WebhookTable rows={rows} columns={buildStageColumns()} expandedRow={expandedRow} onToggle={setExpandedRow} userMap={userMap} />}
             </div>
           )}
           {rows.length >= 500 && (
@@ -482,57 +484,76 @@ function LeadsTable({ rows, expandedRow, onToggle }: { rows: Record<string, unkn
 
 interface WebhookColumn {
   header: string
-  render: (row: Record<string, unknown>, p: Record<string, unknown>) => string
+  render: (row: Record<string, unknown>, p: Record<string, unknown>, um: Record<string, string>) => string
 }
 
-function formatWebhookSource(ws: string | null | undefined): string {
-  if (ws === 'oauth') return 'OAuth'
-  if (ws === 'automation') return 'Automation'
-  return '\u2014'
+function resolveUser(userId: string | undefined | null, um: Record<string, string>): string {
+  if (!userId) return '\u2014'
+  return um[userId] ?? userId.slice(0, 8) + '...'
 }
 
-const appointmentColumns: WebhookColumn[] = [
-  { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
-  { header: 'Contact', render: (_, p) => nestedStr(p, 'contact', 'contactName') },
-  { header: 'Scheduled Time', render: (_, p) => formatDateLong((p.startTime ?? (p.appointment as Record<string, unknown>)?.startTime) as string | undefined) },
-  { header: 'Type', render: (_, p) => (p.appointmentType ?? p.type ?? '\u2014') as string },
-  { header: 'Assigned To', render: (_, p) => (p.assignedUserId ?? p.calendarId ?? '\u2014') as string },
-  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
-  { header: 'Event Status', render: (r) => webhookStatusIcon(r.status as string) },
-]
+function formatStatus(s: string | undefined): string {
+  if (!s) return '\u2014'
+  if (s === 'open') return 'Open'
+  if (s === 'won') return 'Won'
+  if (s === 'lost') return 'Lost'
+  if (s === 'abandoned') return 'Abandoned'
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
 
-const messageColumns: WebhookColumn[] = [
-  { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
-  { header: 'Contact', render: (_, p) => nestedStr(p, 'contact', 'contactName', 'fullName') || 'Unknown' },
-  { header: 'Direction', render: (r) => { const et = r.eventType as string; return et?.includes('Inbound') ? '\ud83d\udce5 Inbound' : et?.includes('Outbound') ? '\ud83d\udce4 Outbound' : '\u2014' } },
-  { header: 'Preview', render: (_, p) => truncate((p.body ?? (p.message as Record<string, unknown>)?.body) as string | undefined, 60) },
-  { header: 'Team Member', render: (_, p) => (p.userId ?? p.assignedTo ?? '\u2014') as string },
-  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
-  { header: 'Read', render: (_, p) => p.read === true ? '\u2705 Read' : '\u2b1c Unread' },
-]
+function formatDeliveryStatus(s: string | undefined): string {
+  if (s === 'sent') return 'Sent'
+  if (s === 'delivered') return 'Delivered'
+  if (s === 'read') return 'Read'
+  if (s === 'failed') return 'Failed'
+  return s ?? '\u2014'
+}
 
-const taskColumns: WebhookColumn[] = [
-  { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
-  { header: 'Contact', render: (_, p) => nestedStr(p, 'contact', 'contactName') },
-  { header: 'Task Title', render: (_, p) => (p.title ?? (p.task as Record<string, unknown>)?.title ?? '\u2014') as string },
-  { header: 'Assigned To', render: (_, p) => (p.assignedTo ?? p.userId ?? '\u2014') as string },
-  { header: 'Due Date', render: (_, p) => { const d = p.dueDate as string | undefined; if (!d) return '\u2014'; try { return new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) } catch { return '\u2014' } } },
-  { header: 'Category', render: (_, p) => (p.taskType ?? p.category ?? '\u2014') as string },
-  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
-  { header: 'Status', render: (r, p) => { const et = r.eventType as string; if (et?.includes('Completed') || et?.includes('completed')) return 'Completed \u2705'; return (p.status ?? '\u2014') as string } },
-]
+function buildAppointmentColumns(): WebhookColumn[] {
+  return [
+    { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
+    { header: 'Title', render: (_, p) => { const apt = (p.appointment ?? {}) as Record<string, unknown>; return (apt.title ?? '\u2014') as string } },
+    { header: 'Scheduled', render: (_, p) => { const apt = (p.appointment ?? {}) as Record<string, unknown>; return formatDateLong(apt.startTime as string | undefined) } },
+    { header: 'Assigned To', render: (_, p, um) => { const apt = (p.appointment ?? {}) as Record<string, unknown>; return resolveUser(apt.assignedUserId as string, um) } },
+    { header: 'Location', render: (_, p) => { const apt = (p.appointment ?? {}) as Record<string, unknown>; return (apt.address ?? '\u2014') as string } },
+    { header: 'Status', render: (_, p) => { const apt = (p.appointment ?? {}) as Record<string, unknown>; return formatStatus(apt.appointmentStatus as string) } },
+    { header: 'Event Status', render: (r) => webhookStatusIcon(r.status as string) },
+  ]
+}
 
-const stageColumns: WebhookColumn[] = [
-  { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
-  { header: 'Contact', render: (_, p) => nestedStr(p, 'contact', 'contactName') },
-  { header: 'Address', render: (_, p) => (p.address ?? (p.opportunity as Record<string, unknown>)?.address ?? '\u2014') as string },
-  { header: 'GHL: From', render: (_, p) => (p.oldPipelineStageId ?? p.previousStage ?? '\u2014') as string },
-  { header: 'GHL: To', render: (_, p) => (p.pipelineStageId ?? p.stage ?? p.stageId ?? '\u2014') as string },
-  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
-  { header: 'Gunner Stage', render: (_, p) => ((p.opportunity as Record<string, unknown>)?.status ?? '\u2014') as string },
-]
+function buildMessageColumns(): WebhookColumn[] {
+  return [
+    { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
+    { header: 'Direction', render: (_, p) => { const d = String(p.direction ?? ''); return d === 'inbound' ? '\ud83d\udce5 Inbound' : d === 'outbound' ? '\ud83d\udce4 Outbound' : '\u2014' } },
+    { header: 'Type', render: (_, p) => { const mt = String(p.messageType ?? ''); return mt === 'SMS' ? 'SMS' : mt === 'Email' ? 'Email' : mt === 'CALL' ? 'Call' : mt || '\u2014' } },
+    { header: 'Preview', render: (_, p) => truncate(p.body as string | undefined, 60) },
+    { header: 'Team Member', render: (_, p, um) => resolveUser(p.userId as string, um) },
+    { header: 'Delivery', render: (_, p) => formatDeliveryStatus(p.status as string) },
+  ]
+}
 
-function WebhookTable({ rows, columns, expandedRow, onToggle }: { rows: Record<string, unknown>[]; columns: WebhookColumn[]; expandedRow: string | null; onToggle: (id: string | null) => void }) {
+function buildTaskColumns(): WebhookColumn[] {
+  return [
+    { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
+    { header: 'Task', render: (_, p) => truncate(p.title as string | undefined, 50) },
+    { header: 'Assigned To', render: (_, p, um) => resolveUser(p.assignedTo as string, um) },
+    { header: 'Due Date', render: (_, p) => { const d = p.dueDate as string | undefined; if (!d) return '\u2014'; try { return new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Chicago' }) } catch { return '\u2014' } } },
+    { header: 'Action', render: (r) => { const et = r.eventType as string; if (et === 'TaskComplete' || et === 'TaskCompleted' || et === 'task.completed') return 'Completed'; if (et === 'TaskCreate') return 'Created'; if (et === 'TaskUpdate') return 'Updated'; return et ?? '\u2014' } },
+  ]
+}
+
+function buildStageColumns(): WebhookColumn[] {
+  return [
+    { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
+    { header: 'Contact', render: (_, p) => (p.name ?? '\u2014') as string },
+    { header: 'Assigned To', render: (_, p, um) => resolveUser(p.assignedTo as string, um) },
+    { header: 'Pipeline Status', render: (_, p) => formatStatus(p.status as string) },
+    { header: 'Action', render: (r) => { const et = r.eventType as string; if (et === 'OpportunityStageUpdate') return 'Stage Changed'; if (et === 'OpportunityUpdate') return 'Updated'; if (et === 'OpportunityCreate') return 'Created'; return et ?? '\u2014' } },
+    { header: 'Event Status', render: (r) => webhookStatusIcon(r.status as string) },
+  ]
+}
+
+function WebhookTable({ rows, columns, expandedRow, onToggle, userMap }: { rows: Record<string, unknown>[]; columns: WebhookColumn[]; expandedRow: string | null; onToggle: (id: string | null) => void; userMap: Record<string, string> }) {
   return (
     <TableShell headers={columns.map(c => c.header)}>
       {rows.map(r => {
@@ -542,7 +563,7 @@ function WebhookTable({ rows, columns, expandedRow, onToggle }: { rows: Record<s
         return (
           <ExpandableRow key={id} id={id} isExpanded={expandedRow === id} onToggle={onToggle} row={r} colSpan={columns.length} isFailed={isFailed}>
             {columns.map(col => (
-              <td key={col.header} className={tdClass}>{col.render(r, p)}</td>
+              <td key={col.header} className={tdClass}>{col.render(r, p, userMap)}</td>
             ))}
           </ExpandableRow>
         )

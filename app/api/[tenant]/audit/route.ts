@@ -99,7 +99,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
       rows = await db.webhookLog.findMany({
         where: {
           tenantId,
-          eventType: { in: ['AppointmentCreated', 'appointment.created'] },
+          eventType: { in: ['AppointmentCreated', 'AppointmentCreate', 'appointment.created'] },
           receivedAt: { gte: startOfDay, lte: endOfDay },
         },
         orderBy: { receivedAt: 'desc' },
@@ -127,7 +127,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
       rows = await db.webhookLog.findMany({
         where: {
           tenantId,
-          eventType: { in: ['TaskCompleted', 'task.completed', 'TaskCreate', 'TaskUpdate'] },
+          eventType: { in: ['TaskCompleted', 'TaskComplete', 'task.completed', 'TaskCreate', 'TaskUpdate'] },
           receivedAt: { gte: startOfDay, lte: endOfDay },
         },
         orderBy: { receivedAt: 'desc' },
@@ -141,7 +141,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
       rows = await db.webhookLog.findMany({
         where: {
           tenantId,
-          eventType: { in: ['OpportunityStageChanged', 'OpportunityUpdate', 'opportunity.stageChanged'] },
+          eventType: { in: ['OpportunityStageChanged', 'OpportunityStageUpdate', 'OpportunityUpdate', 'OpportunityCreate', 'opportunity.stageChanged'] },
           receivedAt: { gte: startOfDay, lte: endOfDay },
         },
         orderBy: { receivedAt: 'desc' },
@@ -156,10 +156,10 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
   const [dialCount, leadCount, appointmentCount, messageCount, taskCount, stageCount, failedCount, lastWebhook] = await Promise.all([
     db.call.count({ where: { tenantId, createdAt: { gte: startOfDay, lte: endOfDay } } }),
     db.property.count({ where: { tenantId, createdAt: { gte: startOfDay, lte: endOfDay } } }),
-    db.webhookLog.count({ where: { tenantId, eventType: { in: ['AppointmentCreated', 'appointment.created'] }, receivedAt: { gte: startOfDay, lte: endOfDay } } }),
+    db.webhookLog.count({ where: { tenantId, eventType: { in: ['AppointmentCreated', 'AppointmentCreate', 'appointment.created'] }, receivedAt: { gte: startOfDay, lte: endOfDay } } }),
     db.webhookLog.count({ where: { tenantId, eventType: { in: ['InboundMessage', 'OutboundMessage', 'ConversationUnread'] }, receivedAt: { gte: startOfDay, lte: endOfDay } } }),
-    db.webhookLog.count({ where: { tenantId, eventType: { in: ['TaskCompleted', 'task.completed', 'TaskCreate', 'TaskUpdate'] }, receivedAt: { gte: startOfDay, lte: endOfDay } } }),
-    db.webhookLog.count({ where: { tenantId, eventType: { in: ['OpportunityStageChanged', 'OpportunityUpdate', 'opportunity.stageChanged'] }, receivedAt: { gte: startOfDay, lte: endOfDay } } }),
+    db.webhookLog.count({ where: { tenantId, eventType: { in: ['TaskCompleted', 'TaskComplete', 'task.completed', 'TaskCreate', 'TaskUpdate'] }, receivedAt: { gte: startOfDay, lte: endOfDay } } }),
+    db.webhookLog.count({ where: { tenantId, eventType: { in: ['OpportunityStageChanged', 'OpportunityStageUpdate', 'OpportunityUpdate', 'OpportunityCreate', 'opportunity.stageChanged'] }, receivedAt: { gte: startOfDay, lte: endOfDay } } }),
     db.webhookLog.count({ where: { tenantId, status: 'failed', receivedAt: { gte: startOfDay, lte: endOfDay } } }),
     db.webhookLog.findFirst({ where: { tenantId }, orderBy: { receivedAt: 'desc' }, select: { receivedAt: true } }),
   ])
@@ -243,5 +243,13 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
     lastWebhookAt: lastWebhook?.receivedAt ?? null,
   }
 
-  return NextResponse.json({ tab, date: dateStr, rows, summary, pipelineHealth, hourly, dialBreakdown })
+  // User map — resolve GHL user IDs to names for display
+  const users = await db.user.findMany({
+    where: { tenantId, ghlUserId: { not: null } },
+    select: { name: true, ghlUserId: true },
+  })
+  const userMap: Record<string, string> = {}
+  for (const u of users) { if (u.ghlUserId) userMap[u.ghlUserId] = u.name }
+
+  return NextResponse.json({ tab, date: dateStr, rows, summary, pipelineHealth, hourly, dialBreakdown, userMap })
 })
