@@ -267,7 +267,7 @@ async function tryExportEndpoint(
         if (!typeFilter) {
           const msgType = String(msg.messageType ?? '').toUpperCase()
           const typeId = typeof msg.messageTypeId === 'number' ? msg.messageTypeId : -1
-          const isCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+          const isCall = msgType === 'CALL' || msgType === 'TYPE_CALL' || typeId === 1 || typeId === 10
             || !!(msg.callDuration || msg.callStatus || (msg.meta as Record<string, unknown>)?.call)
           if (!isCall) continue
         }
@@ -361,7 +361,7 @@ async function callTypeConversationSearch(
           for (const msg of msgs) {
             const msgType = String(msg.messageType ?? '').toUpperCase()
             const typeId = typeof msg.messageTypeId === 'number' ? msg.messageTypeId : -1
-            const isCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+            const isCall = msgType === 'CALL' || msgType === 'TYPE_CALL' || typeId === 1 || typeId === 10
               || !!(msg.callDuration || msg.callStatus || (msg.meta as Record<string, unknown>)?.call)
             if (!isCall) continue
 
@@ -443,7 +443,7 @@ async function perUserConversationSearch(
               // Check if it's a call (verified types from GHL docs)
               const msgType = String(msg.messageType ?? '').toUpperCase()
               const typeId = typeof msg.messageTypeId === 'number' ? msg.messageTypeId : -1
-              const isCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+              const isCall = msgType === 'CALL' || msgType === 'TYPE_CALL' || typeId === 1 || typeId === 10
                 || !!(msg.callDuration || msg.callStatus || (msg.meta as Record<string, unknown>)?.call)
               if (!isCall) continue
 

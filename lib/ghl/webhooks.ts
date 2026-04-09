@@ -118,7 +118,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
   // Fallback: any message with callDuration/callStatus/meta.call is a call
   const msgType = (msg.messageType ?? '').toUpperCase()
   const typeId = typeof msg.messageTypeId === 'number' ? msg.messageTypeId : -1
-  const isCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+  const isCall = msgType === 'CALL' || msgType === 'TYPE_CALL' || typeId === 1 || typeId === 10
     || !!(msg.callDuration || msg.callStatus || msg.meta?.call)
 
   if (!isCall) return // skip SMS, email, chat

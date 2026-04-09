@@ -200,7 +200,7 @@ function normalizeToEvent(raw: Record<string, unknown>, locationId: string): GHL
   if (raw.type && typeof raw.type === 'string' && raw.locationId) {
     const msgType = String(raw.messageType ?? '').toUpperCase()
     const typeId = typeof raw.messageTypeId === 'number' ? raw.messageTypeId : -1
-    const isStandardCall = msgType === 'CALL' || typeId === 1 || typeId === 10
+    const isStandardCall = msgType === 'CALL' || msgType === 'TYPE_CALL' || typeId === 1 || typeId === 10
 
     if (isStandardCall) {
       // It's a call from OAuth app — enrich with any customData if available
