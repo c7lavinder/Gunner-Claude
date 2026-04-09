@@ -51,29 +51,35 @@ export async function POST(request: NextRequest) {
 
     const event = JSON.parse(rawBody)
 
-    // ── Raw webhook log — fires for every single GHL webhook ──────────────
-    // Visibility layer: even if everything else fails, we have a record.
-    // Fire-and-forget: never blocks the response.
+    // ── Raw webhook log — every GHL webhook gets a row immediately ──────
+    // Captures eventType + raw payload on arrival. Status updated after processing.
     const _rawEvent = event as Record<string, unknown>
-    db.webhookLog.create({
-      data: {
-        eventType: String(_rawEvent.type ?? 'UNKNOWN'),
-        messageId: String(
-          _rawEvent.messageId ?? _rawEvent.id ?? _rawEvent.altId ?? _rawEvent.callId ?? ''
-        ) || null,
-        locationId: String(
-          _rawEvent.locationId ?? _rawEvent.location_id ??
-          (_rawEvent.location && typeof _rawEvent.location === 'object'
-            ? (_rawEvent.location as Record<string, unknown>).id
-            : '') ??
-          'UNKNOWN'
-        ),
-        rawPayload: JSON.parse(JSON.stringify(_rawEvent)),
-        processed: false,
-      },
-    }).catch(err =>
+    let webhookLogId: string | null = null
+    try {
+      const wl = await db.webhookLog.create({
+        data: {
+          eventType: String(
+            _rawEvent.type ?? _rawEvent.event ?? _rawEvent.eventType ?? 'UNKNOWN'
+          ),
+          messageId: String(
+            _rawEvent.messageId ?? _rawEvent.id ?? _rawEvent.altId ?? _rawEvent.callId ?? ''
+          ) || null,
+          locationId: String(
+            _rawEvent.locationId ?? _rawEvent.location_id ??
+            (_rawEvent.location && typeof _rawEvent.location === 'object'
+              ? (_rawEvent.location as Record<string, unknown>).id
+              : '') ??
+            'UNKNOWN'
+          ),
+          rawPayload: JSON.parse(JSON.stringify(_rawEvent)),
+          processed: false,
+          status: 'processing',
+        },
+      })
+      webhookLogId = wl.id
+    } catch (err) {
       console.error('[Webhook] WebhookLog write failed:', err instanceof Error ? err.message : err)
-    )
+    }
     // ── End webhook log ───────────────────────────────────────────────────
 
     // Find tenant from ANY location field GHL might send
@@ -129,10 +135,30 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Webhook] type=${normalized.type} | loc=${locationId} | contact=${normalized.contactId ?? 'none'} | callDuration=${normalized.callDuration ?? 'n/a'}`)
 
-    // Process
-    handleGHLWebhook(normalized).catch((err) => {
-      console.error('[Webhook] Error:', err instanceof Error ? err.message : err)
-    })
+    // Process — outcome written to WebhookLog async (never blocks the response)
+    handleGHLWebhook(normalized)
+      .then(async () => {
+        if (webhookLogId) {
+          await db.webhookLog.update({
+            where: { id: webhookLogId },
+            data: { status: 'success', processed: true, processedAt: new Date() },
+          }).catch(() => {}) // silent — never block on outcome write
+        }
+      })
+      .catch(async (err) => {
+        console.error('[Webhook] Processing failed:', err instanceof Error ? err.message : err)
+        if (webhookLogId) {
+          await db.webhookLog.update({
+            where: { id: webhookLogId },
+            data: {
+              status: 'failed',
+              processed: true,
+              processedAt: new Date(),
+              errorReason: err instanceof Error ? err.message : 'Unknown error',
+            },
+          }).catch(() => {}) // silent — never block on outcome write
+        }
+      })
 
     return NextResponse.json({ received: true }, { status: 200 })
   } catch (err) {

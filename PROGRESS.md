@@ -49,6 +49,16 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 34b — WebhookLog outcome tracking (2026-04-08)
+
+Extended WebhookLog with outcome tracking:
+- Added 3 fields: status (received|processing|success|failed), processedAt, errorReason
+- Added 3 indexes: [tenantId,eventType], [tenantId,status], [tenantId,receivedAt]
+- route.ts: WebhookLog now writes status='processing' on arrival, then updates to
+  'success' or 'failed' with processedAt + errorReason after handleGHLWebhook resolves
+- Response to GHL still returns immediately — outcome update is fully async
+- Files changed: prisma/schema.prisma, app/api/webhooks/ghl/route.ts, PROGRESS.md
+
 ### Session 34 — Autonomous audit + known bug fixes (2026-04-08)
 
 Tasks completed:

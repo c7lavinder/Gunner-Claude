@@ -1180,10 +1180,18 @@ model WebhookLog {
   callId      String?  @map("call_id")
   notes       String?
 
+  // Outcome tracking — written after processing completes or fails
+  status      String   @default("received") // received | processing | success | failed
+  processedAt DateTime? @map("processed_at")
+  errorReason String?  @map("error_reason")
+
   tenantId    String?  @map("tenant_id")
   tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
   @@index([locationId, receivedAt])
+  @@index([tenantId, eventType])
+  @@index([tenantId, status])
+  @@index([tenantId, receivedAt])
   @@map("webhook_logs")
 }
