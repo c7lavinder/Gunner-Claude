@@ -134,11 +134,13 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
   console.log(`[GHL Webhook] Call detected: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}, recording=${!!recordingUrl}`)
 
   // Classify call: no-answer dials still get a Call row (never dropped)
-  const isNoAnswer =
-    ['failed', 'busy', 'no-answer', 'canceled'].includes(callStatus) ||
-    (callDuration === 0 && !recordingUrl)
+  // IMPORTANT: GHL sends callDuration=null for completed calls at webhook time.
+  // Only classify as no-answer when we have PROOF: explicit fail status AND no completed signal.
+  const hasFailStatus = ['failed', 'busy', 'no-answer', 'canceled'].includes(callStatus)
+  const hasCompletedStatus = ['completed', 'answered', 'connected'].includes(callStatus)
+  const isNoAnswer = hasFailStatus && !hasCompletedStatus
   const isShortCall =
-    !isNoAnswer && callDuration > 0 && callDuration < 45 && !recordingUrl
+    !isNoAnswer && !hasCompletedStatus && callDuration > 0 && callDuration < 45 && !recordingUrl
 
   // Deduplicate by messageId or altId
   const dedupeId = msg.altId || messageId
@@ -155,6 +157,25 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     })
     if (existing) {
       console.log(`[GHL Webhook] Duplicate call ${dedupeId}, skipping`)
+      return
+    }
+  }
+
+  // Cross-source dedup: automation webhooks generate synthetic IDs (wf_...) that don't
+  // match OAuth webhook IDs for the same call. Dedup by contactId + 5s window.
+  // 5s is tight enough to catch same-call duplicates but won't block real double-dials
+  // (which are typically 10+ seconds apart as the rep redials).
+  if (msg.contactId) {
+    const recentDupe = await db.call.findFirst({
+      where: {
+        tenantId,
+        ghlContactId: msg.contactId,
+        createdAt: { gte: new Date(Date.now() - 5_000) },
+      },
+      select: { id: true },
+    })
+    if (recentDupe) {
+      console.log(`[GHL Webhook] Cross-source duplicate for contact ${msg.contactId} within 5s, skipping`)
       return
     }
   }
