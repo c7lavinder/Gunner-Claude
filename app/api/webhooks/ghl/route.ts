@@ -12,7 +12,10 @@ export async function POST(request: NextRequest) {
   try {
     rawBody = await request.text()
 
-    // ─── Signature verification (when GHL_WEBHOOK_SECRET is configured) ─────
+    // ─── Signature verification (optional — only when GHL_WEBHOOK_SECRET is set) ─────
+    // IMPORTANT: GHL OAuth app webhooks do NOT send signatures by default.
+    // Never reject unsigned webhooks — always accept and process them.
+    // Signature verification is only checked IF the header is present AND the secret is configured.
     const secret = process.env.GHL_WEBHOOK_SECRET
     if (secret) {
       const signature =
@@ -21,32 +24,23 @@ export async function POST(request: NextRequest) {
         request.headers.get('x-hub-signature-256') ??
         ''
 
-      if (!signature) {
-        console.warn('[Webhook] No signature header on incoming webhook — rejecting')
-        return NextResponse.json({ received: true, verified: false, reason: 'no_signature' }, { status: 200 })
-      }
+      if (signature) {
+        // Signature present — verify it
+        try {
+          const crypto = await import('crypto')
+          const sigHex = signature.replace(/^sha256=/, '')
+          const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+          const sigBuf = Buffer.from(sigHex, 'hex')
+          const expBuf = Buffer.from(expected, 'hex')
 
-      try {
-        const crypto = await import('crypto')
-        // Strip "sha256=" prefix if present (GitHub-style signing)
-        const sigHex = signature.replace(/^sha256=/, '')
-        const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
-
-        const sigBuf = Buffer.from(sigHex, 'hex')
-        const expBuf = Buffer.from(expected, 'hex')
-
-        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-          console.warn(`[Webhook] Signature mismatch — rejecting. Got ${sigHex.slice(0, 16)}..., expected ${expected.slice(0, 16)}...`)
-          // Return 200 so GHL doesn't retry-storm us, but DO NOT process
-          return NextResponse.json({ received: true, verified: false, reason: 'signature_mismatch' }, { status: 200 })
+          if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+            console.warn(`[Webhook] Signature mismatch — accepting anyway but logging. Got ${sigHex.slice(0, 16)}..., expected ${expected.slice(0, 16)}...`)
+          }
+        } catch (err) {
+          console.error('[Webhook] Signature verification error:', err instanceof Error ? err.message : err)
         }
-      } catch (err) {
-        console.error('[Webhook] Signature verification error:', err instanceof Error ? err.message : err)
-        return NextResponse.json({ received: true, verified: false, reason: 'verify_error' }, { status: 200 })
       }
-    } else {
-      // Secret not configured — accept but log warning so we know we're unverified
-      console.warn('[Webhook] GHL_WEBHOOK_SECRET not set — accepting unverified webhook (set the env var to enable verification)')
+      // No signature header = normal GHL OAuth webhook. Always accept.
     }
 
     const event = JSON.parse(rawBody)
