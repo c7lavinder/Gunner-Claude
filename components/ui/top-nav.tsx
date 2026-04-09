@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
-import { Bell, Settings, ChevronDown, Menu, X, MessageSquare, Bot } from 'lucide-react'
+import { Bell, Settings, ChevronDown, Menu, X, MessageSquare, Bot, Shield } from 'lucide-react'
 import { hasPermission, isRoleAtLeast, type UserRole } from '@/types/roles'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -134,6 +134,19 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
               title="AI Logs"
             >
               <Bot size={16} />
+            </Link>
+          )}
+          {!isViewingAs && isRoleAtLeast(role, 'ADMIN') && (
+            <Link
+              href={`${base}/audit`}
+              className={`p-2 rounded-[10px] transition-colors ${
+                pathname.startsWith(`${base}/audit`)
+                  ? 'bg-surface-secondary text-txt-primary'
+                  : 'text-txt-muted hover:text-txt-primary hover:bg-surface-secondary'
+              }`}
+              title="Audit"
+            >
+              <Shield size={16} />
             </Link>
           )}
           {!isViewingAs && (

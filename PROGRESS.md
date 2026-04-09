@@ -49,6 +49,17 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 34c — Audit page (2026-04-08)
+
+Built /{tenant}/audit — 6-tab system event monitor (owner/admin only):
+- Tabs: Dials (calls table), Leads (properties table), Appointments, Messages,
+  Tasks, Stage Changes (all from webhook_logs with rawPayload parsing)
+- API: app/api/[tenant]/audit/route.ts — withTenant, date picker, per-tab queries
+- Status bar: webhook health dot (green/yellow/red), events today count, failed count
+- Failed rows: red background + hover tooltip with errorReason
+- Nav: Shield icon added to top-nav between AI Logs and Settings (admin+ only)
+- Files: route.ts (new), page.tsx (new), audit-client.tsx (new), top-nav.tsx (modified)
+
 ### Session 34b — WebhookLog outcome tracking (2026-04-08)
 
 Extended WebhookLog with outcome tracking:
