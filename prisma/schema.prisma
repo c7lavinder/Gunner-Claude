@@ -1181,6 +1181,9 @@ model WebhookLog {
   callId      String?  @map("call_id")
   notes       String?
 
+  // Source detection — how the webhook arrived
+  webhookSource String? @map("webhook_source") // 'oauth' | 'automation'
+
   // Outcome tracking — written after processing completes or fails
   status      String   @default("received") // received | processing | success | failed
   processedAt DateTime? @map("processed_at")

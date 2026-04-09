@@ -51,9 +51,14 @@ export async function POST(request: NextRequest) {
 
     const event = JSON.parse(rawBody)
 
-    // ── Raw webhook log — every GHL webhook gets a row immediately ──────
-    // Captures eventType + raw payload on arrival. Status updated after processing.
+    // ── Detect webhook source: OAuth app vs GHL workflow automation ────
+    // OAuth app payloads: have `type` (string) + `locationId` at top level
+    // Automation payloads: have `customData` or lack standard OAuth fields
     const _rawEvent = event as Record<string, unknown>
+    const isOAuth = !!(typeof _rawEvent.type === 'string' && _rawEvent.locationId)
+    const webhookSource: 'oauth' | 'automation' = isOAuth ? 'oauth' : 'automation'
+
+    // ── Raw webhook log — every GHL webhook gets a row immediately ──────
     let webhookLogId: string | null = null
     try {
       const wl = await db.webhookLog.create({
@@ -74,6 +79,7 @@ export async function POST(request: NextRequest) {
           rawPayload: JSON.parse(JSON.stringify(_rawEvent)),
           processed: false,
           status: 'processing',
+          webhookSource,
         },
       })
       webhookLogId = wl.id
@@ -132,8 +138,10 @@ export async function POST(request: NextRequest) {
 
     // Normalize to standard format — handles ANY GHL payload shape
     const normalized = normalizeToEvent(event, locationId)
+    // Attach webhookSource so downstream handlers can tag Call rows
+    normalized._webhookSource = webhookSource
 
-    console.log(`[Webhook] type=${normalized.type} | loc=${locationId} | contact=${normalized.contactId ?? 'none'} | callDuration=${normalized.callDuration ?? 'n/a'}`)
+    console.log(`[Webhook] type=${normalized.type} | loc=${locationId} | source=${webhookSource} | contact=${normalized.contactId ?? 'none'} | callDuration=${normalized.callDuration ?? 'n/a'}`)
 
     // Process — outcome written to WebhookLog async (never blocks the response)
     handleGHLWebhook(normalized)

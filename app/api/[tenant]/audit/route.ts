@@ -102,7 +102,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         },
         orderBy: { receivedAt: 'desc' },
         take: 200,
-        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true },
+        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
     }
@@ -116,7 +116,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         },
         orderBy: { receivedAt: 'desc' },
         take: 200,
-        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true },
+        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
     }
@@ -130,7 +130,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         },
         orderBy: { receivedAt: 'desc' },
         take: 200,
-        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true },
+        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
     }
@@ -144,7 +144,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         },
         orderBy: { receivedAt: 'desc' },
         take: 200,
-        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true },
+        select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
     }

@@ -288,16 +288,24 @@ function TableShell({ headers, children }: { headers: string[]; children: React.
 
 // ─── Tab 1: Dials ──────────────────────────────────────────────────────────
 
+function formatCallSource(src: string | null): { delivery: string; deliveryClass: string; source: string; sourceClass: string } {
+  if (src === 'webhook_oauth') return { delivery: '\u26a1 Real-time', deliveryClass: 'text-green-600', source: 'OAuth', sourceClass: 'text-green-600' }
+  if (src === 'webhook_automation') return { delivery: '\u26a1 Real-time', deliveryClass: 'text-green-600', source: 'Automation', sourceClass: 'text-blue-600' }
+  if (src === 'webhook') return { delivery: '\u26a1 Real-time', deliveryClass: 'text-green-600', source: 'Webhook', sourceClass: 'text-green-600' }
+  if (src === 'poll') return { delivery: '\ud83d\udd53 Cron', deliveryClass: 'text-amber-600', source: 'API Poll', sourceClass: 'text-amber-600' }
+  return { delivery: '\u2014', deliveryClass: 'text-txt-muted', source: '\u2014', sourceClass: 'text-txt-muted' }
+}
+
 function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <TableShell headers={['Time', 'Contact', 'Direction', 'Duration', 'Team Member', 'Source', 'Status', 'Score']}>
+    <TableShell headers={['Time', 'Contact', 'Direction', 'Duration', 'Team Member', 'Delivery', 'Source', 'Status', 'Score']}>
       {rows.map(r => {
         const dur = r.durationSeconds as number | null
         const status = r.gradingStatus as string
         const result = r.callResult as string | null
         const score = r.score as number | null
         const dir = r.direction as string | null
-        const src = r.source as string | null
+        const { delivery, deliveryClass, source, sourceClass } = formatCallSource(r.source as string | null)
 
         let statusLabel = 'Unknown'
         let statusClass = 'text-txt-muted'
@@ -307,9 +315,6 @@ function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
         else if (status === 'PENDING') { statusLabel = 'Pending \u23f3'; statusClass = 'text-blue-600' }
         else if (dur && dur < 45) { statusLabel = 'Too Short'; statusClass = 'text-txt-muted' }
 
-        const sourceLabel = src === 'webhook' ? '\u26a1 Webhook' : src === 'poll' ? '\ud83d\udd04 Poll' : '\u2014'
-        const sourceClass = src === 'webhook' ? 'text-green-600' : src === 'poll' ? 'text-amber-600' : 'text-txt-muted'
-
         return (
           <tr key={r.id as string} className={trClass} style={{ borderColor: 'var(--border-light)' }}>
             <td className={tdClass}>{formatTime(r.createdAt as string)}</td>
@@ -317,7 +322,8 @@ function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
             <td className={tdClass}>{dir === 'INBOUND' ? '\ud83d\udce5 Inbound' : dir === 'OUTBOUND' ? '\ud83d\udce4 Outbound' : '\u2014'}</td>
             <td className={tdClass}>{formatDuration(dur)}</td>
             <td className={tdClass}>{(r.teamMemberName as string) || '\u2014'}</td>
-            <td className={`${tdClass} ${sourceClass} font-medium text-[11px]`}>{sourceLabel}</td>
+            <td className={`${tdClass} ${deliveryClass} font-medium text-[11px]`}>{delivery}</td>
+            <td className={`${tdClass} ${sourceClass} font-medium text-[11px]`}>{source}</td>
             <td className={`${tdClass} ${statusClass} font-medium`}>{statusLabel}</td>
             <td className={tdClass}>{score !== null ? Math.round(score) : '\u2014'}</td>
           </tr>
@@ -354,13 +360,19 @@ interface WebhookColumn {
   render: (row: Record<string, unknown>, p: Record<string, unknown>) => string
 }
 
+function formatWebhookSource(ws: string | null | undefined): string {
+  if (ws === 'oauth') return 'OAuth'
+  if (ws === 'automation') return 'Automation'
+  return '\u2014'
+}
+
 const appointmentColumns: WebhookColumn[] = [
   { header: 'Time', render: (r) => formatTime((r.receivedAt ?? r.createdAt) as string) },
   { header: 'Contact', render: (_, p) => nestedStr(p, 'contact', 'contactName') },
   { header: 'Scheduled Time', render: (_, p) => formatDateLong((p.startTime ?? (p.appointment as Record<string, unknown>)?.startTime) as string | undefined) },
   { header: 'Type', render: (_, p) => (p.appointmentType ?? p.type ?? '\u2014') as string },
   { header: 'Assigned To', render: (_, p) => (p.assignedUserId ?? p.calendarId ?? '\u2014') as string },
-  { header: 'Status', render: (_, p) => (p.appointmentStatus ?? p.status ?? '\u2014') as string },
+  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
   { header: 'Event Status', render: (r) => webhookStatusIcon(r.status as string) },
 ]
 
@@ -370,8 +382,8 @@ const messageColumns: WebhookColumn[] = [
   { header: 'Direction', render: (r) => { const et = r.eventType as string; return et?.includes('Inbound') ? '\ud83d\udce5 Inbound' : et?.includes('Outbound') ? '\ud83d\udce4 Outbound' : '\u2014' } },
   { header: 'Preview', render: (_, p) => truncate((p.body ?? (p.message as Record<string, unknown>)?.body) as string | undefined, 60) },
   { header: 'Team Member', render: (_, p) => (p.userId ?? p.assignedTo ?? '\u2014') as string },
+  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
   { header: 'Read', render: (_, p) => p.read === true ? '\u2705 Read' : '\u2b1c Unread' },
-  { header: 'Replied', render: (_, p) => p.replied === true ? '\u2705 Replied' : '\u2014' },
 ]
 
 const taskColumns: WebhookColumn[] = [
@@ -381,6 +393,7 @@ const taskColumns: WebhookColumn[] = [
   { header: 'Assigned To', render: (_, p) => (p.assignedTo ?? p.userId ?? '\u2014') as string },
   { header: 'Due Date', render: (_, p) => { const d = p.dueDate as string | undefined; if (!d) return '\u2014'; try { return new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) } catch { return '\u2014' } } },
   { header: 'Category', render: (_, p) => (p.taskType ?? p.category ?? '\u2014') as string },
+  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
   { header: 'Status', render: (r, p) => { const et = r.eventType as string; if (et?.includes('Completed') || et?.includes('completed')) return 'Completed \u2705'; return (p.status ?? '\u2014') as string } },
 ]
 
@@ -390,6 +403,7 @@ const stageColumns: WebhookColumn[] = [
   { header: 'Address', render: (_, p) => (p.address ?? (p.opportunity as Record<string, unknown>)?.address ?? '\u2014') as string },
   { header: 'GHL: From', render: (_, p) => (p.oldPipelineStageId ?? p.previousStage ?? '\u2014') as string },
   { header: 'GHL: To', render: (_, p) => (p.pipelineStageId ?? p.stage ?? p.stageId ?? '\u2014') as string },
+  { header: 'Source', render: (r) => formatWebhookSource(r.webhookSource as string | null) },
   { header: 'Gunner Stage', render: (_, p) => ((p.opportunity as Record<string, unknown>)?.status ?? '\u2014') as string },
 ]
 

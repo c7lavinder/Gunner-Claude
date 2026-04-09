@@ -107,6 +107,8 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     altId?: string
   }
 
+  const webhookSource = (event as Record<string, unknown>)._webhookSource as string | undefined
+
   // Log full payload for debugging
   console.log(`[GHL Webhook] Message: type=${msg.messageType} typeId=${msg.messageTypeId} direction=${msg.direction} contact=${msg.contactId} payload=${JSON.stringify(event).slice(0, 400)}`)
 
@@ -194,7 +196,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       direction: direction as 'INBOUND' | 'OUTBOUND',
       durationSeconds: callDuration > 0 ? callDuration : undefined, // 0 = not yet known, poll-calls fills it later
       calledAt: msg.dateAdded ? new Date(msg.dateAdded) : new Date(),
-      source: 'webhook',
+      source: webhookSource === 'automation' ? 'webhook_automation' : 'webhook_oauth',
       gradingStatus: isNoAnswer || isShortCall ? 'FAILED' : 'PENDING',
       callResult: isNoAnswer ? 'no_answer' : isShortCall ? 'short_call' : undefined,
       aiSummary: isNoAnswer
@@ -295,6 +297,7 @@ function extractRecordingUrl(data: {
 // ─── Call Completed (legacy — some GHL setups send this) ────────────────────
 
 async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
+  const webhookSource = (event as Record<string, unknown>)._webhookSource as string | undefined
   const callData = event as {
     id?: string
     callId?: string
@@ -411,7 +414,7 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
       durationSeconds: duration > 0 ? duration : undefined,
       calledAt: new Date(),
-      source: 'webhook',
+      source: webhookSource === 'automation' ? 'webhook_automation' : 'webhook_oauth',
       gradingStatus: isFailed ? 'FAILED' : 'PENDING',
       callResult: explicitNoAnswer ? 'no_answer' : provenShortCall ? 'short_call' : undefined,
       ...(isFailed ? {
