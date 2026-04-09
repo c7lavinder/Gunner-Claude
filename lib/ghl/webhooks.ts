@@ -161,21 +161,21 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     }
   }
 
-  // Cross-source dedup: automation webhooks generate synthetic IDs (wf_...) that don't
-  // match OAuth webhook IDs for the same call. Dedup by contactId + 5s window.
-  // 5s is tight enough to catch same-call duplicates but won't block real double-dials
-  // (which are typically 10+ seconds apart as the rep redials).
-  if (msg.contactId) {
-    const recentDupe = await db.call.findFirst({
+  // Automation dedup: GHL workflow automations send a duplicate webhook with a synthetic
+  // wf_ ID for the same call that the OAuth webhook already delivered. Block only these.
+  // Real double-dials (separate dials to same person) always have real GHL message IDs.
+  if (dedupeId.startsWith('wf_') && msg.contactId) {
+    const oauthVersion = await db.call.findFirst({
       where: {
         tenantId,
         ghlContactId: msg.contactId,
-        createdAt: { gte: new Date(Date.now() - 5_000) },
+        createdAt: { gte: new Date(Date.now() - 60_000) },
+        source: { startsWith: 'webhook_oauth' },
       },
       select: { id: true },
     })
-    if (recentDupe) {
-      console.log(`[GHL Webhook] Cross-source duplicate for contact ${msg.contactId} within 5s, skipping`)
+    if (oauthVersion) {
+      console.log(`[GHL Webhook] Automation duplicate (${dedupeId}) — OAuth version already exists, skipping`)
       return
     }
   }
