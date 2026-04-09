@@ -104,12 +104,14 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
   const [data, setData] = useState<AuditResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'webhook' | 'poll'>('all')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/${tenantSlug}/audit?tab=${activeTab}&date=${selectedDate}`)
+      const sourceParam = activeTab === 'dials' && sourceFilter !== 'all' ? `&source=${sourceFilter}` : ''
+      const res = await fetch(`/api/${tenantSlug}/audit?tab=${activeTab}&date=${selectedDate}${sourceParam}`)
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
       const json = await res.json()
       setData(json)
@@ -118,7 +120,7 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
     } finally {
       setLoading(false)
     }
-  }, [tenantSlug, activeTab, selectedDate])
+  }, [tenantSlug, activeTab, selectedDate, sourceFilter])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -183,6 +185,26 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
           )
         })}
       </div>
+
+      {/* Source filter — Dials tab only */}
+      {activeTab === 'dials' && (
+        <div className="flex items-center gap-2">
+          <span className="text-ds-fine text-txt-muted">Source:</span>
+          {(['all', 'webhook', 'poll'] as const).map(opt => (
+            <button
+              key={opt}
+              onClick={() => setSourceFilter(opt)}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                sourceFilter === opt
+                  ? 'bg-gunner-red text-white'
+                  : 'bg-surface-secondary text-txt-secondary hover:text-txt-primary'
+              }`}
+            >
+              {opt === 'all' ? 'All' : opt === 'webhook' ? 'Webhook' : 'Poll'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Error state */}
       {error && (
@@ -268,13 +290,14 @@ function TableShell({ headers, children }: { headers: string[]; children: React.
 
 function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
   return (
-    <TableShell headers={['Time', 'Contact', 'Direction', 'Duration', 'Team Member', 'Status', 'Score']}>
+    <TableShell headers={['Time', 'Contact', 'Direction', 'Duration', 'Team Member', 'Source', 'Status', 'Score']}>
       {rows.map(r => {
         const dur = r.durationSeconds as number | null
         const status = r.gradingStatus as string
         const result = r.callResult as string | null
         const score = r.score as number | null
         const dir = r.direction as string | null
+        const src = r.source as string | null
 
         let statusLabel = 'Unknown'
         let statusClass = 'text-txt-muted'
@@ -284,6 +307,9 @@ function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
         else if (status === 'PENDING') { statusLabel = 'Pending \u23f3'; statusClass = 'text-blue-600' }
         else if (dur && dur < 45) { statusLabel = 'Too Short'; statusClass = 'text-txt-muted' }
 
+        const sourceLabel = src === 'webhook' ? '\u26a1 Webhook' : src === 'poll' ? '\ud83d\udd04 Poll' : '\u2014'
+        const sourceClass = src === 'webhook' ? 'text-green-600' : src === 'poll' ? 'text-amber-600' : 'text-txt-muted'
+
         return (
           <tr key={r.id as string} className={trClass} style={{ borderColor: 'var(--border-light)' }}>
             <td className={tdClass}>{formatTime(r.createdAt as string)}</td>
@@ -291,6 +317,7 @@ function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
             <td className={tdClass}>{dir === 'INBOUND' ? '\ud83d\udce5 Inbound' : dir === 'OUTBOUND' ? '\ud83d\udce4 Outbound' : '\u2014'}</td>
             <td className={tdClass}>{formatDuration(dur)}</td>
             <td className={tdClass}>{(r.teamMemberName as string) || '\u2014'}</td>
+            <td className={`${tdClass} ${sourceClass} font-medium text-[11px]`}>{sourceLabel}</td>
             <td className={`${tdClass} ${statusClass} font-medium`}>{statusLabel}</td>
             <td className={tdClass}>{score !== null ? Math.round(score) : '\u2014'}</td>
           </tr>

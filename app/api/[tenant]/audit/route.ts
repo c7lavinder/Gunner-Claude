@@ -19,6 +19,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
   const url = new URL(req.url)
   const tab = (url.searchParams.get('tab') ?? 'dials') as AuditTab
   const dateStr = url.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
+  const sourceFilter = url.searchParams.get('source') // 'webhook' | 'poll' | null (all)
 
   if (!VALID_TABS.includes(tab)) {
     return NextResponse.json({ error: `Invalid tab: ${tab}` }, { status: 400 })
@@ -34,13 +35,17 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
   switch (tab) {
     case 'dials': {
       const calls = await db.call.findMany({
-        where: { tenantId, createdAt: { gte: startOfDay, lte: endOfDay } },
+        where: {
+          tenantId,
+          createdAt: { gte: startOfDay, lte: endOfDay },
+          ...(sourceFilter ? { source: sourceFilter } : {}),
+        },
         orderBy: { createdAt: 'desc' },
         take: 200,
         select: {
           id: true, createdAt: true, durationSeconds: true, score: true,
           gradingStatus: true, callResult: true, aiSummary: true,
-          ghlContactId: true, contactName: true, direction: true,
+          ghlContactId: true, contactName: true, direction: true, source: true,
           assignedTo: { select: { name: true } },
         },
       })
@@ -55,6 +60,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         ghlContactId: c.ghlContactId,
         contactName: c.contactName,
         direction: c.direction,
+        source: c.source ?? 'unknown',
         teamMemberName: c.assignedTo?.name ?? null,
       }))
       break

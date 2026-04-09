@@ -168,6 +168,7 @@ async function processCallMessage(
       direction,
       durationSeconds: duration > 0 ? duration : undefined,
       calledAt: msgDate,
+      source: 'poll',
       recordingUrl: hasRecording ? rec.recordingUrl : undefined,
       callResult: isNoAnswer ? 'no_answer' : isGradeable ? undefined : 'short_call',
       gradingStatus: isGradeable ? 'PENDING' : 'FAILED',

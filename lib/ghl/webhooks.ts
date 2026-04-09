@@ -194,6 +194,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       direction: direction as 'INBOUND' | 'OUTBOUND',
       durationSeconds: callDuration > 0 ? callDuration : undefined, // 0 = not yet known, poll-calls fills it later
       calledAt: msg.dateAdded ? new Date(msg.dateAdded) : new Date(),
+      source: 'webhook',
       gradingStatus: isNoAnswer || isShortCall ? 'FAILED' : 'PENDING',
       callResult: isNoAnswer ? 'no_answer' : isShortCall ? 'short_call' : undefined,
       aiSummary: isNoAnswer
@@ -410,6 +411,7 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       direction: callData.direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
       durationSeconds: duration > 0 ? duration : undefined,
       calledAt: new Date(),
+      source: 'webhook',
       gradingStatus: isFailed ? 'FAILED' : 'PENDING',
       callResult: explicitNoAnswer ? 'no_answer' : provenShortCall ? 'short_call' : undefined,
       ...(isFailed ? {

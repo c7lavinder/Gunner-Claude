@@ -485,6 +485,7 @@ model Call {
   direction    CallDirection @default(OUTBOUND)
   durationSeconds Int? @map("duration_seconds")
   calledAt     DateTime? @map("called_at")
+  source       String?  @map("source") // 'webhook' | 'poll' — how this call was ingested
 
   // AI Grading
   gradingStatus GradingStatus @default(PENDING) @map("grading_status")
