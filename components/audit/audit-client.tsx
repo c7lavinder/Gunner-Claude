@@ -30,6 +30,16 @@ interface HourlyBucket {
   poll: number
 }
 
+interface DialBreakdown {
+  total: number
+  webhookCount: number
+  pollCount: number
+  noAnswer: number
+  graded: number
+  pending: number
+  failed: number
+}
+
 interface AuditResponse {
   tab: AuditTab
   date: string
@@ -37,6 +47,7 @@ interface AuditResponse {
   summary: Summary
   pipelineHealth: PipelineHealth
   hourly: HourlyBucket[] | null
+  dialBreakdown: DialBreakdown | null
 }
 
 const TAB_LABELS: Record<AuditTab, string> = {
@@ -54,7 +65,7 @@ const TABS: AuditTab[] = ['dials', 'leads', 'appointments', 'messages', 'tasks',
 
 function formatTime(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Chicago' })
 }
 
 function formatDuration(sec: number | null | undefined): string {
@@ -99,6 +110,34 @@ function nestedStr(obj: Record<string, unknown>, ...keys: string[]): string {
     }
   }
   return '\u2014'
+}
+
+function exportDialsCsv(rows: Record<string, unknown>[], date: string) {
+  const headers = ['Time (CT)', 'Contact', 'Direction', 'Duration (s)', 'Team Member', 'Delivery', 'Source', 'Status', 'Score', 'GHL Contact ID']
+  const csvRows = rows.map(r => {
+    const src = r.source as string | null
+    const { delivery, source } = formatCallSource(src)
+    return [
+      formatTime(r.createdAt as string),
+      (r.contactName as string) || (r.ghlContactId as string) || 'Unknown',
+      r.direction as string || '',
+      r.durationSeconds ?? '',
+      (r.teamMemberName as string) || '',
+      delivery.replace(/[^\w\s]/g, '').trim(),
+      source,
+      r.gradingStatus as string || '',
+      r.score ?? '',
+      r.ghlContactId ?? '',
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+  })
+  const csv = [headers.join(','), ...csvRows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `gunner-dials-${date}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function webhookStatusIcon(status: string | undefined): string {
@@ -146,6 +185,7 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
   const summary = data?.summary
   const health = data?.pipelineHealth
   const hourly = data?.hourly
+  const dialBreakdown = data?.dialBreakdown
   const rows = data?.rows ?? []
   const lastMins = minutesAgo(summary?.lastWebhookAt ?? null)
   const statusColor = lastMins === null ? 'bg-red-400' : lastMins < 60 ? 'bg-green-400' : lastMins < 240 ? 'bg-yellow-400' : 'bg-red-400'
@@ -257,6 +297,30 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
         </div>
       )}
 
+      {/* Reconciliation bar — Dials tab only */}
+      {activeTab === 'dials' && dialBreakdown && (
+        <div className="px-4 py-3 rounded-[10px] border bg-surface-primary" style={{ borderColor: 'var(--border-medium)' }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-ds-fine font-semibold text-txt-primary">Gunner: {dialBreakdown.total} dials</span>
+              <span className="text-[10px] text-txt-muted">\u26a1 {dialBreakdown.webhookCount} webhook</span>
+              <span className="text-[10px] text-txt-muted">\ud83d\udd04 {dialBreakdown.pollCount} poll</span>
+              <span className="text-[10px] text-txt-muted">\u2705 {dialBreakdown.graded} graded</span>
+              <span className="text-[10px] text-txt-muted">\u23f3 {dialBreakdown.pending} pending</span>
+              <span className="text-[10px] text-txt-muted">\ud83d\udcf5 {dialBreakdown.noAnswer} no answer</span>
+              {dialBreakdown.failed > 0 && <span className="text-[10px] text-red-600">\u274c {dialBreakdown.failed} failed</span>}
+            </div>
+            <button
+              onClick={() => exportDialsCsv(rows, selectedDate)}
+              className="px-3 py-1.5 text-[11px] font-medium rounded-[8px] bg-surface-secondary text-txt-secondary hover:text-txt-primary transition-colors"
+            >
+              Export CSV
+            </button>
+          </div>
+          <p className="text-[9px] text-txt-muted mt-1">Compare this total against your GHL dashboard dial count. Times shown in Central.</p>
+        </div>
+      )}
+
       {/* Hourly webhook vs poll — Dials tab only */}
       {activeTab === 'dials' && hourly && hourly.some(h => h.webhook > 0 || h.poll > 0) && (
         <HourlyChart hourly={hourly} />
@@ -293,8 +357,8 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
               {activeTab === 'stages' && <WebhookTable rows={rows} columns={stageColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
             </div>
           )}
-          {rows.length >= 200 && (
-            <p className="text-ds-fine text-txt-muted text-center py-2">Showing 200 of {summary?.counts[activeTab] ?? '200+'} — load more not yet implemented</p>
+          {rows.length >= 500 && (
+            <p className="text-ds-fine text-txt-muted text-center py-2">Showing 500 of {summary?.counts[activeTab] ?? '500+'}</p>
           )}
         </>
       )}

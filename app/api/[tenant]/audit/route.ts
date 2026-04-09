@@ -43,7 +43,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
             : {}),
         },
         orderBy: { createdAt: 'desc' },
-        take: 200,
+        take: 500,
         select: {
           id: true, createdAt: true, durationSeconds: true, score: true,
           gradingStatus: true, callResult: true, aiSummary: true,
@@ -72,7 +72,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
       const props = await db.property.findMany({
         where: { tenantId, createdAt: { gte: startOfDay, lte: endOfDay } },
         orderBy: { createdAt: 'desc' },
-        take: 200,
+        take: 500,
         select: {
           id: true, createdAt: true, address: true, city: true, state: true,
           leadSource: true, status: true, tcpScore: true,
@@ -103,7 +103,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
           receivedAt: { gte: startOfDay, lte: endOfDay },
         },
         orderBy: { receivedAt: 'desc' },
-        take: 200,
+        take: 500,
         select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
@@ -117,7 +117,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
           receivedAt: { gte: startOfDay, lte: endOfDay },
         },
         orderBy: { receivedAt: 'desc' },
-        take: 200,
+        take: 500,
         select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
@@ -131,7 +131,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
           receivedAt: { gte: startOfDay, lte: endOfDay },
         },
         orderBy: { receivedAt: 'desc' },
-        take: 200,
+        take: 500,
         select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
@@ -145,7 +145,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
           receivedAt: { gte: startOfDay, lte: endOfDay },
         },
         orderBy: { receivedAt: 'desc' },
-        take: 200,
+        take: 500,
         select: { id: true, receivedAt: true, eventType: true, status: true, rawPayload: true, errorReason: true, webhookSource: true },
       })
       break
@@ -210,23 +210,30 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
     avgGradeTimeSec,
   }
 
-  // ── Hourly webhook vs poll comparison (Dials tab) ───────────────────
+  // ── Hourly webhook vs poll comparison + dial breakdown (Dials tab) ──
   let hourly: { hour: number; webhook: number; poll: number }[] | null = null
+  let dialBreakdown: { total: number; webhookCount: number; pollCount: number; noAnswer: number; graded: number; pending: number; failed: number } | null = null
   if (tab === 'dials') {
     const allCallsToday = await db.call.findMany({
       where: { tenantId, createdAt: { gte: startOfDay, lte: endOfDay } },
-      select: { createdAt: true, source: true },
+      select: { createdAt: true, source: true, gradingStatus: true, callResult: true },
     })
     const hours: Record<number, { webhook: number; poll: number }> = {}
     for (let h = 0; h < 24; h++) hours[h] = { webhook: 0, poll: 0 }
+    let wc = 0, pc = 0, na = 0, gr = 0, pe = 0, fa = 0
     for (const c of allCallsToday) {
       const h = new Date(c.createdAt).getUTCHours()
       const src = c.source ?? ''
-      if (src.startsWith('webhook')) hours[h].webhook++
-      else if (src === 'poll') hours[h].poll++
-      else { hours[h].webhook++; hours[h].poll++ } // unknown = count in both for visibility
+      if (src.startsWith('webhook')) { hours[h].webhook++; wc++ }
+      else if (src === 'poll') { hours[h].poll++; pc++ }
+      else { hours[h].webhook++; hours[h].poll++ }
+      if (c.callResult === 'no_answer') na++
+      if (c.gradingStatus === 'COMPLETED') gr++
+      else if (c.gradingStatus === 'PENDING') pe++
+      else if (c.gradingStatus === 'FAILED') fa++
     }
     hourly = Object.entries(hours).map(([h, counts]) => ({ hour: Number(h), ...counts }))
+    dialBreakdown = { total: allCallsToday.length, webhookCount: wc, pollCount: pc, noAnswer: na, graded: gr, pending: pe, failed: fa }
   }
 
   const summary = {
@@ -236,5 +243,5 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
     lastWebhookAt: lastWebhook?.receivedAt ?? null,
   }
 
-  return NextResponse.json({ tab, date: dateStr, rows, summary, pipelineHealth, hourly })
+  return NextResponse.json({ tab, date: dateStr, rows, summary, pipelineHealth, hourly, dialBreakdown })
 })
