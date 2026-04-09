@@ -15,11 +15,28 @@ interface Summary {
   lastWebhookAt: string | null
 }
 
+interface PipelineHealth {
+  stuckPending: number
+  stuckRecordings: number
+  gradedToday: number
+  gradeableToday: number
+  gradingRate: number | null
+  avgGradeTimeSec: number | null
+}
+
+interface HourlyBucket {
+  hour: number
+  webhook: number
+  poll: number
+}
+
 interface AuditResponse {
   tab: AuditTab
   date: string
   rows: Record<string, unknown>[]
   summary: Summary
+  pipelineHealth: PipelineHealth
+  hourly: HourlyBucket[] | null
 }
 
 const TAB_LABELS: Record<AuditTab, string> = {
@@ -124,7 +141,11 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+
   const summary = data?.summary
+  const health = data?.pipelineHealth
+  const hourly = data?.hourly
   const rows = data?.rows ?? []
   const lastMins = minutesAgo(summary?.lastWebhookAt ?? null)
   const statusColor = lastMins === null ? 'bg-red-400' : lastMins < 60 ? 'bg-green-400' : lastMins < 240 ? 'bg-yellow-400' : 'bg-red-400'
@@ -163,6 +184,36 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
           {summary.failedCount > 0 && (
             <span className="text-ds-fine text-red-600 font-medium">Failed: {summary.failedCount}</span>
           )}
+        </div>
+      )}
+
+      {/* Pipeline health */}
+      {health && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <HealthCard
+            label="Grading Rate"
+            value={health.gradingRate !== null ? `${health.gradingRate}%` : 'N/A'}
+            detail={`${health.gradedToday} of ${health.gradeableToday} gradeable`}
+            status={health.gradingRate === null ? 'neutral' : health.gradingRate >= 90 ? 'good' : health.gradingRate >= 50 ? 'warn' : 'bad'}
+          />
+          <HealthCard
+            label="Stuck Pending"
+            value={String(health.stuckPending)}
+            detail="calls > 30 min without grade"
+            status={health.stuckPending === 0 ? 'good' : health.stuckPending <= 3 ? 'warn' : 'bad'}
+          />
+          <HealthCard
+            label="Stuck Recordings"
+            value={String(health.stuckRecordings)}
+            detail="fetch jobs pending/failed"
+            status={health.stuckRecordings === 0 ? 'good' : health.stuckRecordings <= 3 ? 'warn' : 'bad'}
+          />
+          <HealthCard
+            label="Avg Grade Time"
+            value={health.avgGradeTimeSec !== null ? formatDuration(health.avgGradeTimeSec) : 'N/A'}
+            detail="call created \u2192 graded"
+            status={health.avgGradeTimeSec === null ? 'neutral' : health.avgGradeTimeSec < 300 ? 'good' : health.avgGradeTimeSec < 600 ? 'warn' : 'bad'}
+          />
         </div>
       )}
 
@@ -206,6 +257,11 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
         </div>
       )}
 
+      {/* Hourly webhook vs poll — Dials tab only */}
+      {activeTab === 'dials' && hourly && hourly.some(h => h.webhook > 0 || h.poll > 0) && (
+        <HourlyChart hourly={hourly} />
+      )}
+
       {/* Error state */}
       {error && (
         <div className="px-4 py-3 rounded-[10px] bg-red-50 text-red-700 text-ds-fine">
@@ -229,12 +285,12 @@ export function AuditClient({ tenantSlug, tenantName }: AuditClientProps) {
             <EmptyState tab={activeTab} date={selectedDate} />
           ) : (
             <div className="overflow-x-auto">
-              {activeTab === 'dials' && <DialsTable rows={rows} />}
-              {activeTab === 'leads' && <LeadsTable rows={rows} />}
-              {activeTab === 'appointments' && <WebhookTable rows={rows} columns={appointmentColumns} />}
-              {activeTab === 'messages' && <WebhookTable rows={rows} columns={messageColumns} />}
-              {activeTab === 'tasks' && <WebhookTable rows={rows} columns={taskColumns} />}
-              {activeTab === 'stages' && <WebhookTable rows={rows} columns={stageColumns} />}
+              {activeTab === 'dials' && <DialsTable rows={rows} expandedRow={expandedRow} onToggle={setExpandedRow} />}
+              {activeTab === 'leads' && <LeadsTable rows={rows} expandedRow={expandedRow} onToggle={setExpandedRow} />}
+              {activeTab === 'appointments' && <WebhookTable rows={rows} columns={appointmentColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
+              {activeTab === 'messages' && <WebhookTable rows={rows} columns={messageColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
+              {activeTab === 'tasks' && <WebhookTable rows={rows} columns={taskColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
+              {activeTab === 'stages' && <WebhookTable rows={rows} columns={stageColumns} expandedRow={expandedRow} onToggle={setExpandedRow} />}
             </div>
           )}
           {rows.length >= 200 && (
@@ -296,7 +352,7 @@ function formatCallSource(src: string | null): { delivery: string; deliveryClass
   return { delivery: '\u2014', deliveryClass: 'text-txt-muted', source: '\u2014', sourceClass: 'text-txt-muted' }
 }
 
-function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
+function DialsTable({ rows, expandedRow, onToggle }: { rows: Record<string, unknown>[]; expandedRow: string | null; onToggle: (id: string | null) => void }) {
   return (
     <TableShell headers={['Time', 'Contact', 'Direction', 'Duration', 'Team Member', 'Delivery', 'Source', 'Status', 'Score']}>
       {rows.map(r => {
@@ -315,8 +371,10 @@ function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
         else if (status === 'PENDING') { statusLabel = 'Pending \u23f3'; statusClass = 'text-blue-600' }
         else if (dur && dur < 45) { statusLabel = 'Too Short'; statusClass = 'text-txt-muted' }
 
+        const id = r.id as string
+        const isExpanded = expandedRow === id
         return (
-          <tr key={r.id as string} className={trClass} style={{ borderColor: 'var(--border-light)' }}>
+          <ExpandableRow key={id} id={id} isExpanded={isExpanded} onToggle={onToggle} row={r} colSpan={9} isFailed={false}>
             <td className={tdClass}>{formatTime(r.createdAt as string)}</td>
             <td className={tdClass}>{(r.contactName as string) || (r.ghlContactId as string) || 'Unknown'}</td>
             <td className={tdClass}>{dir === 'INBOUND' ? '\ud83d\udce5 Inbound' : dir === 'OUTBOUND' ? '\ud83d\udce4 Outbound' : '\u2014'}</td>
@@ -326,7 +384,7 @@ function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
             <td className={`${tdClass} ${sourceClass} font-medium text-[11px]`}>{source}</td>
             <td className={`${tdClass} ${statusClass} font-medium`}>{statusLabel}</td>
             <td className={tdClass}>{score !== null ? Math.round(score) : '\u2014'}</td>
-          </tr>
+          </ExpandableRow>
         )
       })}
     </TableShell>
@@ -335,20 +393,23 @@ function DialsTable({ rows }: { rows: Record<string, unknown>[] }) {
 
 // ─── Tab 2: Leads ──────────────────────────────────────────────────────────
 
-function LeadsTable({ rows }: { rows: Record<string, unknown>[] }) {
+function LeadsTable({ rows, expandedRow, onToggle }: { rows: Record<string, unknown>[]; expandedRow: string | null; onToggle: (id: string | null) => void }) {
   return (
     <TableShell headers={['Time', 'Contact / Seller', 'Address', 'Lead Source', 'Market', 'Gunner Stage', 'GHL Stage']}>
-      {rows.map(r => (
-        <tr key={r.id as string} className={trClass} style={{ borderColor: 'var(--border-light)' }}>
-          <td className={tdClass}>{formatTime(r.createdAt as string)}</td>
-          <td className={tdClass}>{(r.sellerName as string) || 'Unknown Seller'}</td>
-          <td className={tdClass}>{(r.address as string) || '\u2014'}</td>
-          <td className={tdClass}>{(r.leadSource as string) || '\u2014'}</td>
-          <td className={tdClass}>{(r.market as string) || '\u2014'}</td>
-          <td className={tdClass}>{(r.status as string) || '\u2014'}</td>
-          <td className={tdClass}>{(r.ghlStage as string) || '\u2014'}</td>
-        </tr>
-      ))}
+      {rows.map(r => {
+        const id = r.id as string
+        return (
+          <ExpandableRow key={id} id={id} isExpanded={expandedRow === id} onToggle={onToggle} row={r} colSpan={7} isFailed={false}>
+            <td className={tdClass}>{formatTime(r.createdAt as string)}</td>
+            <td className={tdClass}>{(r.sellerName as string) || 'Unknown Seller'}</td>
+            <td className={tdClass}>{(r.address as string) || '\u2014'}</td>
+            <td className={tdClass}>{(r.leadSource as string) || '\u2014'}</td>
+            <td className={tdClass}>{(r.market as string) || '\u2014'}</td>
+            <td className={tdClass}>{(r.status as string) || '\u2014'}</td>
+            <td className={tdClass}>{(r.ghlStage as string) || '\u2014'}</td>
+          </ExpandableRow>
+        )
+      })}
     </TableShell>
   )
 }
@@ -407,25 +468,142 @@ const stageColumns: WebhookColumn[] = [
   { header: 'Gunner Stage', render: (_, p) => ((p.opportunity as Record<string, unknown>)?.status ?? '\u2014') as string },
 ]
 
-function WebhookTable({ rows, columns }: { rows: Record<string, unknown>[]; columns: WebhookColumn[] }) {
+function WebhookTable({ rows, columns, expandedRow, onToggle }: { rows: Record<string, unknown>[]; columns: WebhookColumn[]; expandedRow: string | null; onToggle: (id: string | null) => void }) {
   return (
     <TableShell headers={columns.map(c => c.header)}>
       {rows.map(r => {
         const p = payload(r)
+        const id = r.id as string
         const isFailed = (r.status as string) === 'failed'
         return (
-          <tr
-            key={r.id as string}
-            className={isFailed ? failedTrClass : trClass}
-            style={{ borderColor: 'var(--border-light)' }}
-            title={isFailed ? (r.errorReason as string) ?? 'Processing failed' : undefined}
-          >
+          <ExpandableRow key={id} id={id} isExpanded={expandedRow === id} onToggle={onToggle} row={r} colSpan={columns.length} isFailed={isFailed}>
             {columns.map(col => (
               <td key={col.header} className={tdClass}>{col.render(r, p)}</td>
             ))}
-          </tr>
+          </ExpandableRow>
         )
       })}
     </TableShell>
+  )
+}
+
+// ─── Expandable Row ────────────────────────────────────────────────────────
+
+function ExpandableRow({ id, isExpanded, onToggle, row, colSpan, isFailed, children }: {
+  id: string; isExpanded: boolean; onToggle: (id: string | null) => void
+  row: Record<string, unknown>; colSpan: number; isFailed: boolean; children: React.ReactNode
+}) {
+  return (
+    <>
+      <tr
+        className={`${isFailed ? failedTrClass : trClass} cursor-pointer`}
+        style={{ borderColor: 'var(--border-light)' }}
+        onClick={() => onToggle(isExpanded ? null : id)}
+        title={isFailed ? (row.errorReason as string) ?? 'Processing failed' : 'Click to expand'}
+      >
+        {children}
+      </tr>
+      {isExpanded && (
+        <tr className="border-b" style={{ borderColor: 'var(--border-light)' }}>
+          <td colSpan={colSpan} className="px-4 py-3 bg-surface-secondary">
+            <ExpandedDetail row={row} />
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function ExpandedDetail({ row }: { row: Record<string, unknown> }) {
+  const rp = row.rawPayload as Record<string, unknown> | undefined
+  const err = row.errorReason as string | undefined
+
+  // For Call rows (dials/leads), show key fields
+  const fields: [string, unknown][] = Object.entries(row).filter(
+    ([k]) => !['id', 'rawPayload'].includes(k) && row[k] !== null && row[k] !== undefined
+  )
+
+  return (
+    <div className="space-y-3 text-ds-fine">
+      {err && (
+        <div className="px-3 py-2 rounded-[8px] bg-red-50 text-red-700">
+          <span className="font-semibold">Error:</span> {err}
+        </div>
+      )}
+      <div>
+        <p className="font-semibold text-txt-secondary mb-1">Fields</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1">
+          {fields.map(([k, v]) => (
+            <div key={k}>
+              <span className="text-txt-muted">{k}:</span>{' '}
+              <span className="text-txt-primary">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {rp && (
+        <div>
+          <p className="font-semibold text-txt-secondary mb-1">Raw Payload</p>
+          <pre className="text-[10px] text-txt-secondary bg-surface-primary border rounded-[8px] px-3 py-2 overflow-x-auto max-h-[300px]" style={{ borderColor: 'var(--border-light)' }}>
+            {JSON.stringify(rp, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Health Card ───────────────────────────────────────────────────────────
+
+function HealthCard({ label, value, detail, status }: {
+  label: string; value: string; detail: string; status: 'good' | 'warn' | 'bad' | 'neutral'
+}) {
+  const borderColor = status === 'good' ? 'border-green-300' : status === 'warn' ? 'border-yellow-300' : status === 'bad' ? 'border-red-300' : 'border-gray-200'
+  const dotColor = status === 'good' ? 'bg-green-400' : status === 'warn' ? 'bg-yellow-400' : status === 'bad' ? 'bg-red-400' : 'bg-gray-300'
+
+  return (
+    <div className={`px-4 py-3 rounded-[10px] border bg-surface-primary ${borderColor}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+        <span className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">{label}</span>
+      </div>
+      <p className="text-[20px] font-semibold text-txt-primary leading-tight">{value}</p>
+      <p className="text-[10px] text-txt-muted mt-0.5">{detail}</p>
+    </div>
+  )
+}
+
+// ─── Hourly Chart ──────────────────────────────────────────────────────────
+
+function HourlyChart({ hourly }: { hourly: HourlyBucket[] }) {
+  const maxVal = Math.max(...hourly.map(h => Math.max(h.webhook, h.poll)), 1)
+  // Only show hours that have data or are within business range (6am-10pm UTC ~= 1am-5pm CT)
+  const activeHours = hourly.filter(h => h.webhook > 0 || h.poll > 0 || (h.hour >= 12 && h.hour <= 23))
+  if (activeHours.length === 0) return null
+
+  return (
+    <div className="px-4 py-3 rounded-[10px] bg-surface-secondary">
+      <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Webhook vs Poll by Hour (UTC)</p>
+      <div className="flex items-end gap-1 h-[60px]">
+        {activeHours.map(h => {
+          const wH = Math.max((h.webhook / maxVal) * 56, h.webhook > 0 ? 4 : 0)
+          const pH = Math.max((h.poll / maxVal) * 56, h.poll > 0 ? 4 : 0)
+          const label = h.hour > 12 ? `${h.hour - 12}p` : h.hour === 12 ? '12p' : h.hour === 0 ? '12a' : `${h.hour}a`
+          return (
+            <div key={h.hour} className="flex flex-col items-center gap-0.5 flex-1 min-w-[24px]" title={`${label}: ${h.webhook} webhook, ${h.poll} poll`}>
+              <div className="flex items-end gap-[2px] w-full justify-center">
+                <div className="w-[8px] rounded-t-sm bg-green-400" style={{ height: `${wH}px` }} />
+                <div className="w-[8px] rounded-t-sm bg-amber-400" style={{ height: `${pH}px` }} />
+              </div>
+              <span className="text-[8px] text-txt-muted">{label}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-4 mt-2">
+        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-green-400" /><span className="text-[9px] text-txt-muted">Webhook</span></div>
+        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-400" /><span className="text-[9px] text-txt-muted">Poll</span></div>
+      </div>
+    </div>
   )
 }

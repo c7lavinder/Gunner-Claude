@@ -162,6 +162,71 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
     db.webhookLog.findFirst({ where: { tenantId }, orderBy: { receivedAt: 'desc' }, select: { receivedAt: true } }),
   ])
 
+  // ── Pipeline health — are calls making it all the way through? ──────
+  const [stuckPending, stuckRecordings, gradedToday, gradeableTodayCount, gradeTimes] = await Promise.all([
+    // Calls stuck in PENDING > 30 min (should have been graded by now)
+    db.call.count({
+      where: {
+        tenantId,
+        gradingStatus: 'PENDING',
+        createdAt: { gte: startOfDay, lte: endOfDay, lt: new Date(Date.now() - 30 * 60_000) },
+      },
+    }),
+    // Recording fetch jobs stuck
+    db.recordingFetchJob.count({
+      where: { tenantId, status: { in: ['PENDING', 'FAILED'] }, createdAt: { gte: startOfDay, lte: endOfDay } },
+    }),
+    // Successfully graded today
+    db.call.count({
+      where: { tenantId, gradingStatus: 'COMPLETED', createdAt: { gte: startOfDay, lte: endOfDay } },
+    }),
+    // Total gradeable (not no_answer, not short_call)
+    db.call.count({
+      where: {
+        tenantId,
+        createdAt: { gte: startOfDay, lte: endOfDay },
+        callResult: null, // null = not no_answer or short_call
+      },
+    }),
+    // Average grading time (created → graded) for completed calls today
+    db.call.findMany({
+      where: { tenantId, gradingStatus: 'COMPLETED', createdAt: { gte: startOfDay, lte: endOfDay }, gradedAt: { not: null } },
+      select: { createdAt: true, gradedAt: true },
+    }),
+  ])
+
+  const avgGradeTimeSec = gradeTimes.length > 0
+    ? Math.round(gradeTimes.reduce((sum, c) => sum + (c.gradedAt!.getTime() - c.createdAt.getTime()) / 1000, 0) / gradeTimes.length)
+    : null
+
+  const pipelineHealth = {
+    stuckPending,
+    stuckRecordings,
+    gradedToday,
+    gradeableToday: gradeableTodayCount,
+    gradingRate: gradeableTodayCount > 0 ? Math.round((gradedToday / gradeableTodayCount) * 100) : null,
+    avgGradeTimeSec,
+  }
+
+  // ── Hourly webhook vs poll comparison (Dials tab) ───────────────────
+  let hourly: { hour: number; webhook: number; poll: number }[] | null = null
+  if (tab === 'dials') {
+    const allCallsToday = await db.call.findMany({
+      where: { tenantId, createdAt: { gte: startOfDay, lte: endOfDay } },
+      select: { createdAt: true, source: true },
+    })
+    const hours: Record<number, { webhook: number; poll: number }> = {}
+    for (let h = 0; h < 24; h++) hours[h] = { webhook: 0, poll: 0 }
+    for (const c of allCallsToday) {
+      const h = new Date(c.createdAt).getUTCHours()
+      const src = c.source ?? ''
+      if (src.startsWith('webhook')) hours[h].webhook++
+      else if (src === 'poll') hours[h].poll++
+      else { hours[h].webhook++; hours[h].poll++ } // unknown = count in both for visibility
+    }
+    hourly = Object.entries(hours).map(([h, counts]) => ({ hour: Number(h), ...counts }))
+  }
+
   const summary = {
     totalToday: dialCount + leadCount + appointmentCount + messageCount + taskCount + stageCount,
     counts: { dials: dialCount, leads: leadCount, appointments: appointmentCount, messages: messageCount, tasks: taskCount, stages: stageCount },
@@ -169,5 +234,5 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
     lastWebhookAt: lastWebhook?.receivedAt ?? null,
   }
 
-  return NextResponse.json({ tab, date: dateStr, rows, summary })
+  return NextResponse.json({ tab, date: dateStr, rows, summary, pipelineHealth, hourly })
 })
