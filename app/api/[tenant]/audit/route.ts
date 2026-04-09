@@ -38,7 +38,9 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         where: {
           tenantId,
           createdAt: { gte: startOfDay, lte: endOfDay },
-          ...(sourceFilter ? { source: sourceFilter } : {}),
+          ...(sourceFilter === 'webhook' ? { source: { startsWith: 'webhook' } }
+            : sourceFilter === 'poll' ? { source: 'poll' }
+            : {}),
         },
         orderBy: { createdAt: 'desc' },
         take: 200,

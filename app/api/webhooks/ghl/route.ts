@@ -143,6 +143,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Webhook] type=${normalized.type} | loc=${locationId} | source=${webhookSource} | contact=${normalized.contactId ?? 'none'} | callDuration=${normalized.callDuration ?? 'n/a'}`)
 
+    // Backfill tenantId on the WebhookLog now that we've resolved it
+    if (webhookLogId) {
+      db.webhookLog.update({
+        where: { id: webhookLogId },
+        data: { tenantId },
+      }).catch(() => {}) // non-blocking
+    }
+
     // Process — outcome written to WebhookLog async (never blocks the response)
     handleGHLWebhook(normalized)
       .then(async () => {
