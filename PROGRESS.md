@@ -49,6 +49,35 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 35 — Live debugging day: call pipeline + audit page (2026-04-09)
+
+First full day with team dialing on new system. 4 team members, ~336 calls (GHL CSVs).
+
+Root causes found and fixed:
+- GHL_WEBHOOK_SECRET HMAC rejection was silently dropping ALL webhooks since Apr 6 (Session 33)
+- TYPE_CALL vs CALL mismatch — GHL built-in dialer sends TYPE_CALL, code only matched CALL
+- pg_advisory_lock leaks on pgbouncer — poll cron blocked all day, replaced with timestamp lock
+- Completed calls classified as no_answer — GHL sends callDuration=null at webhook time
+- handleCallCompleted 5-min contactId dedup was killing real double-dials
+- Automation webhooks (wf_ IDs) creating duplicates — bidirectional 30s dedup added
+- process-recording-jobs wasting API calls on wf_ IDs — now skips them immediately
+- Appointments not showing on audit — filter had AppointmentCreated, GHL sends AppointmentCreate
+- Tasks/stages event types also mismatched — TaskComplete not TaskCompleted, OpportunityStageUpdate
+
+End of day audit results (verified against GHL CSVs):
+- Leads: 7/7 captured (Susan Hammer was existing property — correct behavior)
+- Appointments: all correct
+- Calls (afternoon after fixes): webhooks caught every call, zero missed
+- Calls (morning before fixes): ~20 of Kyle's early calls missing, backfillable
+- Duplicates: automation webhook still creates some extras, 30s dedup window should help
+- Grading: 4 completed, 70 pending (recording-jobs fix deployed for overnight processing)
+
+Key finding: GHL OAuth webhooks ARE the primary call delivery path (67% on Apr 6 when working).
+The automation workflow webhook is a secondary source with synthetic wf_ IDs.
+Poll cron is safety net but wasn't running most of today (advisory lock issue, now fixed).
+
+Files changed: webhooks.ts, route.ts, poll-calls.ts, process-recording-jobs.ts, audit page files
+
 ### Session 34c — Audit page (2026-04-08)
 
 Built /{tenant}/audit — 6-tab system event monitor (owner/admin only):
@@ -201,14 +230,22 @@ All other bugs from sessions 1-32 are resolved.
 
 ## Next Session — Start Exactly Here
 
-**Task:** Run `npx tsx scripts/daily-health-check.ts` first. If clean, work on the LM "227"
-aggregation bug (parked item, highest team-visibility). If errors, investigate before
-touching anything else.
+**Task:** Run `npx tsx scripts/diagnose-calls.ts` to verify overnight grading caught up.
+Then check audit page — compare Dials count against GHL dashboard.
+If numbers match within 10%, system is healthy. Focus on remaining parked items.
+
+**If Corey reports missing calls:** Run diagnose-calls.ts, check webhook_logs for
+delivery gaps, verify poll cron is running (look for recent poll-sourced calls).
+See memory/reference_call_pipeline.md for full diagnostic playbook.
+
+**Railway access:** Need a fresh Railway API token from Corey to see server logs.
+Current token is invalid. This is the biggest diagnostic gap.
 
 Parked items (prioritized):
-1. LM tab "227" dial count not aggregating across LM role
-2. Day Hub vs Calls page count source-of-truth alignment
-3. Grading truncated JSON — consider max_tokens bump in lib/ai/grading.ts (P7 fence-stripping RESOLVED Session 34, but truncation may still occur on very long transcripts)
-4. Refactor recording-jobs script + route to share lib/jobs/
-5. Migrate ~64 remaining API routes to withTenant (was 72, 8 done in Session 34)
-6. Sweep remaining silent catches — lib/ai/ and app/api/ai/ done (Session 34). Remaining dirs: lib/workflows/, lib/ghl/, lib/properties.ts, lib/buyers/, app/(tenant)/, app/api/[tenant]/dayhub/, app/api/admin/, app/api/properties/, app/api/milestones/, scripts/
+1. Verify poll cron is running on Railway (can't confirm without logs)
+2. Backfill Kyle's ~20 missing morning calls from Apr 9 (before fixes deployed)
+3. LM tab "227" dial count not aggregating across LM role
+4. Day Hub vs Calls page count source-of-truth alignment
+5. Grading truncated JSON — consider max_tokens bump in lib/ai/grading.ts
+6. Migrate ~64 remaining API routes to withTenant
+7. Sweep remaining silent catches in broader codebase
