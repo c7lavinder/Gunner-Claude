@@ -351,13 +351,15 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     select: { id: true, durationSeconds: true, gradingStatus: true, recordingUrl: true },
   })
 
-  // If not found by messageId, check by contactId + recent time (workflow events have different IDs)
-  if (!existing && callData.contactId) {
+  // If not found by messageId AND this is an automation webhook (wf_ ID),
+  // check by contactId + recent time to dedup against OAuth version.
+  // Do NOT do this for real GHL message IDs — those are real double-dials.
+  if (!existing && callData.contactId && messageId.startsWith('wf_')) {
     existing = await db.call.findFirst({
       where: {
         tenantId,
         ghlContactId: callData.contactId,
-        calledAt: { gte: new Date(Date.now() - 5 * 60 * 1000) }, // within last 5 minutes
+        calledAt: { gte: new Date(Date.now() - 60_000) }, // within last 60s
       },
       orderBy: { calledAt: 'desc' },
       select: { id: true, durationSeconds: true, gradingStatus: true, recordingUrl: true },
