@@ -480,22 +480,29 @@ async function pollCalls() {
   console.log('[poll-calls] Starting...')
 
   // ─── Run-lock: prevent concurrent poll runs from racing ───────────────
-  // If a previous poll is still running (e.g. GHL slow, call volume spike),
-  // this run exits immediately instead of double-inserting calls.
-  const LOCK_KEY = 8472310984 // arbitrary unique int for this cron job
+  // Uses an UPDATE-based lock on the tenant row instead of pg_advisory_lock.
+  // Advisory locks don't work with pgbouncer transaction mode (they leak).
+  // Uses lastCallExportCursor's update timestamp as a heartbeat.
   let lockAcquired = false
   try {
-    const lockResult = await db.$queryRaw<{ pg_try_advisory_lock: boolean }[]>`
-      SELECT pg_try_advisory_lock(${LOCK_KEY})
-    `
-    lockAcquired = lockResult[0]?.pg_try_advisory_lock === true
-    if (!lockAcquired) {
-      console.log('[poll-calls] Another poll run is in progress — exiting cleanly')
+    // Check if any tenant was polled in the last 45 seconds
+    const recentPoll = await db.tenant.findFirst({
+      where: {
+        ghlAccessToken: { not: null },
+        ghlLocationId: { not: null },
+        updatedAt: { gte: new Date(Date.now() - 45_000) },
+        lastCallExportCursor: { not: null },
+      },
+      select: { id: true, updatedAt: true },
+    })
+    if (recentPoll) {
+      console.log(`[poll-calls] Recent poll detected (${recentPoll.updatedAt.toISOString()}) — exiting cleanly`)
       process.exit(0)
     }
+    lockAcquired = true
     console.log('[poll-calls] Lock acquired — starting poll')
   } catch (err) {
-    console.error('[poll-calls] Failed to acquire advisory lock:', err instanceof Error ? err.message : err)
+    console.error('[poll-calls] Failed to check lock:', err instanceof Error ? err.message : err)
     process.exit(1)
   }
 
@@ -601,10 +608,7 @@ async function pollCalls() {
     process.exit(1)
   } finally {
     if (lockAcquired) {
-      await db.$queryRaw`SELECT pg_advisory_unlock(${LOCK_KEY})`.catch(err =>
-        console.error('[poll-calls] Failed to release advisory lock:', err instanceof Error ? err.message : err)
-      )
-      console.log('[poll-calls] Lock released')
+      console.log('[poll-calls] Complete — lock expires in 45s')
     }
   }
 
