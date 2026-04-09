@@ -161,21 +161,31 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     }
   }
 
-  // Automation dedup: GHL workflow automations send a duplicate webhook with a synthetic
-  // wf_ ID for the same call that the OAuth webhook already delivered. Block only these.
-  // Real double-dials (separate dials to same person) always have real GHL message IDs.
-  if (dedupeId.startsWith('wf_') && msg.contactId) {
-    const oauthVersion = await db.call.findFirst({
+  // Cross-source dedup: OAuth and automation webhooks fire for the same call with different IDs.
+  // One has a real GHL ID, the other has a wf_ prefix. Either can arrive first.
+  // If one source already created this call within 10s, upgrade that row instead of creating a dupe.
+  // 10s is safe — real double-dials are deliberate redials with 10+ seconds between them.
+  if (msg.contactId) {
+    const isAutomation = dedupeId.startsWith('wf_')
+    const otherSourcePrefix = isAutomation ? 'webhook_oauth' : 'webhook_automation'
+    const crossSourceDupe = await db.call.findFirst({
       where: {
         tenantId,
         ghlContactId: msg.contactId,
-        createdAt: { gte: new Date(Date.now() - 60_000) },
-        source: { startsWith: 'webhook_oauth' },
+        createdAt: { gte: new Date(Date.now() - 10_000) },
+        source: { startsWith: otherSourcePrefix },
       },
-      select: { id: true },
+      select: { id: true, durationSeconds: true, gradingStatus: true, ghlCallId: true },
     })
-    if (oauthVersion) {
-      console.log(`[GHL Webhook] Automation duplicate (${dedupeId}) — OAuth version already exists, skipping`)
+    if (crossSourceDupe) {
+      // Upgrade the existing row if we have better data (e.g. real duration)
+      const updates: Record<string, unknown> = {}
+      if (callDuration > 0 && !crossSourceDupe.durationSeconds) updates.durationSeconds = callDuration
+      if (!isAutomation && crossSourceDupe.ghlCallId?.startsWith('wf_')) updates.ghlCallId = dedupeId // prefer real ID
+      if (Object.keys(updates).length > 0) {
+        await db.call.update({ where: { id: crossSourceDupe.id }, data: updates })
+      }
+      console.log(`[GHL Webhook] Cross-source duplicate for ${msg.contactId} — merged into ${crossSourceDupe.id}`)
       return
     }
   }
@@ -351,15 +361,17 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     select: { id: true, durationSeconds: true, gradingStatus: true, recordingUrl: true },
   })
 
-  // If not found by messageId AND this is an automation webhook (wf_ ID),
-  // check by contactId + recent time to dedup against OAuth version.
-  // Do NOT do this for real GHL message IDs — those are real double-dials.
-  if (!existing && callData.contactId && messageId.startsWith('wf_')) {
+  // Cross-source dedup: if the other source (OAuth or automation) already created
+  // this call within 10s, treat as same call. Either can arrive first.
+  if (!existing && callData.contactId) {
+    const isAutomation = messageId.startsWith('wf_')
+    const otherSourcePrefix = isAutomation ? 'webhook_oauth' : 'webhook_automation'
     existing = await db.call.findFirst({
       where: {
         tenantId,
         ghlContactId: callData.contactId,
-        calledAt: { gte: new Date(Date.now() - 60_000) }, // within last 60s
+        calledAt: { gte: new Date(Date.now() - 10_000) },
+        source: { startsWith: otherSourcePrefix },
       },
       orderBy: { calledAt: 'desc' },
       select: { id: true, durationSeconds: true, gradingStatus: true, recordingUrl: true },
