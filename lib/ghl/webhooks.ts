@@ -172,7 +172,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       where: {
         tenantId,
         ghlContactId: msg.contactId,
-        createdAt: { gte: new Date(Date.now() - 10_000) },
+        createdAt: { gte: new Date(Date.now() - 30_000) },
         source: { startsWith: otherSourcePrefix },
       },
       select: { id: true, durationSeconds: true, gradingStatus: true, ghlCallId: true },
@@ -370,7 +370,7 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       where: {
         tenantId,
         ghlContactId: callData.contactId,
-        calledAt: { gte: new Date(Date.now() - 10_000) },
+        calledAt: { gte: new Date(Date.now() - 30_000) },
         source: { startsWith: otherSourcePrefix },
       },
       orderBy: { calledAt: 'desc' },

@@ -29,6 +29,17 @@ async function processJobs() {
 
     for (const job of jobs) {
       stats.processed++
+
+      // Skip automation webhook jobs — wf_ IDs are synthetic and GHL rejects them
+      if (job.ghlMessageId.startsWith('wf_')) {
+        await db.recordingFetchJob.update({
+          where: { id: job.id },
+          data: { status: 'FAILED', lastError: 'Automation webhook ID (wf_) — not a real GHL message' },
+        })
+        stats.failed++
+        continue
+      }
+
       try {
         // fetchAndStoreRecording already handles token refresh, FAILED→PENDING flip, and re-grading (from Fix #1)
         await fetchAndStoreRecording(job.callId, job.ghlMessageId)
