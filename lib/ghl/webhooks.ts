@@ -712,6 +712,63 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
   } catch (err) {
     await logFailure(tenantId, 'webhook.stage_update_failed', 'property', err, { contactId: oppData.contactId, stageId })
   }
+
+  // ─── Upsert Seller/Buyer by pipeline ───────────────────────────────────
+  // When an opportunity is created or moves stages, ensure the contact
+  // exists as a Seller (sales pipeline) or Buyer (buyers pipeline).
+  if (oppData.contactId && oppData.pipelineId) {
+    try {
+      const { getSellerBuyerPipelineIds } = await import('@/lib/ghl/pipelines')
+      const { sellerPipelineId, buyerPipelineId } = await getSellerBuyerPipelineIds(tenantId)
+      const ghl = await getGHLClient(tenantId)
+      const contact = await ghl.getContact(oppData.contactId)
+      const contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim()
+      if (!contactName) return
+
+      const normalizePhone = (p: string | null | undefined): string | null => {
+        if (!p) return null
+        const d = p.replace(/\D/g, '')
+        if (d.length === 10) return `+1${d}`
+        if (d.length === 11 && d.startsWith('1')) return `+${d}`
+        return p
+      }
+      const phone = normalizePhone(contact.phone)
+
+      if (oppData.pipelineId === sellerPipelineId) {
+        const existing = await db.seller.findFirst({
+          where: {
+            tenantId,
+            OR: [{ ghlContactId: oppData.contactId }, ...(phone ? [{ phone }] : [])],
+          },
+          select: { id: true },
+        })
+        if (existing) {
+          await db.seller.update({ where: { id: existing.id }, data: { name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+        } else {
+          await db.seller.create({ data: { tenantId, name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+        }
+        console.log(`[GHL Webhook] Seller upserted from opportunity: ${contactName}`)
+      }
+
+      if (oppData.pipelineId === buyerPipelineId) {
+        const existing = await db.buyer.findFirst({
+          where: {
+            tenantId,
+            OR: [{ ghlContactId: oppData.contactId }, ...(phone ? [{ phone }] : [])],
+          },
+          select: { id: true },
+        })
+        if (existing) {
+          await db.buyer.update({ where: { id: existing.id }, data: { name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+        } else {
+          await db.buyer.create({ data: { tenantId, name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+        }
+        console.log(`[GHL Webhook] Buyer upserted from opportunity: ${contactName}`)
+      }
+    } catch (err) {
+      await logFailure(tenantId, 'webhook.contact_upsert_from_opp_failed', 'seller', err, { contactId: oppData.contactId })
+    }
+  }
 }
 
 // ─── Task Completed → Sync to our DB ───────────────────────────────────────

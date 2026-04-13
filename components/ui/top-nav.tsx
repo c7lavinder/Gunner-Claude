@@ -66,6 +66,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     { href: `${base}/tasks`, label: 'Day Hub', always: true },
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as never },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
+    { href: `${base}/contacts`, label: 'Contacts', adminOnly: true },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
   ]
 
@@ -112,6 +113,9 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
                 {item.label}
                 {item.label === 'Training' && reviewCount > 0 && (
                   <span className="ml-1 text-[9px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{reviewCount}</span>
+                )}
+                {item.label === 'Contacts' && (
+                  <span className="ml-1 text-[8px] font-semibold text-[#7F77DD] bg-purple-100 px-1 py-0.5 rounded">Beta</span>
                 )}
                 {active && (
                   <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gunner-red rounded-full" />
