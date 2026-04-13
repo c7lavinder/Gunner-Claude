@@ -28,89 +28,20 @@ interface BuyerRow {
   id: string
   name: string
   phone: string | null
-  secondaryPhone: string | null
-  mobilePhone: string | null
   email: string | null
-  secondaryEmail: string | null
   company: string | null
-  website: string | null
   ghlContactId: string | null
-  mailingAddress: string | null
   mailingCity: string | null
   mailingState: string | null
-  mailingZip: string | null
-  preferredContactMethod: string | null
-  bestTimeToContact: string | null
-  doNotContact: boolean
   isActive: boolean
   isVip: boolean
   isGhost: boolean
-  // Buybox — Geographic
+  doNotContact: boolean
   primaryMarkets: string[]
-  countiesOfInterest: string[]
-  citiesOfInterest: string[]
-  zipCodesOfInterest: string[]
-  urbanRuralPreference: string | null
-  isNationalBuyer: boolean
-  isOutOfStateBuyer: boolean
-  // Buybox — Property
-  propertyTypes: string[]
-  minBeds: number | null
-  maxBeds: number | null
-  minSqft: number | null
-  maxSqft: number | null
-  yearBuiltMin: number | null
-  maxRepairBudget: string | null
-  tenantOccupiedOk: boolean | null
-  prefersVacant: boolean | null
-  // Buybox — Financial
-  minPurchasePrice: string | null
-  maxPurchasePrice: string | null
-  minArv: string | null
-  maxArv: string | null
-  maxArvPercent: number | null
-  fundingType: string | null
-  proofOfFundsOnFile: boolean
-  pofAmount: string | null
-  hardMoneyLender: string | null
-  typicalCloseTimelineDays: number | null
-  canCloseAsIs: boolean | null
-  doubleCloseOk: boolean | null
-  subjectToOk: boolean | null
-  // Activity
-  buyerGrade: string | null
-  buyerSinceDate: string | null
-  totalDealsClosedWithUs: number
-  totalDealsClosedOverall: number | null
-  averageCloseTimelineDays: number | null
-  blastResponseRate: number | null
-  offerRate: number | null
-  closeRate: number | null
-  dealsFallenThrough: number
-  reliabilityScore: number | null
-  // Communication
-  preferredBlastChannel: string | null
-  unsubscribedFromEmail: boolean
-  unsubscribedFromText: boolean
-  lastCommunicationDate: string | null
-  engagementTrend: string | null
-  // Relationship
-  howAcquired: string | null
-  referralSourceName: string | null
-  relationshipStrength: string | null
-  hasExclusivityAgreement: boolean
-  // Strategy
-  exitStrategies: string[]
-  offMarketOnly: boolean
-  creativeFinanceInterest: boolean
-  isSubjectToBuyer: boolean
-  // AI
-  buyerScore: number | null
-  ghostRiskScore: number | null
-  // General
   tags: string[]
-  internalNotes: string | null
-  priorityFlag: boolean
+  customFields: Record<string, unknown>
+  buyerGrade: string | null
+  totalDealsClosedWithUs: number
   createdAt: string
 }
 
@@ -147,18 +78,6 @@ const GRADE_COLORS: Record<string, string> = {
   B: 'bg-blue-100 text-blue-700',
   C: 'bg-amber-100 text-amber-700',
   D: 'bg-red-100 text-red-700',
-}
-
-function fmt$(val: string | null): string {
-  if (!val) return '\u2014'
-  const n = parseFloat(val)
-  if (isNaN(n)) return val
-  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
-}
-
-function fmtPct(val: number | null): string {
-  if (val === null || val === undefined) return '\u2014'
-  return `${(val * 100).toFixed(0)}%`
 }
 
 function relTime(dateStr: string | null): string {
@@ -360,101 +279,88 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-[11px] whitespace-nowrap">
+                <table className="w-full text-[11px]">
                   <thead>
                     <tr className="border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAFA]">
-                      {/* Identity */}
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider sticky left-0 bg-[#FAFAFA] z-10">Name</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Company</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">City/State</th>
-                      {/* Status */}
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Location</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Source</th>
-                      {/* Buybox — Geo */}
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Tier</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Markets</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Counties</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Zips</th>
-                      {/* Buybox — Property */}
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Prop Types</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Beds</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Sqft</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Max Repair</th>
-                      {/* Buybox — Financial */}
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Price Range</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">ARV Range</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Max ARV%</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Funding</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">POF</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Close Days</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Dbl Close</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Sub-To</th>
-                      {/* Performance */}
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Buybox</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Verified Funding</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Max Price</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Response Speed</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Deals</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Blast Resp</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Offer Rate</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Close Rate</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Reliability</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Fallen Thru</th>
-                      {/* Strategy */}
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Exit Strategy</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Creative</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Off-Market</th>
-                      {/* Communication */}
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Pref Channel</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Trend</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Last Contact</th>
-                      {/* Meta */}
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Notes</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Tags</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">GHL</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredBuyers.map(b => {
+                      const cf = b.customFields ?? {}
                       const markets = Array.isArray(b.primaryMarkets) ? b.primaryMarkets : []
-                      const counties = Array.isArray(b.countiesOfInterest) ? b.countiesOfInterest : []
-                      const zips = Array.isArray(b.zipCodesOfInterest) ? b.zipCodesOfInterest : []
-                      const propTypes = Array.isArray(b.propertyTypes) ? b.propertyTypes : []
-                      const exits = Array.isArray(b.exitStrategies) ? b.exitStrategies : []
                       const tags = Array.isArray(b.tags) ? b.tags : []
+                      const tier = (cf.tier as string) ?? null
+                      const buybox = (cf.buybox as string) ?? null
+                      const verifiedFunding = cf.verifiedFunding === true
+                      const maxBuyPrice = cf.maxBuyPrice as number | null
+                      const responseSpeed = (cf.responseSpeed as string) ?? null
+                      const secondaryMarkets = Array.isArray(cf.secondaryMarkets) ? cf.secondaryMarkets as string[] : []
+                      const allMarkets = [...markets, ...secondaryMarkets]
 
-                      const Pills = ({ items, color = 'bg-blue-50 text-blue-600', max = 2 }: { items: string[]; color?: string; max?: number }) => (
-                        items.length > 0 ? (
-                          <div className="flex items-center gap-1">
-                            {items.slice(0, max).map((m, i) => (
-                              <span key={i} className={`px-1.5 py-0.5 rounded text-[8px] font-medium ${color}`}>{String(m)}</span>
-                            ))}
-                            {items.length > max && <span className="text-[9px] text-gray-400">+{items.length - max}</span>}
-                          </div>
-                        ) : <span className="text-gray-300">{'\u2014'}</span>
-                      )
-
-                      const yn = (v: boolean | null) => v === true ? 'Yes' : v === false ? 'No' : '\u2014'
+                      const TIER_COLORS: Record<string, string> = {
+                        'a': 'bg-green-100 text-green-700',
+                        'b': 'bg-blue-100 text-blue-700',
+                        'c': 'bg-amber-100 text-amber-700',
+                        'd': 'bg-red-100 text-red-700',
+                        'unqualified': 'bg-gray-100 text-gray-500',
+                      }
 
                       return (
                         <tr key={b.id} className="border-b border-[rgba(0,0,0,0.04)] hover:bg-gray-50/50 transition-colors">
-                          {/* Identity */}
-                          <td className="px-3 py-2.5 sticky left-0 bg-white z-10">
-                            <div className="flex items-center gap-1.5">
-                              {b.priorityFlag && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
-                              <Link href={`/${tenantSlug}/buyers/${b.id}`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
-                                {b.name}
-                              </Link>
-                            </div>
+                          <td className="px-3 py-2.5">
+                            <Link href={`/${tenantSlug}/buyers/${b.id}`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
+                              {b.name}
+                            </Link>
                           </td>
                           <td className="px-3 py-2.5 text-gray-600">{b.company ?? '\u2014'}</td>
                           <td className="px-3 py-2.5 text-gray-600">{formatPhone(b.phone)}</td>
                           <td className="px-3 py-2.5 text-gray-600 max-w-[160px] truncate">{b.email ?? '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-600">{b.mailingCity && b.mailingState ? `${b.mailingCity}, ${b.mailingState}` : b.mailingState ?? '\u2014'}</td>
-                          {/* Status */}
+                          <td className="px-3 py-2.5 text-gray-600">{b.mailingCity && b.mailingState ? `${b.mailingCity}, ${b.mailingState}` : '\u2014'}</td>
                           <td className="px-3 py-2.5">
                             {b.buyerGrade ? (
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${GRADE_COLORS[b.buyerGrade] ?? 'bg-gray-100 text-gray-600'}`}>{b.buyerGrade}</span>
                             ) : '\u2014'}
                           </td>
+                          <td className="px-3 py-2.5">
+                            {tier ? (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold capitalize ${TIER_COLORS[tier.toLowerCase()] ?? 'bg-gray-100 text-gray-600'}`}>{tier}</span>
+                            ) : '\u2014'}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {allMarkets.length > 0 ? (
+                              <div className="flex items-center gap-1">
+                                {allMarkets.slice(0, 2).map((m, i) => (
+                                  <span key={i} className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-blue-50 text-blue-600">{String(m)}</span>
+                                ))}
+                                {allMarkets.length > 2 && <span className="text-[9px] text-gray-400">+{allMarkets.length - 2}</span>}
+                              </div>
+                            ) : <span className="text-gray-300">{'\u2014'}</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-600 max-w-[180px] truncate text-[10px]">{buybox ?? '\u2014'}</td>
+                          <td className="px-3 py-2.5">
+                            {verifiedFunding ? (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-green-100 text-green-700">Verified</span>
+                            ) : <span className="text-gray-300">{'\u2014'}</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-700">{maxBuyPrice ? `$${maxBuyPrice.toLocaleString()}` : '\u2014'}</td>
+                          <td className="px-3 py-2.5 text-gray-600">{responseSpeed ?? '\u2014'}</td>
+                          <td className="px-3 py-2.5 text-gray-700 font-medium">{b.totalDealsClosedWithUs}</td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1">
                               {b.isGhost && <span className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-gray-200 text-gray-600">Ghost</span>}
@@ -464,55 +370,16 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
                               {b.isActive && !b.isGhost && !b.isVip && !b.doNotContact && <span className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-green-50 text-green-600">Active</span>}
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-gray-600 text-[10px]">{b.howAcquired ?? '\u2014'}</td>
-                          {/* Buybox — Geo */}
-                          <td className="px-3 py-2.5"><Pills items={markets} /></td>
-                          <td className="px-3 py-2.5"><Pills items={counties} color="bg-amber-50 text-amber-600" /></td>
-                          <td className="px-3 py-2.5"><Pills items={zips} color="bg-gray-100 text-gray-600" max={3} /></td>
-                          {/* Buybox — Property */}
-                          <td className="px-3 py-2.5"><Pills items={propTypes} color="bg-violet-50 text-violet-600" /></td>
-                          <td className="px-3 py-2.5 text-gray-700">{b.minBeds != null || b.maxBeds != null ? `${b.minBeds ?? '?'}-${b.maxBeds ?? '?'}` : '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{b.minSqft != null || b.maxSqft != null ? `${b.minSqft?.toLocaleString() ?? '?'}-${b.maxSqft?.toLocaleString() ?? '?'}` : '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{fmt$(b.maxRepairBudget)}</td>
-                          {/* Buybox — Financial */}
-                          <td className="px-3 py-2.5 text-gray-700">{b.minPurchasePrice || b.maxPurchasePrice ? `${fmt$(b.minPurchasePrice)}-${fmt$(b.maxPurchasePrice)}` : '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{b.minArv || b.maxArv ? `${fmt$(b.minArv)}-${fmt$(b.maxArv)}` : '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{b.maxArvPercent != null ? `${b.maxArvPercent}%` : '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-600">{b.fundingType ?? '\u2014'}</td>
                           <td className="px-3 py-2.5">
-                            {b.proofOfFundsOnFile ? (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-green-100 text-green-700">{b.pofAmount ? fmt$(b.pofAmount) : 'Yes'}</span>
+                            {tags.length > 0 ? (
+                              <div className="flex items-center gap-1">
+                                {tags.slice(0, 3).map((t, i) => (
+                                  <span key={i} className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-gray-100 text-gray-600">{String(t)}</span>
+                                ))}
+                                {tags.length > 3 && <span className="text-[9px] text-gray-400">+{tags.length - 3}</span>}
+                              </div>
                             ) : <span className="text-gray-300">{'\u2014'}</span>}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-700">{b.typicalCloseTimelineDays != null ? `${b.typicalCloseTimelineDays}d` : '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{yn(b.doubleCloseOk)}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{yn(b.subjectToOk)}</td>
-                          {/* Performance */}
-                          <td className="px-3 py-2.5 text-gray-700 font-medium">{b.totalDealsClosedWithUs}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{fmtPct(b.blastResponseRate)}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{fmtPct(b.offerRate)}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{fmtPct(b.closeRate)}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{b.reliabilityScore != null ? b.reliabilityScore.toFixed(1) : '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{b.dealsFallenThrough || '\u2014'}</td>
-                          {/* Strategy */}
-                          <td className="px-3 py-2.5"><Pills items={exits} color="bg-indigo-50 text-indigo-600" /></td>
-                          <td className="px-3 py-2.5 text-gray-700">{yn(b.creativeFinanceInterest)}</td>
-                          <td className="px-3 py-2.5 text-gray-700">{yn(b.offMarketOnly)}</td>
-                          {/* Communication */}
-                          <td className="px-3 py-2.5 text-gray-600">{b.preferredBlastChannel ?? '\u2014'}</td>
-                          <td className="px-3 py-2.5">
-                            {b.engagementTrend ? (
-                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-semibold ${
-                                b.engagementTrend === 'improving' ? 'bg-green-100 text-green-700' :
-                                b.engagementTrend === 'declining' ? 'bg-red-100 text-red-700' :
-                                'bg-gray-100 text-gray-600'
-                              }`}>{b.engagementTrend}</span>
-                            ) : '\u2014'}
-                          </td>
-                          <td className="px-3 py-2.5 text-gray-500 text-[10px]">{relTime(b.lastCommunicationDate)}</td>
-                          {/* Meta */}
-                          <td className="px-3 py-2.5 text-gray-500 max-w-[200px] truncate text-[10px]">{b.internalNotes ?? '\u2014'}</td>
-                          <td className="px-3 py-2.5"><Pills items={tags} color="bg-gray-100 text-gray-600" max={3} /></td>
                           <td className="px-3 py-2.5">
                             {b.ghlContactId ? (
                               <a href={`https://app.gohighlevel.com/contacts/detail/${b.ghlContactId}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
