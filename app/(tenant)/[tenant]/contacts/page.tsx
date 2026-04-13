@@ -31,12 +31,45 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
     db.buyer.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: 500,
       select: {
-        id: true, name: true, phone: true, email: true, company: true, ghlContactId: true,
-        buyerGrade: true, isVip: true, isGhost: true, isActive: true,
-        primaryMarkets: true, totalDealsClosedWithUs: true,
-        blastResponseRate: true, lastCommunicationDate: true,
+        id: true, name: true, phone: true, secondaryPhone: true, mobilePhone: true,
+        email: true, secondaryEmail: true, company: true, website: true, ghlContactId: true,
+        mailingAddress: true, mailingCity: true, mailingState: true, mailingZip: true,
+        preferredContactMethod: true, bestTimeToContact: true,
+        doNotContact: true, isActive: true, isVip: true, isGhost: true,
+        // Buybox — Geographic
+        primaryMarkets: true, countiesOfInterest: true, citiesOfInterest: true,
+        zipCodesOfInterest: true, urbanRuralPreference: true,
+        isNationalBuyer: true, isOutOfStateBuyer: true,
+        // Buybox — Property
+        propertyTypes: true, minBeds: true, maxBeds: true, minSqft: true, maxSqft: true,
+        yearBuiltMin: true, maxRepairBudget: true,
+        tenantOccupiedOk: true, prefersVacant: true,
+        // Buybox — Financial
+        minPurchasePrice: true, maxPurchasePrice: true, minArv: true, maxArv: true,
+        maxArvPercent: true, fundingType: true, proofOfFundsOnFile: true,
+        pofAmount: true, hardMoneyLender: true,
+        typicalCloseTimelineDays: true, canCloseAsIs: true,
+        doubleCloseOk: true, subjectToOk: true,
+        // Activity
+        buyerGrade: true, buyerSinceDate: true, totalDealsClosedWithUs: true,
+        totalDealsClosedOverall: true, averageCloseTimelineDays: true,
+        blastResponseRate: true, offerRate: true, closeRate: true,
+        dealsFallenThrough: true, reliabilityScore: true,
+        // Communication
+        preferredBlastChannel: true, unsubscribedFromEmail: true, unsubscribedFromText: true,
+        lastCommunicationDate: true, engagementTrend: true,
+        // Relationship
+        howAcquired: true, referralSourceName: true, relationshipStrength: true,
+        hasExclusivityAgreement: true,
+        // Strategy
+        exitStrategies: true, offMarketOnly: true, creativeFinanceInterest: true,
+        isSubjectToBuyer: true,
+        // AI
+        buyerScore: true, ghostRiskScore: true,
+        // General
+        tags: true, internalNotes: true, priorityFlag: true,
         createdAt: true,
       },
     }),
@@ -53,6 +86,19 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
       buyers={buyers.map(b => ({
         ...b,
         primaryMarkets: b.primaryMarkets as string[],
+        countiesOfInterest: b.countiesOfInterest as string[],
+        citiesOfInterest: b.citiesOfInterest as string[],
+        zipCodesOfInterest: b.zipCodesOfInterest as string[],
+        propertyTypes: b.propertyTypes as string[],
+        exitStrategies: b.exitStrategies as string[],
+        tags: b.tags as string[],
+        maxRepairBudget: b.maxRepairBudget?.toString() ?? null,
+        minPurchasePrice: b.minPurchasePrice?.toString() ?? null,
+        maxPurchasePrice: b.maxPurchasePrice?.toString() ?? null,
+        minArv: b.minArv?.toString() ?? null,
+        maxArv: b.maxArv?.toString() ?? null,
+        pofAmount: b.pofAmount?.toString() ?? null,
+        buyerSinceDate: b.buyerSinceDate?.toISOString() ?? null,
         lastCommunicationDate: b.lastCommunicationDate?.toISOString() ?? null,
         createdAt: b.createdAt.toISOString(),
       }))}
