@@ -16,11 +16,11 @@ export const POST = withTenant<Params>(async (_req, ctx) => {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const { sellerPipelineId, buyerPipelineId } = await getSellerBuyerPipelineIds(ctx.tenantId)
+  const { sellerPipelineId, buyerPipelineId, pipelineNames } = await getSellerBuyerPipelineIds(ctx.tenantId)
 
   if (!sellerPipelineId && !buyerPipelineId) {
     return NextResponse.json({
-      error: 'No "Sales Process" or "Buyers Pipeline" found in GHL. Check pipeline names.',
+      error: `No seller or buyer pipeline found. GHL pipelines: ${pipelineNames.join(', ')}`,
     }, { status: 400 })
   }
 
@@ -208,7 +208,14 @@ export const POST = withTenant<Params>(async (_req, ctx) => {
   }
 
   console.log(`[Sync] Complete: ${JSON.stringify({ ...counts, errors: counts.errors.length })}`)
-  return NextResponse.json(counts)
+  return NextResponse.json({
+    ...counts,
+    pipelines: {
+      all: pipelineNames,
+      sellerMatch: sellerPipelineId ? pipelineNames.find(n => n.toLowerCase().includes('sales') || n.toLowerCase().includes('seller')) : null,
+      buyerMatch: buyerPipelineId ? pipelineNames.find(n => n.toLowerCase().includes('buyer') || n.toLowerCase().includes('disposition')) : null,
+    },
+  })
 })
 
 function normalizePhone(phone: string | null | undefined): string | null {

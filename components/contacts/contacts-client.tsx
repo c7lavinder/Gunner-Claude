@@ -106,7 +106,12 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
       const res = await fetch(`/api/${tenantSlug}/contacts/sync-from-ghl`, { method: 'POST' })
       const data = await res.json()
       if (res.ok) {
-        setSyncResult(`Sync complete — ${data.sellersCreated + data.sellersUpdated} sellers, ${data.buyersCreated + data.buyersUpdated} buyers imported`)
+        const sellerTotal = (data.sellersCreated ?? 0) + (data.sellersUpdated ?? 0)
+        const buyerTotal = (data.buyersCreated ?? 0) + (data.buyersUpdated ?? 0)
+        const pipelines = data.pipelines
+        let msg = `Sync complete — ${sellerTotal} sellers, ${buyerTotal} buyers`
+        if (pipelines?.all) msg += ` | Pipelines: ${pipelines.all.join(', ')}`
+        setSyncResult(msg)
       } else {
         setSyncResult(`Error: ${data.error ?? 'Sync failed'}`)
       }
