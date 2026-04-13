@@ -20,7 +20,7 @@ export async function GET() {
 
 async function processJobs() {
   const startedAt = Date.now()
-  const stats = { processed: 0, succeeded: 0, retried: 0, failed: 0, cleaned: 0 }
+  const stats = { processed: 0, succeeded: 0, retried: 0, failed: 0, cleaned: 0, stalePendingRecovered: 0, transcriptionRetries: 0 }
 
   try {
     // 1. Pick up due jobs
@@ -75,6 +75,13 @@ async function processJobs() {
           })
           stats.failed++
           console.warn(`[recording-jobs] Job ${job.id} permanently failed after ${newAttempts} attempts: ${errMessage}`)
+
+          // FIX: When recording fetch exhausts retries, trigger gradeCall so the call
+          // gets properly handled (grades with whatever data is available, or marks FAILED)
+          // instead of staying stuck in PENDING forever.
+          gradeCall(job.callId).catch(gradeErr =>
+            logFailure(job.tenantId, 'recording_jobs.final_grade_failed', 'call', gradeErr, { callId: job.callId, jobId: job.id })
+          )
         } else {
           // Exponential backoff: 1m, 2m, 4m, 8m, 16m
           const backoffMs = Math.pow(2, newAttempts - 1) * 60_000
@@ -98,8 +105,68 @@ async function processJobs() {
     })
     stats.cleaned = cleaned.count
 
+    // 3. Recovery sweep: stale PENDING calls with no active recording fetch job
+    // These calls were created but gradeCall() was never triggered — either the
+    // recording fetch job failed silently, was never created, or the job completed
+    // without triggering grading. Trigger gradeCall() so they get properly handled.
+    try {
+      const activeJobCallIds = await db.recordingFetchJob.findMany({
+        where: { status: 'PENDING' },
+        select: { callId: true },
+      })
+      const activeCallIdSet = new Set(activeJobCallIds.map(j => j.callId))
+
+      const stalePending = await db.call.findMany({
+        where: {
+          gradingStatus: 'PENDING',
+          createdAt: { lt: new Date(Date.now() - 15 * 60 * 1000) }, // >15 min old
+        },
+        select: { id: true, tenantId: true },
+        take: 10,
+      })
+
+      for (const call of stalePending) {
+        if (activeCallIdSet.has(call.id)) continue // recording job still in flight
+        gradeCall(call.id).catch(err =>
+          logFailure(call.tenantId, 'recording_jobs.stale_pending_grade_failed', 'call', err, { callId: call.id })
+        )
+        stats.stalePendingRecovered++
+      }
+    } catch (err) {
+      console.error('[recording-jobs] Stale PENDING sweep error:', err instanceof Error ? err.message : err)
+    }
+
+    // 4. Recovery sweep: retry failed transcriptions
+    // Calls with a recording URL but no transcript that failed with "Transcription failed"
+    // Only retry calls created in last 4 hours, with a 15-minute cooldown between retries.
+    try {
+      // Only retry calls whose aiSummary says "will retry automatically" (retry count < max).
+      // Once retries exhaust, grading.ts changes the message to "manual reprocess required"
+      // and this sweep stops matching.
+      const failedTranscriptions = await db.call.findMany({
+        where: {
+          gradingStatus: 'FAILED',
+          recordingUrl: { not: null },
+          transcript: { equals: null },
+          aiSummary: { contains: 'will retry automatically' },
+          createdAt: { gt: new Date(Date.now() - 4 * 60 * 60 * 1000) }, // within last 4 hours
+        },
+        select: { id: true, tenantId: true },
+        take: 5,
+      })
+
+      for (const call of failedTranscriptions) {
+        gradeCall(call.id).catch(err =>
+          logFailure(call.tenantId, 'recording_jobs.transcription_retry_failed', 'call', err, { callId: call.id })
+        )
+        stats.transcriptionRetries++
+      }
+    } catch (err) {
+      console.error('[recording-jobs] Transcription retry sweep error:', err instanceof Error ? err.message : err)
+    }
+
     const durationMs = Date.now() - startedAt
-    console.log(`[recording-jobs] Done in ${durationMs}ms — processed=${stats.processed} succeeded=${stats.succeeded} retried=${stats.retried} failed=${stats.failed} cleaned=${stats.cleaned}`)
+    console.log(`[recording-jobs] Done in ${durationMs}ms — processed=${stats.processed} succeeded=${stats.succeeded} retried=${stats.retried} failed=${stats.failed} cleaned=${stats.cleaned} stalePending=${stats.stalePendingRecovered} transRetries=${stats.transcriptionRetries}`)
 
     return NextResponse.json({ ok: true, durationMs, ...stats })
   } catch (err) {

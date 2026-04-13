@@ -98,18 +98,28 @@ export async function gradeCall(callId: string): Promise<void> {
     }
 
     // If no transcript available (either no recording, or transcription failed), don't grade.
-    // Mark as FAILED so the retry loop in poll-calls picks it up later.
+    // Mark as FAILED so the recovery sweep in process-recording-jobs picks it up.
+    // aiSummary prefix "Transcription failed" is the marker the sweep uses to find retryable calls.
     if (!transcript) {
+      const currentSummary = (await db.call.findUnique({ where: { id: callId }, select: { aiSummary: true } }))?.aiSummary
+      const retryNum = currentSummary?.startsWith('Transcription failed')
+        ? (parseInt(currentSummary.match(/retry (\d+)/)?.[1] ?? '0', 10) + 1)
+        : 1
+      const maxRetries = 3
+      const exhausted = retryNum > maxRetries
+
       await db.call.update({
         where: { id: callId },
         data: {
           gradingStatus: 'FAILED',
           aiSummary: call.recordingUrl
-            ? 'Transcription failed — will retry automatically.'
+            ? exhausted
+              ? `Transcription failed after ${maxRetries} retries — manual reprocess required.`
+              : `Transcription failed (retry ${retryNum}/${maxRetries}) — will retry automatically.`
             : 'No recording or transcript available — awaiting recording from GHL.',
         },
       })
-      console.log(`[Call Grading] No transcript for call ${callId} (${duration}s, recording: ${call.recordingUrl ? 'yes' : 'no'}) — will retry`)
+      console.log(`[Call Grading] No transcript for call ${callId} (${duration}s, recording: ${call.recordingUrl ? 'yes' : 'no'}, retry: ${retryNum}/${maxRetries}) — ${exhausted ? 'retries exhausted' : 'will retry'}`)
       return
     }
 
