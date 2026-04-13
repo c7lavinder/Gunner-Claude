@@ -1,15 +1,16 @@
 // lib/ghl/webhooks.ts
 // Processes all incoming GHL webhook events
 // Called by: app/api/webhooks/ghl/route.ts
+//
+// IMPORTANT: Webhooks only SAVE data. They do NOT grade, transcribe, or fetch recordings.
+// All grading decisions happen in the unified cron: app/api/cron/process-recording-jobs/route.ts
 
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
-import { gradeCall } from '@/lib/ai/grading'
 import { getGHLClient } from '@/lib/ghl/client'
 import { createPropertyFromContact } from '@/lib/properties'
 import { awardTaskXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
-import { fetchAndStoreRecording } from '@/lib/ghl/fetch-recording'
 import { logFailure } from '@/lib/audit'
 
 export type GHLWebhookEvent = {
@@ -133,14 +134,9 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
 
   console.log(`[GHL Webhook] Call detected: messageId=${messageId}, duration=${callDuration}s, status=${callStatus}, direction=${direction}, contact=${msg.contactId}, recording=${!!recordingUrl}`)
 
-  // Classify call: no-answer dials still get a Call row (never dropped)
-  // IMPORTANT: GHL sends callDuration=null for completed calls at webhook time.
-  // Only classify as no-answer when we have PROOF: explicit fail status AND no completed signal.
+  // Save call status info for the cron processor to use later.
+  // We do NOT classify or skip here — the cron decides SKIPPED vs grade.
   const hasFailStatus = ['failed', 'busy', 'no-answer', 'canceled'].includes(callStatus)
-  const hasCompletedStatus = ['completed', 'answered', 'connected'].includes(callStatus)
-  const isNoAnswer = hasFailStatus && !hasCompletedStatus
-  const isShortCall =
-    !isNoAnswer && !hasCompletedStatus && callDuration > 0 && callDuration < 45 && !recordingUrl
 
   // Deduplicate by messageId or altId
   const dedupeId = msg.altId || messageId
@@ -213,7 +209,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     } catch (err) { await logFailure(tenantId, 'webhook.contact_lookup_failed', 'call', err, { contactId: msg.contactId, handler: 'handleMessage' }) }
   }
 
-  // Create call record — recording URL comes from attachments in webhook
+  // Create call record — always PENDING. The cron processor decides SKIPPED vs grade.
   const call = await db.call.create({
     data: {
       tenantId,
@@ -225,20 +221,15 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       propertyId: property?.id,
       recordingUrl: recordingUrl ?? undefined,
       direction: direction as 'INBOUND' | 'OUTBOUND',
-      durationSeconds: callDuration > 0 ? callDuration : undefined, // 0 = not yet known, poll-calls fills it later
+      durationSeconds: callDuration > 0 ? callDuration : undefined,
       calledAt: msg.dateAdded ? new Date(msg.dateAdded) : new Date(),
       source: webhookSource === 'automation' ? 'webhook_automation' : 'webhook_oauth',
-      gradingStatus: isNoAnswer || isShortCall ? 'FAILED' : 'PENDING',
-      callResult: isNoAnswer ? 'no_answer' : isShortCall ? 'short_call' : undefined,
-      aiSummary: isNoAnswer
-        ? 'No answer — call not connected.'
-        : isShortCall
-        ? `Short call (${callDuration}s) — not graded.`
-        : undefined,
+      gradingStatus: 'PENDING',
+      callResult: hasFailStatus ? 'no_answer' : undefined,
     },
   })
 
-  console.log(`[GHL Webhook] Created call ${call.id}: recording=${!!recordingUrl}, contact=${contactName}, noAnswer=${isNoAnswer}, shortCall=${isShortCall}`)
+  console.log(`[GHL Webhook] Created call ${call.id}: recording=${!!recordingUrl}, contact=${contactName}, duration=${callDuration}s`)
 
   // Auto-add team member when a call is tied to a property
   if (property?.id && user?.id) {
@@ -268,43 +259,8 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     },
   })
 
-  // Only attempt transcription/recording fetch for substantive calls
-  if (!isNoAnswer && !isShortCall) {
-    if (recordingUrl) {
-      // Transcribe and grade immediately (recording is already available)
-      import('../ai/transcribe').then(({ transcribeRecording }) =>
-        transcribeRecording(recordingUrl!).then(async trans => {
-          if (trans.status === 'success' && trans.transcript) {
-            await db.call.update({
-              where: { id: call.id },
-              data: {
-                transcript: trans.transcript,
-                ...(trans.duration ? { durationSeconds: trans.duration } : {}),
-              },
-            })
-            console.log(`[GHL Webhook] Transcribed call ${call.id}: ${trans.transcript.length} chars`)
-          }
-          // Grade with or without transcript
-          return gradeCall(call.id)
-        }).catch(async err => {
-          await logFailure(tenantId, 'webhook.transcribe_grade_failed', 'call', err, { callId: call.id, recordingUrl })
-          // Grade without transcript as fallback
-          gradeCall(call.id).catch(err2 => logFailure(tenantId, 'webhook.call_grade_fallback_failed', 'call', err2, { callId: call.id }))
-        })
-      ).catch(err => logFailure(tenantId, 'webhook.transcribe_import_failed', 'call', err, { callId: call.id }))
-    } else if (!recordingUrl && messageId) {
-      // No recording URL in the payload — enqueue a durable job to fetch it later
-      console.log(`[GHL Webhook] Enqueuing recording fetch job for call ${call.id} (msg: ${messageId})`)
-      await db.recordingFetchJob.create({
-        data: {
-          tenantId,
-          callId: call.id,
-          ghlMessageId: messageId,
-          nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
-        },
-      }).catch(err => logFailure(tenantId, 'webhook.recording_enqueue_failed', 'recording_fetch_job', err, { callId: call.id, messageId }))
-    }
-  }
+  // Grading, transcription, and recording fetch all happen in the cron processor.
+  // The webhook's job is done — call is saved as PENDING.
 }
 
 // Extract recording URL from webhook payload
@@ -379,29 +335,20 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
   }
 
   if (existing) {
-    // Update existing call with any new data we have (duration, recording)
+    // Update existing call with any new data — cron processor will handle grading
     const updates: Record<string, unknown> = {}
     if (existing.durationSeconds === null && duration > 0) updates.durationSeconds = duration
     if (!existing.recordingUrl) {
       const rec = extractRecordingUrl(callData)
       if (rec) updates.recordingUrl = rec
     }
-
+    // If we got new data and call isn't already graded, bump back to PENDING so cron picks it up
     if (Object.keys(updates).length > 0) {
-      const finalDuration = (updates.durationSeconds ?? existing.durationSeconds ?? 0) as number
-      const isGradeable = finalDuration >= 45
-      await db.call.update({
-        where: { id: existing.id },
-        data: {
-          ...updates,
-          ...(isGradeable && existing.gradingStatus !== 'COMPLETED' ? { gradingStatus: 'PENDING' } : {}),
-          ...(!isGradeable && finalDuration > 0 ? { gradingStatus: 'FAILED', callResult: 'short_call', aiSummary: `Short call (${finalDuration}s) — not graded.` } : {}),
-        },
-      })
-      if (isGradeable && existing.gradingStatus !== 'COMPLETED') {
-        console.log(`[GHL Webhook] Updated call ${existing.id} with duration=${finalDuration}s, triggering grade`)
-        gradeCall(existing.id).catch(err => logFailure(tenantId, 'webhook.existing_call_grade_failed', 'call', err, { callId: existing.id, duration: finalDuration }))
+      if (existing.gradingStatus !== 'COMPLETED' && existing.gradingStatus !== 'PROCESSING') {
+        updates.gradingStatus = 'PENDING'
       }
+      await db.call.update({ where: { id: existing.id }, data: updates })
+      console.log(`[GHL Webhook] Updated call ${existing.id}: ${JSON.stringify(updates)}`)
     }
     return
   }
@@ -428,16 +375,15 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     }
   }
 
-  // At webhook time, GHL sends duration=0 for connected calls (call hasn't ended yet).
-  // Don't pre-judge — create as PENDING. Recording fetch + polling cron will upgrade later.
-  // Only mark FAILED if we have PROOF: explicit no-answer status, or non-zero duration < 45s.
+  // Save call status hint from GHL (cron uses this for SKIPPED routing)
   const explicitNoAnswer = duration === 0 && ['no-answer', 'busy', 'failed', 'canceled'].includes(
     String(callData.callStatus ?? callData.status ?? '').toLowerCase()
   )
-  const provenShortCall = duration > 0 && duration < 45
-  const isFailed = explicitNoAnswer || provenShortCall
 
-  // Save ALL calls — only mark FAILED when we have proof
+  // Save recording URL if present in the webhook payload
+  const recordingUrl = extractRecordingUrl(callData)
+
+  // Always PENDING — the cron processor makes all grading decisions
   const call = await db.call.create({
     data: {
       tenantId,
@@ -450,37 +396,14 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
       durationSeconds: duration > 0 ? duration : undefined,
       calledAt: new Date(),
       source: webhookSource === 'automation' ? 'webhook_automation' : 'webhook_oauth',
-      gradingStatus: isFailed ? 'FAILED' : 'PENDING',
-      callResult: explicitNoAnswer ? 'no_answer' : provenShortCall ? 'short_call' : undefined,
-      ...(isFailed ? {
-        aiSummary: explicitNoAnswer ? 'No answer.' : `Short call (${duration}s) — not graded.`
-      } : {}),
+      recordingUrl: recordingUrl ?? undefined,
+      gradingStatus: 'PENDING',
+      callResult: explicitNoAnswer ? 'no_answer' : undefined,
     },
   })
 
-  console.log(`[GHL Webhook] Created call ${call.id}: ${contactName ?? 'Unknown'} | ${duration}s | ${isFailed ? 'FAILED' : 'PENDING'}`)
-
-  // Fetch recording + grade for any call that isn't proven failed
-  if (!isFailed) {
-    const recordingUrl = extractRecordingUrl(callData)
-    if (recordingUrl) {
-      await db.call.update({ where: { id: call.id }, data: { recordingUrl } })
-    }
-
-    if (!recordingUrl) {
-      console.log(`[GHL Webhook] Enqueuing recording fetch job for call ${call.id} (msg: ${messageId})`)
-      await db.recordingFetchJob.create({
-        data: {
-          tenantId,
-          callId: call.id,
-          ghlMessageId: messageId,
-          nextAttemptAt: new Date(Date.now() + 90_000), // first attempt in 90s
-        },
-      }).catch(err => logFailure(tenantId, 'webhook.recording_enqueue_failed', 'recording_fetch_job', err, { callId: call.id, messageId }))
-    } else {
-      gradeCall(call.id).catch(err => logFailure(tenantId, 'webhook.call_grade_failed', 'call', err, { callId: call.id }))
-    }
-  }
+  console.log(`[GHL Webhook] Created call ${call.id}: ${contactName ?? 'Unknown'} | ${duration}s | recording=${!!recordingUrl}`)
+  // Grading, transcription, recording fetch → handled by cron processor
 }
 
 // ─── Opportunity Stage Changed → Maybe create property ─────────────────────

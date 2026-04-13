@@ -231,6 +231,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
       if (c.gradingStatus === 'COMPLETED') gr++
       else if (c.gradingStatus === 'PENDING') pe++
       else if (c.gradingStatus === 'FAILED') fa++
+      else if (c.gradingStatus === 'SKIPPED') na++ // count SKIPPED with no_answer bucket
     }
     hourly = Object.entries(hours).map(([h, counts]) => ({ hour: Number(h), ...counts }))
     dialBreakdown = { total: allCallsToday.length, webhookCount: wc, pollCount: pc, noAnswer: na, graded: gr, pending: pe, failed: fa }

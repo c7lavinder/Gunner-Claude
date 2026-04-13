@@ -153,7 +153,7 @@ export default async function HealthPage({ params }: { params: { tenant: string 
               <td className="px-4 py-2 text-txt-primary font-medium">{c.contactName ?? '—'}</td>
               <td className="px-4 py-2 text-txt-secondary">{c.assignedTo?.name ?? '—'}</td>
               <td className="px-4 py-2 text-txt-secondary">{c.durationSeconds != null ? `${c.durationSeconds}s` : '—'}</td>
-              <td className="px-4 py-2"><Badge status={c.gradingStatus === 'COMPLETED' ? 'graded' : c.callResult === 'short_call' ? 'short' : c.callResult === 'no_answer' ? 'no_answer' : 'other'} /></td>
+              <td className="px-4 py-2"><Badge status={c.gradingStatus === 'COMPLETED' ? 'graded' : c.gradingStatus === 'SKIPPED' ? 'short' : c.callResult === 'no_answer' ? 'no_answer' : c.callResult === 'short_call' ? 'short' : 'other'} /></td>
               <td className="px-4 py-2 text-center">{c.recordingUrl ? '🎙' : '—'}</td>
             </tr>
           ))}

@@ -724,6 +724,7 @@ enum GradingStatus {
   PROCESSING
   COMPLETED
   FAILED
+  SKIPPED
 
   @@map("grading_status")
 }

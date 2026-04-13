@@ -43,7 +43,7 @@ export const PROPERTY_STATUS_LABELS: Record<PropertyStatus, string> = {
 
 // ─── Call types ───────────────────────────────────────────────────────────────
 
-export type GradingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+export type GradingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKIPPED'
 export type CallDirection = 'INBOUND' | 'OUTBOUND'
 
 // ─── Task types ───────────────────────────────────────────────────────────────

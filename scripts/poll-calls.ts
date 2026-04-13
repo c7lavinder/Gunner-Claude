@@ -12,10 +12,8 @@
 
 import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
-import { gradeCall } from '../lib/ai/grading'
 import { syncGHLUsers } from '../lib/ghl/sync-users'
 import { fetchCallRecording } from '../lib/ghl/fetch-recording'
-import { transcribeRecording } from '../lib/ai/transcribe'
 import { logFailure } from '../lib/audit'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
@@ -81,25 +79,15 @@ async function processCallMessage(
       const updates: Record<string, unknown> = {}
       if (needsDurationUpdate) updates.durationSeconds = freshDuration
       if (needsRecordingUpdate) updates.recordingUrl = freshRecording
-      if (wasFalselyFailed) {
+      // Bump back to PENDING so the cron processor picks it up for grading
+      if (wasFalselyFailed || needsRecordingUpdate) {
         updates.gradingStatus = 'PENDING'
         updates.callResult = null
         updates.aiSummary = null
       }
       await db.call.update({ where: { id: existing.id }, data: updates })
       console.log(`[poll-calls] UPGRADED call ${existing.id}: duration=${freshDuration}s, hasRec=${!!freshRecording}, wasFailed=${wasFalselyFailed}`)
-
-      if (wasFalselyFailed || needsRecordingUpdate) {
-        if (freshRecording) {
-          const trans = await transcribeRecording(freshRecording, accessToken)
-          if (trans.status === 'success' && trans.transcript) {
-            await db.call.update({ where: { id: existing.id }, data: { transcript: trans.transcript } })
-          }
-        }
-        await gradeCall(existing.id).catch(err =>
-          logFailure(tenantId, 'poll.regrade_failed', 'call', err, { callId: existing.id, dedupeId })
-        )
-      }
+      // Grading handled by cron processor — not inline here
       return 'new'
     }
     return 'deduped'
@@ -155,7 +143,7 @@ async function processCallMessage(
   const isNoAnswer = duration === 0 && !hasRecording
   const msgDate = new Date(String(msg.dateAdded ?? Date.now()))
 
-  // Create call record
+  // Create call record — always PENDING. Cron processor handles all grading decisions.
   const call = await db.call.create({
     data: {
       tenantId,
@@ -170,9 +158,8 @@ async function processCallMessage(
       calledAt: msgDate,
       source: 'poll',
       recordingUrl: hasRecording ? rec.recordingUrl : undefined,
-      callResult: isNoAnswer ? 'no_answer' : isGradeable ? undefined : 'short_call',
-      gradingStatus: isGradeable ? 'PENDING' : 'FAILED',
-      ...(isGradeable ? {} : { aiSummary: isNoAnswer ? 'No answer — zero duration.' : `Short call (${duration}s) — not graded.` }),
+      callResult: isNoAnswer ? 'no_answer' : undefined,
+      gradingStatus: 'PENDING',
     },
   })
 
@@ -185,30 +172,8 @@ async function processCallMessage(
     }).catch(err => logFailure(tenantId, 'poll.team_member_upsert_failed', 'property_team_member', err, { propertyId: property?.id, userId: user?.id }))
   }
 
-  // Transcription and grading handled separately by process-recording-jobs.ts
-  // poll-calls.ts only imports call records — nothing else.
-  if (isGradeable && !hasRecording && messageId) {
-    // No recording in payload — enqueue a job to fetch it (if not already queued)
-    const existingJob = await db.recordingFetchJob.findFirst({
-      where: { callId: call.id },
-      select: { id: true },
-    })
-    if (!existingJob) {
-      await db.recordingFetchJob.create({
-        data: {
-          tenantId,
-          callId: call.id,
-          ghlMessageId: messageId,
-          nextAttemptAt: new Date(Date.now() + 60_000), // first attempt in 60s
-        },
-      }).catch(err =>
-        console.error(`[poll-calls] Failed to create recording job for ${call.id}:`, err)
-      )
-    }
-  }
-  // If hasRecording — process-recording-jobs.ts will find it via the PENDING gradingStatus
-
-  console.log(`[poll-calls] New: ${contactName ?? 'Unknown'} | ${duration > 0 ? `${duration}s` : '0s'} | rec=${hasRecording} | ${isGradeable ? 'GRADE' : 'dial'}`)
+  // Grading, transcription, recording fetch → all handled by cron processor
+  console.log(`[poll-calls] New: ${contactName ?? 'Unknown'} | ${duration > 0 ? `${duration}s` : '0s'} | rec=${hasRecording}`)
   return 'new'
 }
 

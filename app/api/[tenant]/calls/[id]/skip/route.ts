@@ -12,7 +12,7 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
 
   await db.call.update({
     where: { id: params.id },
-    data: { gradingStatus: 'FAILED', aiSummary: 'Manually skipped' },
+    data: { gradingStatus: 'SKIPPED', aiSummary: 'Manually skipped.' },
   })
 
   return NextResponse.json({ success: true })

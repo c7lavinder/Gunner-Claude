@@ -432,7 +432,7 @@ function DialsTable({ rows, expandedRow, onToggle }: { rows: Record<string, unkn
         let statusLabel = 'Unknown'
         let statusClass = 'text-txt-muted'
         if (status === 'COMPLETED' && score !== null) { statusLabel = 'Graded \u2705'; statusClass = 'text-green-600' }
-        else if (result === 'no_answer') { statusLabel = 'No Answer'; statusClass = 'text-txt-muted' }
+        else if (status === 'SKIPPED' || result === 'no_answer') { statusLabel = 'Skipped'; statusClass = 'text-txt-muted' }
         else if (status === 'FAILED') { statusLabel = 'Failed \u274c'; statusClass = 'text-red-600' }
         else if (status === 'PENDING') { statusLabel = 'Pending \u23f3'; statusClass = 'text-blue-600' }
         else if (dur && dur < 45) { statusLabel = 'Too Short'; statusClass = 'text-txt-muted' }

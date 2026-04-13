@@ -99,23 +99,7 @@ export async function fetchAndStoreRecording(
       data: { recordingUrl: result.recordingUrl },
     })
     console.log(`[Recording] Stored recording for call ${callId}: ${result.recordingUrl.slice(0, 80)}`)
-
-    // Re-evaluate: if this call was falsely marked FAILED at webhook time, flip back to PENDING
-    const updated = await db.call.findUnique({
-      where: { id: callId },
-      select: { gradingStatus: true, callResult: true },
-    })
-    if (updated?.gradingStatus === 'FAILED' && (updated.callResult === 'no_answer' || updated.callResult === 'short_call')) {
-      await db.call.update({
-        where: { id: callId },
-        data: { gradingStatus: 'PENDING', callResult: null, aiSummary: null },
-      })
-      console.log(`[Recording] Flipped call ${callId} from FAILED back to PENDING — recording arrived`)
-      const { gradeCall } = await import('@/lib/ai/grading')
-      gradeCall(callId).catch(err =>
-        logFailure(call.tenantId, 'recording.regrade_failed', 'call', err, { callId, messageId })
-      )
-    }
+    // Grading decisions are handled by the cron processor — not here.
   } else {
     console.warn(`[Recording] Failed for call ${callId} (msg: ${messageId}): ${result.error ?? result.status}`)
     throw new Error(result.error ?? `Recording fetch ${result.status}`)

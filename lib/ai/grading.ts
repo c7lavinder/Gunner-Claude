@@ -48,35 +48,10 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const duration = call.durationSeconds ?? 0
 
-    // Duration routing: <45s and 0s caught here
+    // Duration routing is handled by the cron processor (SKIPPED for <45s).
+    // gradeCall() focuses on transcription + AI grading.
     // 45-90s: summary only (no rubric score)
     // 90s+: full grading with rubric score
-
-    // Zero duration = no answer (GHL sends 0 when unanswered)
-    if (duration === 0) {
-      await db.call.update({
-        where: { id: callId },
-        data: {
-          gradingStatus: 'FAILED',
-          aiSummary: 'No answer — zero duration.',
-          callResult: 'no_answer',
-        },
-      })
-      return
-    }
-
-    // Under 45s = dial attempt or no answer — do not grade
-    if (duration < 45) {
-      await db.call.update({
-        where: { id: callId },
-        data: {
-          gradingStatus: 'FAILED',
-          aiSummary: 'No answer — call under 45 seconds.',
-          callResult: 'no_answer',
-        },
-      })
-      return
-    }
 
     // Transcribe if recording URL exists
     let transcript = call.transcript
@@ -97,29 +72,19 @@ export async function gradeCall(callId: string): Promise<void> {
       }
     }
 
-    // If no transcript available (either no recording, or transcription failed), don't grade.
-    // Mark as FAILED so the recovery sweep in process-recording-jobs picks it up.
-    // aiSummary prefix "Transcription failed" is the marker the sweep uses to find retryable calls.
+    // If no transcript available, mark FAILED. The cron processor will retry
+    // by calling gradeCall() again on the next cycle (if recording exists).
     if (!transcript) {
-      const currentSummary = (await db.call.findUnique({ where: { id: callId }, select: { aiSummary: true } }))?.aiSummary
-      const retryNum = currentSummary?.startsWith('Transcription failed')
-        ? (parseInt(currentSummary.match(/retry (\d+)/)?.[1] ?? '0', 10) + 1)
-        : 1
-      const maxRetries = 3
-      const exhausted = retryNum > maxRetries
-
       await db.call.update({
         where: { id: callId },
         data: {
           gradingStatus: 'FAILED',
           aiSummary: call.recordingUrl
-            ? exhausted
-              ? `Transcription failed after ${maxRetries} retries — manual reprocess required.`
-              : `Transcription failed (retry ${retryNum}/${maxRetries}) — will retry automatically.`
-            : 'No recording or transcript available — awaiting recording from GHL.',
+            ? 'Transcription failed — cron will retry.'
+            : 'No recording or transcript available.',
         },
       })
-      console.log(`[Call Grading] No transcript for call ${callId} (${duration}s, recording: ${call.recordingUrl ? 'yes' : 'no'}, retry: ${retryNum}/${maxRetries}) — ${exhausted ? 'retries exhausted' : 'will retry'}`)
+      console.log(`[Call Grading] No transcript for call ${callId} (${duration}s, recording: ${call.recordingUrl ? 'yes' : 'no'})`)
       return
     }
 

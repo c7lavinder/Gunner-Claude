@@ -136,9 +136,9 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
     (c.gradingStatus === 'FAILED' && c.callResult !== 'no_answer')
   )
   const skippedCalls = calls.filter(c =>
-    (c.durationSeconds !== null && c.durationSeconds < 45) ||
+    c.gradingStatus === 'SKIPPED' ||
     c.callResult === 'no_answer' ||
-    (c.gradingStatus === 'FAILED' && c.durationSeconds === 0)
+    (c.durationSeconds !== null && c.durationSeconds < 45 && c.gradingStatus !== 'COMPLETED')
   )
 
   // Apply filters
