@@ -15,7 +15,7 @@ import { fetchCallRecording, fetchAndStoreRecording } from '../lib/ghl/fetch-rec
 import { gradeCall } from '../lib/ai/grading'
 import { logFailure } from '../lib/audit'
 
-const BATCH_SIZE = 20
+const BATCH_SIZE = 50
 const MIN_AGE_MS = 2 * 60 * 1000       // wait 2 min before processing (let GHL settle)
 const RECORDING_TIMEOUT_MS = 2 * 60 * 60 * 1000 // give up on recording after 2 hours
 const MIN_DURATION_FOR_GRADING = 45
