@@ -288,16 +288,12 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
                   <thead>
                     <tr className="border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAFA]">
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Company</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Tier</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Markets</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Buybox</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Verified Funding</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Max Price</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Response Speed</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Deals</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -333,15 +329,8 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
                               {b.name}
                             </Link>
                           </td>
-                          <td className="px-3 py-2.5 text-gray-600">{b.company ?? '\u2014'}</td>
                           <td className="px-3 py-2.5 text-gray-600">{formatPhone(b.phone)}</td>
                           <td className="px-3 py-2.5 text-gray-600 max-w-[160px] truncate">{b.email ?? '\u2014'}</td>
-                          <td className="px-3 py-2.5 text-gray-600">{b.mailingCity && b.mailingState ? `${b.mailingCity}, ${b.mailingState}` : '\u2014'}</td>
-                          <td className="px-3 py-2.5">
-                            {b.buyerGrade ? (
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${GRADE_COLORS[b.buyerGrade] ?? 'bg-gray-100 text-gray-600'}`}>{b.buyerGrade}</span>
-                            ) : '\u2014'}
-                          </td>
                           <td className="px-3 py-2.5">
                             {tier ? (
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold capitalize ${TIER_COLORS[tier.toLowerCase()] ?? 'bg-gray-100 text-gray-600'}`}>{tier}</span>
@@ -363,7 +352,6 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
                               <span className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-green-100 text-green-700">Verified</span>
                             ) : <span className="text-gray-300">{'\u2014'}</span>}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-700">{maxBuyPrice ? `$${maxBuyPrice.toLocaleString()}` : '\u2014'}</td>
                           <td className="px-3 py-2.5 text-gray-600">{responseSpeed ?? '\u2014'}</td>
                           <td className="px-3 py-2.5 text-gray-700 font-medium">{b.totalDealsClosedWithUs}</td>
                           <td className="px-3 py-2.5">
