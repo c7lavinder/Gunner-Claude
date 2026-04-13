@@ -23,7 +23,7 @@ const TIER_MAP: Record<string, string> = {
   'A': 'priority', 'B': 'qualified', 'C': 'jv', 'Cold': 'unqualified',
 }
 
-function parseGHLContact(contact: {
+export function parseGHLContact(contact: {
   id: string; firstName?: string; lastName?: string; phone?: string; email?: string
   city?: string; state?: string; tags?: string[]
   customFields?: Array<{ id: string; value: unknown }>
