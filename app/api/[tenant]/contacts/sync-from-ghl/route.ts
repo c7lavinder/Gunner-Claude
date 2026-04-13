@@ -6,6 +6,7 @@ import { db } from '@/lib/db/client'
 import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 import { getSellerBuyerPipelineIds } from '@/lib/ghl/pipelines'
+import { syncBuyerFromGHL } from '@/lib/buyers/sync'
 import { isRoleAtLeast, type UserRole } from '@/types/roles'
 
 type Params = { tenant: string }
@@ -103,7 +104,7 @@ export const POST = withTenant<Params>(async (_req, ctx) => {
     }
   }
 
-  // Process buyer pipeline
+  // Process buyer pipeline — use syncBuyerFromGHL which parses all GHL custom fields
   if (buyerPipelineId) {
     const opps = await ghl.getAllPipelineOpportunities(buyerPipelineId)
     console.log(`[Sync] Found ${opps.length} buyer pipeline opportunities`)
@@ -118,9 +119,8 @@ export const POST = withTenant<Params>(async (_req, ctx) => {
             const name = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim()
             if (!name) return 'skipped'
 
+            // Check if buyer already exists
             const phone = normalizePhone(contact.phone)
-            const email = contact.email || null
-
             const existing = await db.buyer.findFirst({
               where: {
                 tenantId: ctx.tenantId,
@@ -132,24 +132,20 @@ export const POST = withTenant<Params>(async (_req, ctx) => {
               select: { id: true },
             })
 
-            if (existing) {
-              await db.buyer.update({
-                where: { id: existing.id },
-                data: { name, phone, email, ghlContactId: opp.contactId },
-              })
-              return 'updated'
-            }
-
-            await db.buyer.create({
-              data: {
-                tenantId: ctx.tenantId,
-                name,
-                phone,
-                email,
-                ghlContactId: opp.contactId,
-              },
+            // Use syncBuyerFromGHL which parses tier, buybox, markets, verified funding, etc.
+            await syncBuyerFromGHL(ctx.tenantId, {
+              id: contact.id,
+              firstName: contact.firstName,
+              lastName: contact.lastName,
+              phone: contact.phone,
+              email: contact.email,
+              city: contact.city,
+              state: contact.state,
+              tags: contact.tags ?? [],
+              customFields: contact.customFields ?? [],
             })
-            return 'created'
+
+            return existing ? 'updated' : 'created'
           } catch (err) {
             return `error:${opp.contactId}:${err instanceof Error ? err.message : 'unknown'}`
           }

@@ -200,8 +200,8 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
       </div>
 
       {/* Table */}
-      <div className="max-w-6xl mx-auto px-6 py-5">
-        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="mx-auto px-6 py-5">
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-x-auto">
           {activeTab === 'sellers' ? (
             filteredSellers.length === 0 ? (
               <div className="py-12 text-center">
