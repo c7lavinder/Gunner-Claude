@@ -49,10 +49,10 @@ export async function POST(request: NextRequest) {
       phone: parsed.data.phone ?? null,
       email: parsed.data.email ?? null,
       company: parsed.data.company ?? null,
-      markets: (parsed.data.markets ?? []) as Prisma.InputJsonValue,
-      criteria: (parsed.data.criteria ?? {}) as Prisma.InputJsonValue,
+      primaryMarkets: (parsed.data.markets ?? []) as Prisma.InputJsonValue,
+      customFields: (parsed.data.criteria ?? {}) as Prisma.InputJsonValue,
       tags: (parsed.data.tags ?? []) as Prisma.InputJsonValue,
-      notes: parsed.data.notes ?? null,
+      internalNotes: parsed.data.notes ?? null,
     },
   })
 

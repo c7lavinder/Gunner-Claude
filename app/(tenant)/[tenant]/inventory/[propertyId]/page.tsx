@@ -21,31 +21,71 @@ export default async function PropertyDetailPage({
 
   if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/dashboard`)
 
-  const property = await db.property.findUnique({
-    where: { id: params.propertyId, tenantId },
-    include: {
-      sellers: {
-        include: { seller: true },
-        orderBy: { isPrimary: 'desc' },
-      },
-      assignedTo: { select: { id: true, name: true, role: true } },
-      market: { select: { name: true } },
-      calls: {
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-        select: {
-          id: true, score: true, gradingStatus: true, direction: true,
-          callType: true, durationSeconds: true, calledAt: true, aiSummary: true,
-          assignedTo: { select: { name: true } },
+  let property
+  try {
+    property = await db.property.findUnique({
+      where: { id: params.propertyId, tenantId },
+      select: {
+        id: true, address: true, city: true, state: true, zip: true,
+        status: true, dispoStatus: true, createdAt: true, updatedAt: true,
+        arv: true, askingPrice: true, mao: true, contractPrice: true,
+        assignmentFee: true, offerPrice: true, repairCost: true, wholesalePrice: true,
+        currentOffer: true, highestOffer: true, acceptedPrice: true, finalProfit: true,
+        fieldSources: true, ghlContactId: true, ghlPipelineId: true, ghlPipelineStage: true,
+        assignedToId: true, leadSource: true,
+        beds: true, baths: true, sqft: true, yearBuilt: true, lotSize: true,
+        propertyType: true, occupancy: true, lockboxCode: true,
+        waterType: true, waterNotes: true, sewerType: true, sewerCondition: true, sewerNotes: true,
+        electricType: true, electricNotes: true,
+        projectType: true, propertyMarkets: true,
+        description: true, internalNotes: true,
+        propertyCondition: true, dealIntel: true,
+        lastOfferDate: true, lastContactedDate: true,
+        repairEstimate: true, rentalEstimate: true, neighborhoodSummary: true,
+        zestimate: true, floodZone: true, taxAssessment: true, annualTax: true,
+        deedDate: true, aiEnrichmentStatus: true, aiEnrichmentError: true,
+        dealBlastAskingOverride: true, dealBlastArvOverride: true,
+        dealBlastContractOverride: true, dealBlastAssignmentFeeOverride: true,
+        customFields: true, marketId: true, manualBuyerIds: true,
+        tcpScore: true, tcpFactors: true, tcpUpdatedAt: true,
+        competingOfferCount: true, dealHealthScore: true,
+        zillowData: true, countyData: true, constructionEstimate: true,
+        sellers: {
+          include: {
+            seller: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+                ghlContactId: true,
+              },
+            },
+          },
+          orderBy: { isPrimary: 'desc' },
+        },
+        assignedTo: { select: { id: true, name: true, role: true } },
+        market: { select: { name: true } },
+        calls: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true, score: true, gradingStatus: true, direction: true,
+            callType: true, durationSeconds: true, calledAt: true, aiSummary: true,
+            assignedTo: { select: { name: true } },
+          },
+        },
+        tasks: {
+          where: { status: { in: ['PENDING', 'IN_PROGRESS'] } },
+          orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }],
+          take: 10,
         },
       },
-      tasks: {
-        where: { status: { in: ['PENDING', 'IN_PROGRESS'] } },
-        orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }],
-        take: 10,
-      },
-    },
-  })
+    })
+  } catch (err) {
+    console.error('[PropertyDetail] Prisma query failed:', err instanceof Error ? err.message : err)
+    throw err
+  }
 
   if (!property) notFound()
 
@@ -160,11 +200,8 @@ export default async function PropertyDetailPage({
         marketName: property.market?.name ?? null,
         propertyMarkets: (property.propertyMarkets ?? []) as string[],
         description: property.description, internalNotes: property.internalNotes,
-        // Seller & Deal Intel
-        sellerMotivation: property.sellerMotivation ?? null,
-        sellerTimeline: property.sellerTimeline ?? null,
+        // Deal Intel
         propertyCondition: property.propertyCondition ?? null,
-        sellerAskingReason: property.sellerAskingReason ?? null,
         lastOfferDate: property.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: property.lastContactedDate?.toISOString() ?? null,
         // AI enrichment fields
@@ -172,7 +209,6 @@ export default async function PropertyDetailPage({
         rentalEstimate: property.rentalEstimate?.toString() ?? null,
         neighborhoodSummary: property.neighborhoodSummary ?? null,
         zestimate: property.zestimate?.toString() ?? null,
-        ownerName: property.ownerName ?? null,
         floodZone: property.floodZone ?? null,
         taxAssessment: property.taxAssessment?.toString() ?? null,
         annualTax: property.annualTax?.toString() ?? null,

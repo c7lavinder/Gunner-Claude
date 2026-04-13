@@ -47,7 +47,7 @@ export default async function BuyersPage({ params }: { params: { tenant: string 
         phone: b.phone,
         email: b.email,
         company: b.company,
-        markets: b.markets as string[],
+        markets: b.primaryMarkets as string[],
         tags: b.tags as string[],
         blastCount: b._count.blastRecipients,
       }))}

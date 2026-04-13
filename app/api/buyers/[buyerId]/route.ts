@@ -34,12 +34,12 @@ export async function PATCH(
 
     const { name, phone, email, tier, markets, maxBuyPrice, verifiedFunding, notes } = parsed.data
 
-    // Merge criteria updates
-    const existingCriteria = (buyer.criteria ?? {}) as Record<string, unknown>
-    const updatedCriteria = { ...existingCriteria }
-    if (tier !== undefined) updatedCriteria.tier = tier
-    if (maxBuyPrice !== undefined) updatedCriteria.maxBuyPrice = maxBuyPrice
-    if (verifiedFunding !== undefined) updatedCriteria.verifiedFunding = verifiedFunding
+    // Merge criteria updates into customFields
+    const existingCustomFields = (buyer.customFields ?? {}) as Record<string, unknown>
+    const updatedCustomFields = { ...existingCustomFields }
+    if (tier !== undefined) updatedCustomFields.tier = tier
+    if (maxBuyPrice !== undefined) updatedCustomFields.maxBuyPrice = maxBuyPrice
+    if (verifiedFunding !== undefined) updatedCustomFields.verifiedFunding = verifiedFunding
 
     const updated = await db.buyer.update({
       where: { id: params.buyerId },
@@ -47,9 +47,9 @@ export async function PATCH(
         ...(name !== undefined && { name }),
         ...(phone !== undefined && { phone }),
         ...(email !== undefined && { email }),
-        ...(markets !== undefined && { markets }),
-        ...(notes !== undefined && { notes }),
-        criteria: JSON.parse(JSON.stringify(updatedCriteria)),
+        ...(markets !== undefined && { primaryMarkets: markets }),
+        ...(notes !== undefined && { internalNotes: notes }),
+        customFields: JSON.parse(JSON.stringify(updatedCustomFields)),
       },
     })
 

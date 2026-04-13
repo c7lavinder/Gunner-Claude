@@ -77,7 +77,7 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
       beds: true, baths: true, sqft: true, yearBuilt: true,
       lotSize: true, propertyType: true, occupancy: true,
       description: true,
-      ownerName: true, taxAssessment: true, annualTax: true, deedDate: true,
+      taxAssessment: true, annualTax: true, deedDate: true,
       fieldSources: true, zillowData: true,
     },
   })
@@ -136,9 +136,6 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
   }
 
   // Populate dedicated DB fields from BatchData (instead of only from AI)
-  if (!property.ownerName && result.ownerName) {
-    updateData.ownerName = result.ownerName; fieldSources.ownerName = 'api'
-  }
   if (property.taxAssessment == null && result.taxAssessedValue) {
     updateData.taxAssessment = result.taxAssessedValue; fieldSources.taxAssessment = 'api'
   }

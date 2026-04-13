@@ -63,17 +63,13 @@ const updateSchema = z.object({
   rentalEstimate: z.string().nullable().optional(),
   neighborhoodSummary: z.string().nullable().optional(),
   zestimate: z.string().nullable().optional(),
-  ownerName: z.string().nullable().optional(),
   deedDate: z.string().nullable().optional(),
   taxAssessment: z.string().nullable().optional(),
   annualTax: z.string().nullable().optional(),
   floodZone: z.string().nullable().optional(),
   aiEnrichmentStatus: z.string().nullable().optional(),
-  // Seller & Deal Intel
-  sellerMotivation: z.string().nullable().optional(),
-  sellerTimeline: z.string().nullable().optional(),
+  // Deal Intel
   propertyCondition: z.string().nullable().optional(),
-  sellerAskingReason: z.string().nullable().optional(),
   // Deal Blast overrides
   dealBlastAskingOverride: z.string().nullable().optional(),
   dealBlastArvOverride: z.string().nullable().optional(),
@@ -111,10 +107,10 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     waterType, waterNotes, sewerType, sewerCondition, sewerNotes, electricType, electricNotes,
     description, internalNotes, lastOfferDate, lastContactedDate,
     // AI enrichment fields
-    repairEstimate, rentalEstimate, neighborhoodSummary, zestimate, ownerName, deedDate,
+    repairEstimate, rentalEstimate, neighborhoodSummary, zestimate, deedDate,
     taxAssessment, annualTax, floodZone, aiEnrichmentStatus,
-    // Seller & Deal Intel
-    sellerMotivation, sellerTimeline, propertyCondition, sellerAskingReason,
+    // Deal Intel
+    propertyCondition,
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
     market: marketName,
@@ -187,17 +183,13 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(rentalEstimate !== undefined && { rentalEstimate: rentalEstimate ? parseFloat(rentalEstimate) : null }),
           ...(neighborhoodSummary !== undefined && { neighborhoodSummary }),
           ...(zestimate !== undefined && { zestimate: zestimate ? parseFloat(zestimate) : null }),
-          ...(ownerName !== undefined && { ownerName }),
           ...(deedDate !== undefined && { deedDate: deedDate ? new Date(deedDate) : null }),
           ...(taxAssessment !== undefined && { taxAssessment: taxAssessment ? parseFloat(taxAssessment) : null }),
           ...(annualTax !== undefined && { annualTax: annualTax ? parseFloat(annualTax) : null }),
           ...(floodZone !== undefined && { floodZone }),
           ...(aiEnrichmentStatus !== undefined && { aiEnrichmentStatus }),
-          // Seller & Deal Intel
-          ...(sellerMotivation !== undefined && { sellerMotivation }),
-          ...(sellerTimeline !== undefined && { sellerTimeline }),
+          // Deal Intel
           ...(propertyCondition !== undefined && { propertyCondition }),
-          ...(sellerAskingReason !== undefined && { sellerAskingReason }),
           // Deal Blast overrides
           ...(dealBlastAskingOverride !== undefined && { dealBlastAskingOverride: dealBlastAskingOverride ? parseFloat(dealBlastAskingOverride) : null }),
           ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),
@@ -218,7 +210,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
       if (sellerName !== undefined) {
         const existingSeller = await tx.propertySeller.findFirst({
           where: { propertyId: params.propertyId, isPrimary: true },
-          include: { seller: true },
+          include: { seller: { select: { id: true, name: true, phone: true, email: true } } },
         })
 
         if (existingSeller) {

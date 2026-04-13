@@ -20,7 +20,11 @@ export default async function PropertyEditPage({
     where: { id: params.propertyId, tenantId: session.tenantId },
     include: {
       sellers: {
-        include: { seller: true },
+        include: {
+          seller: {
+            select: { name: true, phone: true, email: true },
+          },
+        },
         where: { isPrimary: true },
         take: 1,
       },

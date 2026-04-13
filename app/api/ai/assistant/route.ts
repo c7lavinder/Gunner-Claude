@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         select: {
           address: true, city: true, state: true, zip: true, status: true, dispoStatus: true,
           askingPrice: true, arv: true, mao: true, currentOffer: true, contractPrice: true,
-          sellerMotivation: true, sellerTimeline: true, propertyCondition: true, dealIntel: true,
+          propertyCondition: true, dealIntel: true,
           propertyMarkets: true, projectType: true, beds: true, baths: true, sqft: true, yearBuilt: true,
           sellers: { select: { seller: { select: { name: true, phone: true } }, role: true } },
           calls: { take: 5, orderBy: { calledAt: 'desc' }, select: { score: true, aiSummary: true, callOutcome: true, calledAt: true, assignedTo: { select: { name: true } } } },
@@ -74,10 +74,10 @@ export async function POST(request: NextRequest) {
 Status: ${property.status}${property.dispoStatus ? ` | Dispo: ${property.dispoStatus}` : ''}
 Pricing: Asking ${property.askingPrice ?? 'N/A'} | ARV ${property.arv ?? 'N/A'} | MAO ${property.mao ?? 'N/A'} | Current Offer ${property.currentOffer ?? 'N/A'} | Contract ${property.contractPrice ?? 'N/A'}
 Details: ${property.beds ?? '?'}bd/${property.baths ?? '?'}ba, ${property.sqft ?? '?'}sqft, built ${property.yearBuilt ?? '?'}
-Motivation: ${property.sellerMotivation ?? 'N/A'} | Timeline: ${property.sellerTimeline ?? 'N/A'} | Condition: ${property.propertyCondition ?? 'N/A'}
-Sellers: ${property.sellers.map(s => `${s.seller.name} (${s.role}) ${s.seller.phone ?? ''}`).join(', ') || 'None linked'}
-Recent Calls: ${property.calls.map(c => `${c.calledAt?.toISOString().slice(0, 10) ?? '?'} by ${c.assignedTo?.name ?? '?'}: Score ${c.score ?? '?'}, ${c.callOutcome ?? 'unknown'} — ${c.aiSummary?.slice(0, 100) ?? 'N/A'}`).join(' | ') || 'None'}
-Open Tasks: ${property.tasks.map(t => `${t.title} (${t.priority}, due ${t.dueAt?.toISOString().slice(0, 10) ?? 'N/A'})`).join(' | ') || 'None'}
+Condition: ${property.propertyCondition ?? 'N/A'}
+Sellers: ${(property.sellers as { seller: { name: string; phone: string | null }; role: string }[]).map(s => `${s.seller.name} (${s.role}) ${s.seller.phone ?? ''}`).join(', ') || 'None linked'}
+Recent Calls: ${(property.calls as { calledAt: Date | null; score: number | null; aiSummary: string | null; callOutcome: string | null; assignedTo: { name: string | null } | null }[]).map(c => `${c.calledAt?.toISOString().slice(0, 10) ?? '?'} by ${c.assignedTo?.name ?? '?'}: Score ${c.score ?? '?'}, ${c.callOutcome ?? 'unknown'} — ${c.aiSummary?.slice(0, 100) ?? 'N/A'}`).join(' | ') || 'None'}
+Open Tasks: ${(property.tasks as { title: string; priority: string; dueAt: Date | null }[]).map(t => `${t.title} (${t.priority}, due ${t.dueAt?.toISOString().slice(0, 10) ?? 'N/A'})`).join(' | ') || 'None'}
 ${property.dealIntel ? `Deal Intel: ${JSON.stringify(property.dealIntel).slice(0, 500)}` : ''}`
       }
     } else if (pageContext?.startsWith('call:')) {

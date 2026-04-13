@@ -274,8 +274,8 @@ export async function GET(
     }
 
     const allBuyers = dbBuyers.map(lb => {
-      const markets = Array.isArray(lb.markets) ? lb.markets as string[] : []
-      const criteria = (lb.criteria ?? {}) as Record<string, unknown>
+      const markets = Array.isArray(lb.primaryMarkets) ? lb.primaryMarkets as string[] : []
+      const criteria = (lb.customFields ?? {}) as Record<string, unknown>
       const tags = Array.isArray(lb.tags) ? lb.tags as string[] : []
       return {
         id: lb.id, name: lb.name, phone: lb.phone ?? '', email: lb.email ?? '',
@@ -288,7 +288,7 @@ export async function GET(
         hasPurchased: (criteria.hasPurchased as boolean) ?? false,
         responseSpeed: (criteria.responseSpeed as string) ?? '',
         maxBuyPrice: (criteria.maxBuyPrice as number) ?? null,
-        buyerNotes: lb.notes ?? '',
+        buyerNotes: lb.internalNotes ?? '',
         tags,
       }
     })
@@ -543,8 +543,8 @@ export async function POST(
         name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
         phone, email: d.email ?? null,
         ghlContactId: contactId,
-        markets: d.markets,
-        criteria: JSON.parse(JSON.stringify({
+        primaryMarkets: d.markets,
+        customFields: JSON.parse(JSON.stringify({
           tier: tierNorm, buybox: d.buybox.join(', '),
           secondaryMarkets: d.secondaryMarket ? [d.secondaryMarket] : [],
           verifiedFunding: d.verifiedFunding ?? false,
@@ -552,14 +552,14 @@ export async function POST(
           responseSpeed: d.responseSpeed ?? '',
         })),
         tags,
-        notes: d.notes ?? null,
+        internalNotes: d.notes ?? null,
         isActive: true,
       },
       update: {
         name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
         phone, email: d.email ?? null,
-        markets: d.markets,
-        criteria: JSON.parse(JSON.stringify({
+        primaryMarkets: d.markets,
+        customFields: JSON.parse(JSON.stringify({
           tier: tierNorm, buybox: d.buybox.join(', '),
           secondaryMarkets: d.secondaryMarket ? [d.secondaryMarket] : [],
           verifiedFunding: d.verifiedFunding ?? false,
@@ -567,7 +567,7 @@ export async function POST(
           responseSpeed: d.responseSpeed ?? '',
         })),
         tags,
-        notes: d.notes ?? null,
+        internalNotes: d.notes ?? null,
         isActive: true,
       },
     }).catch(err => console.error('[Buyers] DB upsert failed:', err))

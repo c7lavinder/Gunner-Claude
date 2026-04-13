@@ -104,7 +104,7 @@ export async function buildGradingContext(params: {
     // Property deal intel
     propertyId ? db.property.findUnique({
       where: { id: propertyId },
-      select: { dealIntel: true, sellerMotivation: true, sellerTimeline: true, propertyCondition: true, sellerAskingReason: true },
+      select: { dealIntel: true, propertyCondition: true },
     }) : null,
 
     // Calibration calls

@@ -20,23 +20,37 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
 
   const canViewAll = hasPermission(role, 'properties.view.all')
 
-  const properties = await db.property.findMany({
-    where: {
-      tenantId,
-      ...(!canViewAll ? { assignedToId: userId } : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 500,
-    include: {
-      sellers: {
-        include: { seller: { select: { id: true, name: true, phone: true, email: true, ghlContactId: true } } },
-        orderBy: { isPrimary: 'desc' },
+  let properties
+  try {
+    properties = await db.property.findMany({
+      where: {
+        tenantId,
+        ...(!canViewAll ? { assignedToId: userId } : {}),
       },
-      assignedTo: { select: { id: true, name: true } },
-      market: { select: { name: true } },
-      _count: { select: { calls: true, tasks: true } },
-    },
-  })
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      select: {
+        id: true, address: true, city: true, state: true, zip: true,
+        status: true, dispoStatus: true, createdAt: true,
+        arv: true, askingPrice: true, mao: true, contractPrice: true,
+        assignmentFee: true, currentOffer: true, highestOffer: true,
+        acceptedPrice: true, finalProfit: true,
+        fieldSources: true, ghlContactId: true, ghlPipelineStage: true,
+        leadSource: true, lastOfferDate: true, lastContactedDate: true,
+        assignedToId: true,
+        sellers: {
+          include: { seller: { select: { id: true, name: true, phone: true, email: true, ghlContactId: true } } },
+          orderBy: { isPrimary: 'desc' },
+        },
+        assignedTo: { select: { id: true, name: true } },
+        market: { select: { name: true } },
+        _count: { select: { calls: true, tasks: true } },
+      },
+    })
+  } catch (err) {
+    console.error('[Inventory] Prisma query failed:', err instanceof Error ? err.message : err)
+    throw err
+  }
 
   // Status counts for filter chips — properties with dispoStatus count in BOTH pipelines
   const statusCounts = properties.reduce<Record<string, number>>((acc, p) => {

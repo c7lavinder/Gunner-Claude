@@ -44,7 +44,7 @@ export async function GET(
 
   const sellers = await db.propertySeller.findMany({
     where: { propertyId: params.propertyId },
-    include: { seller: true },
+    include: { seller: { select: { id: true, name: true, phone: true, email: true, ghlContactId: true } } },
     orderBy: { isPrimary: 'desc' },
   })
 

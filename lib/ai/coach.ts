@@ -170,7 +170,7 @@ export async function getCoachResponse(
       const prop = await db.property.findUnique({
         where: { id: propertyId, tenantId },
         include: {
-          sellers: { include: { seller: true }, where: { isPrimary: true }, take: 1 },
+          sellers: { include: { seller: { select: { name: true, phone: true } } }, where: { isPrimary: true }, take: 1 },
           assignedTo: { select: { name: true } },
           market: { select: { name: true } },
           _count: { select: { calls: true, tasks: true } },

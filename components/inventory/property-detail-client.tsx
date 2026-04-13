@@ -76,14 +76,13 @@ interface PropertyDetail {
   marketName: string | null
   projectType: string[]; propertyMarkets: string[]
   description: string | null; internalNotes: string | null
-  // Seller & Deal Intel
-  sellerMotivation: string | null; sellerTimeline: string | null
-  propertyCondition: string | null; sellerAskingReason: string | null
+  // Deal Intel
+  propertyCondition: string | null
   lastOfferDate: string | null; lastContactedDate: string | null
   // AI enrichment fields
   repairEstimate: string | null; rentalEstimate: string | null
   neighborhoodSummary: string | null; zestimate: string | null
-  ownerName: string | null; floodZone: string | null
+  floodZone: string | null
   taxAssessment: string | null; annualTax: string | null
   aiEnrichmentStatus: string | null
   // Deal Blast overrides
@@ -109,12 +108,12 @@ interface PropertyDetail {
 // Timezone abbreviation for display (e.g. "CST", "EST")
 const TZ_ABBR = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
 
-type TabKey = 'overview' | 'research' | 'buyers' | 'outreach' | 'activity' | 'ai' | 'blast'
+type TabKey = 'overview' | 'data' | 'buyers' | 'outreach' | 'activity' | 'ai' | 'blast'
 
 const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
   { key: 'overview', label: 'Overview',      icon: Home },
   { key: 'activity', label: 'Activity',      icon: Activity },
-  { key: 'research', label: 'Research',      icon: SearchIcon },
+  { key: 'data',     label: 'Data',          icon: SearchIcon },
   { key: 'buyers',   label: 'Buyers',        icon: Users },
   { key: 'outreach', label: 'Outreach',      icon: Send },
   { key: 'blast',    label: 'Deal Blast',    icon: Megaphone },
@@ -138,6 +137,26 @@ export function PropertyDetailClient({
   const [enriching, setEnriching] = useState(false)
   const { toast } = useToast()
   const [actionMsg, setActionMsg] = useState('')
+
+  // Contact suggestion state
+  const [pendingSuggestionCount, setPendingSuggestionCount] = useState(0)
+  const [suggestions, setSuggestions] = useState<Array<{
+    id: string; fieldName: string; fieldLabel: string; targetType: string
+    sellerId: string | null; buyerId: string | null
+    currentValue: unknown; proposedValue: unknown; confidence: number | null
+    evidence: string | null; status: string
+  }>>([])
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/${tenantSlug}/properties/${property.id}/contact-suggestions`)
+      .then(r => r.json())
+      .then(d => {
+        setPendingSuggestionCount(d.total ?? 0)
+        setSuggestions(d.suggestions ?? [])
+      })
+      .catch(() => {})
+  }, [property.id, tenantSlug])
 
   const appStage = STATUS_TO_APP_STAGE[property.status] ?? 'acquisition.new_lead'
   const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
@@ -294,6 +313,11 @@ export function PropertyDetailClient({
                 }`}
               >
                 <Icon size={12} /> {tab.label}
+                {tab.key === 'data' && pendingSuggestionCount > 0 && (
+                  <span className="ml-1.5 bg-[#7F77DD] text-white text-[10px] font-medium rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                    {pendingSuggestionCount}
+                  </span>
+                )}
               </button>
             )
           })}
@@ -304,7 +328,20 @@ export function PropertyDetailClient({
           {activeTab === 'overview' && (
             <OverviewTab property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg} ghlContactId={ghlContactId} projectTypeOptions={projectTypeOptions} />
           )}
-          {activeTab === 'research' && <ResearchTab property={property} />}
+          {activeTab === 'data' && (
+            <div className="space-y-6">
+              {/* ── Contacts + Suggestion Banner ─────────────── */}
+              <DataContactsSection
+                property={property}
+                tenantSlug={tenantSlug}
+                suggestions={suggestions}
+                pendingCount={pendingSuggestionCount}
+                onReview={() => setShowSuggestionModal(true)}
+              />
+              {/* ── Property Data (existing research content) ── */}
+              <ResearchTab property={property} />
+            </div>
+          )}
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'outreach' && <OutreachTab property={property} />}
           {activeTab === 'activity' && <ActivityTab property={property} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} ghlContactId={ghlContactId} />}
@@ -313,6 +350,22 @@ export function PropertyDetailClient({
       </div>
 
       {/* Offers are recorded via Outreach tab */}
+
+      {/* ── Suggestion Review Modal ────────────────── */}
+      {showSuggestionModal && (
+        <SuggestionReviewModal
+          suggestions={suggestions}
+          tenantSlug={tenantSlug}
+          propertyId={property.id}
+          sellers={property.sellers}
+          onClose={() => setShowSuggestionModal(false)}
+          onUpdate={(remaining) => {
+            setSuggestions(remaining)
+            setPendingSuggestionCount(remaining.length)
+            if (remaining.length === 0) setShowSuggestionModal(false)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1886,10 +1939,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
     electricNotes: property.electricNotes,
     description: property.description,
     internalNotes: property.internalNotes,
-    sellerMotivation: property.sellerMotivation,
-    sellerTimeline: property.sellerTimeline,
     propertyCondition: property.propertyCondition,
-    sellerAskingReason: property.sellerAskingReason,
   })
 
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
@@ -2197,7 +2247,226 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   )
 }
 
-// ─── Research Tab ────────────────────────────────────────────────────────────
+// ─── Data Tab — Contacts Section ─────────────────────────────────────────────
+
+interface SuggestionItem {
+  id: string; fieldName: string; fieldLabel: string; targetType: string
+  sellerId: string | null; buyerId: string | null
+  currentValue: unknown; proposedValue: unknown; confidence: number | null
+  evidence: string | null; status: string
+}
+
+function DataContactsSection({
+  property, tenantSlug, suggestions, pendingCount, onReview,
+}: {
+  property: PropertyDetail
+  tenantSlug: string
+  suggestions: SuggestionItem[]
+  pendingCount: number
+  onReview: () => void
+}) {
+  const sellers = property.sellers
+
+  return (
+    <div className="space-y-4">
+      {/* Suggestion Banner */}
+      {pendingCount > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-[#EEEDFE] border border-[#AFA9EC] rounded-[12px]">
+          <div className="flex items-center gap-3">
+            <span className="text-[#7F77DD] text-sm font-bold">✦</span>
+            <div>
+              <p className="text-[12px] font-semibold text-[#5B54B0]">{pendingCount} suggestion{pendingCount !== 1 ? 's' : ''} to approve</p>
+              <p className="text-[10px] text-[#7F77DD]">
+                From calls &middot; {sellers.map(s => s.name).join(', ') || 'Unknown contact'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onReview}
+            className="px-3 py-1.5 bg-[#7F77DD] text-white text-[11px] font-semibold rounded-[8px] hover:bg-[#6B63C9] transition-colors"
+          >
+            Review
+          </button>
+        </div>
+      )}
+
+      {/* Contact Cards */}
+      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+        <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+          <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">
+            Contacts ({sellers.length})
+          </p>
+        </div>
+        <div className="p-3 space-y-2">
+          {sellers.length === 0 ? (
+            <p className="text-[11px] text-gray-400 py-2">No contacts linked</p>
+          ) : (
+            sellers.map(s => {
+              const initials = s.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+              const hasPending = suggestions.some(sg => sg.sellerId === s.id)
+              return (
+                <Link
+                  key={s.id}
+                  href={`/${tenantSlug}/sellers/${s.id}`}
+                  className="flex items-center gap-3 p-2.5 rounded-lg border border-[rgba(0,0,0,0.06)] hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold shrink-0">
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium text-gray-900">{s.name}</span>
+                      <span className="text-[9px] text-gray-500">{s.role}</span>
+                      {hasPending && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
+                    </div>
+                    {s.phone && <span className="text-[10px] text-gray-400">{s.phone}</span>}
+                  </div>
+                  {s.isPrimary && (
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-indigo-100 text-indigo-700">Primary</span>
+                  )}
+                </Link>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Suggestion Review Modal ─────────────────────────────────────────────────
+
+function SuggestionReviewModal({
+  suggestions, tenantSlug, propertyId, sellers, onClose, onUpdate,
+}: {
+  suggestions: SuggestionItem[]
+  tenantSlug: string
+  propertyId: string
+  sellers: PropertyDetail['sellers']
+  onClose: () => void
+  onUpdate: (remaining: SuggestionItem[]) => void
+}) {
+  const [items, setItems] = useState(suggestions)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [processing, setProcessing] = useState<string | null>(null)
+
+  const getContactName = (s: SuggestionItem) => {
+    if (s.sellerId) {
+      const seller = sellers.find(sel => sel.id === s.sellerId)
+      return seller ? `${seller.name} (${seller.role})` : 'Seller'
+    }
+    return s.targetType === 'property' ? 'Property' : 'Buyer'
+  }
+
+  async function handleDecision(id: string, status: 'approved' | 'edited' | 'skipped', finalValue?: unknown) {
+    setProcessing(id)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/properties/${propertyId}/contact-suggestions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decisions: [{ id, status, finalValue }] }),
+      })
+      if (res.ok) {
+        const remaining = items.filter(i => i.id !== id)
+        setItems(remaining)
+        onUpdate(remaining)
+      }
+    } catch { /* silent */ }
+    setProcessing(null)
+    setEditingId(null)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-[16px] w-full max-w-xl max-h-[80vh] flex flex-col" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.06)]">
+          <div>
+            <h2 className="text-[14px] font-bold text-gray-900">{items.length} suggestion{items.length !== 1 ? 's' : ''} to approve</h2>
+            <p className="text-[10px] text-gray-500">Review AI-extracted data from calls</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+        </div>
+
+        {/* Suggestion list */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {items.length === 0 ? (
+            <p className="text-[11px] text-gray-400 text-center py-8">All suggestions reviewed</p>
+          ) : (
+            items.map(s => (
+              <div key={s.id} className="border border-[rgba(0,0,0,0.08)] rounded-[12px] p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-gray-900">{s.fieldLabel}</span>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-semibold bg-purple-100 text-[#7F77DD]">✦ AI</span>
+                </div>
+                <p className="text-[10px] text-gray-500">For: {getContactName(s)}</p>
+                <p className="text-[12px] font-medium text-[#7F77DD]">
+                  Proposed: {String(s.proposedValue ?? '')}
+                </p>
+                {s.evidence && (
+                  <p className="text-[10px] text-gray-400 italic">&ldquo;{s.evidence}&rdquo;</p>
+                )}
+                {s.confidence !== null && (
+                  <p className="text-[9px] text-gray-400">Confidence: {(s.confidence * 100).toFixed(0)}%</p>
+                )}
+
+                {editingId === s.id ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      className="flex-1 text-[11px] px-2 py-1 border border-gray-300 rounded bg-white"
+                      value={editValue}
+                      onChange={e => setEditValue(e.target.value)}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleDecision(s.id, 'edited', editValue)}
+                      disabled={processing === s.id}
+                      className="px-2.5 py-1 bg-green-600 text-white text-[10px] font-semibold rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="px-2.5 py-1 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded hover:bg-gray-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => handleDecision(s.id, 'approved', s.proposedValue)}
+                      disabled={processing === s.id}
+                      className="px-3 py-1 bg-[#7F77DD] text-white text-[10px] font-semibold rounded-[6px] hover:bg-[#6B63C9] disabled:opacity-50"
+                    >
+                      Push
+                    </button>
+                    <button
+                      onClick={() => { setEditingId(s.id); setEditValue(String(s.proposedValue ?? '')) }}
+                      className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-semibold rounded-[6px] hover:bg-amber-200"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDecision(s.id, 'skipped')}
+                      disabled={processing === s.id}
+                      className="px-3 py-1 bg-gray-100 text-gray-500 text-[10px] font-semibold rounded-[6px] hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Research Tab (Property Data Section) ────────────────────────────────────
 
 function ResearchTab({ property }: { property: PropertyDetail }) {
   const [researching, setResearching] = useState(false)
@@ -2604,10 +2873,7 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Seller & Deal Intel</p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
-          <DataCard label="Motivation" value={fmtStr(property.sellerMotivation)} fieldKey="sellerMotivation" />
-          <DataCard label="Timeline" value={fmtStr(property.sellerTimeline)} fieldKey="sellerTimeline" />
           <DataCard label="Condition" value={fmtStr(property.propertyCondition)} fieldKey="propertyCondition" />
-          <DataCard label="Price Reason" value={fmtStr(property.sellerAskingReason)} fieldKey="sellerAskingReason" />
         </div>
       </div>
 

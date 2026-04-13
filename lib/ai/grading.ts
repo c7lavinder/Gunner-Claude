@@ -920,7 +920,7 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
   try {
     const call = await db.call.findUnique({
       where: { id: callId },
-      select: { aiSummary: true, callOutcome: true, callType: true, transcript: true, property: { select: { address: true, sellerMotivation: true, sellerTimeline: true, propertyCondition: true, sellerAskingReason: true } } },
+      select: { aiSummary: true, callOutcome: true, callType: true, transcript: true, property: { select: { address: true, propertyCondition: true } } },
     })
     if (!call) return
 
@@ -947,10 +947,7 @@ Call summary: ${gradingResult.summary}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
 Call type: ${call.callType ?? 'Unknown'}
 Property: ${call.property?.address ?? 'Unknown'}
-Seller Motivation: ${call.property?.sellerMotivation ?? 'Unknown'}
-Seller Timeline: ${call.property?.sellerTimeline ?? 'Unknown'}
 Property Condition: ${call.property?.propertyCondition ?? 'Unknown'}
-Seller Price Reason: ${call.property?.sellerAskingReason ?? 'Unknown'}
 Score: ${gradingResult.overallScore}/100
 Feedback: ${gradingResult.feedback}
 Transcript excerpt: ${transcriptExcerpt}

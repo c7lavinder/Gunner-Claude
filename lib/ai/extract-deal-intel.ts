@@ -14,18 +14,13 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 export async function extractDealIntel(callId: string): Promise<void> {
   const call = await db.call.findUnique({
     where: { id: callId },
-    select: {
-      id: true, transcript: true, aiSummary: true, callOutcome: true, callType: true,
-      durationSeconds: true, direction: true, calledAt: true, score: true,
-      sentiment: true, sellerMotivation: true, contactName: true,
+    include: {
       assignedTo: { select: { id: true, name: true } },
       property: {
         select: {
           id: true, address: true, city: true, state: true, zip: true,
           status: true, askingPrice: true, offerPrice: true, contractPrice: true,
-          sellerMotivation: true, sellerTimeline: true, propertyCondition: true,
-          sellerAskingReason: true, occupancy: true, dealIntel: true,
-          sellerMotivationLevel: true, timelineUrgency: true, decisionMakersConfirmed: true,
+          propertyCondition: true, occupancy: true, dealIntel: true,
           zillowData: true,
         },
       },
@@ -194,10 +189,8 @@ function buildExtractionUserPrompt(
     property: {
       address: string; city: string; state: string; zip: string; status: string
       askingPrice: unknown; offerPrice: unknown; contractPrice: unknown
-      sellerMotivation: string | null; sellerTimeline: string | null
-      propertyCondition: string | null; sellerAskingReason: string | null
-      occupancy: string | null; sellerMotivationLevel: number | null
-      timelineUrgency: string | null; decisionMakersConfirmed: boolean | null
+      propertyCondition: string | null
+      occupancy: string | null
     }
   },
   currentDealIntel: DealIntel,
@@ -223,12 +216,8 @@ function buildExtractionUserPrompt(
 - Asking Price: ${call.property.askingPrice ?? 'Not set'}
 - Offer Price: ${call.property.offerPrice ?? 'Not set'}
 - Contract Price: ${call.property.contractPrice ?? 'Not set'}
-- Seller Motivation (text): ${call.property.sellerMotivation ?? 'Not set'}
-- Seller Motivation Level: ${call.property.sellerMotivationLevel ?? 'Not set'}
-- Timeline: ${call.property.sellerTimeline ?? 'Not set'} (Urgency: ${call.property.timelineUrgency ?? 'Not set'})
 - Condition: ${call.property.propertyCondition ?? 'Not set'}
-- Occupancy: ${call.property.occupancy ?? 'Not set'}
-- Decision Makers Confirmed: ${call.property.decisionMakersConfirmed ?? 'Not set'}`)
+- Occupancy: ${call.property.occupancy ?? 'Not set'}`)
 
   // Include relevant BatchData
   if (Object.keys(batchData).length > 0) {

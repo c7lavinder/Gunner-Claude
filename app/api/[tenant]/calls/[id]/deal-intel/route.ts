@@ -108,16 +108,7 @@ export async function PATCH(
       dealIntel: currentIntel as Prisma.InputJsonValue,
     }
 
-    // Sync queryable columns from dealIntel
-    if (field === 'sellerMotivationLevel' && typeof valueToWrite === 'number') {
-      updateData.sellerMotivationLevel = valueToWrite
-    }
-    if (field === 'sellerTimelineUrgency' && typeof valueToWrite === 'string') {
-      updateData.timelineUrgency = valueToWrite
-    }
-    if (field === 'decisionMakersConfirmed' && typeof valueToWrite === 'boolean') {
-      updateData.decisionMakersConfirmed = valueToWrite
-    }
+    // Sync queryable columns from dealIntel (seller fields moved to Seller model)
     if (field === 'competingOffers' && Array.isArray(valueToWrite)) {
       updateData.competingOfferCount = valueToWrite.length
     }

@@ -34,7 +34,7 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
       property: {
         select: {
           id: true, address: true, ghlContactId: true,
-          sellers: { include: { seller: true }, take: 1 },
+          sellers: { include: { seller: { select: { id: true, name: true, phone: true, ghlContactId: true } } }, take: 1 },
         },
       },
     },
