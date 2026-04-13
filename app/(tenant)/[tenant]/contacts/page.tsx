@@ -18,13 +18,23 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
     db.seller.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: 500,
       select: {
         id: true, name: true, phone: true, email: true, ghlContactId: true,
-        motivationPrimary: true, urgencyLevel: true, leadScore: true,
-        predictedCloseProbability: true, followUpPriority: true,
-        totalCallCount: true, lastContactDate: true,
+        leadSource: true, totalCallCount: true, lastContactDate: true,
         createdAt: true,
+        properties: {
+          take: 1,
+          orderBy: { isPrimary: 'desc' },
+          include: {
+            property: {
+              select: {
+                id: true, address: true, city: true, state: true,
+                market: { select: { name: true } },
+              },
+            },
+          },
+        },
       },
     }),
     db.seller.count({ where: { tenantId } }),
@@ -46,11 +56,18 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
 
   return (
     <ContactsClient
-      sellers={sellers.map(s => ({
-        ...s,
-        lastContactDate: s.lastContactDate?.toISOString() ?? null,
-        createdAt: s.createdAt.toISOString(),
-      }))}
+      sellers={sellers.map(s => {
+        const prop = s.properties[0]?.property ?? null
+        return {
+          id: s.id, name: s.name, phone: s.phone, email: s.email, ghlContactId: s.ghlContactId,
+          leadSource: s.leadSource, totalCallCount: s.totalCallCount,
+          lastContactDate: s.lastContactDate?.toISOString() ?? null,
+          createdAt: s.createdAt.toISOString(),
+          propertyAddress: prop ? `${prop.address}, ${prop.city}, ${prop.state}` : null,
+          propertyId: prop?.id ?? null,
+          market: prop?.market?.name ?? null,
+        }
+      })}
       buyers={buyers.map(b => ({
         ...b,
         primaryMarkets: b.primaryMarkets as string[],

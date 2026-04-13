@@ -14,14 +14,13 @@ interface SellerRow {
   phone: string | null
   email: string | null
   ghlContactId: string | null
-  motivationPrimary: string | null
-  urgencyLevel: string | null
-  leadScore: number | null
-  predictedCloseProbability: number | null
-  followUpPriority: string | null
+  leadSource: string | null
   totalCallCount: number
   lastContactDate: string | null
   createdAt: string
+  propertyAddress: string | null
+  propertyId: string | null
+  market: string | null
 }
 
 interface BuyerRow {
@@ -221,10 +220,9 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Motivation</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Urgency</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Lead Score</th>
-                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Close %</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Property</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Market</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Source</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Calls</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Last Contact</th>
                       <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">GHL</th>
@@ -239,23 +237,20 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
                           </Link>
                         </td>
                         <td className="px-3 py-2.5 text-gray-600">{formatPhone(s.phone)}</td>
-                        <td className="px-3 py-2.5 text-gray-600 max-w-[140px] truncate">{s.email ?? '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-gray-600 max-w-[160px] truncate">{s.email ?? '\u2014'}</td>
                         <td className="px-3 py-2.5">
-                          {s.motivationPrimary ? (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${MOTIVATION_COLORS[s.motivationPrimary] ?? 'bg-gray-100 text-gray-600'}`}>
-                              {s.motivationPrimary.replace(/_/g, ' ')}
-                            </span>
-                          ) : '\u2014'}
+                          {s.propertyId ? (
+                            <Link href={`/${tenantSlug}/inventory/${s.propertyId}`} className="text-gray-900 hover:text-blue-600 hover:underline text-[10px]">
+                              {s.propertyAddress}
+                            </Link>
+                          ) : <span className="text-gray-300">{'\u2014'}</span>}
                         </td>
                         <td className="px-3 py-2.5">
-                          {s.urgencyLevel ? (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${URGENCY_COLORS[s.urgencyLevel] ?? URGENCY_COLORS.unknown}`}>
-                              {s.urgencyLevel}
-                            </span>
-                          ) : '\u2014'}
+                          {s.market ? (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-blue-50 text-blue-600">{s.market}</span>
+                          ) : <span className="text-gray-300">{'\u2014'}</span>}
                         </td>
-                        <td className="px-3 py-2.5 text-gray-700">{s.leadScore !== null ? `${s.leadScore.toFixed(0)}/100` : '\u2014'}</td>
-                        <td className="px-3 py-2.5 text-gray-700">{s.predictedCloseProbability !== null ? `${(s.predictedCloseProbability * 100).toFixed(0)}%` : '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-gray-600 text-[10px]">{s.leadSource ?? '\u2014'}</td>
                         <td className="px-3 py-2.5 text-gray-700">{s.totalCallCount}</td>
                         <td className="px-3 py-2.5 text-gray-500 text-[10px]">{relTime(s.lastContactDate)}</td>
                         <td className="px-3 py-2.5">
