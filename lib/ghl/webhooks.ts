@@ -2,12 +2,11 @@
 // Processes all incoming GHL webhook events
 // Called by: app/api/webhooks/ghl/route.ts
 //
-// Webhooks save data and kick off grading immediately when possible.
-// The cron (process-recording-jobs) is the safety net for anything missed.
+// Webhooks ONLY save data. Grading happens in the cron (process-recording-jobs).
+// One path, one loop, no fragile fire-and-forget chains.
 
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
-import { gradeCall } from '@/lib/ai/grading'
 import { getGHLClient } from '@/lib/ghl/client'
 import { createPropertyFromContact } from '@/lib/properties'
 import { awardTaskXP } from '@/lib/gamification/xp'
@@ -260,13 +259,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     },
   })
 
-  // Grade immediately if we have a recording — don't wait for the cron.
-  // Fire-and-forget: if this fails, the cron picks it up as a safety net.
-  if (recordingUrl && !hasFailStatus) {
-    gradeCall(call.id).catch(err =>
-      logFailure(tenantId, 'webhook.immediate_grade_failed', 'call', err, { callId: call.id })
-    )
-  }
+  // Cron processes this call within ~30 seconds. One path, no fragile chains.
 }
 
 // Extract recording URL from webhook payload
@@ -409,13 +402,7 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
   })
 
   console.log(`[GHL Webhook] Created call ${call.id}: ${contactName ?? 'Unknown'} | ${duration}s | recording=${!!recordingUrl}`)
-
-  // Grade immediately if we have a recording — don't wait for the cron.
-  if (recordingUrl && !explicitNoAnswer) {
-    gradeCall(call.id).catch(err =>
-      logFailure(tenantId, 'webhook.immediate_grade_failed', 'call', err, { callId: call.id })
-    )
-  }
+  // Cron processes this call within ~30 seconds. One path, no fragile chains.
 }
 
 // ─── Opportunity Stage Changed → Maybe create property ─────────────────────
