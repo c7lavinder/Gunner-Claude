@@ -13,9 +13,9 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url)
-  const type = url.searchParams.get('type') // filter by type
-  const status = url.searchParams.get('status') // filter by status
-  const search = url.searchParams.get('search') // search input/output
+  const type = url.searchParams.get('type')
+  const status = url.searchParams.get('status')
+  const search = url.searchParams.get('search')
   const limit = parseInt(url.searchParams.get('limit') ?? '50')
   const offset = parseInt(url.searchParams.get('offset') ?? '0')
 
@@ -28,6 +28,13 @@ export async function GET(req: Request) {
       { outputSummary: { contains: search, mode: 'insensitive' } },
     ]
   }
+
+  // Fetch user names for display
+  const users = await db.user.findMany({
+    where: { tenantId: session.tenantId },
+    select: { id: true, name: true },
+  })
+  const userNames = new Map(users.map(u => [u.id, u.name]))
 
   const [logs, total, stats] = await Promise.all([
     db.aiLog.findMany({
@@ -43,7 +50,6 @@ export async function GET(req: Request) {
       },
     }),
     db.aiLog.count({ where: where as Parameters<typeof db.aiLog.count>[0] extends { where?: infer W } ? W : never }),
-    // Stats
     Promise.all([
       db.aiLog.count({ where: { tenantId: session.tenantId, createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
       db.aiLog.count({ where: { tenantId: session.tenantId, status: 'error', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } } }),
@@ -54,7 +60,7 @@ export async function GET(req: Request) {
   const [todayCount, weekErrors, weekTotal] = stats
 
   return NextResponse.json({
-    logs,
+    logs: logs.map(l => ({ ...l, userName: l.userId ? userNames.get(l.userId) ?? null : 'System' })),
     total,
     stats: {
       todayCount,
