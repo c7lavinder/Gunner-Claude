@@ -123,6 +123,7 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     || !!(msg.callDuration || msg.callStatus || msg.meta?.call)
 
   if (!isCall) return // skip SMS, email, chat
+  if (!msg.contactId) return // no contact = junk event, don't create a call record
 
   // Extract call metadata
   const callDuration = msg.callDuration ?? msg.meta?.call?.duration ?? 0
@@ -303,6 +304,7 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
 
   const messageId = callData.messageId ?? callData.id ?? callData.callId
   if (!messageId) return
+  if (!callData.contactId) return // no contact = junk event
 
   // Skip only pre-connection statuses (not yet a dial)
   const status = String(callData.callStatus ?? callData.status ?? '').toLowerCase()
