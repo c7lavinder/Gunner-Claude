@@ -25,14 +25,42 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
   })
   const config = (tenant?.config ?? {}) as Record<string, unknown>
   const allGoals = (config.kpiGoals ?? {}) as Record<string, Record<string, number>>
+
+  const isAdmin = role === 'ADMIN' || role === 'OWNER'
+
+  // For admin: multiply each role's goals by headcount
+  // For non-admin: use their own role's goals
   const ROLE_TO_GOAL_KEY: Record<string, string> = {
     LEAD_MANAGER: 'LM', ACQUISITION_MANAGER: 'AM', DISPOSITION_MANAGER: 'DISPO',
     TEAM_LEAD: 'AM', ADMIN: 'AM', OWNER: 'AM',
   }
-  const goalKey = ROLE_TO_GOAL_KEY[role] ?? 'AM'
-  const goals = allGoals[goalKey] ?? {}
 
-  const isAdmin = role === 'ADMIN' || role === 'OWNER'
+  let goals: Record<string, number>
+  if (isAdmin) {
+    // Count users per role for goal multiplication (exclude admin/owner — they don't have individual KPI targets)
+    const roleCounts = await db.user.groupBy({
+      by: ['role'],
+      where: { tenantId, role: { notIn: ['ADMIN', 'OWNER'] } },
+      _count: { _all: true },
+    })
+    const countByGoalKey: Record<string, number> = {}
+    for (const rc of roleCounts) {
+      if (!rc.role) continue
+      const gk = ROLE_TO_GOAL_KEY[rc.role] ?? 'AM'
+      countByGoalKey[gk] = (countByGoalKey[gk] ?? 0) + rc._count._all
+    }
+    // Merge all role goals, multiplied by headcount
+    goals = {}
+    for (const [gk, roleGoals] of Object.entries(allGoals)) {
+      const headcount = countByGoalKey[gk] ?? 1
+      for (const [metric, value] of Object.entries(roleGoals)) {
+        goals[metric] = (goals[metric] ?? 0) + value * headcount
+      }
+    }
+  } else {
+    const goalKey = ROLE_TO_GOAL_KEY[role] ?? 'AM'
+    goals = allGoals[goalKey] ?? {}
+  }
 
   const [todayTasks, tomorrowTasks, overdueTasks, roleConfig, completedToday, xpRecord, milestoneCounts, callCounts, properties] = await Promise.all([
     // Today's tasks
