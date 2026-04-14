@@ -123,7 +123,6 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
     || !!(msg.callDuration || msg.callStatus || msg.meta?.call)
 
   if (!isCall) return // skip SMS, email, chat
-  if (!msg.contactId) return // no contact = junk event, don't create a call record
 
   // Extract call metadata
   const callDuration = msg.callDuration ?? msg.meta?.call?.duration ?? 0
@@ -208,6 +207,11 @@ async function handleMessage(tenantId: string, event: GHLWebhookEvent) {
       contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim() || null
       contactAddress = [contact.address1, contact.city, contact.state].filter(Boolean).join(', ') || null
     } catch (err) { await logFailure(tenantId, 'webhook.contact_lookup_failed', 'call', err, { contactId: msg.contactId, handler: 'handleMessage' }) }
+  }
+  // Fallback: use phone number if contact name couldn't be resolved
+  if (!contactName) {
+    const phone = String(event.phone ?? event.to ?? event.from ?? (event as Record<string, unknown>).callerNumber ?? '')
+    if (phone) contactName = phone
   }
 
   // Create call record — always PENDING. The cron processor decides SKIPPED vs grade.
@@ -304,7 +308,6 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
 
   const messageId = callData.messageId ?? callData.id ?? callData.callId
   if (!messageId) return
-  if (!callData.contactId) return // no contact = junk event
 
   // Skip only pre-connection statuses (not yet a dial)
   const status = String(callData.callStatus ?? callData.status ?? '').toLowerCase()
@@ -374,6 +377,11 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
     } catch (err) {
       await logFailure(tenantId, 'webhook.contact_lookup_failed', 'call', err, { contactId, handler: 'handleCallCompleted' })
     }
+  }
+  // Fallback: use phone number if contact name couldn't be resolved
+  if (!contactName) {
+    const phone = String(event.phone ?? (event as Record<string, unknown>).to ?? (event as Record<string, unknown>).from ?? (event as Record<string, unknown>).callerNumber ?? '')
+    if (phone) contactName = phone
   }
 
   // Save call status hint from GHL (cron uses this for SKIPPED routing)
