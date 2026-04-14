@@ -27,7 +27,7 @@ interface Call {
   property: { id: string; address: string; city: string; state: string } | null
 }
 
-type Tab = 'all' | 'review' | 'skipped' | 'archived'
+type Tab = 'completed' | 'pending' | 'skipped' | 'failed'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   }, [])
   const effectiveCanViewAll = canViewAll && !isViewingAs
 
-  const [tab, setTab] = useState<Tab>('all')
+  const [tab, setTab] = useState<Tab>('completed')
   const [teamFilter, setTeamFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
@@ -129,25 +129,24 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   const [syncing, setSyncing] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
-  // Tab filtering
-  const allCalls = calls.filter(c => c.gradingStatus === 'COMPLETED')
-  const reviewCalls = calls.filter(c =>
-    ['PENDING', 'PROCESSING'].includes(c.gradingStatus) ||
-    (c.gradingStatus === 'FAILED' && c.callResult !== 'no_answer')
-  )
+  // Tab filtering — matches pipeline statuses directly
+  const completedCalls = calls.filter(c => c.gradingStatus === 'COMPLETED')
+  const pendingCalls = calls.filter(c => ['PENDING', 'PROCESSING'].includes(c.gradingStatus))
   const skippedCalls = calls.filter(c =>
     c.gradingStatus === 'SKIPPED' ||
-    c.callResult === 'no_answer' ||
-    (c.durationSeconds !== null && c.durationSeconds < 45 && c.gradingStatus !== 'COMPLETED')
+    (c.callResult === 'no_answer' && c.gradingStatus !== 'COMPLETED')
+  )
+  const failedCalls = calls.filter(c =>
+    c.gradingStatus === 'FAILED' && c.callResult !== 'no_answer'
   )
 
   // Apply filters
-  let filtered = tab === 'all' ? allCalls : tab === 'review' ? reviewCalls : tab === 'skipped' ? skippedCalls : []
+  let filtered = tab === 'completed' ? completedCalls : tab === 'pending' ? pendingCalls : tab === 'skipped' ? skippedCalls : tab === 'failed' ? failedCalls : []
   // View As: filter to only that user's calls
   if (isViewingAs && viewAsName) {
     filtered = filtered.filter(c => c.assignedTo?.name === viewAsName)
   }
-  if (tab === 'all') {
+  if (tab === 'completed') {
     if (teamFilter) filtered = filtered.filter(c => c.assignedTo?.id === teamFilter)
     if (typeFilter) filtered = filtered.filter(c => c.callType === typeFilter)
     if (outcomeFilter) filtered = filtered.filter(c => c.callOutcome === outcomeFilter)
@@ -189,13 +188,13 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   }
 
   const allTabs: Array<{ id: Tab; label: string; count: number; icon: React.ReactNode }> = [
-    { id: 'all', label: 'All Calls', count: filtered.length, icon: <Phone size={13} /> },
-    { id: 'review', label: 'Needs Review', count: reviewCalls.length, icon: <AlertTriangle size={13} /> },
+    { id: 'completed', label: 'Completed', count: completedCalls.length, icon: <Phone size={13} /> },
+    { id: 'pending', label: 'Pending', count: pendingCalls.length, icon: <Clock size={13} /> },
     { id: 'skipped', label: 'Skipped', count: skippedCalls.length, icon: <X size={13} /> },
-    { id: 'archived', label: 'Archived', count: 0, icon: <Archive size={13} /> },
+    { id: 'failed', label: 'Failed', count: failedCalls.length, icon: <AlertTriangle size={13} /> },
   ]
-  // Non-admins only see "All Calls" — no review/skipped/archived tabs
-  const tabs = effectiveCanViewAll ? allTabs : allTabs.filter(t => t.id === 'all')
+  // Non-admins only see "Completed" — no pending/skipped/failed tabs
+  const tabs = effectiveCanViewAll ? allTabs : allTabs.filter(t => t.id === 'completed')
 
   return (
     <div className="space-y-5">
@@ -266,7 +265,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
         </div>}
 
         {/* FILTER BAR */}
-        {tab === 'all' && (
+        {tab === 'completed' && (
           <div className="flex flex-wrap gap-2">
             <select value={dateFilter} onChange={e => updateDateFilter(e.target.value)}
               className="bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-secondary focus:outline-none"
@@ -311,7 +310,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
         )}
 
         {/* CALL LIST */}
-        {tab === 'all' && (
+        {tab === 'completed' && (
           <div className="space-y-3">
             {filtered.length === 0 ? (
               <div className="bg-surface-primary border-[0.5px] rounded-[14px] py-16 text-center text-[13px] text-txt-muted" style={{ borderColor: 'var(--border-light)' }}>
@@ -325,34 +324,20 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
           </div>
         )}
 
-        {/* NEEDS REVIEW */}
-        {tab === 'review' && (
+        {/* PENDING */}
+        {tab === 'pending' && (
           <div className="space-y-3">
-            {reviewCalls.length === 0 ? (
+            {pendingCalls.length === 0 ? (
               <div className="bg-surface-primary border-[0.5px] rounded-[14px] py-16 text-center text-[13px] text-txt-muted" style={{ borderColor: 'var(--border-light)' }}>
-                No calls in review
+                No pending calls
               </div>
             ) : (
-              reviewCalls.map(c => (
+              pendingCalls.map(c => (
                 <div key={c.id} className="bg-surface-primary border-[0.5px] rounded-[14px] flex items-center gap-3 px-5 py-4" style={{ borderColor: 'var(--border-light)' }}>
-                  {c.gradingStatus === 'FAILED' ? (
-                    <AlertTriangle size={16} className="text-semantic-red shrink-0" />
-                  ) : (
-                    <Loader2 size={16} className="text-semantic-blue animate-spin shrink-0" />
-                  )}
+                  <Loader2 size={16} className="text-semantic-blue animate-spin shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] font-medium text-txt-primary truncate">{c.contactName ?? 'Call'}</p>
-                    <p className="text-[11px] text-txt-muted">{c.gradingStatus.toLowerCase()} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
-                  </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button onClick={() => callAction(c.id, 'reprocess')} disabled={actionLoading === `${c.id}-reprocess`}
-                      className="text-[11px] font-medium bg-gunner-red-light text-gunner-red hover:bg-gunner-red hover:text-white px-2.5 py-1.5 rounded-[6px] transition-colors">
-                      {actionLoading === `${c.id}-reprocess` ? <Loader2 size={10} className="animate-spin" /> : 'Retry'}
-                    </button>
-                    <button onClick={() => callAction(c.id, 'skip')} disabled={actionLoading === `${c.id}-skip`}
-                      className="text-[11px] font-medium bg-surface-secondary text-txt-secondary hover:text-txt-primary px-2.5 py-1.5 rounded-[6px] transition-colors">
-                      Skip
-                    </button>
+                    <p className="text-[11px] text-txt-muted">processing · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
                   </div>
                 </div>
               ))
@@ -383,10 +368,34 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
           </div>
         )}
 
-        {/* ARCHIVED */}
-        {tab === 'archived' && (
-          <div className="bg-surface-primary border-[0.5px] rounded-[14px] py-16 text-center text-[13px] text-txt-muted" style={{ borderColor: 'var(--border-light)' }}>
-            No archived calls
+        {/* FAILED */}
+        {tab === 'failed' && (
+          <div className="space-y-3">
+            {failedCalls.length === 0 ? (
+              <div className="bg-surface-primary border-[0.5px] rounded-[14px] py-16 text-center text-[13px] text-txt-muted" style={{ borderColor: 'var(--border-light)' }}>
+                No failed calls
+              </div>
+            ) : (
+              failedCalls.map(c => (
+                <div key={c.id} className="bg-surface-primary border-[0.5px] rounded-[14px] flex items-center gap-3 px-5 py-4" style={{ borderColor: 'var(--border-light)' }}>
+                  <AlertTriangle size={16} className="text-semantic-red shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-medium text-txt-primary truncate">{c.contactName ?? 'Call'}</p>
+                    <p className="text-[11px] text-txt-muted">{(c.aiSummary ?? 'failed').slice(0, 60)} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => callAction(c.id, 'reprocess')} disabled={actionLoading === `${c.id}-reprocess`}
+                      className="text-[11px] font-medium bg-gunner-red-light text-gunner-red hover:bg-gunner-red hover:text-white px-2.5 py-1.5 rounded-[6px] transition-colors">
+                      {actionLoading === `${c.id}-reprocess` ? <Loader2 size={10} className="animate-spin" /> : 'Retry'}
+                    </button>
+                    <button onClick={() => callAction(c.id, 'skip')} disabled={actionLoading === `${c.id}-skip`}
+                      className="text-[11px] font-medium bg-surface-secondary text-txt-secondary hover:text-txt-primary px-2.5 py-1.5 rounded-[6px] transition-colors">
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
     </div>
