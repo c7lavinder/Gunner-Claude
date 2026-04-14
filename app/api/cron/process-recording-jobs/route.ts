@@ -178,6 +178,17 @@ async function processJobs() {
       where: { status: 'DONE', updatedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
     }).catch(() => {})
 
+    // ── Step 3: Link unlinked calls to properties ─────────────────────────
+    // Webhook sometimes creates calls before the property exists, or the
+    // lookup fails. This backfill catches them every cycle.
+    await db.$executeRaw`
+      UPDATE calls SET property_id = p.id
+      FROM properties p
+      WHERE calls.ghl_contact_id = p.ghl_contact_id
+      AND calls.property_id IS NULL
+      AND calls.ghl_contact_id IS NOT NULL
+    `.catch(() => {})
+
     const durationMs = Date.now() - startedAt
     console.log(`[call-processor] ${durationMs}ms | pending=${stats.pending} graded=${stats.graded} skipped=${stats.skipped} waiting=${stats.waiting} timedOut=${stats.timedOut} legacy=${stats.legacyJobs} errors=${stats.errors}`)
 
