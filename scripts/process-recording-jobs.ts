@@ -7,7 +7,7 @@
 //   2. This cron picks up PENDING calls and does ONE of:
 //      a. <45s, no recording → SKIPPED
 //      b. ≥45s → fetch recording → pass to gradeCall() (transcribes + grades)
-//      c. No recording after 2 hours → FAILED
+//      c. No recording yet → keep retrying (every call in GHL is recorded)
 //   3. Legacy: also drains any remaining RecordingFetchJob rows
 
 import { db } from '../lib/db/client'
@@ -97,21 +97,16 @@ async function processJobs() {
           }
         }
 
-        // ── Decision 4: No recording, no transcript → wait or timeout ─────
+        // ── Decision 4: No recording yet → keep trying ───────────────────
+        // Every call in GHL is recorded. No recording = our fetch hasn't worked yet.
         if (!call.recordingUrl && !call.transcript) {
+          await db.call.update({
+            where: { id: call.id },
+            data: { gradingStatus: 'PENDING' },
+          })
+          stats.waiting++
           if (ageMs > RECORDING_TIMEOUT_MS) {
-            await db.call.update({
-              where: { id: call.id },
-              data: { gradingStatus: 'SKIPPED', aiSummary: 'No recording available — skipped.' },
-            })
-            stats.timedOut++
-          } else {
-            // Put back to PENDING — try again next cycle
-            await db.call.update({
-              where: { id: call.id },
-              data: { gradingStatus: 'PENDING' },
-            })
-            stats.waiting++
+            console.warn(`[call-processor] Call ${call.id} (${call.contactName ?? 'Unknown'}) still has no recording after ${Math.round(ageMs / 60_000)} min — will keep retrying`)
           }
           continue
         }
