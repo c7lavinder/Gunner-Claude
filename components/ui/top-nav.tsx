@@ -68,6 +68,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
     { href: `${base}/contacts`, label: 'Contacts', adminOnly: true },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
+    { href: `${base}/accountability`, label: 'Accountability', adminOnly: true },
   ]
 
   const visibleItems = navItems.filter(item => {
