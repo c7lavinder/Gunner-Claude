@@ -28,13 +28,17 @@ export async function GET(
     const today = new Date()
     const { dayStart, dayEnd } = getCentralDayBounds()
 
+    const isAdmin = session.role === 'ADMIN' || session.role === 'OWNER'
+
     const where: Record<string, unknown> = {
       tenantId,
       status: { in: ['PENDING', 'IN_PROGRESS'] },
     }
 
     if (category) where.category = category
+    // Explicit filter overrides default. Otherwise: admin sees all, non-admin sees own.
     if (assignedTo) where.assignedToId = assignedTo
+    else if (!isAdmin) where.assignedToId = session.userId
 
     const [tasks, totalCount, overdueCount] = await Promise.all([
       db.task.findMany({
