@@ -590,52 +590,50 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       })
     }
 
-    // Auto-create milestone for the new status
-    // Same-day dedup (Central time): allows re-entries on different days but prevents
-    // duplicate milestones from multiple webhook fires within the same day.
-    // CONTACTED/FOLLOW_UP don't create new LEAD milestones — only actual stage triggers do.
+    // Auto-create ALL milestones required for this status (backfill any gaps).
+    // A property at OFFER_MADE should have: LEAD, APPOINTMENT_SET, OFFER_MADE.
+    // If it jumped from NEW_LEAD to OFFER_MADE, the intermediate ones get created here.
     if (newStatus) {
-      const STATUS_TO_MILESTONE: Record<string, string> = {
-        'NEW_LEAD': 'LEAD',
-        'APPOINTMENT_SET': 'APPOINTMENT_SET', 'APPOINTMENT_COMPLETED': 'APPOINTMENT_SET',
-        'OFFER_MADE': 'OFFER_MADE', 'UNDER_CONTRACT': 'UNDER_CONTRACT', 'SOLD': 'CLOSED',
-        'IN_DISPOSITION': 'DISPO_NEW', 'DISPO_PUSHED': 'DISPO_PUSHED',
-        'DISPO_OFFERS': 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED': 'DISPO_CONTRACTED',
-        'DISPO_CLOSED': 'DISPO_CLOSED',
+      const STATUS_REQUIRED_MILESTONES: Record<string, string[]> = {
+        'NEW_LEAD': ['LEAD'],
+        'CONTACTED': ['LEAD'],
+        'APPOINTMENT_SET': ['LEAD', 'APPOINTMENT_SET'],
+        'APPOINTMENT_COMPLETED': ['LEAD', 'APPOINTMENT_SET'],
+        'OFFER_MADE': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE'],
+        'UNDER_CONTRACT': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT'],
+        'SOLD': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED'],
+        'IN_DISPOSITION': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW'],
+        'DISPO_PUSHED': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED'],
+        'DISPO_OFFERS': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED'],
+        'DISPO_CONTRACTED': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED'],
+        'DISPO_CLOSED': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED'],
+        'FOLLOW_UP': ['LEAD'],
       }
-      const milestoneType = STATUS_TO_MILESTONE[newStatus]
-      if (milestoneType) {
+      const requiredMilestones = STATUS_REQUIRED_MILESTONES[newStatus] ?? []
+      if (requiredMilestones.length > 0) {
         try {
           const prop = await db.property.findFirst({
             where: { tenantId, ghlContactId: oppData.contactId },
-            select: { id: true },
+            select: { id: true, milestones: { select: { type: true } } },
           })
           if (prop) {
-            // Same-day dedup in Central time
-            const { getCentralDayBounds } = await import('@/lib/dates')
-            const { dayStart, dayEnd } = getCentralDayBounds()
-
-            const existing = await db.propertyMilestone.findFirst({
-              where: {
-                tenantId, propertyId: prop.id, type: milestoneType as import('@prisma/client').MilestoneType,
-                createdAt: { gte: dayStart, lte: dayEnd },
-              },
-            })
-            if (!existing) {
+            const existing = new Set(prop.milestones.map(m => String(m.type)))
+            for (const mType of requiredMilestones) {
+              if (existing.has(mType)) continue
               await db.propertyMilestone.create({
                 data: {
                   tenantId,
                   propertyId: prop.id,
-                  type: milestoneType as import('@prisma/client').MilestoneType,
+                  type: mType as import('@prisma/client').MilestoneType,
                   source: 'AUTO_WEBHOOK',
                   loggedById: milestoneUser?.id,
                 },
-              })
-              console.log(`[GHL Webhook] Auto-created ${milestoneType} milestone for property ${prop.id}`)
+              }).catch(err => logFailure(tenantId, 'webhook.milestone_backfill_failed', 'property_milestone', err, { propertyId: prop.id, milestoneType: mType }))
+              console.log(`[GHL Webhook] Auto-created ${mType} milestone for property ${prop.id}`)
             }
           }
         } catch (err) {
-          await logFailure(tenantId, 'webhook.milestone_create_failed', 'property_milestone', err, { contactId: oppData.contactId, milestoneType, stageId })
+          await logFailure(tenantId, 'webhook.milestone_create_failed', 'property_milestone', err, { contactId: oppData.contactId, newStatus, stageId })
         }
       }
     }
