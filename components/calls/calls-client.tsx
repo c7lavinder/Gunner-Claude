@@ -353,17 +353,24 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
                 No skipped calls
               </div>
             ) : (
-              skippedCalls.map(c => (
-                <div key={c.id} className="bg-surface-primary border-[0.5px] rounded-[14px] flex items-center gap-3 px-5 py-4" style={{ borderColor: 'var(--border-light)' }}>
-                  <div className="w-10 h-10 rounded-[10px] bg-surface-tertiary flex items-center justify-center shrink-0">
-                    <Phone size={14} className="text-txt-muted" />
+              skippedCalls.map(c => {
+                const reason = c.aiSummary
+                  ?? (c.callResult === 'no_answer' ? 'No answer'
+                    : c.durationSeconds !== null && c.durationSeconds < 45 ? `Short call (${c.durationSeconds}s)`
+                    : 'Skipped')
+                return (
+                  <div key={c.id} className="bg-surface-primary border-[0.5px] rounded-[14px] flex items-center gap-3 px-5 py-4" style={{ borderColor: 'var(--border-light)' }}>
+                    <div className="w-10 h-10 rounded-[10px] bg-surface-tertiary flex items-center justify-center shrink-0">
+                      <Phone size={14} className="text-txt-muted" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-medium text-txt-primary truncate">{c.contactName ?? 'Call'}</p>
+                      <p className="text-[11px] text-txt-muted">{format(new Date(c.calledAt), 'MMM d, h:mm a')}{c.durationSeconds ? ` · ${formatDuration(c.durationSeconds)}` : ''}</p>
+                    </div>
+                    <span className="text-[11px] text-txt-muted bg-surface-secondary px-2.5 py-1 rounded-[6px] shrink-0">{reason}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-medium text-txt-primary truncate">{c.contactName ?? 'Call'}</p>
-                    <p className="text-[11px] text-txt-muted">{formatDuration(c.durationSeconds)} · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
-                  </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         )}
