@@ -24,7 +24,7 @@ interface MilestoneCounts {
 
 export function DayHubClient({
   tenantSlug, userName, userRole, todayTasks, tomorrowTasks, overdueTasks,
-  categories, completedToday, xp, milestones, calls, properties,
+  categories, completedToday, xp, milestones, calls, goals, properties,
 }: {
   tenantSlug: string
   userName: string
@@ -37,6 +37,7 @@ export function DayHubClient({
   xp: { level: number; weeklyXp: number } | null
   milestones: MilestoneCounts
   calls: { calls: number; convos: number }
+  goals: Record<string, number>
   properties: Array<{ id: string; label: string }>
 }) {
   const router = useRouter()
@@ -112,6 +113,7 @@ export function DayHubClient({
         userRole={userRole}
         milestones={milestones}
         calls={calls}
+        goals={goals}
         properties={properties}
         tenantSlug={tenantSlug}
       />
@@ -257,6 +259,7 @@ interface CardDef {
   key: string
   label: string
   value: number
+  goal: number
   icon: typeof Phone
   color: string
   bgColor: string
@@ -267,34 +270,36 @@ function getCardsForRole(
   role: UserRole,
   milestones: MilestoneCounts,
   calls: { calls: number; convos: number },
+  goals: Record<string, number>,
 ): CardDef[] {
   switch (role) {
     case 'LEAD_MANAGER':
       return [
-        { key: 'calls', label: 'Calls Made', value: calls.calls, icon: Phone, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-        { key: 'convos', label: 'Convos', value: calls.convos, icon: MessageSquare, color: 'text-teal-600', bgColor: 'bg-teal-50' },
-        { key: 'aptSet', label: 'Apts Set', value: milestones.aptSet, icon: Calendar, color: 'text-semantic-amber', bgColor: 'bg-semantic-amber-bg', milestoneType: 'APPOINTMENT_SET' },
+        { key: 'calls', label: 'Calls Made', value: calls.calls, goal: goals.calls ?? 0, icon: Phone, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+        { key: 'convos', label: 'Convos', value: calls.convos, goal: goals.convos ?? 0, icon: MessageSquare, color: 'text-teal-600', bgColor: 'bg-teal-50' },
+        { key: 'aptSet', label: 'Apts Set', value: milestones.aptSet, goal: goals.apts ?? 0, icon: Calendar, color: 'text-semantic-amber', bgColor: 'bg-semantic-amber-bg', milestoneType: 'APPOINTMENT_SET' },
       ]
     case 'DISPOSITION_MANAGER':
       return [
-        { key: 'pushed', label: 'Pushed', value: milestones.pushed, icon: Send, color: 'text-blue-600', bgColor: 'bg-blue-50', milestoneType: 'DISPO_PUSHED' },
-        { key: 'dispoOffer', label: 'Offers Received', value: milestones.dispoOffer, icon: FileText, color: 'text-purple-600', bgColor: 'bg-purple-50', milestoneType: 'DISPO_OFFER_RECEIVED' },
-        { key: 'dispoContract', label: 'Contracted', value: milestones.dispoContract, icon: Handshake, color: 'text-semantic-green', bgColor: 'bg-semantic-green-bg', milestoneType: 'DISPO_CONTRACTED' },
+        { key: 'pushed', label: 'Pushed', value: milestones.pushed, goal: goals.pushed ?? 0, icon: Send, color: 'text-blue-600', bgColor: 'bg-blue-50', milestoneType: 'DISPO_PUSHED' },
+        { key: 'dispoOffer', label: 'Offers Received', value: milestones.dispoOffer, goal: goals.dispoOffers ?? 0, icon: FileText, color: 'text-purple-600', bgColor: 'bg-purple-50', milestoneType: 'DISPO_OFFER_RECEIVED' },
+        { key: 'dispoContract', label: 'Contracted', value: milestones.dispoContract, goal: goals.dispoContracts ?? 0, icon: Handshake, color: 'text-semantic-green', bgColor: 'bg-semantic-green-bg', milestoneType: 'DISPO_CONTRACTED' },
       ]
     // ACQUISITION_MANAGER, TEAM_LEAD, ADMIN, OWNER
     default:
       return [
-        { key: 'calls', label: 'Calls', value: calls.calls, icon: Phone, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-        { key: 'offer', label: 'Offers Made', value: milestones.offer, icon: FileText, color: 'text-purple-600', bgColor: 'bg-purple-50', milestoneType: 'OFFER_MADE' },
-        { key: 'contract', label: 'Contracts', value: milestones.contract, icon: Handshake, color: 'text-semantic-green', bgColor: 'bg-semantic-green-bg', milestoneType: 'UNDER_CONTRACT' },
+        { key: 'calls', label: 'Calls', value: calls.calls, goal: goals.calls ?? 0, icon: Phone, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+        { key: 'offer', label: 'Offers Made', value: milestones.offer, goal: goals.offers ?? 0, icon: FileText, color: 'text-purple-600', bgColor: 'bg-purple-50', milestoneType: 'OFFER_MADE' },
+        { key: 'contract', label: 'Contracts', value: milestones.contract, goal: goals.contracts ?? 0, icon: Handshake, color: 'text-semantic-green', bgColor: 'bg-semantic-green-bg', milestoneType: 'UNDER_CONTRACT' },
       ]
   }
 }
 
-function RoleKpiCards({ userRole, milestones, calls, properties, tenantSlug }: {
+function RoleKpiCards({ userRole, milestones, calls, goals, properties, tenantSlug }: {
   userRole: UserRole
   milestones: MilestoneCounts
   calls: { calls: number; convos: number }
+  goals: Record<string, number>
   properties: Array<{ id: string; label: string }>
   tenantSlug: string
 }) {
@@ -306,7 +311,7 @@ function RoleKpiCards({ userRole, milestones, calls, properties, tenantSlug }: {
   const [formProperty, setFormProperty] = useState('')
   const [formNotes, setFormNotes] = useState('')
 
-  const cards = getCardsForRole(userRole, milestones, calls)
+  const cards = getCardsForRole(userRole, milestones, calls, goals)
 
   async function logMilestone(milestoneType: string) {
     if (!formProperty) {
@@ -364,7 +369,7 @@ function RoleKpiCards({ userRole, milestones, calls, properties, tenantSlug }: {
                     </button>
                   )}
                 </div>
-                <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+                <p className={`text-2xl font-bold ${card.color}`}>{card.value}{card.goal > 0 ? <span className="text-sm font-normal text-txt-muted">/{card.goal}</span> : ''}</p>
                 <p className="text-ds-fine text-txt-muted">{card.label}</p>
               </div>
               {/* Entry form */}

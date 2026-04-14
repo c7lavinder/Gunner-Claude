@@ -18,6 +18,22 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
   const { dayStart, dayEnd } = getCentralDayBounds()
   const tomorrowEnd = endOfDay(addDays(today, 1))
 
+  // Load KPI goals from tenant config
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { config: true },
+  })
+  const config = (tenant?.config ?? {}) as Record<string, unknown>
+  const allGoals = (config.kpiGoals ?? {}) as Record<string, Record<string, number>>
+  const ROLE_TO_GOAL_KEY: Record<string, string> = {
+    LEAD_MANAGER: 'LM', ACQUISITION_MANAGER: 'AM', DISPOSITION_MANAGER: 'DISPO',
+    TEAM_LEAD: 'AM', ADMIN: 'AM', OWNER: 'AM',
+  }
+  const goalKey = ROLE_TO_GOAL_KEY[role] ?? 'AM'
+  const goals = allGoals[goalKey] ?? {}
+
+  const isAdmin = role === 'ADMIN' || role === 'OWNER'
+
   const [todayTasks, tomorrowTasks, overdueTasks, roleConfig, completedToday, xpRecord, milestoneCounts, callCounts, properties] = await Promise.all([
     // Today's tasks
     db.task.findMany({
@@ -83,18 +99,26 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
       select: { totalXp: true, level: true, weeklyXp: true },
     }),
 
-    // All 7 milestone type counts for today (unique properties per type)
-    Promise.all([
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'LEAD', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'OFFER_MADE', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'UNDER_CONTRACT', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_PUSHED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_OFFER_RECEIVED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-      db.propertyMilestone.groupBy({ by: ['propertyId'], where: { tenantId, type: 'DISPO_CONTRACTED', createdAt: { gte: dayStart, lte: dayEnd } } }).then(r => r.length),
-    ]).then(([lead, aptSet, offer, contract, pushed, dispoOffer, dispoContract]) => ({
-      lead, aptSet, offer, contract, pushed, dispoOffer, dispoContract,
-    })),
+    // All 7 milestone type counts for today — scoped to this user (admin sees all)
+    (() => {
+      const msWhere = (type: string) => ({
+        tenantId,
+        type: type as import('@prisma/client').MilestoneType,
+        createdAt: { gte: dayStart, lte: dayEnd },
+        ...(isAdmin ? {} : { loggedById: userId }),
+      })
+      return Promise.all([
+        db.propertyMilestone.groupBy({ by: ['propertyId'], where: msWhere('LEAD') }).then(r => r.length),
+        db.propertyMilestone.groupBy({ by: ['propertyId'], where: msWhere('APPOINTMENT_SET') }).then(r => r.length),
+        db.propertyMilestone.groupBy({ by: ['propertyId'], where: msWhere('OFFER_MADE') }).then(r => r.length),
+        db.propertyMilestone.groupBy({ by: ['propertyId'], where: msWhere('UNDER_CONTRACT') }).then(r => r.length),
+        db.propertyMilestone.groupBy({ by: ['propertyId'], where: msWhere('DISPO_PUSHED') }).then(r => r.length),
+        db.propertyMilestone.groupBy({ by: ['propertyId'], where: msWhere('DISPO_OFFER_RECEIVED') }).then(r => r.length),
+        db.propertyMilestone.groupBy({ by: ['propertyId'], where: msWhere('DISPO_CONTRACTED') }).then(r => r.length),
+      ]).then(([lead, aptSet, offer, contract, pushed, dispoOffer, dispoContract]) => ({
+        lead, aptSet, offer, contract, pushed, dispoOffer, dispoContract,
+      }))
+    })(),
 
     // Calls made today + meaningful convos (>=45s)
     Promise.all([
@@ -136,6 +160,7 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
       xp={xpRecord ? { level: xpRecord.level, weeklyXp: xpRecord.weeklyXp } : null}
       milestones={milestoneCounts}
       calls={callCounts}
+      goals={goals}
       properties={properties.map(p => ({ id: p.id, label: `${p.address}, ${p.city} ${p.state}` }))}
     />
   )
