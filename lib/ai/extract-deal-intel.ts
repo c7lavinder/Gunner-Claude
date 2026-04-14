@@ -53,7 +53,7 @@ export async function extractDealIntel(callId: string): Promise<void> {
     const userPrompt = buildExtractionUserPrompt({ ...call, property }, currentDealIntel, batchData)
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 6000,
       system: buildExtractionSystemPrompt(learningContext),
       messages: [{ role: 'user', content: userPrompt }],
@@ -66,7 +66,7 @@ export async function extractDealIntel(callId: string): Promise<void> {
       tenantId: call.tenant.id, userId: call.assignedTo?.id, type: 'deal_intel',
       pageContext: `call:${callId}`, input: userPrompt.slice(0, 3000), output: content.text.slice(0, 3000),
       tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
-      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+      durationMs: timer(), model: 'claude-sonnet-4-6',
     }).catch((err) => {
       logFailure(call.tenant.id, 'extract_deal_intel.ai_log_failed', `call:${callId}`, err)
     })

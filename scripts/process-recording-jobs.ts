@@ -11,6 +11,7 @@
 //   3. Legacy: also drains any remaining RecordingFetchJob rows
 
 import { db } from '../lib/db/client'
+import { Prisma } from '@prisma/client'
 import { fetchCallRecording, fetchAndStoreRecording } from '../lib/ghl/fetch-recording'
 import { gradeCall } from '../lib/ai/grading'
 import { logFailure } from '../lib/audit'
@@ -25,6 +26,16 @@ async function processJobs() {
   const stats = { pending: 0, graded: 0, skipped: 0, waiting: 0, timedOut: 0, legacyJobs: 0, errors: 0 }
 
   try {
+    // ── Step 0: Link unlinked calls to properties BEFORE grading ──────────
+    // Must run first so gradeCall() sees propertyId for deal intel extraction.
+    await db.$executeRaw`
+      UPDATE calls SET property_id = p.id
+      FROM properties p
+      WHERE calls.ghl_contact_id = p.ghl_contact_id
+      AND calls.property_id IS NULL
+      AND calls.ghl_contact_id IS NOT NULL
+    `.catch(() => {})
+
     // ── Step 1: Process PENDING calls ──────────────────────────────────────
     const pendingCalls = await db.call.findMany({
       where: {
@@ -176,16 +187,30 @@ async function processJobs() {
       where: { status: 'DONE', updatedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
     }).catch(() => {})
 
-    // ── Step 3: Link unlinked calls to properties ─────────────────────────
-    // Webhook sometimes creates calls before the property exists, or the
-    // lookup fails. This backfill catches them every cycle.
-    await db.$executeRaw`
-      UPDATE calls SET property_id = p.id
-      FROM properties p
-      WHERE calls.ghl_contact_id = p.ghl_contact_id
-      AND calls.property_id IS NULL
-      AND calls.ghl_contact_id IS NOT NULL
-    `.catch(() => {})
+    // ── Step 3: Catch-up deal intel extraction ────────────────────────────
+    // Graded calls that have transcript + property but no deal intel yet.
+    // Handles calls that were graded before property was linked.
+    const { extractDealIntel } = await import('../lib/ai/extract-deal-intel')
+    const missingIntel = await db.call.findMany({
+      where: {
+        gradingStatus: 'COMPLETED',
+        transcript: { not: null },
+        propertyId: { not: null },
+        dealIntelHistory: { equals: Prisma.DbNull },
+        durationSeconds: { gte: 45 },
+      },
+      select: { id: true, contactName: true },
+      orderBy: { gradedAt: 'desc' },
+      take: 5,
+    })
+    for (const call of missingIntel) {
+      try {
+        await extractDealIntel(call.id)
+        console.log(`[call-processor] Deal intel extracted for ${call.contactName ?? call.id}`)
+      } catch (err) {
+        console.warn(`[call-processor] Deal intel failed for ${call.id}:`, err instanceof Error ? err.message : err)
+      }
+    }
 
     const durationMs = Date.now() - startedAt
     console.log(`[call-processor] ${durationMs}ms | pending=${stats.pending} graded=${stats.graded} skipped=${stats.skipped} waiting=${stats.waiting} timedOut=${stats.timedOut} legacy=${stats.legacyJobs} errors=${stats.errors}`)
