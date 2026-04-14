@@ -61,12 +61,26 @@ export async function gradeCall(callId: string): Promise<void> {
       const transcription = await transcribeRecording(call.recordingUrl, ghlToken ?? undefined)
       if (transcription.status === 'success' && transcription.transcript) {
         transcript = transcription.transcript
-        // Save transcript to DB so we don't re-transcribe
+        // Save transcript + real duration from Deepgram
         await db.call.update({
           where: { id: callId },
-          data: { transcript },
+          data: {
+            transcript,
+            ...(transcription.duration ? { durationSeconds: transcription.duration } : {}),
+          },
         })
-        console.log(`[Call Grading] Transcription complete: ${transcript.length} chars`)
+        console.log(`[Call Grading] Transcription complete: ${transcript.length} chars, duration=${transcription.duration ?? '?'}s`)
+
+        // Now we know the real duration — skip short calls instead of wasting a Claude call
+        const realDuration = transcription.duration ?? call.durationSeconds ?? 0
+        if (realDuration > 0 && realDuration < 45) {
+          await db.call.update({
+            where: { id: callId },
+            data: { gradingStatus: 'SKIPPED', aiSummary: `Short call (${realDuration}s) — skipped.`, callResult: 'short_call' },
+          })
+          console.log(`[Call Grading] Short call detected after transcription (${realDuration}s) — skipped`)
+          return
+        }
       } else {
         console.warn(`[Call Grading] Transcription failed: ${transcription.error}`)
       }

@@ -53,7 +53,7 @@ async function processJobs() {
         const ageMs = Date.now() - call.createdAt.getTime()
 
         // ── Decision 1: Known short call or no-answer → SKIPPED ───────────
-        if (duration !== null && duration > 0 && duration < MIN_DURATION_FOR_GRADING && !call.recordingUrl) {
+        if (duration !== null && duration > 0 && duration < MIN_DURATION_FOR_GRADING) {
           await db.call.update({
             where: { id: call.id },
             data: { gradingStatus: 'SKIPPED', aiSummary: `Short call (${duration}s) — skipped.`, callResult: 'short_call' },
@@ -71,7 +71,17 @@ async function processJobs() {
           continue
         }
 
-        // ── Decision 2: Try to fetch recording if we don't have one ───────
+        // ── Decision 2: wf_ IDs can never fetch recordings — skip immediately ──
+        if (!call.recordingUrl && call.ghlCallId?.startsWith('wf_')) {
+          await db.call.update({
+            where: { id: call.id },
+            data: { gradingStatus: 'SKIPPED', aiSummary: 'Automation duplicate — real call graded separately.' },
+          })
+          stats.skipped++
+          continue
+        }
+
+        // ── Decision 3: Try to fetch recording if we don't have one ───────
         if (!call.recordingUrl && call.ghlCallId && call.tenant?.ghlAccessToken && call.tenant?.ghlLocationId) {
           try {
             const rec = await fetchCallRecording(call.tenant.ghlAccessToken, call.tenant.ghlLocationId, call.ghlCallId)
@@ -87,12 +97,12 @@ async function processJobs() {
           }
         }
 
-        // ── Decision 3: No recording, no transcript → wait or timeout ─────
+        // ── Decision 4: No recording, no transcript → wait or timeout ─────
         if (!call.recordingUrl && !call.transcript) {
           if (ageMs > RECORDING_TIMEOUT_MS) {
             await db.call.update({
               where: { id: call.id },
-              data: { gradingStatus: 'FAILED', aiSummary: `No recording available from GHL after ${Math.round(ageMs / 60_000)} minutes.` },
+              data: { gradingStatus: 'SKIPPED', aiSummary: 'No recording available — skipped.' },
             })
             stats.timedOut++
           } else {
@@ -106,7 +116,7 @@ async function processJobs() {
           continue
         }
 
-        // ── Decision 4: Has recording or transcript → grade ───────────────
+        // ── Decision 5: Has recording or transcript → grade ───────────────
         await gradeCall(call.id)
         stats.graded++
 
