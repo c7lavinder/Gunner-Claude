@@ -919,7 +919,7 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
     const nsTimer = startTimer()
 
     const res = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       messages: [{
         role: 'user',
@@ -952,7 +952,7 @@ Return JSON array only:
       tenantId, type: 'next_steps', pageContext: `call:${callId}`,
       input: `Next steps for call ${callId}`, output: text.slice(0, 2000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
-      durationMs: nsTimer(), model: 'claude-sonnet-4-20250514',
+      durationMs: nsTimer(), model: 'claude-sonnet-4-6',
     }).catch((err) => {
       logFailure(tenantId, 'grading.next_steps_log_failed', `call:${callId}`, err)
     })
