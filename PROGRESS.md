@@ -49,6 +49,49 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 36 — Backlog recovery for stuck calls (2026-04-19)
+
+Corey flagged calls stuck in PENDING/FAILED. Live DB showed last-7-day split:
+COMPLETED 48, FAILED 131, PENDING 1141, SKIPPED 394. Four root causes:
+
+1. **Anthropic credits exhausted on 2026-04-13** — every `call.grading.failed`
+   audit log from that day reads "Your credit balance is too low." Corey confirmed
+   billing now healthy. Left 131 calls in FAILED with no auto-retry path.
+2. **Stale-pending lookback too narrow** — `poll-calls.ts` only looks back 24h;
+   1,000+ PENDING rows were older than that and no automatic retry touched them.
+3. **`wf_*` workflow-event IDs** — cross-source dedup now handles this at webhook
+   time (Session-35 refactor), but older rows still had `ghl_call_id` like
+   `wf_1775758575091` and never got their recording.
+4. **Prisma enum drift on local dev clients** — prod DB had `SKIPPED` (migration
+   `20260413180000_add_skipped_grading_status` deployed Apr 13) but any local
+   Prisma client generated before that migration crashed on those rows.
+
+What shipped this session (scripts only — no code changes to app):
+- `scripts/recover-stuck-calls.ts` — one-shot backfill. Scans last N days of
+  PENDING/FAILED, resolves `wf_*` ids to real message ids via GHL conversation
+  lookup (closest-in-time TYPE_CALL message), fetches missing recordings,
+  transcribes via Deepgram, re-runs `gradeCall()`. Idempotent, fault-tolerant
+  per-row, configurable `--concurrency` / `--sleep` / `--days` / `--limit`.
+  Handles the unique-constraint collision when a `wf_` stub and a real call row
+  both exist for the same call.
+- `scripts/check-stuck-calls.ts` — diagnostic read of PENDING/FAILED state with
+  raw SQL (bypasses Prisma enum on drifted clients) + RecordingFetchJob counts +
+  last 10 `call.grading.failed` audit entries.
+- `scripts/check-progress.ts` — live status-count snapshot.
+- `scripts/reset-processing.ts` — flips any PROCESSING rows back to PENDING
+  (for interrupted recovery runs).
+
+An earlier attempt this session put the same fixes in app code (grading.ts,
+webhooks.ts, fetch-recording.ts, process-recording-jobs) — those were abandoned
+when Session-35's unified pipeline refactor landed from remote with a superior
+architecture. Hard-reset to origin/main and kept only the scripts.
+
+Verification:
+- `npx tsc --noEmit` — 0 errors.
+- Small live batch (20 rows): 8 graded cleanly before hitting a unique-constraint
+  bug on a wf_ id collision; bug fixed, re-run.
+- DB snapshot during full sweep: COMPLETED 48 → 319 (last 30d).
+
 ### Session 35 — Live debugging day: call pipeline + audit page (2026-04-09)
 
 First full day with team dialing on new system. 4 team members, ~336 calls (GHL CSVs).
