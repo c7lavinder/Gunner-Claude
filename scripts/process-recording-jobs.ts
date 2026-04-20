@@ -25,6 +25,25 @@ async function processJobs() {
   const startedAt = Date.now()
   const stats = { pending: 0, graded: 0, skipped: 0, waiting: 0, timedOut: 0, legacyJobs: 0, errors: 0 }
 
+  // Heartbeat: fires BEFORE any real work so if the script imports and reaches
+  // this line, we have proof the cron ran. Added after the 2026-04-20 outage
+  // (cron went silent 04:43 UTC with zero audit trail). Health query:
+  //   SELECT MAX(created_at) FROM audit_logs
+  //   WHERE action='cron.process_recording_jobs.started';
+  // If result > 2 minutes old, cron is not running.
+  await db.auditLog.create({
+    data: {
+      tenantId: null,
+      userId: null,
+      action: 'cron.process_recording_jobs.started',
+      resource: 'cron',
+      resourceId: 'process-recording-jobs',
+      severity: 'INFO',
+      source: 'SYSTEM',
+      payload: { startedAt: new Date().toISOString() },
+    },
+  }).catch(err => console.error('[heartbeat] audit write failed:', err))
+
   try {
     // ── Step 0: Link unlinked calls to properties BEFORE grading ──────────
     // Must run first so gradeCall() sees propertyId for deal intel extraction.
@@ -218,6 +237,25 @@ async function processJobs() {
     console.error('[call-processor] Fatal error:', err instanceof Error ? err.message : err)
     process.exit(1)
   }
+
+  // Heartbeat: only fires on clean completion. Absence of a 'finished' row
+  // after a 'started' row = cron reached processJobs() but died mid-run.
+  // process.exit(1) in the outer catch above intentionally skips this write.
+  await db.auditLog.create({
+    data: {
+      tenantId: null,
+      userId: null,
+      action: 'cron.process_recording_jobs.finished',
+      resource: 'cron',
+      resourceId: 'process-recording-jobs',
+      severity: 'INFO',
+      source: 'SYSTEM',
+      payload: {
+        durationMs: Date.now() - startedAt,
+        stats,
+      },
+    },
+  }).catch(err => console.error('[heartbeat] audit write failed:', err))
 
   process.exit(0)
 }
