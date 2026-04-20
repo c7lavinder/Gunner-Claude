@@ -109,7 +109,11 @@ export class GHLClient {
   // ─── Tasks ─────────────────────────────────────────────────────────────────
 
   async createTask(contactId: string, task: GHLTaskInput) {
-    return this.request<GHLTask>('POST', `/contacts/${contactId}/tasks`, { ...task })
+    // GHL's POST /contacts/{id}/tasks rejects (422) when `completed` is missing
+    // or non-boolean. Default to false here so every caller gets a valid body
+    // without repeating the flag. Callers that really want to create-and-complete
+    // in one call can still override by passing `completed: true` in `task`.
+    return this.request<GHLTask>('POST', `/contacts/${contactId}/tasks`, { completed: false, ...task })
   }
 
   async updateTask(contactId: string, taskId: string, data: Partial<GHLTaskInput>) {
