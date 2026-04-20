@@ -35,7 +35,7 @@ import path from 'path'
 const TARGET_COUNT = 30
 const GHL = 'https://services.leadconnectorhq.com'
 const FALLBACK_MATCH_WINDOW_MS = 10 * 60_000  // ±10 min for contactId fallback (catches H2 cross-source merges)
-const SANITY_SAMPLE = 4                       // how many known-good SKIPPED calls to sanity-check first
+const SANITY_SAMPLE = 8                       // ≥1 of N must verify — N=8 makes that a real signal
 
 // ─── env loader (no dotenv dep — same pattern as visual-audit.ts) ───────────
 
@@ -446,18 +446,28 @@ async function verifyCoverageRow(tenantId: string, ghl: RealCall, db: import('@p
 
 async function sanityCheck(tenant: TenantCtx, db: import('@prisma/client').PrismaClient): Promise<boolean> {
   const headers = ghlHeaders(tenant.ghlAccessToken)
+  // Filter to rows with known provenance. Legacy/off-path rows (e.g. recovery
+  // scripts that left source=null with no contactId/duration) can't be verified
+  // against GHL by design and would falsely fail sanity. Those still surface
+  // in Pass A's per-row failure list — that's correct.
   const skipped = await db.call.findMany({
-    where: { tenantId: tenant.id, gradingStatus: 'SKIPPED', ghlCallId: { not: null } },
+    where: {
+      tenantId: tenant.id,
+      gradingStatus: 'SKIPPED',
+      ghlCallId: { not: null },
+      source: { not: null },
+    },
     orderBy: { createdAt: 'desc' },
     take: SANITY_SAMPLE,
     select: { id: true, ghlCallId: true },
   })
   if (skipped.length === 0) {
-    console.log('[verify] sanity: no SKIPPED rows in DB to test against — skipping sanity check')
+    console.log('[verify] sanity: no source-tagged SKIPPED rows in DB to test against — skipping sanity check')
     return true
   }
 
   const failures: string[] = []
+  let verified = 0
   let unverifiable = 0
   for (const c of skipped) {
     if (!c.ghlCallId) continue
@@ -467,14 +477,27 @@ async function sanityCheck(tenant: TenantCtx, db: import('@prisma/client').Prism
     if (!isCallMessage(res.msg)) {
       const mt = (res.msg as { messageType?: string }).messageType ?? '?'
       failures.push(`${c.id} (ghlCallId=${c.ghlCallId}): GHL says messageType=${mt}`)
+      continue
     }
+    verified++
   }
-  if (failures.length > 0) {
-    console.error('[verify] SANITY CHECK FAILED — known-good SKIPPED calls did not verify as calls in GHL:')
+
+  const probedCount = skipped.length - unverifiable
+  // Halt ONLY if we tried to probe at least one row and zero verified.
+  // That means the endpoint is broken, auth is wrong, or every sample row is orphaned —
+  // any of which makes Pass A's results meaningless. Individual stale rows below the
+  // halt threshold show up in Pass A's per-row failure list, which is correct behavior.
+  if (probedCount > 0 && verified === 0) {
+    console.error(`[verify] SANITY CHECK FAILED — 0/${probedCount} probed rows verified. Endpoint or auth likely broken:`)
     for (const f of failures) console.error(`  ${f}`)
     return false
   }
-  console.log(`[verify] sanity: ${skipped.length - unverifiable} verified ok, ${unverifiable} wf_ synthetic (skipped)`)
+  if (failures.length > 0) {
+    console.warn(`[verify] sanity: ${verified}/${probedCount} verified, ${failures.length} stale (will appear in Pass A), ${unverifiable} wf_ synthetic`)
+    for (const f of failures) console.warn(`  ${f}`)
+  } else {
+    console.log(`[verify] sanity: ${verified}/${probedCount} verified, ${unverifiable} wf_ synthetic (skipped)`)
+  }
   return true
 }
 
@@ -551,6 +574,12 @@ async function main(): Promise<void> {
   const passBCheck = bFail.length === 0 && bRows.length === TARGET_COUNT
   const overallOk = passACheck && passBCheck
   console.log(`\nOverall: ${overallOk ? '✅ PASS' : '❌ FAIL'} (Pass A ${passACheck ? '✅' : '❌'}, Pass B ${passBCheck ? '✅' : '❌'})`)
+
+  // Canary: counts off-path ingestion (rows with no source tag). Not gated —
+  // if this number grows over time, something is silently writing calls outside
+  // the webhook/poll paths.
+  const sourceNullCount = await db.call.count({ where: { tenantId: tenant.id, source: null } })
+  console.log(`[canary] calls with source IS NULL: ${sourceNullCount}`)
 
   await db.$disconnect()
   process.exit(overallOk ? 0 : 1)
