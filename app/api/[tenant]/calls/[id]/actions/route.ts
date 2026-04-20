@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
+import { resolveAssignee } from '@/lib/ghl/resolveAssignee'
 import { logFailure } from '@/lib/audit'
 import { z } from 'zod'
 import { addDays, format } from 'date-fns'
@@ -80,24 +81,10 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
   // Resolve internal user id -> GHL user id for task assignment.
   // Falls back to undefined if user has no ghlUserId mapping — task is still
   // created, just without an assignee. Skipped resolution is recorded in the
-  // audit payload below.
-  let resolvedAssignedTo: string | undefined
-  let assignedToResolutionNote: string | undefined
-  if (parsed.data.assignedTo) {
-    const assignee = await db.user.findUnique({
-      where: { id: parsed.data.assignedTo },
-      select: { ghlUserId: true, tenantId: true },
-    })
-    if (!assignee) {
-      assignedToResolutionNote = 'user_not_found'
-    } else if (assignee.tenantId !== ctx.tenantId) {
-      assignedToResolutionNote = 'user_wrong_tenant'
-    } else if (!assignee.ghlUserId) {
-      assignedToResolutionNote = 'user_missing_ghl_mapping'
-    } else {
-      resolvedAssignedTo = assignee.ghlUserId
-    }
-  }
+  // audit payload below. Shared helper also powers the AI Assistant's execute
+  // route so the resolution/audit-tag logic is single-sourced.
+  const { ghlUserId: resolvedAssignedTo, note: assignedToResolutionNote } =
+    await resolveAssignee(parsed.data.assignedTo, ctx.tenantId)
 
   try {
     const ghl = await getGHLClient(ctx.tenantId)
