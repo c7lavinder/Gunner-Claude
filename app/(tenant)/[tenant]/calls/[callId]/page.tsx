@@ -24,7 +24,7 @@ export default async function CallDetailPage({
       assignedTo: { select: { id: true, name: true, role: true } },
       property: {
         select: {
-          id: true, address: true, city: true, state: true, status: true,
+          id: true, address: true, city: true, state: true, status: true, ghlPipelineStage: true,
           sellers: { include: { seller: { select: { name: true, phone: true } } }, take: 1 },
         },
       },
@@ -103,6 +103,7 @@ export default async function CallDetailPage({
           city: call.property.city,
           state: call.property.state,
           status: call.property.status,
+          ghlPipelineStage: call.property.ghlPipelineStage,
           sellerName: call.property.sellers[0]?.seller.name ?? null,
         } : null,
         aiNextSteps,

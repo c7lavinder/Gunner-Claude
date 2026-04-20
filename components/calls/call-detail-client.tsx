@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
+import { ConfirmActionModal } from '@/components/ui/confirm-action-modal'
 import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
 import { formatFieldLabel } from '@/lib/format'
 
@@ -44,7 +45,7 @@ interface CallDetail {
   rubricScores: Record<string, RubricScore>; coachingTips: string[]
   contactName: string | null; contactPhone: string | null
   assignedTo: { id: string; name: string; role: string } | null
-  property: { id: string; address: string; city: string; state: string; status: string; sellerName: string | null } | null
+  property: { id: string; address: string; city: string; state: string; status: string; ghlPipelineStage: string | null; sellerName: string | null } | null
   aiNextSteps: Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null
   isCalibration: boolean
   calibrationNotes: string | null
@@ -113,6 +114,58 @@ const STEP_ICONS: Record<string, { icon: typeof CheckCircle; color: string; bg: 
 
 const ALL_ACTION_TYPES = Object.keys(STEP_ICONS)
 
+// ─── High-stakes confirm-modal helpers ──────────────────────────────────────
+
+// Which action types route through the confirmation modal before executing.
+// Low/medium stakes stay single-click (add_note, create_task, create_appointment,
+// check_off_task, schedule_sms, add_to_workflow, remove_from_workflow).
+const HIGH_STAKES_TYPES = new Set(['send_sms', 'change_stage'])
+
+type PipelineList = Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>
+
+function lookupStageName(stageId: string | undefined, pipelines: PipelineList): string | null {
+  if (!stageId || !pipelines || pipelines.length === 0) return null
+  for (const p of pipelines) {
+    const stage = p.stages?.find(s => s.id === stageId)
+    if (stage) return stage.name
+  }
+  return null
+}
+
+// Build the preview object the confirm modal renders. Pure function — no DB
+// calls, no lookups beyond the already-loaded `pipelines` state. Safe to call
+// inline during render.
+function buildPreview(
+  step: NextStep,
+  call: CallDetail,
+  pipelines: PipelineList,
+): {
+  title: string
+  recipientLabel?: string
+  bodyPreview?: string
+  beforeAfter?: { label: string; before: string; after: string }
+} {
+  if (step.type === 'send_sms') {
+    return {
+      title: `Send SMS to ${call.contactName ?? 'contact'}`,
+      recipientLabel: call.contactPhone
+        ? `To: ${call.contactName ?? ''} (${call.contactPhone})`
+        : undefined,
+      bodyPreview: step.smsBody || step.label,
+    }
+  }
+  if (step.type === 'change_stage') {
+    const before = call.property?.ghlPipelineStage?.trim() || 'unknown'
+    const after = lookupStageName(step.stageId, pipelines) || step.stageId || 'unknown'
+    return {
+      title: 'Change pipeline stage',
+      beforeAfter: { label: 'Pipeline stage', before, after },
+    }
+  }
+  // Fallback — shouldn't be hit (modal only opens for HIGH_STAKES_TYPES).
+  return { title: step.label || step.type }
+}
+
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export function CallDetailClient({ call, tenantSlug, isOwn }: {
@@ -131,6 +184,9 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [showFeedback, setShowFeedback] = useState(false)
   const [reclassifying, setReclassifying] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  // High-stakes confirm modal — null = closed, step index = open for that step
+  const [confirmModalStep, setConfirmModalStep] = useState<number | null>(null)
+  const [isPushing, setIsPushing] = useState(false)
   const [generatedSteps, setGeneratedSteps] = useState<NextStep[]>(() => {
     if (call.aiNextSteps && call.aiNextSteps.length > 0) {
       // Dedup: same type + similar label → keep only the first
@@ -1301,7 +1357,15 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={() => pushStep(i)}
+                            onClick={() => {
+                              // High-stakes (send_sms, change_stage) route through the
+                              // confirmation modal; everything else stays single-click.
+                              if (HIGH_STAKES_TYPES.has(step.type)) {
+                                setConfirmModalStep(i)
+                              } else {
+                                pushStep(i)
+                              }
+                            }}
                             disabled={actionLoading === `step-${i}`}
                             className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-[12px] font-semibold px-3 py-1.5 rounded-[10px] transition-colors"
                           >
@@ -1389,6 +1453,31 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
       {/* Feedback modal */}
       {showFeedback && <FeedbackModal callId={call.id} tenantSlug={tenantSlug} onClose={() => setShowFeedback(false)} />}
+
+      {/* High-stakes action confirm modal — single instance for the whole page */}
+      {confirmModalStep !== null && (() => {
+        const step = generatedSteps[confirmModalStep]
+        if (!step) return null
+        return (
+          <ConfirmActionModal
+            open
+            onCancel={() => { if (!isPushing) setConfirmModalStep(null) }}
+            onConfirm={async () => {
+              setIsPushing(true)
+              try {
+                await pushStep(confirmModalStep)
+              } finally {
+                setIsPushing(false)
+                setConfirmModalStep(null)
+              }
+            }}
+            actionType={step.type}
+            preview={buildPreview(step, call, pipelines)}
+            isProcessing={isPushing}
+            danger
+          />
+        )
+      })()}
     </div>
   )
 }
