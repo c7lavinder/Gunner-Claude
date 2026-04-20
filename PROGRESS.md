@@ -106,6 +106,12 @@ bump max_tokens to 8000) — fixes the `Argument 'sentiment': Invalid value`
 errors visible in audit_logs from 2026-04-19 evening. Surfaced incidentally
 during the verifier's audit_log shape probe.
 
+**Stop hook modified (Session 37, 2026-04-20):** removed auto-commit + auto-push
+step. Previously auto-pushed to main after every turn that typechecked — violated
+CLAUDE.md Rule 7 (surgical one-prompt-at-a-time with diff review before push).
+Stop hook now only runs tsc. Pre-push git hook added as belt-and-suspenders tsc
+gate at push time.
+
 ### Session 36 — Backlog recovery for stuck calls (2026-04-19)
 
 Corey flagged calls stuck in PENDING/FAILED. Live DB showed last-7-day split:
