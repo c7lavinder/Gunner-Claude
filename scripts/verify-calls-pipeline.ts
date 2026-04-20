@@ -2,13 +2,17 @@
 // Read-only verification: fetches the last 30 call messages from GHL conversations
 // and confirms each one flowed cleanly through the Gunner pipeline.
 //
-// Spec verified per call:
+// Spec verified per call (matches current code shipped in 911bcb4):
 //   (1) DB row exists in calls (matched by ghlCallId, fallback ghlContactId+time window)
 //   (2) Duration bucket matches grading status:
-//         0-44s  → gradingStatus=FAILED, callResult=no_answer, score IS NULL
+//         0-44s  → gradingStatus=SKIPPED, callResult=short_call, score IS NULL
 //         45-89s → gradingStatus=COMPLETED, aiSummary present
 //         90s+   → gradingStatus=COMPLETED, score NOT NULL, rubricScores populated
-//   (3) Zero ERROR audit_logs reference this call (resourceId / resource=call:<id> / payload.callId)
+//       gradingStatus=FAILED is also accepted for any bucket IF a matching
+//       logFailure audit_log row exists — that's a real downstream failure,
+//       reported as "❌ failed" rather than bucket drift.
+//   (3) Zero ERROR audit_logs reference this call (resourceId, resource=call,
+//       resource=call:<id>, resource=<callId>, or payload.callId)
 //   (4) If the webhook payload (or GHL meta) had a recording URL, transcript is populated
 //         OR a PENDING RecordingFetchJob exists for the call
 //
@@ -43,7 +47,7 @@ interface VerifyRow {
   bucketMatch: boolean
   noFailures: boolean
   transcriptOk: boolean
-  verdict: '✅' | '❌'
+  verdict: '✅' | '❌' | '❌ failed'
   reasons: string[]
 }
 
@@ -198,11 +202,16 @@ async function locateDbCall(tenantId: string, ghl: GhlCallMessage) {
 function checkBucket(
   bucket: Bucket,
   call: { gradingStatus: string; callResult: string | null; score: number | null; aiSummary: string | null; rubricScores: unknown },
+  hasFailureLog: boolean,
 ): string[] {
+  // FAILED + a matching logFailure row is a real downstream failure, accepted
+  // as a valid terminal state for any bucket. Surfaced as "❌ failed" elsewhere.
+  if (call.gradingStatus === 'FAILED' && hasFailureLog) return []
+
   const issues: string[] = []
   if (bucket === 'short') {
-    if (call.gradingStatus !== 'FAILED') issues.push(`<45s expects gradingStatus=FAILED, got ${call.gradingStatus}`)
-    if (call.callResult !== 'no_answer') issues.push(`<45s expects callResult=no_answer, got ${call.callResult ?? 'null'}`)
+    if (call.gradingStatus !== 'SKIPPED') issues.push(`<45s expects gradingStatus=SKIPPED, got ${call.gradingStatus}`)
+    if (call.callResult !== 'short_call') issues.push(`<45s expects callResult=short_call, got ${call.callResult ?? 'null'}`)
     if (call.score !== null && call.score !== undefined) issues.push(`<45s expects score=null, got ${call.score}`)
   } else if (bucket === 'summary') {
     if (call.gradingStatus !== 'COMPLETED') issues.push(`45-89s expects gradingStatus=COMPLETED, got ${call.gradingStatus}`)
@@ -218,10 +227,11 @@ function checkBucket(
 }
 
 async function countFailureLogs(tenantId: string, callId: string): Promise<number> {
-  // Three shapes used by logFailure / grading:
-  //   resourceId = callId                    (grading.ts call.grading.failed)
-  //   resource   = `call:${callId}`          (grading.ts ai_log_failed, next_steps_log_failed, etc.)
-  //   payload.callId = callId                (logFailure context)
+  // Shapes used by logFailure / grading observed in production:
+  //   resourceId = callId             (grading.ts call.grading.failed)
+  //   resource   = `call:${callId}`   (grading.ts ai_log_failed / next_steps_log_failed)
+  //   resource   = callId             (grading.ts grading.workflows_trigger_failed — bare cuid)
+  //   payload.callId = callId         (kept for forward compat — matches 0 rows today per audit shape probe)
   return db.auditLog.count({
     where: {
       tenantId,
@@ -229,6 +239,7 @@ async function countFailureLogs(tenantId: string, callId: string): Promise<numbe
       OR: [
         { resourceId: callId },
         { resource: `call:${callId}` },
+        { resource: callId },
         { payload: { path: ['callId'], equals: callId } },
       ],
     },
@@ -298,10 +309,12 @@ async function verifyCall(tenantId: string, ghl: GhlCallMessage): Promise<Verify
   const dur = call.durationSeconds ?? ghl.durationSeconds
   const bucket = bucketFor(dur)
 
-  const bucketIssues = checkBucket(bucket, call)
+  const failureCount = await countFailureLogs(tenantId, call.id)
+  const hasFailureLog = failureCount > 0
+
+  const bucketIssues = checkBucket(bucket, call, hasFailureLog)
   reasons.push(...bucketIssues)
 
-  const failureCount = await countFailureLogs(tenantId, call.id)
   if (failureCount > 0) reasons.push(`${failureCount} ERROR audit_logs reference this call`)
 
   const transcriptResult = await checkTranscript(tenantId, ghl, call)
@@ -310,7 +323,13 @@ async function verifyCall(tenantId: string, ghl: GhlCallMessage): Promise<Verify
   const bucketMatch = bucketIssues.length === 0
   const noFailures = failureCount === 0
   const transcriptOk = transcriptResult.ok
+  const isRealFailure = call.gradingStatus === 'FAILED' && hasFailureLog
   const pass = bucketMatch && noFailures && transcriptOk
+
+  let verdict: VerifyRow['verdict']
+  if (pass) verdict = '✅'
+  else if (isRealFailure) verdict = '❌ failed'
+  else verdict = '❌'
 
   return {
     callId: call.id,
@@ -320,7 +339,7 @@ async function verifyCall(tenantId: string, ghl: GhlCallMessage): Promise<Verify
     bucketMatch,
     noFailures,
     transcriptOk,
-    verdict: pass ? '✅' : '❌',
+    verdict,
     reasons,
   }
 }
@@ -356,12 +375,13 @@ async function main(): Promise<void> {
     verdict: r.verdict,
   })))
 
-  const failed = rows.filter(r => r.verdict === '❌')
+  const failed = rows.filter(r => r.verdict !== '✅')
   if (failed.length > 0) {
     console.log('\nFailure details:')
     for (const r of failed) {
       const id = r.callId ?? `ghl:${r.ghlCallId}`
-      console.log(`  ${id}: ${r.reasons.join('; ')}`)
+      const tag = r.verdict === '❌ failed' ? ' (failed — see logs)' : ''
+      console.log(`  ${id}${tag}: ${r.reasons.join('; ')}`)
     }
   }
 
