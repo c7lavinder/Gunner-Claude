@@ -1,17 +1,40 @@
 // POST /api/ai/assistant/execute — execute an approved tool call
 // Wires to real GHL API + Gunner DB actions
+//
+// editedInput contract (added Blocker #2 / Prompt 4):
+//   Client sends `editedInput` when the user touched the inline edit panel on
+//   any of the 7 target action families. Final payload = { ...original, ...edited }
+//   — edit wins on overlap. originalInput + editedInput BOTH persisted in the
+//   audit row so the AI-learning loop can diff proposed vs executed later.
+//   Branches the prompt did not widen (e.g. log_offer, update_property, …)
+//   simply never receive editedInput and fall through to the original path.
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
+import { resolveAssignee } from '@/lib/ghl/resolveAssignee'
 import { logFailure } from '@/lib/audit'
+import { z } from 'zod'
+
+const bodySchema = z.object({
+  toolCallId: z.string(),
+  pageContext: z.string().optional().nullable(),
+  rejected: z.boolean().optional(),
+  // Loose dict — per-branch validation happens inline where a required field
+  // is enforced (e.g. change_pipeline_stage requires stageId; see defect #4 in
+  // ACTION_EXECUTION_AUDIT.md). All keys are optional at the schema level so
+  // the same endpoint can service 40+ action types with different shapes.
+  editedInput: z.record(z.unknown()).optional(),
+})
 
 export async function POST(request: NextRequest) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { toolCallId, pageContext, rejected } = await request.json()
-  if (!toolCallId) return NextResponse.json({ error: 'toolCallId required' }, { status: 400 })
+  const body = await request.json()
+  const parsed = bodySchema.safeParse(body)
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+  const { toolCallId, pageContext, rejected, editedInput } = parsed.data
 
   const tenantId = session.tenantId
   const sessionUserId = session.userId
@@ -34,15 +57,22 @@ export async function POST(request: NextRequest) {
 
   if (!toolCall) return NextResponse.json({ error: 'Tool call not found' }, { status: 404 })
 
+  // Merge client-supplied edits OVER the AI's original input. Edit wins on
+  // overlap. Branches read from `mergedInput`; audit rows persist BOTH shapes.
+  const originalInput = toolCall.input as Record<string, unknown>
+  const editedInputSafe = (editedInput ?? {}) as Record<string, unknown>
+  const mergedInput: Record<string, unknown> = { ...originalInput, ...editedInputSafe }
+  const wasEdited = Object.keys(editedInputSafe).length > 0
+
   // Handle rejection — log for AI learning and return
   if (rejected) {
     await db.actionLog.create({
       data: {
         tenantId, userId: sessionUserId,
         actionType: toolCall.name,
-        proposed: JSON.parse(JSON.stringify(toolCall.input)),
+        proposed: JSON.parse(JSON.stringify(originalInput)),
         wasEdited: false, wasRejected: true,
-        pageContext,
+        pageContext: pageContext ?? undefined,
       },
     }).catch(err => logFailure(tenantId, 'assistant.rejection_log_failed', 'actionLog', err))
     return NextResponse.json({ result: 'Rejection logged' })
@@ -82,11 +112,16 @@ export async function POST(request: NextRequest) {
         if (!contactId) { result = 'No contact linked — cannot send SMS'; break }
         if (!ghl) { result = 'GHL not connected'; break }
 
-        const message = String(toolCall.input.message ?? '')
+        const message = String(mergedInput.message ?? '').trim()
+        if (!message) {
+          return NextResponse.json({ error: 'SMS message text is required' }, { status: 400 })
+        }
         await ghl.sendSMS(contactId, message)
-        result = `SMS sent to ${toolCall.input.contactName ?? 'contact'}: "${message.slice(0, 60)}${message.length > 60 ? '...' : ''}"`
+        result = `SMS sent to ${mergedInput.contactName ?? 'contact'}: "${message.slice(0, 60)}${message.length > 60 ? '...' : ''}"`
 
-        // Log to audit
+        // Business-event audit row (sms.sent) — preserved verbatim so existing
+        // dashboards querying on action='sms.sent' keep working. The universal
+        // assistant.action.${type} row is added at the end of try for AI-learning.
         await db.auditLog.create({
           data: {
             tenantId: tenantId, userId: sessionUserId,
@@ -103,17 +138,23 @@ export async function POST(request: NextRequest) {
         if (!contactId) { result = 'No contact linked — cannot create task'; break }
         if (!ghl) { result = 'GHL not connected'; break }
 
-        const title = String(toolCall.input.title ?? 'Follow up')
-        const description = String(toolCall.input.description ?? '')
-        const dueDate = toolCall.input.dueDate ? new Date(String(toolCall.input.dueDate)) : new Date(Date.now() + 86400000) // default tomorrow
+        const title = String(mergedInput.title ?? 'Follow up')
+        const description = String(mergedInput.description ?? '')
+        const dueDate = mergedInput.dueDate ? new Date(String(mergedInput.dueDate)) : new Date(Date.now() + 86400000) // default tomorrow
+
+        // Resolve internal user id -> GHL user id via the shared helper. Same
+        // three-state note vocabulary as call-detail's actions route.
+        const { ghlUserId: taskAssignee, note: taskAssigneeNote } =
+          await resolveAssignee(mergedInput.assignedTo as string | undefined, tenantId)
 
         await ghl.createTask(contactId, {
           title,
           body: description,
           dueDate: dueDate.toISOString(),
           completed: false,
+          assignedTo: taskAssignee,
         })
-        result = `Task created: "${title}"${toolCall.input.assignedTo ? ` (assigned: ${toolCall.input.assignedTo})` : ''}, due ${dueDate.toISOString().slice(0, 10)}`
+        result = `Task created: "${title}"${taskAssignee ? ` (assigned to GHL user)` : (mergedInput.assignedTo ? ` (assignee skipped: ${taskAssigneeNote})` : '')}, due ${dueDate.toISOString().slice(0, 10)}`
         break
       }
 
@@ -122,47 +163,63 @@ export async function POST(request: NextRequest) {
         if (!contactId) { result = 'No contact linked — cannot add note'; break }
         if (!ghl) { result = 'GHL not connected'; break }
 
-        const note = String(toolCall.input.note ?? '')
+        const note = String(mergedInput.note ?? '').trim()
+        if (!note) {
+          return NextResponse.json({ error: 'Note text is required' }, { status: 400 })
+        }
         await ghl.addNote(contactId, note)
-        result = `Note added to ${toolCall.input.contactName ?? 'contact'} (${note.length} chars)`
+        result = `Note added to ${mergedInput.contactName ?? 'contact'} (${note.length} chars)`
         break
       }
 
       case 'change_pipeline_stage': {
+        // Rule 2: no fuzzy matching. stageId must be an explicit GHL id from a
+        // client-populated dropdown. pipelineId is an optional hint; when
+        // absent we scan all pipelines to find the owner of the given stageId.
         if (!ghl) { result = 'GHL not connected'; break }
         const contactId = await resolveContactId()
         if (!contactId) { result = 'No contact linked'; break }
 
-        // Find the opportunity for this contact
-        const pipelines = await ghl.getPipelines()
-        const targetPipeline = pipelines.pipelines?.find(p =>
-          p.name.toLowerCase().includes(String(toolCall!.input.pipelineName ?? '').toLowerCase())
-        ) ?? pipelines.pipelines?.[0]
+        const targetStageId = mergedInput.stageId ? String(mergedInput.stageId) : undefined
+        if (!targetStageId) {
+          return NextResponse.json(
+            { error: 'stageId is required for change_pipeline_stage (Rule 2: no fuzzy matching)' },
+            { status: 400 },
+          )
+        }
+        const hintPipelineId = mergedInput.pipelineId ? String(mergedInput.pipelineId) : undefined
 
-        if (!targetPipeline) { result = 'Pipeline not found'; break }
-
-        const targetStage = targetPipeline.stages?.find(s =>
-          s.name.toLowerCase().includes(String(toolCall!.input.stageName ?? '').toLowerCase())
+        const pipelinesResp = await ghl.getPipelines()
+        const candidatePipelines = hintPipelineId
+          ? (pipelinesResp.pipelines ?? []).filter(p => p.id === hintPipelineId)
+          : (pipelinesResp.pipelines ?? [])
+        const ownerPipeline = candidatePipelines.find(p =>
+          p.stages?.some((s: { id: string }) => s.id === targetStageId),
         )
-
-        if (!targetStage) { result = `Stage "${toolCall.input.stageName}" not found in ${targetPipeline.name}`; break }
+        if (!ownerPipeline) {
+          return NextResponse.json(
+            { error: 'stageId not found in the specified pipeline(s)' },
+            { status: 400 },
+          )
+        }
+        const targetStage = ownerPipeline.stages?.find(s => s.id === targetStageId)
 
         // Find opportunity for this contact in this pipeline
-        const opps = await ghl.searchOpportunities(targetPipeline.id, 10)
+        const opps = await ghl.searchOpportunities(ownerPipeline.id, 10)
         const opp = opps.opportunities?.find(o => o.contactId === contactId)
 
         if (opp) {
-          await ghl.updateOpportunityStage(opp.id, targetStage.id)
-          result = `Moved ${toolCall.input.contactName ?? 'contact'} to "${targetStage.name}" in ${targetPipeline.name}`
+          await ghl.updateOpportunityStage(opp.id, targetStageId)
+          result = `Moved ${mergedInput.contactName ?? 'contact'} to "${targetStage?.name ?? targetStageId}" in ${ownerPipeline.name}`
         } else {
-          // Create new opportunity
+          // Create new opportunity at the target stage
           await ghl.createOpportunity({
-            pipelineId: targetPipeline.id,
-            stageId: targetStage.id,
+            pipelineId: ownerPipeline.id,
+            stageId: targetStageId,
             contactId,
-            name: String(toolCall.input.contactName ?? 'Deal'),
+            name: String(mergedInput.contactName ?? 'Deal'),
           })
-          result = `Created opportunity for ${toolCall.input.contactName ?? 'contact'} at "${targetStage.name}" in ${targetPipeline.name}`
+          result = `Created opportunity for ${mergedInput.contactName ?? 'contact'} at "${targetStage?.name ?? targetStageId}" in ${ownerPipeline.name}`
         }
         break
       }
@@ -251,11 +308,15 @@ export async function POST(request: NextRequest) {
         if (!contactId || !ghl) { result = 'No contact linked or GHL not connected'; break }
 
         const updates: Record<string, unknown> = {}
-        if (toolCall.input.firstName) updates.firstName = toolCall.input.firstName
-        if (toolCall.input.lastName) updates.lastName = toolCall.input.lastName
-        if (toolCall.input.phone) updates.phone = toolCall.input.phone
-        if (toolCall.input.email) updates.email = toolCall.input.email
-        if (toolCall.input.tags) updates.tags = toolCall.input.tags
+        if (mergedInput.firstName) updates.firstName = mergedInput.firstName
+        if (mergedInput.lastName) updates.lastName = mergedInput.lastName
+        if (mergedInput.phone) updates.phone = mergedInput.phone
+        if (mergedInput.email) updates.email = mergedInput.email
+        if (mergedInput.tags) updates.tags = mergedInput.tags
+
+        if (Object.keys(updates).length === 0) {
+          return NextResponse.json({ error: 'At least one field to update is required' }, { status: 400 })
+        }
 
         await ghl.updateContact(contactId, updates)
         result = `Contact updated: ${Object.keys(updates).join(', ')}`
@@ -266,11 +327,11 @@ export async function POST(request: NextRequest) {
         const contactId = await resolveContactId()
         if (!contactId || !ghl) { result = 'No contact linked or GHL not connected'; break }
 
-        const taskId = String(toolCall.input.taskId ?? '')
+        const taskId = String(mergedInput.taskId ?? '')
         if (!taskId) { result = 'No task ID provided'; break }
 
         await ghl.completeTask(contactId, taskId)
-        result = `Task "${toolCall.input.title ?? taskId}" marked complete`
+        result = `Task "${mergedInput.title ?? taskId}" marked complete`
         break
       }
 
@@ -278,12 +339,14 @@ export async function POST(request: NextRequest) {
         const contactId = await resolveContactId()
         if (!contactId || !ghl) { result = 'No contact linked or GHL not connected'; break }
 
-        await ghl.sendEmail(
-          contactId,
-          String(toolCall.input.subject ?? 'Follow Up'),
-          String(toolCall.input.body ?? ''),
-        )
-        result = `Email sent to ${toolCall.input.contactName ?? 'contact'}: "${toolCall.input.subject}"`
+        const subject = String(mergedInput.subject ?? '').trim()
+        const emailBody = String(mergedInput.body ?? '').trim()
+        if (!subject || !emailBody) {
+          return NextResponse.json({ error: 'Email subject and body are required' }, { status: 400 })
+        }
+
+        await ghl.sendEmail(contactId, subject, emailBody)
+        result = `Email sent to ${mergedInput.contactName ?? 'contact'}: "${subject}"`
         break
       }
 
@@ -367,40 +430,58 @@ export async function POST(request: NextRequest) {
 
       case 'create_contact': {
         if (!ghl) { result = 'GHL not connected'; break }
+        const firstName = String(mergedInput.firstName ?? '').trim()
+        const lastName = String(mergedInput.lastName ?? '').trim()
+        const phone = String(mergedInput.phone ?? '').trim()
+        if (!firstName && !lastName) {
+          return NextResponse.json({ error: 'At least one of firstName or lastName is required' }, { status: 400 })
+        }
+        if (!phone && !mergedInput.email) {
+          return NextResponse.json({ error: 'phone or email is required to create a contact' }, { status: 400 })
+        }
         const newContact = await ghl.createContact({
-          firstName: String(toolCall.input.firstName ?? ''),
-          lastName: String(toolCall.input.lastName ?? ''),
-          phone: String(toolCall.input.phone ?? ''),
-          email: toolCall.input.email ? String(toolCall.input.email) : undefined,
-          source: toolCall.input.source ? String(toolCall.input.source) : undefined,
-          tags: Array.isArray(toolCall.input.tags) ? toolCall.input.tags.map(String) : undefined,
+          firstName, lastName, phone,
+          email: mergedInput.email ? String(mergedInput.email) : undefined,
+          source: mergedInput.source ? String(mergedInput.source) : undefined,
+          tags: Array.isArray(mergedInput.tags) ? (mergedInput.tags as unknown[]).map(String) : undefined,
         })
-        result = `Contact created: ${toolCall.input.firstName} ${toolCall.input.lastName ?? ''} (${toolCall.input.phone})${newContact?.contact?.id ? ` — ID: ${newContact.contact.id}` : ''}`
+        result = `Contact created: ${firstName} ${lastName} (${phone})${newContact?.contact?.id ? ` — ID: ${newContact.contact.id}` : ''}`
         break
       }
 
       case 'create_opportunity': {
+        // Rule 2: pipelineId + stageId must be explicit GHL ids. Fuzzy
+        // name-matching removed — client populates both from GHL dropdowns.
         if (!ghl) { result = 'GHL not connected'; break }
         const oppContactId = await resolveContactId()
         if (!oppContactId) { result = 'No contact linked — cannot create opportunity'; break }
 
-        const pipelines = await ghl.getPipelines()
-        const pipeline = pipelines.pipelines?.find(p =>
-          p.name.toLowerCase().includes(String(toolCall!.input.pipelineName ?? '').toLowerCase())
-        ) ?? pipelines.pipelines?.[0]
-        if (!pipeline) { result = 'No pipeline found'; break }
+        const oppPipelineId = mergedInput.pipelineId ? String(mergedInput.pipelineId) : undefined
+        const oppStageId = mergedInput.stageId ? String(mergedInput.stageId) : undefined
+        if (!oppPipelineId || !oppStageId) {
+          return NextResponse.json(
+            { error: 'pipelineId and stageId are required for create_opportunity (Rule 2: no fuzzy matching)' },
+            { status: 400 },
+          )
+        }
 
-        const stage = toolCall.input.stageName
-          ? pipeline.stages?.find(s => s.name.toLowerCase().includes(String(toolCall!.input.stageName).toLowerCase()))
-          : pipeline.stages?.[0]
+        const pipelinesResp = await ghl.getPipelines()
+        const pipeline = pipelinesResp.pipelines?.find(p => p.id === oppPipelineId)
+        if (!pipeline) {
+          return NextResponse.json({ error: 'pipelineId not found' }, { status: 400 })
+        }
+        const stage = pipeline.stages?.find(s => s.id === oppStageId)
+        if (!stage) {
+          return NextResponse.json({ error: 'stageId not found in the specified pipeline' }, { status: 400 })
+        }
 
         await ghl.createOpportunity({
           pipelineId: pipeline.id,
-          stageId: stage?.id ?? pipeline.stages?.[0]?.id ?? '',
+          stageId: stage.id,
           contactId: oppContactId,
-          name: String(toolCall.input.dealName ?? 'New Deal'),
+          name: String(mergedInput.dealName ?? 'New Deal'),
         })
-        result = `Opportunity created: "${toolCall.input.dealName}" in ${pipeline.name} → ${stage?.name ?? 'first stage'}`
+        result = `Opportunity created: "${mergedInput.dealName ?? 'New Deal'}" in ${pipeline.name} → ${stage.name}`
         break
       }
 
@@ -571,11 +652,24 @@ export async function POST(request: NextRequest) {
       case 'update_task': {
         const contactId = await resolveContactId()
         if (!contactId || !ghl) { result = 'No contact or GHL not connected'; break }
+        const updateTaskId = String(mergedInput.taskId ?? '')
+        if (!updateTaskId) {
+          return NextResponse.json({ error: 'taskId is required for update_task' }, { status: 400 })
+        }
         const taskUpdates: Record<string, unknown> = {}
-        if (toolCall.input.title) taskUpdates.title = toolCall.input.title
-        if (toolCall.input.description) taskUpdates.body = toolCall.input.description
-        if (toolCall.input.dueDate) taskUpdates.dueDate = new Date(String(toolCall.input.dueDate)).toISOString()
-        await ghl.updateTask(contactId, String(toolCall.input.taskId), taskUpdates)
+        if (mergedInput.title) taskUpdates.title = mergedInput.title
+        if (mergedInput.description) taskUpdates.body = mergedInput.description
+        if (mergedInput.dueDate) taskUpdates.dueDate = new Date(String(mergedInput.dueDate)).toISOString()
+        // Assignment edits route through the shared resolver — single source of truth.
+        if (mergedInput.assignedTo) {
+          const { ghlUserId: updateTaskAssignee } =
+            await resolveAssignee(String(mergedInput.assignedTo), tenantId)
+          if (updateTaskAssignee) taskUpdates.assignedTo = updateTaskAssignee
+        }
+        if (Object.keys(taskUpdates).length === 0) {
+          return NextResponse.json({ error: 'At least one field to update is required' }, { status: 400 })
+        }
+        await ghl.updateTask(contactId, updateTaskId, taskUpdates)
         result = `Task updated: ${Object.keys(taskUpdates).join(', ')}`
         break
       }
@@ -620,14 +714,18 @@ export async function POST(request: NextRequest) {
         if (!ghl) { result = 'GHL not connected'; break }
         const contactId = await resolveContactId()
         if (!contactId) { result = 'No contact linked'; break }
+        const status = String(mergedInput.status ?? '').trim()
+        if (!status) {
+          return NextResponse.json({ error: 'status is required' }, { status: 400 })
+        }
         const pipes = await ghl.getPipelines()
         const pipe = pipes.pipelines?.[0]
         if (!pipe) { result = 'No pipeline found'; break }
         const opps = await ghl.searchOpportunities(pipe.id, 10)
         const opp = opps.opportunities?.find(o => o.contactId === contactId)
         if (!opp) { result = 'No opportunity found for this contact'; break }
-        await ghl.updateOpportunity(opp.id, { status: String(toolCall.input.status) })
-        result = `Opportunity status updated to ${toolCall.input.status}`
+        await ghl.updateOpportunity(opp.id, { status })
+        result = `Opportunity status updated to ${status}`
         break
       }
 
@@ -635,14 +733,18 @@ export async function POST(request: NextRequest) {
         if (!ghl) { result = 'GHL not connected'; break }
         const contactId = await resolveContactId()
         if (!contactId) { result = 'No contact linked'; break }
+        const monetaryValue = Number(mergedInput.value)
+        if (!Number.isFinite(monetaryValue)) {
+          return NextResponse.json({ error: 'value must be a finite number' }, { status: 400 })
+        }
         const pipes2 = await ghl.getPipelines()
         const pipe2 = pipes2.pipelines?.[0]
         if (!pipe2) { result = 'No pipeline found'; break }
         const opps2 = await ghl.searchOpportunities(pipe2.id, 10)
         const opp2 = opps2.opportunities?.find(o => o.contactId === contactId)
         if (!opp2) { result = 'No opportunity found'; break }
-        await ghl.updateOpportunity(opp2.id, { monetaryValue: Number(toolCall.input.value) })
-        result = `Opportunity value updated to $${Number(toolCall.input.value).toLocaleString()}`
+        await ghl.updateOpportunity(opp2.id, { monetaryValue })
+        result = `Opportunity value updated to $${monetaryValue.toLocaleString()}`
         break
       }
 
@@ -840,23 +942,90 @@ export async function POST(request: NextRequest) {
         result = `Action "${toolCall.name}" acknowledged`
     }
 
-    // Log the action
+    // AI-learning log — proposed vs executed shapes.
     await db.actionLog.create({
       data: {
         tenantId: tenantId,
         userId: sessionUserId,
         actionType: toolCall.name,
-        proposed: JSON.parse(JSON.stringify(toolCall.input)),
-        executed: JSON.parse(JSON.stringify(toolCall.input)),
-        wasEdited: false,
+        proposed: JSON.parse(JSON.stringify(originalInput)),
+        executed: JSON.parse(JSON.stringify(mergedInput)),
+        wasEdited,
         wasRejected: false,
-        pageContext,
+        pageContext: pageContext ?? undefined,
       },
     }).catch(err => logFailure(tenantId, 'assistant.execute.action_log_failed', 'actionLog', err))
+
+    // Universal success audit row — parallel to call-detail's success audit.
+    // Queryable via: action='assistant.action.<type>' AND severity='INFO'.
+    // Payload persists originalInput + editedInput + wasEdited so the learning
+    // loop can diff proposed vs executed offline. Wrapped in catch so audit
+    // write failures never cascade into a user-facing 500.
+    await db.auditLog.create({
+      data: {
+        tenantId,
+        userId: sessionUserId,
+        action: `assistant.action.${toolCall.name}`,
+        resource: 'assistant',
+        resourceId: toolCallId,
+        source: 'USER',
+        severity: 'INFO',
+        payload: {
+          type: toolCall.name,
+          pageContext: pageContext ?? undefined,
+          originalInput: JSON.parse(JSON.stringify(originalInput)),
+          editedInput: wasEdited ? JSON.parse(JSON.stringify(editedInputSafe)) : undefined,
+          wasEdited,
+          result: typeof result === 'string' ? result.slice(0, 500) : undefined,
+        },
+      },
+    }).catch(err => console.error('[Assistant] Success audit write failed:', err instanceof Error ? err.message : err))
 
     return NextResponse.json({ result })
   } catch (err) {
     console.error('[Assistant Execute]', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Execution failed' }, { status: 500 })
+
+    const errorMessage = err instanceof Error ? err.message : 'Execution failed'
+    const errorStack = err instanceof Error ? err.stack?.slice(0, 500) : undefined
+
+    // Failure audit — two rows per failure by design (mirror of call-detail):
+    //   ERROR row  (action='assistant.action.failed')  — forensic, full fields
+    //   SYSTEM row (resource='assistant:<toolCallId>')  — triage, fast grep
+    // Health query:
+    //   SELECT COUNT(*) FROM audit_logs
+    //   WHERE action='assistant.action.failed'
+    //     AND created_at > NOW() - INTERVAL '24 hours';
+    await db.auditLog.create({
+      data: {
+        tenantId,
+        userId: sessionUserId,
+        action: 'assistant.action.failed',
+        resource: 'assistant',
+        resourceId: toolCallId,
+        source: 'USER',
+        severity: 'ERROR',
+        payload: {
+          type: toolCall.name,
+          pageContext: pageContext ?? undefined,
+          originalInput: JSON.parse(JSON.stringify(originalInput)),
+          editedInput: wasEdited ? JSON.parse(JSON.stringify(editedInputSafe)) : undefined,
+          wasEdited,
+          errorMessage,
+          errorStack,
+        },
+      },
+    }).catch(writeErr => {
+      console.error('[Assistant] Failed to write ERROR audit row:', writeErr instanceof Error ? writeErr.message : writeErr)
+    })
+
+    await logFailure(tenantId, 'assistant.action.failed', `assistant:${toolCallId}`, err, {
+      type: toolCall.name,
+      pageContext: pageContext ?? undefined,
+      originalInput,
+      editedInput: wasEdited ? editedInputSafe : undefined,
+      wasEdited,
+    })
+
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
