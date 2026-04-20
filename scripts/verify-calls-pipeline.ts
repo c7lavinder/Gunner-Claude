@@ -270,14 +270,22 @@ async function fetchRealCallsViaConvSearch(tenant: TenantCtx, target: number): P
     const convs = data.conversations ?? []
     if (convs.length === 0) break
 
+    // 30-day cutoff drops historical archive messages that share a conversation
+    // with recent activity. Without this, Pass B walks back into year-old calls
+    // from chatty conversations and reports them as missing — false signal.
+    const RECENT_CUTOFF_MS = Date.now() - 30 * 86400_000
     for (const conv of convs) {
       if (collected.length >= target) break
-      const msgRes = await fetch(`${GHL}/conversations/${conv.id}/messages?limit=50`, { headers })
+      // limit=10 (was 50) — same archive-noise reasoning. Recent calls are at
+      // the top of the per-conversation list anyway.
+      const msgRes = await fetch(`${GHL}/conversations/${conv.id}/messages?limit=10`, { headers })
       if (!msgRes.ok) continue
       const msgData = await msgRes.json() as { messages?: { messages?: Array<Record<string, unknown>> } }
       const msgs = msgData.messages?.messages ?? []
       for (const m of msgs) {
         if (!isCallMessage(m)) continue   // verbatim isCall — drops SMS/email/chat
+        const dateAdded = (m as { dateAdded?: string }).dateAdded
+        if (dateAdded && new Date(dateAdded).getTime() < RECENT_CUTOFF_MS) continue
         const parsed = parseRealCall(m, conv.id)
         if (!parsed) continue
         if (seen.has(parsed.messageId)) continue
@@ -422,8 +430,16 @@ async function verifyCoverageRow(tenantId: string, ghl: RealCall, db: import('@p
   reasons.push(...bucketIssues)
   if (failureCount > 0) reasons.push(`${failureCount} ERROR audit_logs reference this call`)
 
-  const trans = await checkTranscript(tenantId, ghl, call, db)
-  if (!trans.ok && trans.reason) reasons.push(trans.reason)
+  // Skip transcript check on very short calls. A 1-7s "recording" is typically
+  // dead air or carrier noise — Deepgram returns nothing, but that's expected,
+  // not a pipeline failure.
+  let trans: { ok: boolean; reason?: string }
+  if (dur < 10) {
+    trans = { ok: true }
+  } else {
+    trans = await checkTranscript(tenantId, ghl, call, db)
+    if (!trans.ok && trans.reason) reasons.push(trans.reason)
+  }
 
   const bucketMatch = bucketIssues.length === 0
   const noFailures = failureCount === 0
@@ -546,19 +562,41 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const bRows: PassBRow[] = []
-  for (const c of realCalls) bRows.push(await verifyCoverageRow(tenant.id, c, db))
+  const bRowsRaw: PassBRow[] = []
+  for (const c of realCalls) bRowsRaw.push(await verifyCoverageRow(tenant.id, c, db))
 
-  console.table(bRows.map(r => ({
-    call_id: r.callId ? r.callId.slice(0, 12) : '— missing',
-    duration: `${r.duration}s`,
-    status: r.status,
-    bucket_match: r.bucketMatch ? '✓' : '✗',
-    no_failures: r.noFailures ? '✓' : '✗',
-    transcript_ok: r.transcriptOk ? '✓' : '✗',
-    verdict: r.verdict,
-  })))
-  const bFail = bRows.filter(r => r.verdict !== '✅')
+  // Dedupe by dbCall.id. Cross-source merges (one DB row created from a wf_
+  // automation message + an OAuth message) produce two GHL messageIds that
+  // resolve to the same call row. Collapse to one entry, count once, note the
+  // extra ghlCallId(s) that merged in.
+  const dedupedB: PassBRow[] = []
+  const seenById = new Map<string, PassBRow>()
+  const mergedIds = new Map<string, string[]>()
+  for (const r of bRowsRaw) {
+    if (r.callId === null) { dedupedB.push(r); continue }   // MISSING rows stay distinct
+    const prev = seenById.get(r.callId)
+    if (!prev) { seenById.set(r.callId, r); dedupedB.push(r); continue }
+    const list = mergedIds.get(r.callId) ?? []
+    list.push(r.ghlCallId)
+    mergedIds.set(r.callId, list)
+  }
+  const dupCount = bRowsRaw.length - dedupedB.length
+  if (dupCount > 0) console.log(`[verify] de-duped ${dupCount} cross-source merge row(s) — counted by dbCall.id`)
+
+  console.table(dedupedB.map(r => {
+    const merged = r.callId ? mergedIds.get(r.callId) : undefined
+    return {
+      call_id: r.callId ? r.callId.slice(0, 12) : '— missing',
+      duration: `${r.duration}s`,
+      status: r.status,
+      bucket_match: r.bucketMatch ? '✓' : '✗',
+      no_failures: r.noFailures ? '✓' : '✗',
+      transcript_ok: r.transcriptOk ? '✓' : '✗',
+      verdict: r.verdict,
+      merged: merged ? `+${merged.length}` : '',
+    }
+  }))
+  const bFail = dedupedB.filter(r => r.verdict !== '✅')
   if (bFail.length > 0) {
     console.log('\nPass B failures:')
     for (const r of bFail) {
@@ -567,11 +605,13 @@ async function main(): Promise<void> {
       console.log(`  ${id}${tag}: ${r.reasons.join('; ')}`)
     }
   }
-  console.log(`\nPass B: ${bRows.length - bFail.length} / ${bRows.length} coverage`)
+  console.log(`\nPass B: ${dedupedB.length - bFail.length} / ${dedupedB.length} coverage`)
 
   // ── Overall ──
   const passACheck = aFail.length === 0
-  const passBCheck = bFail.length === 0 && bRows.length === TARGET_COUNT
+  // realCalls.length is the number of unique GHL messageIds we sampled.
+  // dedupedB.length may be smaller after cross-source merge collapse — that's expected.
+  const passBCheck = bFail.length === 0 && realCalls.length === TARGET_COUNT
   const overallOk = passACheck && passBCheck
   console.log(`\nOverall: ${overallOk ? '✅ PASS' : '❌ FAIL'} (Pass A ${passACheck ? '✅' : '❌'}, Pass B ${passBCheck ? '✅' : '❌'})`)
 
