@@ -11,6 +11,14 @@ import { addDays, format } from 'date-fns'
 const schema = z.object({
   type: z.enum(['add_note', 'create_task', 'send_sms', 'create_appointment', 'change_stage', 'check_off_task']),
   label: z.string().optional(),
+  // Edit-panel fields — widened per ACTION_EXECUTION_AUDIT.md defect #1.
+  // Each is optional; handlers fall back to sensible defaults when absent.
+  description: z.string().optional(),
+  dueDate: z.string().optional(),      // ISO datetime or YYYY-MM-DD
+  assignedTo: z.string().optional(),   // internal user id — resolved to ghlUserId and forwarded to GHL below
+  stageId: z.string().optional(),      // required for change_stage (defect #4)
+  pipelineId: z.string().optional(),   // optional hint for stageId lookup; otherwise scan all pipelines
+  smsBody: z.string().optional(),      // lets SMS body diverge from display label
 })
 
 const patchSchema = z.object({
@@ -20,6 +28,14 @@ const patchSchema = z.object({
     reasoning: z.string(),
     status: z.enum(['pending', 'pushed', 'skipped']),
     pushedAt: z.string().nullable().optional(),
+    // Persist edit-panel fields so they survive reload and are available at push time
+    description: z.string().optional(),
+    dueDate: z.string().optional(),
+    assignedTo: z.string().optional(),
+    stageId: z.string().optional(),
+    pipelineId: z.string().optional(),
+    smsBody: z.string().optional(),
+    originalLabel: z.string().optional(),
   })),
 })
 
@@ -49,6 +65,39 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
 
   const label = parsed.data.label ?? ''
 
+  // Normalize a user-supplied date/datetime to GHL's expected ISO format.
+  // Accepts YYYY-MM-DD (from <input type="date">) or a full ISO string.
+  // Falls back to the provided `fallback` Date if input is missing/invalid.
+  function resolveDueDate(input: string | undefined, fallback: Date): string {
+    if (input) {
+      const d = new Date(input.length === 10 ? `${input}T00:00:00Z` : input)
+      if (!Number.isNaN(d.getTime())) return format(d, "yyyy-MM-dd'T'HH:mm:ss'Z'")
+    }
+    return format(fallback, "yyyy-MM-dd'T'HH:mm:ss'Z'")
+  }
+
+  // Resolve internal user id -> GHL user id for task assignment.
+  // Falls back to undefined if user has no ghlUserId mapping — task is still
+  // created, just without an assignee. Skipped resolution is recorded in the
+  // audit payload below.
+  let resolvedAssignedTo: string | undefined
+  let assignedToResolutionNote: string | undefined
+  if (parsed.data.assignedTo) {
+    const assignee = await db.user.findUnique({
+      where: { id: parsed.data.assignedTo },
+      select: { ghlUserId: true, tenantId: true },
+    })
+    if (!assignee) {
+      assignedToResolutionNote = 'user_not_found'
+    } else if (assignee.tenantId !== ctx.tenantId) {
+      assignedToResolutionNote = 'user_wrong_tenant'
+    } else if (!assignee.ghlUserId) {
+      assignedToResolutionNote = 'user_missing_ghl_mapping'
+    } else {
+      resolvedAssignedTo = assignee.ghlUserId
+    }
+  }
+
   try {
     const ghl = await getGHLClient(ctx.tenantId)
     const callDate = call.calledAt ? format(new Date(call.calledAt), 'MMM d') : 'recent'
@@ -56,7 +105,9 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
     switch (parsed.data.type) {
       // ── Add Note to GHL Contact ─────────────────────────────────────────
       case 'add_note': {
-        const noteBody = label || `Call on ${callDate}: ${call.aiSummary ?? 'Call graded — see Gunner AI for details.'}`
+        const noteBody = parsed.data.description
+          || label
+          || `Call on ${callDate}: ${call.aiSummary ?? 'Call graded — see Gunner AI for details.'}`
         await ghl.addNote(contactId, noteBody)
         break
       }
@@ -64,58 +115,84 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
       // ── Create Task in GHL ──────────────────────────────────────────────
       case 'create_task': {
         const title = label || `Follow up: ${call.property?.address ?? 'Contact'}`
-        const dueDate = format(addDays(new Date(), 1), "yyyy-MM-dd'T'HH:mm:ss'Z'")
-        await ghl.createTask(contactId, { title, dueDate })
+        const dueDate = resolveDueDate(parsed.data.dueDate, addDays(new Date(), 1))
+        await ghl.createTask(contactId, {
+          title,
+          body: parsed.data.description || undefined,
+          dueDate,
+          assignedTo: resolvedAssignedTo,
+        })
         break
       }
 
       // ── Send SMS via GHL ────────────────────────────────────────────────
       case 'send_sms': {
-        if (!label) {
+        const body = parsed.data.smsBody || label
+        if (!body) {
           return NextResponse.json({ success: false, message: 'SMS message text is required' }, { status: 400 })
         }
-        await ghl.sendSMS(contactId, label)
+        await ghl.sendSMS(contactId, body)
         break
       }
 
       // ── Create Appointment (as a scheduled task in GHL) ─────────────────
       case 'create_appointment': {
         const title = label || `Appointment: ${call.property?.address ?? 'Contact'}`
-        const dueDate = format(addDays(new Date(), 1), "yyyy-MM-dd'T'HH:mm:ss'Z'")
-        await ghl.createTask(contactId, { title: `📅 ${title}`, dueDate })
+        const dueDate = resolveDueDate(parsed.data.dueDate, addDays(new Date(), 1))
+        // TODO: once calendar/datetime fields are supported in schema, switch from
+        // task-style to real GHL appointment via /calendars/events.
+        await ghl.createTask(contactId, {
+          title: `📅 ${title}`,
+          body: parsed.data.description || undefined,
+          dueDate,
+          assignedTo: resolvedAssignedTo,
+        })
         break
       }
 
-      // ── Change Pipeline Stage ───────────────────────────────────────────
+      // ── Change Pipeline Stage (requires explicit stageId — defect #4) ───
       case 'change_stage': {
-        // Find the opportunity for this contact to move its stage
-        const pipelines = await ghl.getPipelines()
-        let opportunityId: string | null = null
+        if (!parsed.data.stageId) {
+          return NextResponse.json(
+            { success: false, message: 'stageId is required for change_stage (Rule 2: no fuzzy matching)' },
+            { status: 400 },
+          )
+        }
+        const targetStageId = parsed.data.stageId
 
-        for (const pipeline of pipelines.pipelines ?? []) {
+        // Validate the stage exists in GHL. If pipelineId was provided, only check
+        // that pipeline; otherwise scan all pipelines to find which one owns it.
+        const pipelinesResp = await ghl.getPipelines()
+        const candidatePipelines = parsed.data.pipelineId
+          ? (pipelinesResp.pipelines ?? []).filter(p => p.id === parsed.data.pipelineId)
+          : (pipelinesResp.pipelines ?? [])
+        const stageValid = candidatePipelines.some(p =>
+          p.stages?.some((s: { id: string }) => s.id === targetStageId)
+        )
+        if (!stageValid) {
+          return NextResponse.json(
+            { success: false, message: 'stageId not found in the specified pipeline(s)' },
+            { status: 400 },
+          )
+        }
+
+        // Find the opportunity on this contact, preferring the matching pipeline.
+        let opportunityId: string | null = null
+        for (const pipeline of candidatePipelines) {
           try {
             const opps = await ghl.searchOpportunities(pipeline.id)
             const match = opps.opportunities?.find((o: { contactId: string }) => o.contactId === contactId)
-            if (match) {
-              opportunityId = match.id
-              // Find the target stage by matching the label text
-              const targetStage = pipeline.stages?.find((s: { name: string }) =>
-                label.toLowerCase().includes(s.name.toLowerCase())
-              )
-              if (targetStage) {
-                await ghl.updateOpportunityStage(opportunityId, targetStage.id)
-                break
-              }
-            }
-          } catch {
-            continue // try next pipeline
-          }
+            if (match) { opportunityId = match.id; break }
+          } catch { continue }
         }
 
         if (!opportunityId) {
-          // Fallback: add as a note so the action isn't lost
-          await ghl.addNote(contactId, `Stage change requested: ${label}`)
+          return NextResponse.json(
+            { success: false, message: 'No opportunity found for this contact in the target pipeline' },
+            { status: 404 },
+          )
         }
+        await ghl.updateOpportunityStage(opportunityId, targetStageId)
         break
       }
 
@@ -156,11 +233,28 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
         resourceId: params.id,
         source: 'USER',
         severity: 'INFO',
-        payload: { contactId, type: parsed.data.type, label },
+        payload: {
+          contactId,
+          type: parsed.data.type,
+          label,
+          description: parsed.data.description,
+          dueDate: parsed.data.dueDate,
+          assignedTo: parsed.data.assignedTo,           // internal user id as submitted
+          ghlAssignedTo: resolvedAssignedTo,            // GHL user id actually sent (if resolved)
+          assignedToResolution: assignedToResolutionNote, // undefined on success, error tag if skipped
+          stageId: parsed.data.stageId,
+          pipelineId: parsed.data.pipelineId,
+          smsBody: parsed.data.smsBody,
+        },
       },
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      // Present only when the client-supplied assignedTo couldn't be forwarded
+      // to GHL; the client uses this to show a warning toast explaining why.
+      ...(assignedToResolutionNote ? { assignedToResolution: assignedToResolutionNote } : {}),
+    })
   } catch (err) {
     console.error(`[Call Action] ${parsed.data.type} failed:`, err instanceof Error ? err.message : err)
     return NextResponse.json({ success: false, message: err instanceof Error ? err.message : 'GHL action failed' }, { status: 500 })

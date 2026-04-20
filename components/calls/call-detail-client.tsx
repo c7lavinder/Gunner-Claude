@@ -57,6 +57,14 @@ interface NextStep {
   originalLabel?: string // AI's original output, for learning feedback loop
   status: 'pending' | 'pushed' | 'skipped'
   pushedAt?: string
+  // Edit-panel fields persisted on Save and sent on Push (defect #1 fix).
+  // All optional; server falls back to defaults when absent.
+  description?: string
+  dueDate?: string      // ISO date or YYYY-MM-DD
+  assignedTo?: string
+  stageId?: string
+  pipelineId?: string
+  smsBody?: string
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -285,7 +293,16 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: step.type, label: step.label }),
+        body: JSON.stringify({
+          type: step.type,
+          label: step.label,
+          description: step.description,
+          dueDate: step.dueDate,
+          assignedTo: step.assignedTo,
+          stageId: step.stageId,
+          pipelineId: step.pipelineId,
+          smsBody: step.smsBody,
+        }),
       })
       if (res.ok) {
         const updatedSteps = generatedSteps.map((s, i) => i === index ? { ...s, status: 'pushed' as const, pushedAt: new Date().toISOString() } : s)
@@ -312,7 +329,12 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           }).catch(() => {})
         }
 
-        toast('Action pushed to CRM', 'success')
+        const data = await res.json().catch(() => ({} as { assignedToResolution?: string }))
+        if (data.assignedToResolution) {
+          toast(`Pushed to CRM. Assignee skipped: ${data.assignedToResolution}`, 'warning')
+        } else {
+          toast('Action pushed to CRM', 'success')
+        }
       } else toast('Failed to push action', 'error')
     } catch { toast('Failed to push action', 'error') }
     setActionLoading(null)
@@ -1249,7 +1271,18 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                             <div className="flex gap-2 pt-1">
                               <button
                                 onClick={() => {
-                                  const updatedSteps = generatedSteps.map((s, si) => si === i ? { ...s, label: editFields.label ?? s.label } : s)
+                                  // Persist ALL edit-panel fields, not just label — defect #1 fix.
+                                  // Fall back to existing step values when editFields didn't set a key.
+                                  const updatedSteps = generatedSteps.map((s, si) => si === i ? {
+                                    ...s,
+                                    label: editFields.label ?? s.label,
+                                    description: editFields.description ?? s.description,
+                                    dueDate: editFields.dueDate ?? s.dueDate,
+                                    assignedTo: editFields.assignedTo ?? s.assignedTo,
+                                    stageId: editFields.stageId ?? s.stageId,
+                                    pipelineId: editFields.pipelineId ?? s.pipelineId,
+                                    smsBody: (s.type === 'send_sms' ? (editFields.label ?? s.smsBody) : s.smsBody),
+                                  } : s)
                                   setGeneratedSteps(updatedSteps)
                                   fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
                                     method: 'PATCH', headers: { 'Content-Type': 'application/json' },

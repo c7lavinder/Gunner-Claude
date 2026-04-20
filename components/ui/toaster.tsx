@@ -1,9 +1,9 @@
 'use client'
 // components/ui/toaster.tsx
 import { useState, useCallback, createContext, useContext } from 'react'
-import { X, CheckCircle, AlertCircle, Info } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
-type ToastType = 'success' | 'error' | 'info'
+type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 interface Toast {
   id: string
@@ -33,18 +33,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const icons = {
     success: <CheckCircle size={14} className="text-semantic-green shrink-0" />,
     error: <AlertCircle size={14} className="text-semantic-red shrink-0" />,
+    warning: <AlertTriangle size={14} className="text-semantic-amber shrink-0" />,
     info: <Info size={14} className="text-semantic-blue shrink-0" />,
   }
 
   const borderColors = {
     success: 'border-semantic-green/20',
     error: 'border-semantic-red/20',
+    warning: 'border-semantic-amber/20',
     info: 'border-semantic-blue/20',
   }
 
   const leftBorders = {
     success: 'border-l-semantic-green',
     error: 'border-l-semantic-red',
+    warning: 'border-l-semantic-amber',
     info: 'border-l-semantic-blue',
   }
 

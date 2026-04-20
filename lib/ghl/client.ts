@@ -559,6 +559,11 @@ export interface GHLTaskInput {
   body?: string
   dueDate: string
   completed?: boolean
+  // GHL user id of the assignee. GHL v2 POST /contacts/{id}/tasks accepts
+  // `assignedTo`; the response sometimes echoes it back as `userId` (see GHLTask).
+  // Callers must pass a GHL user id (e.g. db.user.ghlUserId), not an internal
+  // Gunner user id.
+  assignedTo?: string
 }
 
 export interface GHLCall {
