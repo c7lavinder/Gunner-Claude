@@ -2,6 +2,7 @@
 // Reusable webhook registration — called from route handler and health check
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
+import { logFailure } from '@/lib/audit'
 
 export const GHL_WEBHOOK_EVENTS = [
   'InboundMessage', 'OutboundMessage', 'CallCompleted',
@@ -22,10 +23,19 @@ export async function reregisterWebhookForTenant(tenantId: string) {
   const webhookUrl = `${baseUrl}/api/webhooks/ghl`
 
   if (tenant.ghlWebhookId) {
-    await ghl.deleteWebhook(tenant.ghlWebhookId).catch(() => {})
+    await ghl.deleteWebhook(tenant.ghlWebhookId).catch(err =>
+      logFailure(tenantId, 'webhook.deregister_failed', `webhook:${tenant.ghlWebhookId}`, err, { webhookUrl })
+    )
   }
 
-  const webhook = await ghl.registerWebhook(webhookUrl, GHL_WEBHOOK_EVENTS)
+  let webhook: { id: string }
+  try {
+    webhook = await ghl.registerWebhook(webhookUrl, GHL_WEBHOOK_EVENTS)
+  } catch (err) {
+    await logFailure(tenantId, 'webhook.register_failed', 'webhook', err, { webhookUrl })
+    throw err
+  }
+
   await db.tenant.update({
     where: { id: tenantId },
     data: { ghlWebhookId: webhook.id },

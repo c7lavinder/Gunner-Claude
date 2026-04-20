@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
+import { approveAction } from '@/lib/gates/requireApproval'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -45,7 +46,7 @@ export async function POST(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const tenantId = session.tenantId
-    const { action, tiers, tier, message, channel, subject, buyerIds } = await req.json()
+    const { action, tiers, tier, message, channel, subject, buyerIds, approvalGateId } = await req.json()
 
     const propertyRaw = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
@@ -208,6 +209,72 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
         if (tier === 'jv') return tags.some(t => t.includes('jv') || t.includes('partner'))
         return true
       })
+
+      // ── Bulk blast approval gate ───────────────────────────────────────────
+      // Every blast with ≥1 recipient requires explicit user confirmation before
+      // sending. Stricter than requireApproval's built-in >10 threshold per the
+      // rollout policy in docs/audits/ACTION_EXECUTION_AUDIT.md (row 15).
+      // Two-phase protocol:
+      //   1. Client POSTs without approvalGateId → we create a pending audit_logs
+      //      row, return 202 with gate details (recipient count, property, sample).
+      //   2. Client POSTs again with approvalGateId → we verify and send.
+      if (tierBuyers.length === 0) {
+        return NextResponse.json({ error: 'No recipients matched', sent: 0, skipped: 0 }, { status: 400 })
+      }
+
+      if (!approvalGateId) {
+        const resolvedChannel = String(channel ?? 'sms')
+        const gate = await db.auditLog.create({
+          data: {
+            tenantId,
+            userId: session.userId,
+            action: `gate.${resolvedChannel}_blast.pending`,
+            resource: `${resolvedChannel}_blast`,
+            resourceId: params.propertyId,
+            source: 'SYSTEM',
+            severity: 'WARNING',
+            payload: {
+              description: `Send ${resolvedChannel.toUpperCase()} to ${tierBuyers.length} buyers for ${property.address}`,
+              recipientCount: tierBuyers.length,
+              propertyId: params.propertyId,
+              propertyAddress: property.address,
+              channel: resolvedChannel,
+              tier,
+              sampleSubject: subject ? String(subject).slice(0, 80) : null,
+              sampleBody: message ? String(message).slice(0, 200) : null,
+              buyerIdSample: tierBuyers.map(b => b.id).slice(0, 20),
+            },
+          },
+        })
+        return NextResponse.json({
+          status: 'pending_approval',
+          gateId: gate.id,
+          recipientCount: tierBuyers.length,
+          propertyAddress: property.address,
+          channel: resolvedChannel,
+          sampleSubject: subject ? String(subject).slice(0, 80) : null,
+          sampleBody: message ? String(message).slice(0, 200) : null,
+          confirmationMessage: `Send ${resolvedChannel.toUpperCase()} to ${tierBuyers.length} buyers at ${property.address}? Confirm to proceed.`,
+        }, { status: 202 })
+      }
+
+      // Verify the approval gate — same tenant, same user, same property, same
+      // action family, still fresh (≤5 min old).
+      const gate = await db.auditLog.findUnique({
+        where: { id: approvalGateId },
+        select: { id: true, tenantId: true, userId: true, action: true, resourceId: true, createdAt: true },
+      })
+      const gateAgeMs = gate ? Date.now() - gate.createdAt.getTime() : Infinity
+      if (!gate
+          || gate.tenantId !== tenantId
+          || gate.userId !== session.userId
+          || !gate.action.startsWith('gate.')
+          || !gate.action.endsWith('_blast.pending')
+          || gate.resourceId !== params.propertyId
+          || gateAgeMs > 5 * 60_000) {
+        return NextResponse.json({ error: 'Invalid or expired approval gate' }, { status: 403 })
+      }
+      await approveAction(gate.id, session.userId, tenantId)
 
       // Create blast record
       const blast = await db.dealBlast.create({
