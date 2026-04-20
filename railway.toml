@@ -1,5 +1,6 @@
 # railway.toml
 # Gunner AI — Railway deployment configuration
+# (force cron re-registration — process-recording-jobs missing from Railway dashboard 2026-04-20)
 
 [build]
 builder = "nixpacks"
