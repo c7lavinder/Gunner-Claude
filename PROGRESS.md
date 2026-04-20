@@ -8,6 +8,7 @@
 
 ## Current Status
 
+**Current session**: 37 — Blocker #1 cleared
 **Phase**: AI Intelligence Layer complete. Deep audit done. Production ready.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -16,6 +17,7 @@
 **AI Tools**: 74 assistant tools, 11 AI logging touchpoints, pgvector semantic search
 **Knowledge**: 42 playbook docs loaded + embedded, 3 user profiles
 **Calls graded**: 17+ (auto-grading active)
+**Pipeline verifier**: scripts/verify-calls-pipeline.ts — bidirectional A/B with sanity gate + canary
 
 ---
 
@@ -48,6 +50,61 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 37 — Pipeline verifier built end-to-end + Blocker #1 cleared (2026-04-20)
+
+Built `scripts/verify-calls-pipeline.ts` iteratively as a recurring health check
+on the call ingestion pipeline. Four commits, each gated by tsc + a live run before
+the next one landed. Final verifier is rollout-ready as a daily cron candidate.
+
+Commits (all on main):
+- `4921397` — first cut. Bucket spec aligned to current code (911bcb4 routing:
+  `<45s → SKIPPED + short_call`, not the older Session-29 `FAILED + no_answer`
+  shape). `countFailureLogs` OR-clause tightened to cover the three real shapes
+  in `audit_logs` (`resourceId`, `resource='call:'+id`, bare `resource=callId`)
+  plus a forward-compat `payload.callId` predicate.
+- `5dc057d` — bidirectional rewrite after first run found 26/30 "missing" rows
+  that were actually SMS messages. GHL's `/conversations/messages/export?type=TYPE_CALL`
+  silently ignores the type filter. New design: Pass A (DB → GHL per-id integrity),
+  Pass B (GHL → DB coverage via `/conversations/search` + per-conv messages +
+  client-side `isCall` filter — verbatim copy of `lib/ghl/webhooks.ts:120-123`),
+  plus a sanity gate up front.
+- `90b5b01` — sanity loosened. First run halted on a single legacy row
+  (`source=null`, `ghlContactId=null`, `durationSeconds=null` — likely from
+  `recover-stuck-calls.ts`). Sanity now filters to `source IS NOT NULL` and
+  halts only on 0/N verified (real endpoint break), not single-row drift.
+  Added end-of-run canary: count of `calls WHERE source IS NULL`.
+- `c013ffe` — Pass B sampling tightening. `/messages?limit=10` (was 50) +
+  `dateAdded > now-30d` filter dropped 9 false-positive "missing" rows that
+  were actually historical archive messages from chatty conversations
+  (oldest from 2025-09-22). Skip transcript assertion when `dur < 10`
+  (Deepgram can't transcribe dead air). Dedupe Pass B output by `dbCall.id`
+  with `+N merged` indicator for cross-source-merge collapse.
+
+Final verifier state on this tenant:
+- Sanity: 5/5 verified, 3 wf_ synthetic skipped — endpoint healthy
+- Pass A: 29/30 — single legacy row `cmo4o88zn0ra…` (source=null) is the only ❌
+- Pass B: 20/25 — 4 short-call bucket mismatches + 1 genuine missing row
+- Canary: 2487 source-null calls, **0 in last 24h** (taper, not active leak)
+- Rollout diagnostic (separate query): 10/10 PASS on the last 10 calls ≥45s
+  in the past 7 days. Both 45-89s summary path and 90s+ full-grade path
+  confirmed live. **This is the proof that closes Blocker #1.**
+
+Findings to triage (added to Known Bugs):
+- Bucket-spec mismatch: webhook handler sets `callResult='no_answer'` at
+  ingestion when GHL ships an explicit fail status, but the cron only writes
+  `short_call` after a successful Deepgram pass. Calls with explicit fail-status
+  + duration <45s stay `no_answer` forever, never get rewritten when SKIPPED.
+  Either accept both in the spec or have the cron flip on SKIPPED routing.
+- 2487 `calls.source IS NULL` rows, oldest 2026-03-21, newest 2026-04-18.
+  Profile fits a bounded backfill operation (Session 36's `recover-stuck-calls.ts`
+  most likely). Last 24h is zero — leak appears stopped. One-time backfill
+  recommended, plus grep `db.call.create` callsites to ensure `source` is set.
+
+Also shipped earlier today: `79e916e` (grading: coerce sentiment to float +
+bump max_tokens to 8000) — fixes the `Argument 'sentiment': Invalid value`
+errors visible in audit_logs from 2026-04-19 evening. Surfaced incidentally
+during the verifier's audit_log shape probe.
 
 ### Session 36 — Backlog recovery for stuck calls (2026-04-19)
 
@@ -266,29 +323,42 @@ Parked for next session (none blocking team onboarding):
 | 11 | Appointments 401 — scope may need update | HIGH | Investigate GHL scope |
 | 12 | GHL API version header may be outdated | MEDIUM | Test newer version |
 | 16 | DEV_BYPASS_AUTH references hardcoded slugs | LOW | Clean up before tenant #2 |
+| 17 | callResult `no_answer` never rewritten to `short_call` when cron routes <45s call to SKIPPED. Surfaced 4× in Session 37 verifier Pass B. | MEDIUM | Either fix in cron processor or update spec to accept both for short calls |
+| 18 | 2487 `calls` rows have `source IS NULL` (oldest 2026-03-21, newest 2026-04-18, **0 in last 24h**). Likely from `scripts/recover-stuck-calls.ts` not setting source. | LOW | One-time `UPDATE` to backfill `source='recovery'`; grep `db.call.create` to add `source` to all script callsites |
+| 19 | One legacy row `cmo4o88zn0raqn5nzaboykobe` (ghlCallId `VyCnm5DBNBVFfipIo0FR`) — non-wf_ id GHL doesn't recognize, source/contactId/duration all null. | LOW | Single instance, no production impact. Origin worth understanding (covered by #18 backfill) |
 
 All other bugs from sessions 1-32 are resolved.
+
+> Note: bug #13, #14, #15 (cross-tenant data leaks) were resolved in Session 33
+> via the `withTenant<TParams>()` helper (commit `c63cb03`) and the 3-route refactor
+> template (commit `f484820`) — already removed from this table per AGENTS.md.
 
 ---
 
 ## Next Session — Start Exactly Here
 
-**Task:** Run `npx tsx scripts/diagnose-calls.ts` to verify overnight grading caught up.
-Then check audit page — compare Dials count against GHL dashboard.
-If numbers match within 10%, system is healthy. Focus on remaining parked items.
+**Task:** Run `npx tsx scripts/verify-calls-pipeline.ts` first (with `.env.local`
+loaded — `node --env-file=.env.local --import tsx scripts/verify-calls-pipeline.ts`).
+Look at the canary line and the Pass B failure list.
 
-**If Corey reports missing calls:** Run diagnose-calls.ts, check webhook_logs for
-delivery gaps, verify poll cron is running (look for recent poll-sourced calls).
-See memory/reference_call_pipeline.md for full diagnostic playbook.
+**If canary shows non-zero `last_day` source-null calls** → there's a live writer
+still producing untagged rows. Grep `db.call.create` across the repo to find it.
 
-**Railway access:** Need a fresh Railway API token from Corey to see server logs.
-Current token is invalid. This is the biggest diagnostic gap.
+**If Pass B fails on >5 calls** → real coverage gap. Run the H1/H2/H3 triage
+flow from Session 37 to classify (workflow stub vs cross-source merge vs real
+ingestion gap).
 
-Parked items (prioritized):
-1. Verify poll cron is running on Railway (can't confirm without logs)
-2. Backfill Kyle's ~20 missing morning calls from Apr 9 (before fixes deployed)
-3. LM tab "227" dial count not aggregating across LM role
-4. Day Hub vs Calls page count source-of-truth alignment
-5. Grading truncated JSON — consider max_tokens bump in lib/ai/grading.ts
-6. Migrate ~64 remaining API routes to withTenant
-7. Sweep remaining silent catches in broader codebase
+Parked items (prioritized — Blocker #1 cleared, these are next):
+1. Bug #17 — fix `no_answer → short_call` rewrite in cron processor
+   ([lib/ai/grading.ts:79](lib/ai/grading.ts#L79) area); or update spec to accept both.
+2. Bug #18 — one-time backfill: `UPDATE calls SET source='recovery' WHERE source IS NULL`
+   AND audit `scripts/recover-stuck-calls.ts` to set source on every `db.call.create`.
+3. Verify poll cron is running on Railway (can't confirm without logs)
+4. Backfill Kyle's ~20 missing morning calls from Apr 9 (before fixes deployed)
+5. LM tab "227" dial count not aggregating across LM role
+6. Day Hub vs Calls page count source-of-truth alignment
+7. Migrate ~64 remaining API routes to withTenant
+8. Sweep remaining silent catches in broader codebase
+
+**Railway access:** Still need a fresh Railway API token from Corey to see server
+logs. Current token is invalid. Largest diagnostic gap remaining.
