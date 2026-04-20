@@ -167,7 +167,7 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     })
@@ -824,9 +824,34 @@ function parseGradingResponse(text: string): GradingResult {
     callOutcome: (raw.callOutcome as string) ?? null,
     followUpScheduled: (raw.followUpScheduled as boolean) ?? false,
     keyMoments: Array.isArray(raw.keyMoments) ? raw.keyMoments as GradingResult['keyMoments'] : [],
-    sentiment: (raw.sentiment as number) ?? null,
-    sellerMotivation: (raw.sellerMotivation as number) ?? null,
+    sentiment: coerceSentiment(raw.sentiment),
+    sellerMotivation: coerceNumber(raw.sellerMotivation),
   }
+}
+
+// Claude occasionally returns sentiment as a string ("positive"/"neutral"/"negative")
+// or sellerMotivation as a free-text rationale. The DB columns are Float, so anything
+// non-numeric must be coerced or dropped to keep the update from rejecting.
+function coerceSentiment(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.max(-1, Math.min(1, v))
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase()
+    if (s === 'positive' || s === 'very positive') return 1
+    if (s === 'neutral') return 0
+    if (s === 'negative' || s === 'very negative') return -1
+    const parsed = Number(s)
+    if (Number.isFinite(parsed)) return Math.max(-1, Math.min(1, parsed))
+  }
+  return null
+}
+
+function coerceNumber(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string') {
+    const parsed = Number(v.trim())
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
 }
 
 // ─── Role-based call type fallback (tier 3 of 3-tier classification) ────────
