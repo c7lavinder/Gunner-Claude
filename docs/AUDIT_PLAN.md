@@ -14,7 +14,7 @@
 
 **The AI Assistant's "Edit" button has no `onClick` handler.** It renders in
 the UI as a clickable element but does nothing —
-[`components/ui/coach-sidebar.tsx:301-303`](../../components/ui/coach-sidebar.tsx#L301-L303).
+[`components/ui/coach-sidebar.tsx:301-303`](../components/ui/coach-sidebar.tsx#L301-L303).
 Field values render as read-only `<span>` tags, and the POST body to
 `/api/ai/assistant/execute` only sends `{ toolCallId, pageContext, rejected? }`
 — no mechanism to convey edits. **All 7 AI-assistant action types run
@@ -41,28 +41,28 @@ implementation the assistant should mirror.
 
 | # | Call Site | File:Line | Action | Stakes | UX | Rel | Safe | Obs | Gaps |
 |---|-----------|-----------|--------|--------|----|----|-----|-----|------|
-| 1 | Assistant — send_sms | [execute/route.ts:80-98](../../app/api/ai/assistant/execute/route.ts#L80-L98) | `ghl.sendSMS` | High | ⚠️ | ⚠️ | ❌ | ✅ | Edit button non-functional; no `requireApproval`; only this branch audit-logs |
-| 2 | Assistant — send_email | [execute/route.ts:278-295](../../app/api/ai/assistant/execute/route.ts#L278-L295) | `ghl.sendEmail` | High | ⚠️ | ⚠️ | ❌ | ❌ | No edit; no approval gate; no audit_log row |
-| 3 | Assistant — add_note | [execute/route.ts:120-134](../../app/api/ai/assistant/execute/route.ts#L120-L134) | `ghl.addNote` | Medium | ⚠️ | ⚠️ | N/A | ❌ | No edit; no audit_log |
-| 4 | Assistant — create_task / update_task | [execute/route.ts:100-118, 570-585](../../app/api/ai/assistant/execute/route.ts#L100-L118) | `ghl.createTask` / `updateTask` | Medium | ⚠️ | ⚠️ | N/A | ❌ | No edit; no audit_log |
-| 5 | Assistant — complete_task | [execute/route.ts:265-274](../../app/api/ai/assistant/execute/route.ts#L265-L274) | `ghl.completeTask` | Low | ⚠️ | ⚠️ | N/A | ❌ | No edit matters less here; still no audit_log |
-| 6 | Assistant — create_contact / update_contact (tags, assignee, fields) | [execute/route.ts:255-265, 365-395, 585-620](../../app/api/ai/assistant/execute/route.ts#L365-L395) | `ghl.createContact` / `updateContact` | High | ⚠️ | ⚠️ | ❌ | ❌ | Creates/modifies contacts with no edit, no approval, no audit |
-| 7 | Assistant — opportunity (create / stage / status / value) | [execute/route.ts:150-170, 395-410, 625-650](../../app/api/ai/assistant/execute/route.ts#L150-L170) | `ghl.createOpportunity` / `updateOpportunity*` | High | ⚠️ | ⚠️ | ❌ | ❌ | Stage changes and new deals with no edit/approval/audit |
-| 8 | Call-detail — add_note | [actions/route.ts:58-62](../../app/api/[tenant]/calls/[id]/actions/route.ts#L58-L62) | `ghl.addNote` | Medium | ✅ | ⚠️ | N/A | ❌ | Client-side toast ✓; route doesn't audit or logFailure |
-| 9 | Call-detail — create_task | [actions/route.ts:64-70](../../app/api/[tenant]/calls/[id]/actions/route.ts#L64-L70) | `ghl.createTask` | Medium | ✅ | ⚠️ | N/A | ❌ | Same pattern as #8 |
-| 10 | Call-detail — send_sms | [actions/route.ts:72-80](../../app/api/[tenant]/calls/[id]/actions/route.ts#L72-L80) | `ghl.sendSMS` | High | ✅ | ⚠️ | ❌ | ❌ | User edits label ✓ but high-stakes send with no approval modal and no audit |
-| 11 | Call-detail — create_appointment | [actions/route.ts:82-90](../../app/api/[tenant]/calls/[id]/actions/route.ts#L82-L90) | `ghl.createTask` (task-style appt) | Low | ✅ | ⚠️ | N/A | ❌ | — |
-| 12 | Call-detail — change_stage | [actions/route.ts:100-120](../../app/api/[tenant]/calls/[id]/actions/route.ts#L100-L120) | `ghl.updateOpportunityStage` | High | ✅ | ⚠️ | ❌ | ❌ | Pipeline stage change with no approval gate |
-| 13 | Call-detail — check_off_task | [actions/route.ts:135-145](../../app/api/[tenant]/calls/[id]/actions/route.ts#L135-L145) | `ghl.completeTask` + `ghl.addNote` | Low | ✅ | ⚠️ | N/A | ❌ | — |
-| 14 | Unified action dispatcher | [ghl/actions/route.ts:62-99](../../app/api/ghl/actions/route.ts#L62-L99) | sendSMS / addNote / createTask / completeTask / updateOpportunityStage | Mixed | N/A | ⚠️ | ❌ | ⚠️ | Plumbing endpoint — permission check ✓, audit on success only, no logFailure. UX owned by caller. |
-| 15 | Deal blast (bulk SMS/email to buyer list) | [properties/[propertyId]/blast/route.ts:224-260](../../app/api/properties/[propertyId]/blast/route.ts#L224-L260) | `ghl.sendSMS` / `sendEmail` × N buyers | **HIGH (bulk)** | ⚠️ | ❌ | **❌** | ⚠️ | Per-recipient errors `console.error`'d silently; aggregate audit only; **no `requireApproval` despite bulk send — violates AGENTS.md gate policy** |
-| 16 | Add buyer to GHL | [properties/[propertyId]/buyers/route.ts:498-521](../../app/api/properties/[propertyId]/buyers/route.ts#L498-L521) | `ghl.createContact` + `createOpportunity` | High | ✅ | ⚠️ | ❌ | ❌ | User-filled form ✓; creates CRM contact + pipeline opportunity with no approval modal and no audit_log |
-| 17 | Day Hub — send inbox reply | [dayhub/inbox/route.ts:112-146](../../app/api/[tenant]/dayhub/inbox/route.ts#L112-L146) | `ghl.sendSMS` | High | ✅ | ⚠️ | ❌ | ⚠️ | User composes and sends ✓; audit on success, nothing on failure; no approval (single-contact; arguably N/A) |
-| 18 | Day Hub — task toggle | [dayhub/tasks/route.ts:118](../../app/api/[tenant]/dayhub/tasks/route.ts#L118) | `ghl.completeTask` | Low | ✅ | ⚠️ | N/A | ❌ | — |
-| 19 | Day Hub — appointment status PUT | [dayhub/appointments/route.ts:257-270](../../app/api/[tenant]/dayhub/appointments/route.ts#L257-L270) | direct `PUT /calendars/events/appointments/{id}` | Low | ✅ | ⚠️ | N/A | ❌ | Direct fetch, not client-wrapped; no retry/backoff |
-| 20 | Task create (CRM-side) | [tasks/route.ts:68](../../app/api/tasks/route.ts#L68) | `ghl.createTask` | Medium | ✅ | ⚠️ | N/A | ❌ | — |
-| 21 | Task complete (CRM-side) | [tasks/[taskId]/complete/route.ts:26](../../app/api/tasks/[taskId]/complete/route.ts#L26) | `ghl.completeTask` | Low | ✅ | ⚠️ | N/A | ❌ | — |
-| 22 | OAuth webhook register / deregister | [lib/ghl/webhook-register.ts:25-28](../../lib/ghl/webhook-register.ts#L25-L28) | `ghl.registerWebhook` / `deleteWebhook` | Medium (system) | N/A | ❌ | ❌ | ❌ | `deleteWebhook.catch(() => {})` silent catch; no audit row; possibly related to **PROGRESS.md bug #10** (registration 404) going undiagnosed |
+| 1 | Assistant — send_sms | [execute/route.ts:80-98](../app/api/ai/assistant/execute/route.ts#L80-L98) | `ghl.sendSMS` | High | ⚠️ | ⚠️ | ❌ | ✅ | Edit button non-functional; no `requireApproval`; only this branch audit-logs |
+| 2 | Assistant — send_email | [execute/route.ts:278-295](../app/api/ai/assistant/execute/route.ts#L278-L295) | `ghl.sendEmail` | High | ⚠️ | ⚠️ | ❌ | ❌ | No edit; no approval gate; no audit_log row |
+| 3 | Assistant — add_note | [execute/route.ts:120-134](../app/api/ai/assistant/execute/route.ts#L120-L134) | `ghl.addNote` | Medium | ⚠️ | ⚠️ | N/A | ❌ | No edit; no audit_log |
+| 4 | Assistant — create_task / update_task | [execute/route.ts:100-118, 570-585](../app/api/ai/assistant/execute/route.ts#L100-L118) | `ghl.createTask` / `updateTask` | Medium | ⚠️ | ⚠️ | N/A | ❌ | No edit; no audit_log |
+| 5 | Assistant — complete_task | [execute/route.ts:265-274](../app/api/ai/assistant/execute/route.ts#L265-L274) | `ghl.completeTask` | Low | ⚠️ | ⚠️ | N/A | ❌ | No edit matters less here; still no audit_log |
+| 6 | Assistant — create_contact / update_contact (tags, assignee, fields) | [execute/route.ts:255-265, 365-395, 585-620](../app/api/ai/assistant/execute/route.ts#L365-L395) | `ghl.createContact` / `updateContact` | High | ⚠️ | ⚠️ | ❌ | ❌ | Creates/modifies contacts with no edit, no approval, no audit |
+| 7 | Assistant — opportunity (create / stage / status / value) | [execute/route.ts:150-170, 395-410, 625-650](../app/api/ai/assistant/execute/route.ts#L150-L170) | `ghl.createOpportunity` / `updateOpportunity*` | High | ⚠️ | ⚠️ | ❌ | ❌ | Stage changes and new deals with no edit/approval/audit |
+| 8 | Call-detail — add_note | [actions/route.ts:58-62](../app/api/[tenant]/calls/[id]/actions/route.ts#L58-L62) | `ghl.addNote` | Medium | ✅ | ⚠️ | N/A | ❌ | Client-side toast ✓; route doesn't audit or logFailure |
+| 9 | Call-detail — create_task | [actions/route.ts:64-70](../app/api/[tenant]/calls/[id]/actions/route.ts#L64-L70) | `ghl.createTask` | Medium | ✅ | ⚠️ | N/A | ❌ | Same pattern as #8 |
+| 10 | Call-detail — send_sms | [actions/route.ts:72-80](../app/api/[tenant]/calls/[id]/actions/route.ts#L72-L80) | `ghl.sendSMS` | High | ✅ | ⚠️ | ❌ | ❌ | User edits label ✓ but high-stakes send with no approval modal and no audit |
+| 11 | Call-detail — create_appointment | [actions/route.ts:82-90](../app/api/[tenant]/calls/[id]/actions/route.ts#L82-L90) | `ghl.createTask` (task-style appt) | Low | ✅ | ⚠️ | N/A | ❌ | — |
+| 12 | Call-detail — change_stage | [actions/route.ts:100-120](../app/api/[tenant]/calls/[id]/actions/route.ts#L100-L120) | `ghl.updateOpportunityStage` | High | ✅ | ⚠️ | ❌ | ❌ | Pipeline stage change with no approval gate |
+| 13 | Call-detail — check_off_task | [actions/route.ts:135-145](../app/api/[tenant]/calls/[id]/actions/route.ts#L135-L145) | `ghl.completeTask` + `ghl.addNote` | Low | ✅ | ⚠️ | N/A | ❌ | — |
+| 14 | Unified action dispatcher | [ghl/actions/route.ts:62-99](../app/api/ghl/actions/route.ts#L62-L99) | sendSMS / addNote / createTask / completeTask / updateOpportunityStage | Mixed | N/A | ⚠️ | ❌ | ⚠️ | Plumbing endpoint — permission check ✓, audit on success only, no logFailure. UX owned by caller. |
+| 15 | Deal blast (bulk SMS/email to buyer list) | [properties/[propertyId]/blast/route.ts:224-260](../app/api/properties/[propertyId]/blast/route.ts#L224-L260) | `ghl.sendSMS` / `sendEmail` × N buyers | **HIGH (bulk)** | ⚠️ | ❌ | **❌** | ⚠️ | Per-recipient errors `console.error`'d silently; aggregate audit only; **no `requireApproval` despite bulk send — violates AGENTS.md gate policy** |
+| 16 | Add buyer to GHL | [properties/[propertyId]/buyers/route.ts:498-521](../app/api/properties/[propertyId]/buyers/route.ts#L498-L521) | `ghl.createContact` + `createOpportunity` | High | ✅ | ⚠️ | ❌ | ❌ | User-filled form ✓; creates CRM contact + pipeline opportunity with no approval modal and no audit_log |
+| 17 | Day Hub — send inbox reply | [dayhub/inbox/route.ts:112-146](../app/api/[tenant]/dayhub/inbox/route.ts#L112-L146) | `ghl.sendSMS` | High | ✅ | ⚠️ | ❌ | ⚠️ | User composes and sends ✓; audit on success, nothing on failure; no approval (single-contact; arguably N/A) |
+| 18 | Day Hub — task toggle | [dayhub/tasks/route.ts:118](../app/api/[tenant]/dayhub/tasks/route.ts#L118) | `ghl.completeTask` | Low | ✅ | ⚠️ | N/A | ❌ | — |
+| 19 | Day Hub — appointment status PUT | [dayhub/appointments/route.ts:257-270](../app/api/[tenant]/dayhub/appointments/route.ts#L257-L270) | direct `PUT /calendars/events/appointments/{id}` | Low | ✅ | ⚠️ | N/A | ❌ | Direct fetch, not client-wrapped; no retry/backoff |
+| 20 | Task create (CRM-side) | [tasks/route.ts:68](../app/api/tasks/route.ts#L68) | `ghl.createTask` | Medium | ✅ | ⚠️ | N/A | ❌ | — |
+| 21 | Task complete (CRM-side) | [tasks/[taskId]/complete/route.ts:26](../app/api/tasks/[taskId]/complete/route.ts#L26) | `ghl.completeTask` | Low | ✅ | ⚠️ | N/A | ❌ | — |
+| 22 | OAuth webhook register / deregister | [lib/ghl/webhook-register.ts:25-28](../lib/ghl/webhook-register.ts#L25-L28) | `ghl.registerWebhook` / `deleteWebhook` | Medium (system) | N/A | ❌ | ❌ | ❌ | `deleteWebhook.catch(() => {})` silent catch; no audit row; possibly related to **PROGRESS.md bug #10** (registration 404) going undiagnosed |
 
 ---
 
