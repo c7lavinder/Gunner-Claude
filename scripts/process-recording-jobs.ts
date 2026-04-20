@@ -1,6 +1,7 @@
 // scripts/process-recording-jobs.ts
 // Unified call processor — the SINGLE place where grading decisions happen.
-// Runs every 1 minute via Railway cron.
+// Runs every 1 minute via Railway cron, AND as one iteration of the
+// grading-worker long-running service (see scripts/grading-worker.ts).
 //
 // Pipeline:
 //   1. Webhook/poll creates call → PENDING (no grading, no classification)
@@ -9,7 +10,13 @@
 //      b. ≥45s → fetch recording → pass to gradeCall() (transcribes + grades)
 //      c. No recording yet → keep retrying (every call in GHL is recorded)
 //   3. Legacy: also drains any remaining RecordingFetchJob rows
+//
+// Export contract:
+//   processJobs() returns on clean completion, throws on fatal error.
+//   It does NOT call process.exit() — that's the caller's responsibility so
+//   grading-worker can loop and the CLI entry point (below) can exit.
 
+import { fileURLToPath } from 'url'
 import { db } from '../lib/db/client'
 import { Prisma } from '@prisma/client'
 import { fetchCallRecording, fetchAndStoreRecording } from '../lib/ghl/fetch-recording'
@@ -21,7 +28,7 @@ const MIN_AGE_MS = 30 * 1000           // wait 30s before processing (GHL needs 
 const RECORDING_TIMEOUT_MS = 2 * 60 * 60 * 1000 // give up on recording after 2 hours
 const MIN_DURATION_FOR_GRADING = 45
 
-async function processJobs() {
+export async function processJobs() {
   const startedAt = Date.now()
   const stats = { pending: 0, graded: 0, skipped: 0, waiting: 0, timedOut: 0, legacyJobs: 0, errors: 0 }
 
@@ -235,12 +242,14 @@ async function processJobs() {
     console.log(`[call-processor] ${durationMs}ms | pending=${stats.pending} graded=${stats.graded} skipped=${stats.skipped} waiting=${stats.waiting} timedOut=${stats.timedOut} legacy=${stats.legacyJobs} errors=${stats.errors}`)
   } catch (err) {
     console.error('[call-processor] Fatal error:', err instanceof Error ? err.message : err)
-    process.exit(1)
+    // Re-throw so callers decide: the CLI entry point exits with code 1;
+    // grading-worker logs and continues the loop after the 60s sleep.
+    throw err
   }
 
   // Heartbeat: only fires on clean completion. Absence of a 'finished' row
-  // after a 'started' row = cron reached processJobs() but died mid-run.
-  // process.exit(1) in the outer catch above intentionally skips this write.
+  // after a 'started' row = processJobs() reached the try block but died
+  // mid-run. The throw in the catch above intentionally skips this write.
   await db.auditLog.create({
     data: {
       tenantId: null,
@@ -256,8 +265,15 @@ async function processJobs() {
       },
     },
   }).catch(err => console.error('[heartbeat] audit write failed:', err))
-
-  process.exit(0)
 }
 
-processJobs()
+// Entry-point guard — only auto-invokes when this file is the CLI entry point,
+// not when imported by grading-worker.ts. Preserves the existing contract
+// (`npx tsx scripts/process-recording-jobs.ts` still works exactly as before)
+// while making `import { processJobs } from './process-recording-jobs'` side-effect-free.
+const isMainModule = process.argv[1] ? process.argv[1] === fileURLToPath(import.meta.url) : false
+if (isMainModule) {
+  processJobs()
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1))
+}

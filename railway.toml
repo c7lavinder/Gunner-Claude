@@ -1,6 +1,5 @@
 # railway.toml
 # Gunner AI — Railway deployment configuration
-# (force cron re-registration — process-recording-jobs missing from Railway dashboard 2026-04-20)
 
 [build]
 builder = "nixpacks"
@@ -26,11 +25,10 @@ name = "poll-calls"
 schedule = "* * * * *"
 command = "npx tsx scripts/poll-calls.ts"
 
-# Cron job: process recording fetch jobs every minute (durable queue — replaces setTimeout)
-[[cron]]
-name = "process-recording-jobs"
-schedule = "* * * * *"
-command = "npx tsx scripts/process-recording-jobs.ts"
+# process-recording-jobs was previously a [[cron]] here. Removed 2026-04-20
+# because Railway's cron scheduler stopped firing it reliably and redeploys
+# did not re-register it. Replaced by the grading-worker [[services]] block
+# below, which runs the same processJobs() in an infinite 60s loop.
 
 # Cron job: daily self-audit at 2am UTC
 [[cron]]
@@ -49,3 +47,13 @@ command = "npx tsx scripts/kpi-snapshot.ts"
 name = "weekly-profiles"
 schedule = "0 3 * * 0"
 command = "npx tsx scripts/generate-profiles.ts"
+
+# Long-running service: grading worker. Replaces the broken
+# process-recording-jobs [[cron]]. Runs processJobs() forever with a 60s
+# sleep between iterations. Railway keeps the process alive and SIGTERMs
+# it on redeploy for a clean restart.
+[[services]]
+name = "grading-worker"
+
+[services.deploy]
+startCommand = "npx tsx scripts/grading-worker.ts"
