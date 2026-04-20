@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
+import { logFailure } from '@/lib/audit'
 import { z } from 'zod'
 import { addDays, format } from 'date-fns'
 
@@ -257,7 +258,64 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
     })
   } catch (err) {
     console.error(`[Call Action] ${parsed.data.type} failed:`, err instanceof Error ? err.message : err)
-    return NextResponse.json({ success: false, message: err instanceof Error ? err.message : 'GHL action failed' }, { status: 500 })
+
+    const errorMessage = err instanceof Error ? err.message : 'GHL action failed'
+    const errorStack = err instanceof Error ? err.stack?.slice(0, 500) : undefined
+
+    // Failure audit — two rows per failure by design:
+    //   ERROR row  (action='call.action.failed')  — forensic, full fields
+    //   SYSTEM row (resource='call:<id>')         — triage, fast grep
+    // Health query:
+    //   SELECT COUNT(*) FROM audit_logs
+    //   WHERE action='call.action.failed'
+    //     AND created_at > NOW() - INTERVAL '24 hours';
+    //
+    // Route its own ERROR audit_logs row that mirrors the success row's shape
+    // so queries on action='call.action.failed' return a parallel trail.
+    // Wrapped so audit write errors can't cascade into another 500.
+    await db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        action: 'call.action.failed',
+        resource: 'call',
+        resourceId: params.id,
+        source: 'USER',
+        severity: 'ERROR',
+        payload: {
+          contactId,
+          type: parsed.data.type,
+          label,
+          description: parsed.data.description,
+          dueDate: parsed.data.dueDate,
+          assignedTo: parsed.data.assignedTo,
+          ghlAssignedTo: resolvedAssignedTo,
+          assignedToResolution: assignedToResolutionNote,
+          stageId: parsed.data.stageId,
+          pipelineId: parsed.data.pipelineId,
+          smsBody: parsed.data.smsBody,
+          errorMessage,
+          errorStack,
+        },
+      },
+    }).catch(writeErr => {
+      console.error('[Call Action] Failed to write ERROR audit row:', writeErr instanceof Error ? writeErr.message : writeErr)
+    })
+
+    // logFailure adds a second SYSTEM-severity row with the standard shape used
+    // everywhere else (resource=`call:<id>`). Complementary to the ERROR row above;
+    // both point back to the same callId so either query path finds them.
+    await logFailure(ctx.tenantId, 'call.action.failed', `call:${params.id}`, err, {
+      type: parsed.data.type,
+      contactId,
+      label,
+      stageId: parsed.data.stageId,
+      pipelineId: parsed.data.pipelineId,
+      assignedTo: parsed.data.assignedTo,
+      dueDate: parsed.data.dueDate,
+    })
+
+    return NextResponse.json({ success: false, message: errorMessage }, { status: 500 })
   }
 })
 
