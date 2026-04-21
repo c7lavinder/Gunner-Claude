@@ -264,6 +264,70 @@ Each entry: **Decision** → **Why** → **Alternatives considered** → **Date 
 
 ---
 
+### D-021 — Long-running Railway [[services]] for reliability-critical workers, not [[cron]]
+
+**Decision:** Reliability-critical background work (currently: grading pipeline) runs as a
+long-running Railway `[[services]]` entry that loops the work internally, NOT as a Railway
+`[[cron]]`. First example: `scripts/grading-worker.ts` (replaces the former `[[cron]]
+process-recording-jobs`). Low-frequency or low-stakes crons (poll-calls, daily-audit,
+daily-kpi-snapshot, weekly-profiles) remain on `[[cron]]`.
+
+**Why:** On 2026-04-20 the `process-recording-jobs` `[[cron]]` silently stopped firing
+mid-day. Zero audit trail, zero error, Railway did not surface the failure anywhere.
+A no-op redeploy did NOT re-register the cron. After ~14 hours of silent pipeline
+outage, converting to a long-running service resumed processing — same logic, same
+60s cadence, different scheduler. Workers we can see start/stop (via heartbeat rows)
+are the only kind we trust now.
+
+**Alternatives considered:**
+- Keep the `[[cron]]` with a whitespace-forced redeploy every N hours → we tried the
+  whitespace redeploy. Did not re-register the cron. Rejected.
+- External cron (GitHub Actions, EasyCron, etc.) hitting a Next.js API route → adds a
+  third-party dependency, introduces auth + retry semantics in a new surface. Deferred.
+- BullMQ / Redis-backed queue → correct long-term answer but premature. D-015 still open;
+  add when volume exceeds ~100 calls/day/tenant or when we have multiple worker types.
+
+**How to apply:** Any new worker that MUST run reliably goes behind a `[[services]]` block
+with a dedicated `scripts/<name>-worker.ts` following the `scripts/grading-worker.ts`
+template (entry-point guard in the underlying script + 60s loop + per-iteration catch).
+See AGENTS.md § "Background Worker Conventions" for the template.
+
+**Date:** 2026-04-20 | Active
+
+---
+
+### D-022 — Mandatory heartbeat audit rows + rescue sweeps for every worker
+
+**Decision:** Every long-running worker writes `cron.<name>.started` and `cron.<name>.finished`
+audit_logs rows per iteration, AND runs a rescue sweep at the top of every iteration that
+resets stale intermediate-state rows back to their retry-eligible state.
+
+**Why:** Before Session 38 there was no way to detect a silent worker outage without
+Railway dashboard access (which was blocked by an invalid API token). Heartbeat rows
+make "worker stopped running" visible via a single SQL query on audit_logs within 2 minutes
+of the outage. Rescue sweeps make the worker self-healing across Railway redeploys, OOMs,
+or any interruption that would otherwise leave claimed rows stranded in PROCESSING.
+
+**Cost:** 2 audit_logs rows per worker iteration = ~2880 rows/day for a 60s-interval
+worker. Negligible for Postgres at this scale. Retention is not an issue — audit_logs
+is the canonical debugging surface and we WANT this trail.
+
+**Alternatives considered:**
+- Railway-side monitoring only → requires dashboard/API access we repeatedly lose.
+- External uptime monitor (UptimeRobot etc.) hitting a health endpoint → tells you the
+  API is up, not that the WORKER is running. Worse signal.
+- Log-based alerting → requires log aggregation we don't have. Audit_logs is already
+  in Postgres, already queryable.
+
+**How to apply:** Copy the heartbeat + rescue template from AGENTS.md when creating any
+new worker, OR when adding reliability guarantees to an existing script. Bug #23 in
+PROGRESS.md tracks applying this pattern to the other 4 crons (poll-calls, daily-audit,
+daily-kpi-snapshot, weekly-profiles).
+
+**Date:** 2026-04-20 | Active
+
+---
+
 ## Decisions Still Open
 
 | # | Question | Options | Notes |

@@ -215,6 +215,109 @@ Critical files to re-inject at start of any new context window:
 
 ---
 
+## Background Worker Conventions (added 2026-04-20 — Session 38)
+
+**Long-running Railway `[[services]]`, NOT `[[cron]]`, for anything that MUST run reliably.**
+
+Session 38 root-caused a pipeline outage where Railway silently dropped the
+`process-recording-jobs` `[[cron]]` registration and would not re-provision it via
+redeploy. The workaround — a `[[services]] grading-worker` that imports the same
+`processJobs()` function and calls it in a 60s infinite loop — is now the repo standard.
+
+### Pattern for new reliability-critical work
+
+1. Put the core logic in a function that returns on success and throws on failure.
+   Do NOT call `process.exit()` inside it — callers decide.
+2. Put a thin CLI entry point at the bottom of the script, guarded by an
+   `import.meta.url` check so the file is side-effect-free when imported:
+   ```typescript
+   import { fileURLToPath } from 'url'
+   const isMainModule = process.argv[1] ? process.argv[1] === fileURLToPath(import.meta.url) : false
+   if (isMainModule) {
+     processJobs().then(() => process.exit(0)).catch(() => process.exit(1))
+   }
+   ```
+3. Create a `scripts/<name>-worker.ts` that imports and loops the function with
+   a 60s sleep + per-iteration error-swallowing. Reference: `scripts/grading-worker.ts`.
+4. Add to railway.toml:
+   ```toml
+   [[services]]
+   name = "<name>-worker"
+   [services.deploy]
+   startCommand = "npx tsx scripts/<name>-worker.ts"
+   ```
+
+### Mandatory observability for workers
+
+**Every worker iteration MUST write heartbeat audit rows** so silent outages are
+visible within one cycle. Established pattern:
+
+```typescript
+// At the top of the per-iteration function, BEFORE the main try block:
+await db.auditLog.create({
+  data: {
+    tenantId: null,
+    userId: null,
+    action: 'cron.<worker_name>.started',
+    resource: 'cron',
+    resourceId: '<worker_name>',
+    severity: 'INFO',
+    source: 'SYSTEM',
+    payload: { startedAt: new Date().toISOString() },
+  },
+}).catch(err => console.error('[heartbeat] audit write failed:', err))
+
+// At the END of the function, AFTER the main try block (skipped on throw/exit):
+await db.auditLog.create({
+  data: {
+    tenantId: null,
+    userId: null,
+    action: 'cron.<worker_name>.finished',
+    resource: 'cron',
+    resourceId: '<worker_name>',
+    severity: 'INFO',
+    source: 'SYSTEM',
+    payload: { durationMs: Date.now() - startedAt, stats },
+  },
+}).catch(err => console.error('[heartbeat] audit write failed:', err))
+```
+
+Health query:
+```sql
+SELECT MAX(created_at) FROM audit_logs
+WHERE action = 'cron.<worker_name>.started';
+```
+If `MAX(created_at)` is > 2 minutes old, the worker is not running.
+
+Absence of a matching `.finished` row after a `.started` row = the worker reached the
+main body but died mid-run. Distinguishes "worker not running" from "worker crashing."
+
+### Rescue sweeps for self-healing
+
+Workers that claim rows via a transient intermediate state (e.g. PROCESSING) MUST
+rescue stuck rows at the top of every iteration. Established pattern from
+`scripts/process-recording-jobs.ts` (Fix 2):
+
+```typescript
+await db.call.updateMany({
+  where: {
+    gradingStatus: 'PROCESSING',
+    updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) },
+  },
+  data: { gradingStatus: 'PENDING' },
+}).catch(err => console.error('[rescue] PROCESSING reset failed:', err))
+```
+
+Requires the row's model to have `updatedAt DateTime @updatedAt @map("updated_at")`.
+Prisma's `@updatedAt` directive auto-populates on every `.update()` / `.updateMany()`
+call, so post-rescue the row's updated_at is fresh — prevents infinite rescue loops.
+
+For auto-retry of permanently-terminal states (e.g. FAILED), same pattern with a
+longer threshold (1 hour) + an additional guard (`recordingUrl: { not: null }`) so
+only rows that CAN be retried get flipped back.
+
+---
+
 ## Route Conventions (added 2026-04-07)
 
 Every new API route under app/api/[tenant]/ MUST use withTenant from lib/api/withTenant.ts.

@@ -8,15 +8,15 @@
 
 ## Current Status
 
-**Current session**: 37 — Blocker #1 cleared
-**Phase**: AI Intelligence Layer complete. Deep audit done. Production ready.
+**Current session**: 38 — Blocker #2 cleared + grading pipeline rebuilt as a service
+**Phase**: Both P0 blockers clear. Chris/Daniel onboarding unblocked. Grading pipeline migrated off broken Railway cron onto a long-running service.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
 **GHL OAuth**: CONNECTED — tenant "New Again Houses" (location: hmD7eWGQJE7EVFpJxj4q)
 **AI Tools**: 74 assistant tools, 11 AI logging touchpoints, pgvector semantic search
 **Knowledge**: 42 playbook docs loaded + embedded, 3 user profiles
-**Calls graded**: 17+ (auto-grading active)
+**Grading worker**: `scripts/grading-worker.ts` runs `processJobs()` every 60s as a Railway [[services]] entry — the old [[cron]] for process-recording-jobs stopped firing on 2026-04-20 and was removed
 **Pipeline verifier**: scripts/verify-calls-pipeline.ts — bidirectional A/B with sanity gate + canary
 
 ---
@@ -50,6 +50,130 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 38 — Blocker #2 cleared + grading pipeline rebuilt as a service (2026-04-20)
+
+**The heavy day.** Two major threads back-to-back: AI Assistant propose→edit→confirm
+wiring (Prompt 4 / Blocker #2) and a live-fire grading-pipeline rescue when the
+Railway cron silently stopped firing mid-session.
+
+**Prompt 4 — Blocker #2 cleared.** Closed ACTION_EXECUTION_AUDIT.md rows 1-7 (the
+dead Edit button in coach-sidebar.tsx) by mirroring call-detail's propose → edit →
+confirm pattern across the AI Assistant surface. Three commits, each paste-then-wait:
+- `15fe184` (Phase A) — refactor(ghl): extracted resolveAssignee helper to
+  `lib/ghl/resolveAssignee.ts`. Single source of truth for internal userId → ghlUserId
+  resolution across actions/route.ts and the incoming execute/route.ts.
+- `2cf2509` (Phase B) — feat(assistant): widened execute/route.ts schema with optional
+  `editedInput`, merged over `toolCall.input` server-side. Dual-row failure audit
+  (`assistant.action.failed` ERROR + logFailure SYSTEM) matching Batch 2 pattern from
+  the call-detail route. Fuzzy matching REMOVED from change_pipeline_stage +
+  create_opportunity (Rule 2: stageId/pipelineId must be explicit GHL ids, 400 on miss).
+  originalInput + editedInput both persisted in audit payload for AI-learning loop.
+- `5203539` (Phase C) — fix(assistant): wired the Edit button (was `<button>` with no
+  onClick). Full rewrite of coach-sidebar.tsx: state additions for editingToolCallId /
+  editedInputs / confirmModalToolCallId / isPushing; per-action-type edit panel
+  (12 types); high-stakes confirmation modal gating for send_sms, send_email,
+  change_pipeline_stage, create_contact, update_contact, create_opportunity.
+  pipelines + team-members fetched once on sidebar open.
+
+Pushed Prompt 4 (`b7f7b37..5203539`) at 07:58 UTC. Phase D (production verification
+matrix) deferred to user since the 6 high-stakes types cannot be verified without real
+contacts or a GHL test contact. Option 1 (Cancel-path), Option 2 (GUNNER TEST contact),
+and Option 3 (real-contact for low-stakes) documented in-session.
+
+**Grading pipeline went silent mid-session.** At 04:43 UTC today the `process-recording-jobs`
+cron stopped firing, zero audit trail. Webhook path still working (PENDING queue grew
+to 199 by afternoon), recording fetch still working (116 of 199 had recording_url), but
+nothing was draining the queue. Commits after 04:43 were coincidental — Prompt 4 pushes
+landed HOURS after the outage started and didn't touch any pipeline file. Confirmed by
+diff+timestamp archaeology.
+
+Investigation sequence (read-only at every step until root cause was confirmed):
+1. Query-driven diagnostic (all 5 parts the user requested) via one-shot tsx script
+   at `/tmp/diagnose-pipeline.ts`. Confirmed: 0 PROCESSING rows (rules out stuck atomic
+   claim), 13 stale PENDING `recording_fetch_jobs` all `wf_*` automation artifacts from
+   April 9-13 (rules out lock issue on the pgbouncer timestamp-lock in poll-calls.ts),
+   0 successful `call.graded` audit rows since 04:43 UTC (worker not running).
+2. Hypothesis H1 (stuck tenant-timestamp lock) — **RULED OUT** by reading scripts/
+   process-recording-jobs.ts in full. No lock exists — per-row atomic claim via
+   `updateMany({ gradingStatus: PENDING, … } → PROCESSING)`. poll-calls.ts:448 has the
+   self-expiring 45s timestamp lock mentioned in Session 35 notes, but it's scoped to
+   poll-calls only — process-recording-jobs is lockless and was therefore never "stuck."
+3. Hypothesis H2 (data-shape errors cascading) — 7 grading errors at 04:14-04:28 UTC
+   (sentiment coerced as string; deal-intel markdown fence regression) are real but
+   not the root cause — the 164 successful grades before 04:43 proved the pipeline
+   was functional right up to the outage.
+4. Hypothesis H3 (Railway-side) — confirmed by process of elimination. Added a
+   heartbeat audit row (`1c8befe`, `feat(cron): add heartbeat audit rows to
+   process-recording-jobs`) so next outage is visible in audit_logs within 60 seconds.
+5. Whitespace-forced re-registration attempt (`2cde3e9`) — did not fix. Railway had
+   lost the cron from its internal registry and a no-op deploy could not revive it.
+6. Converted process-recording-jobs from Railway `[[cron]]` to a long-running
+   Railway `[[services]]` worker (`429c4a5`):
+     - NEW `scripts/grading-worker.ts` — imports processJobs() and calls it in an
+       infinite `while(true)` loop with 60s sleep between iterations. Per-iteration
+       errors are caught + logged + loop continues (self-heal). Does not call
+       process.exit().
+     - `scripts/process-recording-jobs.ts` refactor:
+         - `async function processJobs()` → `export async function processJobs()`
+         - `process.exit(1)` in outer catch → `throw err` (caller decides)
+         - Removed `process.exit(0)` at end of function
+         - Top-level `processJobs()` wrapped in `import.meta.url === fileURLToPath(...)`
+           entry-point guard so CLI invocation still works exactly as before AND the
+           file is side-effect-free when imported by grading-worker.
+     - `railway.toml` — removed `[[cron]] process-recording-jobs`, added `[[services]]
+       grading-worker`. poll-calls cron + daily-audit + daily-kpi-snapshot + weekly-profiles
+       unchanged.
+
+**Three surgical post-service fixes (`a77911c`)** after the service was live:
+- **Fix 1 — null duration bypass.** The skip-check tree had two guards
+  (`duration !== null && > 0 && < 45` → SKIPPED; `duration === 0` → SKIPPED) but NULL
+  slipped through both and went into grading. Transcription failed on no-answer calls
+  and they ended up FAILED. Changed zero check to `duration === null || duration === 0`.
+  This is the root cause of the 24 empty-shell FAILED rows seen earlier today (and
+  the source of PROGRESS.md bug entries #24).
+- **Fix 2 — PROCESSING rescue.** At the top of processJobs(), before the heartbeat,
+  reset any row stuck PROCESSING > 5 min back to PENDING. Self-heals after a Railway
+  redeploy or a mid-grade OOM. 0 stuck rows currently, but the guardrail is in place.
+- **Fix 3 — FAILED auto-retry.** After PROCESSING rescue, reset any FAILED row that
+  HAS a recording and hasn't been touched in > 1 hour. Targets transient failures
+  (Anthropic credit outage, Deepgram blip). Calls without recordings stay FAILED.
+- **Schema requirement for Fix 2 + 3.** The Call model had no `updatedAt` column.
+  Added `updatedAt DateTime @updatedAt @map("updated_at")` + migration
+  `20260420230000_add_updated_at_to_call/migration.sql` that backfills existing rows
+  to their `created_at`. Three-step safe pattern (add nullable → backfill → set NOT NULL)
+  that runs in <1s on the current ~5k row calls table via Railway's
+  `db:migrate:prod && npm run build` buildCommand chain.
+
+**Manual drains while debugging.** Ran `process-recording-jobs.ts` from local env via
+`npx tsx` five times during the outage to keep the backlog from growing. Combined
+results: 218 PENDING claimed, 67 actual Claude grades, 151 post-transcription-skips
+(short calls, silent recordings), 0 errors, ~55 min total runtime, ~67 Claude grades +
+~218 Deepgram transcriptions of token/API cost. After drain #5, PENDING dropped from
+199 → 54 (the 54 being fresh arrivals during the drain itself).
+
+**Commits (all on main):**
+- `15fe184` refactor(ghl): extract resolveAssignee helper for reuse
+- `2cf2509` feat(assistant): accept edited input + audit success/failure for all 7 action types
+- `5203539` fix(assistant): wire Edit button + confirm modal for all 7 action types
+- `1c8befe` feat(cron): add heartbeat audit rows to process-recording-jobs
+- `2cde3e9` fix(railway): force cron re-registration — process-recording-jobs missing from Railway dashboard
+- `429c4a5` feat(grading-worker): convert process-recording-jobs cron to long-running service
+- `a77911c` fix(grading-worker): handle null duration + rescue stuck PROCESSING and FAILED rows
+
+**Parallel side-findings logged for future cleanup:**
+- `assign_contact_to_user` branch in execute/route.ts still uses name-contains fuzzy
+  matching. Left alone this session per explicit user instruction — separate call
+  pattern, different prompt.
+- Deal intel parser has a markdown-fence regression (`` ```json `` not stripped). The
+  Session 34 `stripJsonFences()` fix covers grading but not deal intel. Calls still
+  grade cleanly; deal intel just returns 0 proposed changes.
+- Sentiment/sellerMotivation type coercion incomplete — Claude sometimes returns
+  strings ("positive") where Floats are expected. Session 37's `79e916e` was supposed
+  to fix this but errors recurred this morning (4 instances at 04:14-04:28 UTC).
+- Body-size gap on `/api/ai/assistant/execute` (editedInput is `z.record(z.unknown())`,
+  no per-action zod, no `content-length` check, no Railway-layer cap). Logged as P2
+  in AUDIT_PLAN.md. Follow-up work, not Prompt 4 scope.
 
 ### Session 37 — Pipeline verifier built end-to-end + Blocker #1 cleared (2026-04-20)
 
@@ -332,6 +456,11 @@ Parked for next session (none blocking team onboarding):
 | 17 | callResult `no_answer` never rewritten to `short_call` when cron routes <45s call to SKIPPED. Surfaced 4× in Session 37 verifier Pass B. | MEDIUM | Either fix in cron processor or update spec to accept both for short calls |
 | 18 | 2487 `calls` rows have `source IS NULL` (oldest 2026-03-21, newest 2026-04-18, **0 in last 24h**). Likely from `scripts/recover-stuck-calls.ts` not setting source. | LOW | One-time `UPDATE` to backfill `source='recovery'`; grep `db.call.create` to add `source` to all script callsites |
 | 19 | One legacy row `cmo4o88zn0raqn5nzaboykobe` (ghlCallId `VyCnm5DBNBVFfipIo0FR`) — non-wf_ id GHL doesn't recognize, source/contactId/duration all null. | LOW | Single instance, no production impact. Origin worth understanding (covered by #18 backfill) |
+| 20 | Deal intel parser has a markdown-fence regression — `` ```json `` not stripped. Session 34 `stripJsonFences()` fix covers grading only. Calls still grade cleanly; deal intel returns 0 proposed changes. Observed 6× across Session 38 manual drains. | MEDIUM | Extract stripJsonFences into a shared util and use in lib/ai/extract-deal-intel.ts |
+| 21 | Sentiment/sellerMotivation type coercion incomplete — Claude occasionally returns strings ("positive", full prose paragraphs) where Prisma expects Float. Prior fix `79e916e` missed some shapes. Surfaced 4× in the 04:14-04:28 UTC window today. | MEDIUM | Normalize in `parseGradingResponse()` before the `db.call.update` — string→null mapping for these fields |
+| 22 | 24 empty-shell FAILED rows from 2026-04-20 have `ghlContactId=NULL`, `recording_url=NULL`, `duration=NULL`. Pre-existing structural issue — GHL fires call-like webhooks with no payload content. Fix 1 (Session 38 `a77911c`) prevents NEW ones but does not remediate these 24. | LOW | One-time `UPDATE calls SET gradingStatus='SKIPPED' WHERE gradingStatus='FAILED' AND recording_url IS NULL AND tenantId=(…)` to clean up |
+| 23 | Railway `[[cron]] process-recording-jobs` would not self-register even after no-op redeploy. Workaround: converted to `[[services]] grading-worker` long-running worker (Session 38). Unknown if poll-calls, daily-audit, daily-kpi-snapshot, weekly-profiles crons are at risk of the same failure. | MEDIUM | Add per-cron heartbeat audit rows (same pattern as `1c8befe`) so a similar silent outage is immediately visible |
+| 24 | Body-size gap on `/api/ai/assistant/execute` — `editedInput` is `z.record(z.unknown()).optional()`, no content-length check. Malicious/malformed client could POST multi-MB payloads that bloat audit_logs. | LOW (P2) | Logged in AUDIT_PLAN.md. Follow-up: tighter per-action zod schemas across all endpoints, not piecemeal |
 
 All other bugs from sessions 1-32 are resolved.
 
@@ -343,28 +472,69 @@ All other bugs from sessions 1-32 are resolved.
 
 ## Next Session — Start Exactly Here
 
-**Task:** Run `npx tsx scripts/verify-calls-pipeline.ts` first (with `.env.local`
-loaded — `node --env-file=.env.local --import tsx scripts/verify-calls-pipeline.ts`).
-Look at the canary line and the Pass B failure list.
+**Task 1 (critical — verify the grading pipeline is actually working post-deploy):**
+```sql
+SELECT action, COUNT(*)::int AS count, MAX(created_at) AS last_seen,
+  EXTRACT(EPOCH FROM (NOW() - MAX(created_at)))::int AS seconds_since
+FROM audit_logs
+WHERE action LIKE 'cron.process_recording_jobs.%'
+  AND created_at > NOW() - INTERVAL '1 hour'
+GROUP BY action;
+```
 
-**If canary shows non-zero `last_day` source-null calls** → there's a live writer
-still producing untagged rows. Grep `db.call.create` across the repo to find it.
+Expected steady state: one `cron.process_recording_jobs.started` + one
+`cron.process_recording_jobs.finished` row per minute. If `last_seen` is > 120
+seconds old, the grading-worker service didn't start on Railway and you're back to
+manual drains. Escalation path in order of least→most invasive:
+1. Check Railway dashboard for `grading-worker` service. If missing, the
+   `[[services]]` block didn't take — likely requires Railway CLI intervention.
+2. If worker is up but only `.started` rows appear (no `.finished`), processJobs()
+   is crashing mid-run — read `audit_logs WHERE severity='ERROR'` for root cause.
+3. Last-resort fallback: run `npx tsx scripts/process-recording-jobs.ts` from local
+   env every ~30 min to keep backlog drained. Session 38 did this 5× successfully.
 
-**If Pass B fails on >5 calls** → real coverage gap. Run the H1/H2/H3 triage
-flow from Session 37 to classify (workflow stub vs cross-source merge vs real
-ingestion gap).
+**Task 2 (verify Fix 2 + Fix 3 from `a77911c` are working):** after any completed
+worker iterations, check for rescued rows:
+```sql
+-- Should be 0 after the first full cycle (PROCESSING rescue)
+SELECT COUNT(*) FROM calls
+WHERE grading_status='PROCESSING' AND updated_at < NOW() - INTERVAL '5 minutes';
 
-Parked items (prioritized — Blocker #1 cleared, these are next):
+-- Evidence Fix 3 worked: FAILED calls from April 13 Anthropic-credit outage that
+-- have recordings should start appearing in COMPLETED over the next hour as the
+-- worker retries them one batch at a time.
+SELECT grading_status, COUNT(*) FROM calls
+WHERE created_at < '2026-04-20'
+  AND recording_url IS NOT NULL
+GROUP BY grading_status;
+```
+
+**Task 3 (Blocker #2 production verification — deferred from Session 38):** the user
+still needs to validate the AI Assistant propose→edit→confirm flow end-to-end on the
+live Railway URL. Three paths documented at end of Session 38:
+- **Cancel-path only** for the 6 high-stakes types (send_sms, send_email,
+  change_pipeline_stage, create_contact, update_contact, create_opportunity) —
+  proves UI + preview + merge + modal without GHL writes
+- **GUNNER TEST contact** in GHL for a single end-to-end SMS proof
+- **Real contact** for the 6 medium/low-stakes types (add_note, create_task,
+  update_task, complete_task, opp status/value) — no outbound seller visibility
+
+Parked items (lower priority):
 1. Bug #17 — fix `no_answer → short_call` rewrite in cron processor
-   ([lib/ai/grading.ts:79](lib/ai/grading.ts#L79) area); or update spec to accept both.
 2. Bug #18 — one-time backfill: `UPDATE calls SET source='recovery' WHERE source IS NULL`
-   AND audit `scripts/recover-stuck-calls.ts` to set source on every `db.call.create`.
-3. Verify poll cron is running on Railway (can't confirm without logs)
-4. Backfill Kyle's ~20 missing morning calls from Apr 9 (before fixes deployed)
-5. LM tab "227" dial count not aggregating across LM role
-6. Day Hub vs Calls page count source-of-truth alignment
-7. Migrate ~64 remaining API routes to withTenant
-8. Sweep remaining silent catches in broader codebase
+3. Bug #20 — extract stripJsonFences into shared util (lib/ai/stripJsonFences.ts),
+   use in extract-deal-intel.ts (Session 38 saw this parser failing 6×)
+4. Bug #21 — normalize sentiment/sellerMotivation in parseGradingResponse
+5. Bug #22 — one-time clean up of the 24 empty-shell FAILED rows
+6. Bug #23 — add heartbeat audit rows to the other 4 crons (poll-calls,
+   daily-audit, daily-kpi-snapshot, weekly-profiles) so a similar silent outage
+   is immediately visible
+7. LM tab "227" dial count not aggregating across LM role
+8. Day Hub vs Calls page count source-of-truth alignment
+9. Migrate ~64 remaining API routes to withTenant
+10. Sweep remaining silent catches in broader codebase
 
 **Railway access:** Still need a fresh Railway API token from Corey to see server
-logs. Current token is invalid. Largest diagnostic gap remaining.
+logs. Current token is invalid. Largest diagnostic gap remaining — specifically
+critical now since the grading-worker service status can only be definitively
+verified via the dashboard or logs.
