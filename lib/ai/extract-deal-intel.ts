@@ -53,13 +53,14 @@ export async function extractDealIntel(callId: string): Promise<void> {
     const userPrompt = buildExtractionUserPrompt({ ...call, property }, currentDealIntel, batchData)
 
     const DEAL_INTEL_MODEL = 'claude-opus-4-6'
-    const response = await anthropic.messages.create({
+    // Stream to avoid SDK v0.90 10-minute non-streaming preflight rejection
+    const response = await anthropic.messages.stream({
       model: DEAL_INTEL_MODEL,
       max_tokens: 16000,
       thinking: { type: 'enabled', budget_tokens: 8000 },
       system: buildExtractionSystemPrompt(learningContext),
       messages: [{ role: 'user', content: userPrompt }],
-    })
+    }).finalMessage()
 
     const textBlock = response.content.find(b => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') throw new Error('No text block in deal-intel response')

@@ -185,13 +185,16 @@ export async function gradeCall(callId: string): Promise<void> {
     // Per-call cost is ~5x Sonnet, but each call origination costs hundreds;
     // pulling maximum signal out of every graded call is the right trade.
     const GRADING_MODEL = 'claude-opus-4-6'
-    const response = await anthropic.messages.create({
+    // SDK v0.90 refuses non-streaming requests whose worst-case runtime could
+    // exceed 10 minutes (max_tokens + thinking budget). Opus + 32k/16k trips
+    // the preflight, so we stream and collect the final message.
+    const response = await anthropic.messages.stream({
       model: GRADING_MODEL,
       max_tokens: 32000,
       thinking: { type: 'enabled', budget_tokens: 16000 },
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
-    })
+    }).finalMessage()
 
     // Extended thinking prepends a thinking block — grab the first text block,
     // not content[0], which would be the thinking.
@@ -980,7 +983,7 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
     const nsTimer = startTimer()
 
     const NEXT_STEPS_MODEL = 'claude-opus-4-6'
-    const res = await anthropic.messages.create({
+    const res = await anthropic.messages.stream({
       model: NEXT_STEPS_MODEL,
       max_tokens: 8000,
       messages: [{
@@ -1008,7 +1011,7 @@ ${fullTranscript}
 Return JSON array only:
 [{ "type": "add_note"|"create_task"|"send_sms"|"create_appointment"|"change_stage"|"check_off_task", "label": "specific action description", "reasoning": "why this action matters" }]`,
       }],
-    })
+    }).finalMessage()
 
     const nsTextBlock = res.content.find(b => b.type === 'text')
     const text = nsTextBlock && nsTextBlock.type === 'text' ? nsTextBlock.text : '[]'
