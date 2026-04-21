@@ -97,9 +97,17 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       }
     })
 
-    // Cross-reference contactIds → property addresses from inventory
-    // Try 3 sources: 1) property.ghlContactId match, 2) seller.ghlContactId match, 3) GHL contact address
-    const propertyMap = new Map<string, string>()
+    // Cross-reference contactIds → ALL linked property addresses from inventory.
+    // Two sources: (1) property.ghlContactId direct match, (2) seller.ghlContactId
+    // → seller's properties. A contact can have multiple linked properties; we
+    // collect them all and de-duplicate by address string.
+    const propertyMap = new Map<string, string[]>()
+    const addAddr = (cid: string, addr: string) => {
+      if (!addr) return
+      const list = propertyMap.get(cid) ?? []
+      if (!list.includes(addr)) list.push(addr)
+      propertyMap.set(cid, list)
+    }
     if (contactIds.length > 0) {
       // Source 1: Direct property → contact link
       const directProps = await db.property.findMany({
@@ -107,31 +115,26 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         select: { ghlContactId: true, address: true, city: true, state: true },
       })
       for (const p of directProps) {
-        if (p.ghlContactId) {
-          const addr = [p.address, p.city, p.state].filter(Boolean).join(', ')
-          if (addr) propertyMap.set(p.ghlContactId, addr)
-        }
+        if (!p.ghlContactId) continue
+        addAddr(p.ghlContactId, [p.address, p.city, p.state].filter(Boolean).join(', '))
       }
 
-      // Source 2: Seller → property link (sellers have ghlContactId from GHL contact)
-      const unmatchedIds = contactIds.filter(id => !propertyMap.has(id))
-      if (unmatchedIds.length > 0) {
-        const sellerProps = await db.seller.findMany({
-          where: { tenantId, ghlContactId: { in: unmatchedIds } },
-          select: {
-            ghlContactId: true,
-            properties: {
-              select: { property: { select: { address: true, city: true, state: true } } },
-              take: 1,
-            },
+      // Source 2: Seller → property link
+      const sellerProps = await db.seller.findMany({
+        where: { tenantId, ghlContactId: { in: contactIds } },
+        select: {
+          ghlContactId: true,
+          properties: {
+            select: { property: { select: { address: true, city: true, state: true } } },
           },
-        })
-        for (const s of sellerProps) {
-          if (s.ghlContactId && s.properties[0]?.property) {
-            const p = s.properties[0].property
-            const addr = [p.address, p.city, p.state].filter(Boolean).join(', ')
-            if (addr) propertyMap.set(s.ghlContactId, addr)
-          }
+        },
+      })
+      for (const s of sellerProps) {
+        if (!s.ghlContactId) continue
+        for (const sp of s.properties) {
+          const p = sp.property
+          if (!p) continue
+          addAddr(s.ghlContactId, [p.address, p.city, p.state].filter(Boolean).join(', '))
         }
       }
     }
@@ -187,10 +190,13 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         : null
       const contact = contactMap.get(t.contactId)
       const resolvedContactName = inlineName || (contact?.name ?? null)
-      const resolvedAddress = propertyMap.get(t.contactId) || contact?.address || null
+      const linkedAddresses = propertyMap.get(t.contactId) ?? []
+      const ghlContactAddress = contact?.address ? [contact.address] : []
+      const allAddresses = linkedAddresses.length > 0 ? linkedAddresses : ghlContactAddress
+      const primaryAddress = allAddresses[0] ?? null
       // Fallback: if no contact name AND no address, use the task title as display name
       const contactName = resolvedContactName
-        || (!resolvedAddress ? (t.title || null) : null)
+        || (!primaryAddress ? (t.title || null) : null)
 
       // Prefer inline assignedToUserDetails, fall back to user map
       const inlineAssigned = t.assignedToUserDetails
@@ -225,7 +231,8 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         contactId: t.contactId,
         contactName,
         contactPhone: contact?.phone ?? null,
-        contactAddress: propertyMap.get(t.contactId) || contact?.address || null,
+        contactAddress: primaryAddress,
+        contactAddresses: allAddresses,
         assignedToName,
         assignedToGhlId: assignedUserId,
         amDone: callStatus.am,
@@ -261,6 +268,9 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         : null
       const assignedToName = inlineAssigned || (t.assignedTo ? ghlUserMap.get(t.assignedTo) ?? null : null)
       const category = classifyTask(t.title || '', t.body || '')
+      const linkedAddresses = propertyMap.get(t.contactId) ?? []
+      const ghlContactAddress = contact?.address ? [contact.address] : []
+      const allAddresses = linkedAddresses.length > 0 ? linkedAddresses : ghlContactAddress
 
       return {
         id: t.id || t._id || '',
@@ -275,7 +285,8 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         contactId: t.contactId,
         contactName,
         contactPhone: contact?.phone ?? null,
-        contactAddress: propertyMap.get(t.contactId) || contact?.address || null,
+        contactAddress: allAddresses[0] ?? null,
+        contactAddresses: allAddresses,
         assignedToName,
         assignedToGhlId: t.assignedTo ?? null,
         amDone: false,

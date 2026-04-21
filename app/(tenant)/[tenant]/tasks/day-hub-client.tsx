@@ -37,6 +37,16 @@ function titleCase(name: string | null): string {
   return name.replace(/\b\w/g, c => c.toUpperCase())
 }
 
+// Format call duration for the activity panel. Sub-minute calls show "Ns" so
+// short outreach attempts aren't all reported as "0m" (which read as zero-duration).
+function formatCallDuration(seconds: number | null | undefined): string {
+  if (!seconds || seconds < 1) return ''
+  if (seconds < 60) return `${Math.round(seconds)}s`
+  const m = Math.floor(seconds / 60)
+  const s = Math.round(seconds % 60)
+  return s > 0 ? `${m}m ${s}s` : `${m}m`
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type OverdueTier = 'none' | 'yellow' | 'orange' | 'red' | 'green'
@@ -55,6 +65,8 @@ export interface EnrichedTask {
   contactName: string | null
   contactPhone: string | null
   contactAddress: string | null
+  /** All inventory addresses linked to this contact (via property.ghlContactId or seller→property). */
+  contactAddresses?: string[]
   assignedToName: string | null
   assignedToGhlId: string | null
   amDone: boolean
@@ -339,6 +351,7 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
   const [completingTask, setCompletingTask] = useState<string | null>(null)
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set())
   const [expandedTask, setExpandedTask] = useState<string | null>(null)
+  const [expandedCompletedTask, setExpandedCompletedTask] = useState<string | null>(null)
 
   // Activity from GHL — fetched sequentially on page load for all contacts
   const [activityMap, setActivityMap] = useState<Record<string, ContactActivity>>({})
@@ -1141,40 +1154,38 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
             </button>
           )}
 
-          {/* Completed today section — scoped to the active view (view-as / role tab / non-admin) */}
+          {/* Completed today section — same TaskRow UI as the active list, with strikethrough + green check */}
           {visibleCompletedTasks.length > 0 && (
-            <div className="mt-4">
-              <p className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider mb-2 px-1">
+            <div className="mt-4 space-y-2">
+              <p className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider px-1">
                 Completed Today ({visibleCompletedTasks.length})
               </p>
-              <div className="space-y-1.5 opacity-70">
-                {visibleCompletedTasks.map(task => (
-                  <div
-                    key={task.id}
-                    className="bg-surface-primary border-[0.5px] rounded-[10px] px-4 py-2.5 flex items-center gap-3"
-                    style={{ borderColor: 'var(--border-light)' }}
-                  >
-                    <CheckCircle size={16} className="text-semantic-green shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] text-txt-secondary line-through truncate">
-                        {task.contactName ?? task.title}
-                      </p>
-                      {task.contactAddress && (
-                        <p className="text-[10px] text-txt-muted truncate">{task.contactAddress}</p>
-                      )}
-                    </div>
-                    <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
-                      (CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']).color
-                    }`}>
-                      {(CATEGORY_BADGE[task.category] ?? CATEGORY_BADGE['Follow-Up']).label}
-                    </span>
-                    {task.assignedToName && (
-                      <span className="text-[10px] text-txt-muted shrink-0">{task.assignedToName}</span>
-                    )}
-                    <span className="w-2 h-2 rounded-full bg-semantic-green shrink-0" />
-                  </div>
-                ))}
-              </div>
+              {visibleCompletedTasks.map(task => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  tenantSlug={tenantSlug}
+                  onComplete={completeTask}
+                  completing={completingTask}
+                  isExpanded={expandedCompletedTask === task.id}
+                  onToggle={() => setExpandedCompletedTask(expandedCompletedTask === task.id ? null : task.id)}
+                  ghlLocationId={ghlLocationId}
+                  preloadedActivity={activityMap[task.contactId] ?? null}
+                  ghlTeamUsers={teamRoster.filter(m => m.ghlUserId).map(m => ({ ghlUserId: m.ghlUserId as string, name: m.name }))}
+                  onTaskRefresh={() => startTransition(() => router.refresh())}
+                  isCompleted
+                  onSMS={(t) => {
+                    setSelectedContact({
+                      id: '', contactId: t.contactId, contactName: t.contactName ?? t.title,
+                      phone: t.contactPhone, lastMessageBody: '', dateUpdated: Date.now(),
+                      type: 'message', unreadCount: 0, assignedTo: t.assignedToName,
+                      propertyAddress: t.contactAddress,
+                    } as InboxItem)
+                    setShowSendConfirm(false)
+                    setReplyText('')
+                  }}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -1235,7 +1246,7 @@ interface ContactActivity {
   hasPm: boolean
 }
 
-function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, preloadedActivity, ghlTeamUsers, onTaskRefresh, onSMS }: {
+function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, preloadedActivity, ghlTeamUsers, onTaskRefresh, onSMS, isCompleted = false }: {
   task: EnrichedTask
   tenantSlug: string
   onComplete: (taskId: string, contactId: string) => void
@@ -1247,6 +1258,8 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
   ghlTeamUsers: Array<{ ghlUserId: string; name: string }>
   onTaskRefresh: () => void
   onSMS: (task: EnrichedTask) => void
+  /** Render in completed mode: filled checkmark, strikethrough title, no complete-task action. */
+  isCompleted?: boolean
 }) {
   // Action modal state — only one open at a time
   const [openAction, setOpenAction] = useState<null | 'note' | 'appointment' | 'workflow' | 'task'>(null)
@@ -1295,30 +1308,34 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
   return (
     <div className={`bg-surface-primary border-[0.5px] rounded-[14px] overflow-hidden transition-shadow ${
       isExpanded ? 'shadow-md ring-1 ring-gunner-red/10' : ''
-    } ${task.isOverdue ? 'border-semantic-red/30' : ''}`} style={{ borderColor: task.isOverdue ? undefined : 'var(--border-light)' }}>
+    } ${!isCompleted && task.isOverdue ? 'border-semantic-red/30' : ''} ${isCompleted ? 'opacity-70' : ''}`} style={{ borderColor: !isCompleted && task.isOverdue ? undefined : 'var(--border-light)' }}>
       {/* Card header — clickable */}
       <button
         onClick={onToggle}
         className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-surface-secondary transition-colors"
       >
-        {/* Two-click confirm checkbox */}
-        <button
-          onClick={handleCheckClick}
-          disabled={isCompleting}
-          className={`shrink-0 transition-all duration-200 ${
-            isCompleting ? 'text-semantic-green'
-            : confirmingComplete ? 'text-semantic-green scale-110'
-            : 'text-txt-muted hover:text-gunner-red'
-          }`}
-          title={confirmingComplete ? 'Click again to confirm' : 'Complete task'}
-        >
-          {isCompleting
-            ? <CheckCircle size={18} className="animate-pulse" />
-            : confirmingComplete
-            ? <CheckCircle size={18} className="animate-pulse" />
-            : <Circle size={18} />
-          }
-        </button>
+        {/* Checkbox: completed → static green check; active → two-click confirm */}
+        {isCompleted ? (
+          <CheckCircle size={18} className="text-semantic-green shrink-0" />
+        ) : (
+          <button
+            onClick={handleCheckClick}
+            disabled={isCompleting}
+            className={`shrink-0 transition-all duration-200 ${
+              isCompleting ? 'text-semantic-green'
+              : confirmingComplete ? 'text-semantic-green scale-110'
+              : 'text-txt-muted hover:text-gunner-red'
+            }`}
+            title={confirmingComplete ? 'Click again to confirm' : 'Complete task'}
+          >
+            {isCompleting
+              ? <CheckCircle size={18} className="animate-pulse" />
+              : confirmingComplete
+              ? <CheckCircle size={18} className="animate-pulse" />
+              : <Circle size={18} />
+            }
+          </button>
+        )}
         {confirmingComplete && (
           <span className="text-[9px] text-semantic-green font-medium shrink-0 animate-pulse">Confirm?</span>
         )}
@@ -1331,26 +1348,37 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
         {/* Name + details */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-txt-primary truncate">{titleCase(task.contactName) || task.title}</span>
+            <span className={`text-[13px] font-semibold text-txt-primary truncate ${isCompleted ? 'line-through' : ''}`}>{titleCase(task.contactName) || task.title}</span>
             {task.assignedToName && (
               <span className="text-[10px] text-semantic-blue shrink-0">
                 <User size={9} className="inline -mt-0.5" /> {titleCase(task.assignedToName)}
               </span>
             )}
           </div>
-          {task.contactAddress && (
-            <p className="text-[11px] text-txt-secondary truncate mt-0.5">
-              <MapPin size={9} className="inline -mt-0.5 text-txt-muted" /> {task.contactAddress}
-            </p>
-          )}
-          {!task.contactAddress && (
-            <p className="text-[11px] text-txt-muted truncate mt-0.5">{task.title}</p>
-          )}
+          {(() => {
+            const addrs = task.contactAddresses ?? (task.contactAddress ? [task.contactAddress] : [])
+            if (addrs.length === 0) {
+              return <p className="text-[11px] text-txt-muted truncate mt-0.5">{task.title}</p>
+            }
+            // Show first address inline; stack additional ones beneath (capped at 3 in collapsed view)
+            const visible = addrs.slice(0, 3)
+            const extra = addrs.length - visible.length
+            return (
+              <div className="mt-0.5 space-y-0.5">
+                {visible.map((a, i) => (
+                  <p key={i} className={`text-[11px] text-txt-secondary truncate ${isCompleted ? 'line-through' : ''}`}>
+                    <MapPin size={9} className="inline -mt-0.5 text-txt-muted" /> {a}
+                  </p>
+                ))}
+                {extra > 0 && <p className="text-[10px] text-txt-muted">+{extra} more</p>}
+              </div>
+            )
+          })()}
         </div>
 
-        {/* Overdue tier dot — fixed-width slot so it never shifts layout */}
+        {/* Overdue tier dot — fixed-width slot so it never shifts layout. Hidden when completed. */}
         <div className="w-3 shrink-0 flex items-center justify-center">
-          {task.overdueTier && task.overdueTier !== 'none' && task.overdueTier !== 'green' && (
+          {!isCompleted && task.overdueTier && task.overdueTier !== 'none' && task.overdueTier !== 'green' && (
             <span className={`w-2 h-2 rounded-full ${
               task.overdueTier === 'yellow' ? 'bg-yellow-400'
               : task.overdueTier === 'orange' ? 'bg-orange-500'
@@ -1359,8 +1387,8 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
           )}
         </div>
 
-        {/* AM/PM glow — activity is source of truth, server DB as fallback */}
-        {(() => {
+        {/* AM/PM glow — only for active tasks. Completed rows replace this with a "Completed" pill below. */}
+        {!isCompleted && (() => {
           const amActive = activity ? activity.hasAm : task.amDone
           const pmActive = activity ? activity.hasPm : task.pmDone
           return (
@@ -1378,14 +1406,18 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
             </div>
           )
         })()}
+        {isCompleted && <div className="w-[72px] shrink-0" />}
 
-        {/* Due status */}
+        {/* Due status (or "Completed" badge for completed rows) */}
         <span className={`text-[11px] font-semibold shrink-0 w-20 text-right ${
-          task.isOverdue ? 'text-semantic-red'
+          isCompleted ? 'text-semantic-green'
+          : task.isOverdue ? 'text-semantic-red'
           : task.isDueToday ? 'text-semantic-amber'
           : 'text-txt-muted'
         }`}>
-          {task.isOverdue
+          {isCompleted
+            ? 'Completed'
+            : task.isOverdue
             ? `${daysOverdue}d overdue`
             : task.isDueToday
             ? 'Due Today'
@@ -1406,7 +1438,9 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
             {task.body && <p className="text-[11px] text-txt-secondary">{task.body}</p>}
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-txt-muted pt-1">
               {task.contactPhone && <span><Phone size={9} className="inline -mt-0.5" /> {formatPhone(task.contactPhone)}</span>}
-              {task.contactAddress && <span><MapPin size={9} className="inline -mt-0.5" /> {task.contactAddress}</span>}
+              {(task.contactAddresses ?? (task.contactAddress ? [task.contactAddress] : [])).map((a, i) => (
+                <span key={i}><MapPin size={9} className="inline -mt-0.5" /> {a}</span>
+              ))}
               {task.assignedToName && <span><User size={9} className="inline -mt-0.5" /> {titleCase(task.assignedToName)}</span>}
               {task.dueDate && <span><Clock size={9} className="inline -mt-0.5" /> Due {format(new Date(task.dueDate), 'MMM d, yyyy')}</span>}
             </div>
@@ -1500,7 +1534,7 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
                           {c.direction === 'outbound' ? 'Outbound' : 'Inbound'} Call
                         </span>
                       </div>
-                      <span className="text-[10px] text-txt-muted">{c.duration ? `${Math.round(c.duration / 60)}m` : ''}</span>
+                      <span className="text-[10px] text-txt-muted">{formatCallDuration(c.duration)}</span>
                       <span className="text-[10px] text-txt-muted">{c.time ? format(new Date(c.time), 'h:mm a') : ''}</span>
                     </div>
                   ))}
