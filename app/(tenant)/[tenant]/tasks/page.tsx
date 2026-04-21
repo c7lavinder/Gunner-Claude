@@ -227,6 +227,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         contactPhone: contact?.phone ?? null,
         contactAddress: propertyMap.get(t.contactId) || contact?.address || null,
         assignedToName,
+        assignedToGhlId: assignedUserId,
         amDone: callStatus.am,
         pmDone: callStatus.pm,
       }
@@ -276,6 +277,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         contactPhone: contact?.phone ?? null,
         contactAddress: propertyMap.get(t.contactId) || contact?.address || null,
         assignedToName,
+        assignedToGhlId: t.assignedTo ?? null,
         amDone: false,
         pmDone: false,
       }

@@ -16,6 +16,7 @@ import {
 import { format, formatDistanceToNow, differenceInDays, addDays, isToday } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 import { KpiLedgerModal } from './KpiLedgerModal'
+import { NoteModal, AppointmentModal, WorkflowModal, TaskEditModal } from '@/components/dayhub/contact-action-modals'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ export interface EnrichedTask {
   contactPhone: string | null
   contactAddress: string | null
   assignedToName: string | null
+  assignedToGhlId: string | null
   amDone: boolean
   pmDone: boolean
 }
@@ -1094,6 +1096,8 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
                   onToggle={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
                   ghlLocationId={ghlLocationId}
                   preloadedActivity={activityMap[task.contactId] ?? null}
+                  ghlTeamUsers={teamRoster.filter(m => m.ghlUserId).map(m => ({ ghlUserId: m.ghlUserId as string, name: m.name }))}
+                  onTaskRefresh={() => startTransition(() => router.refresh())}
                   onSMS={(t) => {
                     setSelectedContact({
                       id: '', contactId: t.contactId, contactName: t.contactName ?? t.title,
@@ -1213,7 +1217,7 @@ interface ContactActivity {
   hasPm: boolean
 }
 
-function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, preloadedActivity, onSMS }: {
+function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggle, ghlLocationId, preloadedActivity, ghlTeamUsers, onTaskRefresh, onSMS }: {
   task: EnrichedTask
   tenantSlug: string
   onComplete: (taskId: string, contactId: string) => void
@@ -1222,8 +1226,13 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
   onToggle: () => void
   ghlLocationId: string
   preloadedActivity: ContactActivity | null
+  ghlTeamUsers: Array<{ ghlUserId: string; name: string }>
+  onTaskRefresh: () => void
   onSMS: (task: EnrichedTask) => void
 }) {
+  // Action modal state — only one open at a time
+  const [openAction, setOpenAction] = useState<null | 'note' | 'appointment' | 'workflow' | 'task'>(null)
+  const { toast } = useToast()
   const [activityTab, setActivityTab] = useState<'activity' | 'notes'>('activity')
   const [confirmingComplete, setConfirmingComplete] = useState(false)
   // On-demand activity fetch — preload only covers first 10 prioritized tasks,
@@ -1397,8 +1406,8 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
                 <Send size={10} /> Text
               </button>
             )}
-            {/* GHL deep links — v2 uses subpath segments, not ?tab= query params.
-                The previous ?tab= form silently dropped users on the default contact view. */}
+            {/* View in CRM still deep-links to GHL (read-only). The other 4 actions
+                open in-Gunner modals that hit GHL via /api/[tenant]/ghl/* routes. */}
             <a
               href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}`}
               target="_blank" rel="noopener noreferrer"
@@ -1406,34 +1415,30 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
             >
               <ExternalLink size={10} /> View in CRM
             </a>
-            <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/appointment`}
-              target="_blank" rel="noopener noreferrer"
+            <button
+              onClick={() => setOpenAction('appointment')}
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >
               <Calendar size={10} /> Create Apt
-            </a>
-            <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/notes`}
-              target="_blank" rel="noopener noreferrer"
+            </button>
+            <button
+              onClick={() => setOpenAction('note')}
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >
               <Pencil size={10} /> Add Note
-            </a>
-            <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/automation`}
-              target="_blank" rel="noopener noreferrer"
+            </button>
+            <button
+              onClick={() => setOpenAction('workflow')}
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >
               <Play size={10} /> Workflow
-            </a>
-            <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/tasks`}
-              target="_blank" rel="noopener noreferrer"
+            </button>
+            <button
+              onClick={() => setOpenAction('task')}
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >
               <ClipboardList size={10} /> Update Task
-            </a>
+            </button>
           </div>
 
           {/* Tab bar */}
@@ -1545,6 +1550,51 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
         </div>
       )}
 
+      {/* In-Gunner action modals — each saves to GHL via /api/[tenant]/ghl/* and refreshes server data */}
+      <NoteModal
+        open={openAction === 'note'}
+        onClose={() => setOpenAction(null)}
+        tenantSlug={tenantSlug}
+        contactId={task.contactId}
+        contactName={task.contactName}
+        toast={toast}
+        onSuccess={onTaskRefresh}
+      />
+      <AppointmentModal
+        open={openAction === 'appointment'}
+        onClose={() => setOpenAction(null)}
+        tenantSlug={tenantSlug}
+        contactId={task.contactId}
+        contactName={task.contactName}
+        toast={toast}
+        onSuccess={onTaskRefresh}
+      />
+      <WorkflowModal
+        open={openAction === 'workflow'}
+        onClose={() => setOpenAction(null)}
+        tenantSlug={tenantSlug}
+        contactId={task.contactId}
+        contactName={task.contactName}
+        toast={toast}
+        onSuccess={onTaskRefresh}
+      />
+      <TaskEditModal
+        open={openAction === 'task'}
+        onClose={() => setOpenAction(null)}
+        tenantSlug={tenantSlug}
+        teamUsers={ghlTeamUsers}
+        initial={{
+          taskId: task.id,
+          contactId: task.contactId,
+          title: task.title,
+          body: task.body,
+          dueDate: task.dueDate,
+          assignedToGhlId: task.assignedToGhlId,
+          completed: false,
+        }}
+        toast={toast}
+        onSuccess={onTaskRefresh}
+      />
     </div>
   )
 }

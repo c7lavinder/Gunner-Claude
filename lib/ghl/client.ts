@@ -287,6 +287,38 @@ export class GHLClient {
     return { events: allEvents }
   }
 
+  // POST /calendars/events/appointments — book a new appointment.
+  // GHL requires calendarId, locationId, contactId, startTime + endTime (ISO),
+  // and accepts optional title, appointmentStatus, assignedUserId, address, meetingLocationType.
+  async createAppointment(data: {
+    calendarId: string
+    contactId: string
+    startTime: string
+    endTime: string
+    title?: string
+    appointmentStatus?: string
+    assignedUserId?: string
+    address?: string
+  }) {
+    return this.request<{ id: string }>('POST', '/calendars/events/appointments', {
+      ...data,
+      locationId: this.locationId,
+    })
+  }
+
+  // ─── Workflows ─────────────────────────────────────────────────────────────
+
+  async getWorkflows() {
+    return this.request<{ workflows: Array<{ id: string; name: string; status?: string }> }>(
+      'GET',
+      `/workflows/?locationId=${this.locationId}`,
+    )
+  }
+
+  async addContactToWorkflow(contactId: string, workflowId: string) {
+    return this.request('POST', `/contacts/${contactId}/workflow/${workflowId}`, {})
+  }
+
   // ─── Pipeline ──────────────────────────────────────────────────────────────
 
   async getPipelines() {
