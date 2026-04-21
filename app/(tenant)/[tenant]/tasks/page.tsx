@@ -10,6 +10,7 @@ import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
 import { isPast, isToday } from 'date-fns'
 import { scoreTask as computeScore, getOverdueTier, type OverdueTier } from '@/lib/tasks/scoring'
+import { getCentralDayBounds } from '@/lib/dates'
 
 // ─── Category classification ───────────────────────────────────────────────
 
@@ -243,18 +244,40 @@ export default async function TasksPage({ params }: { params: { tenant: string }
     // Sort by score descending
     enrichedTasks.sort((a, b) => b.score - a.score)
 
-    // Enrich today's completed tasks (filter to today in Central time)
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
-    const todayCompleted = completedTasks.filter(t => {
-      if (!t.dueDate) return false
-      const taskDate = new Date(t.dueDate).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
-      return taskDate === todayStr
+    // "Completed today" — driven by the AUDIT LOG, not GHL's task.dueDate.
+    // GHL's task object has no completedAt field, so the previous heuristic
+    // (dueDate === today) silently dropped any task completed today that was
+    // due on a different day. The audit log records every completion that
+    // happens through Gunner with the completer's userId, so it's the right
+    // source of truth for "completed today by user X".
+    const { dayStart: todayStartCentral } = getCentralDayBounds()
+    const todayCompletionAudits = await db.auditLog.findMany({
+      where: {
+        tenantId,
+        action: 'task.completed_ghl',
+        createdAt: { gte: todayStartCentral },
+      },
+      select: { userId: true, payload: true, user: { select: { name: true, ghlUserId: true } } },
     })
+    // Map ghlTaskId → completer info (name + ghlUserId for display + filtering)
+    const completedTodayByTaskId = new Map<string, { byName: string | null; byGhlUserId: string | null }>()
+    for (const a of todayCompletionAudits) {
+      const taskId = (a.payload as { taskId?: string } | null)?.taskId
+      if (!taskId) continue
+      completedTodayByTaskId.set(taskId, {
+        byName: a.user?.name ?? null,
+        byGhlUserId: a.user?.ghlUserId ?? null,
+      })
+    }
+    const todayCompleted = completedTasks.filter(t => completedTodayByTaskId.has(t.id))
 
-    // Filter completed by user permissions
+    // Non-admin scoping: only show tasks they completed (audit userId match)
     let filteredCompleted = todayCompleted
     if (!isAdmin && currentUser?.ghlUserId) {
-      filteredCompleted = filteredCompleted.filter(t => t.assignedTo === currentUser.ghlUserId)
+      filteredCompleted = filteredCompleted.filter(t => {
+        const c = completedTodayByTaskId.get(t.id)
+        return c?.byGhlUserId === currentUser.ghlUserId || t.assignedTo === currentUser.ghlUserId
+      })
     }
 
     completedTodayTasks = filteredCompleted.slice(0, 30).map(t => {
@@ -266,7 +289,11 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       const inlineAssigned = t.assignedToUserDetails
         ? `${t.assignedToUserDetails.firstName ?? ''} ${t.assignedToUserDetails.lastName ?? ''}`.trim()
         : null
-      const assignedToName = inlineAssigned || (t.assignedTo ? ghlUserMap.get(t.assignedTo) ?? null : null)
+      const ghlAssignedName = inlineAssigned || (t.assignedTo ? ghlUserMap.get(t.assignedTo) ?? null : null)
+      // For completed tasks, prefer the COMPLETER (from audit log) as the "assigned" name
+      // so the View-As filter, team dropdown, and displayed name reflect who did the work.
+      const completer = completedTodayByTaskId.get(t.id)
+      const assignedToName = completer?.byName ?? ghlAssignedName
       const category = classifyTask(t.title || '', t.body || '')
       const linkedAddresses = propertyMap.get(t.contactId) ?? []
       const ghlContactAddress = contact?.address ? [contact.address] : []

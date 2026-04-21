@@ -514,10 +514,13 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
   if (categoryFilter) filteredTasks = filteredTasks.filter(t => t.category === categoryFilter)
   if (teamFilter) filteredTasks = filteredTasks.filter(t => t.assignedToName === teamFilter)
 
-  // Completed Today: restrict to the same scope so view-as Daniel sees only Daniel's completions
-  const visibleCompletedTasks = scopedNames
+  // Completed Today: apply the same scope + category + team filters as the active list
+  // so the panel below mirrors what's actually being viewed above.
+  let visibleCompletedTasks = scopedNames
     ? completedTasks.filter(t => t.assignedToName && scopedNames!.has(t.assignedToName))
     : completedTasks
+  if (categoryFilter) visibleCompletedTasks = visibleCompletedTasks.filter(t => t.category === categoryFilter)
+  if (teamFilter) visibleCompletedTasks = visibleCompletedTasks.filter(t => t.assignedToName === teamFilter)
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length
   let displayTasks = filteredTasks
   if (showOverdueOnly) displayTasks = displayTasks.filter(t => t.isOverdue)
