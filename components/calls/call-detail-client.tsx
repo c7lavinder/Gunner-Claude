@@ -46,12 +46,13 @@ interface CallDetail {
   contactName: string | null; contactPhone: string | null
   assignedTo: { id: string; name: string; role: string } | null
   property: { id: string; address: string; city: string; state: string; status: string; ghlPipelineStage: string | null; sellerName: string | null } | null
+  relatedProperties: Array<{ id: string; address: string; city: string; state: string; status: string }>
   aiNextSteps: Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null
   isCalibration: boolean
   calibrationNotes: string | null
 }
 
-type Tab = 'coaching' | 'criteria' | 'transcript' | 'next-steps' | 'property'
+type Tab = 'coaching' | 'transcript' | 'next-steps' | 'property'
 
 interface NextStep {
   type: string; label: string; reasoning: string
@@ -183,6 +184,10 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [expandedMoment, setExpandedMoment] = useState<number | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
   const [reclassifying, setReclassifying] = useState(false)
+  const [reclassifyType, setReclassifyType] = useState<string>(call.callType ?? '')
+  const [reclassifyOutcome, setReclassifyOutcome] = useState<string>(call.callOutcome ?? '')
+  const [reclassifySaving, setReclassifySaving] = useState(false)
+  const [propertiesExpanded, setPropertiesExpanded] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   // High-stakes confirm modal — null = closed, step index = open for that step
   const [confirmModalStep, setConfirmModalStep] = useState<number | null>(null)
@@ -252,7 +257,6 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: 'coaching', label: 'Coaching', icon: <Lightbulb size={14} /> },
-    { id: 'criteria', label: 'Criteria', icon: <Target size={14} /> },
     { id: 'transcript', label: 'Transcript', icon: <FileText size={14} /> },
     { id: 'next-steps', label: 'Next Steps', icon: <Zap size={14} />, badge: generatedSteps.filter(s => s.status === 'pending').length || undefined },
     { id: 'property', label: 'Property', icon: <Home size={14} />, badge: propertyPendingCount || undefined },
@@ -304,19 +308,41 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     } catch { setIsCalibration(!newValue); toast('Failed to update', 'error') }
   }
 
-  async function reclassify(callType: string) {
-    setReclassifying(false)
-    setActionLoading('reclassify')
+  async function saveReclassify() {
+    const typeChanged = reclassifyType && reclassifyType !== call.callType
+    const outcomeChanged = reclassifyOutcome && reclassifyOutcome !== call.callOutcome
+    if (!typeChanged && !outcomeChanged) {
+      setReclassifying(false)
+      return
+    }
+    setReclassifySaving(true)
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/reclassify`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callType }),
+        body: JSON.stringify({
+          ...(typeChanged ? { callType: reclassifyType } : {}),
+          ...(outcomeChanged ? { callOutcome: reclassifyOutcome } : {}),
+        }),
       })
-      if (res.ok) { toast(`Reclassified as ${callType.replace(/_/g, ' ')}`, 'success'); startTransition(() => router.refresh()) }
-      else toast('Failed to reclassify', 'error')
+      if (res.ok) {
+        toast('Reclassified', 'success')
+        setReclassifying(false)
+        startTransition(() => router.refresh())
+      } else {
+        toast('Failed to reclassify', 'error')
+      }
     } catch { toast('Failed to reclassify', 'error') }
-    setActionLoading(null)
+    setReclassifySaving(false)
   }
+
+  // Outcomes available for the selected reclassify type — falls back to full
+  // tenant-wide union when no type is selected yet.
+  const outcomeChoices = (() => {
+    const def = CALL_TYPES.find(ct => ct.id === reclassifyType)
+    if (def) return def.results
+    return CALL_TYPES.flatMap(ct => ct.results)
+      .filter((r, i, arr) => arr.findIndex(x => x.id === r.id) === i)
+  })()
 
   async function generateNextSteps() {
     setGeneratingSteps(true)
@@ -465,7 +491,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           </button>
           <div className="relative">
             <button
-              onClick={() => setReclassifying(!reclassifying)}
+              onClick={() => {
+                if (!reclassifying) {
+                  setReclassifyType(call.callType ?? '')
+                  setReclassifyOutcome(call.callOutcome ?? '')
+                }
+                setReclassifying(!reclassifying)
+              }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-txt-primary transition-all"
               style={{ borderColor: 'var(--border-medium)' }}
             >
@@ -473,14 +505,55 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
             </button>
             {reclassifying && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setReclassifying(false)} />
-                <div className="absolute top-full right-0 mt-1 bg-surface-primary border rounded-[10px] p-1 z-50 min-w-44 shadow-ds-float" style={{ borderColor: 'var(--border-medium)' }}>
-                  {CALL_TYPES.map(ct => (
-                    <button key={ct.id} onClick={() => reclassify(ct.id)}
-                      className="block w-full text-left text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary px-3 py-2 rounded-[6px]">
-                      {ct.name}
+                <div className="fixed inset-0 z-40" onClick={() => !reclassifySaving && setReclassifying(false)} />
+                <div className="absolute top-full right-0 mt-1 bg-surface-primary border rounded-[14px] p-4 z-50 w-72 shadow-ds-float space-y-3" style={{ borderColor: 'var(--border-medium)' }}>
+                  <div>
+                    <label className="block text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-1">Call type</label>
+                    <select
+                      value={reclassifyType}
+                      onChange={e => {
+                        setReclassifyType(e.target.value)
+                        // Reset outcome when type changes and the current outcome isn't valid for the new type
+                        const newType = CALL_TYPES.find(ct => ct.id === e.target.value)
+                        if (newType && reclassifyOutcome && !newType.results.some(r => r.id === reclassifyOutcome)) {
+                          setReclassifyOutcome('')
+                        }
+                      }}
+                      className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary focus:outline-none"
+                      style={{ borderColor: 'var(--border-medium)' }}
+                    >
+                      <option value="">—</option>
+                      {CALL_TYPES.map(ct => <option key={ct.id} value={ct.id}>{ct.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium tracking-[0.08em] text-txt-muted uppercase mb-1">Outcome</label>
+                    <select
+                      value={reclassifyOutcome}
+                      onChange={e => setReclassifyOutcome(e.target.value)}
+                      className="w-full bg-surface-secondary border-[0.5px] rounded-[10px] px-3 py-2 text-[13px] text-txt-primary focus:outline-none"
+                      style={{ borderColor: 'var(--border-medium)' }}
+                    >
+                      <option value="">—</option>
+                      {outcomeChoices.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => !reclassifySaving && setReclassifying(false)}
+                      className="text-[12px] text-txt-secondary hover:text-txt-primary px-2 py-1"
+                    >
+                      Cancel
                     </button>
-                  ))}
+                    <button
+                      onClick={saveReclassify}
+                      disabled={reclassifySaving}
+                      className="flex items-center gap-1.5 text-[12px] font-medium bg-gunner-red text-white hover:bg-gunner-red-dark px-3 py-1.5 rounded-[8px] disabled:opacity-50"
+                    >
+                      {reclassifySaving && <Loader2 size={11} className="animate-spin" />}
+                      Save
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -522,11 +595,45 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
             {RESULT_NAMES[outcome] ?? outcome.replace(/_/g, ' ')}
           </Pill>
         )}
-        {call.property && (
-          <Link href={`/${tenantSlug}/inventory/${call.property.id}`} target="_blank" className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border-[0.5px] border-[rgba(0,0,0,0.14)] text-txt-secondary hover:text-gunner-red hover:border-gunner-red/30 transition-colors">
-            <MapPin size={9} /> {call.property.address}, {call.property.city}, {call.property.state}
-          </Link>
-        )}
+        {(() => {
+          // Show up to 3 related properties, plus a "+X more" toggle that expands the rest inline.
+          const props = call.relatedProperties.length > 0
+            ? call.relatedProperties
+            : (call.property ? [{ id: call.property.id, address: call.property.address, city: call.property.city, state: call.property.state, status: call.property.status }] : [])
+          if (props.length === 0) return null
+          const visible = propertiesExpanded ? props : props.slice(0, 3)
+          const hiddenCount = props.length - visible.length
+          return (
+            <>
+              {visible.map(p => (
+                <Link
+                  key={p.id}
+                  href={`/${tenantSlug}/inventory/${p.id}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border-[0.5px] border-[rgba(0,0,0,0.14)] text-txt-secondary hover:text-gunner-red hover:border-gunner-red/30 transition-colors"
+                >
+                  <MapPin size={9} /> {p.address}, {p.city}, {p.state}
+                </Link>
+              ))}
+              {hiddenCount > 0 && (
+                <button
+                  onClick={() => setPropertiesExpanded(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border-[0.5px] border-[rgba(0,0,0,0.14)] text-txt-muted hover:text-txt-primary hover:border-gunner-red/30 transition-colors"
+                >
+                  +{hiddenCount} more
+                </button>
+              )}
+              {propertiesExpanded && props.length > 3 && (
+                <button
+                  onClick={() => setPropertiesExpanded(false)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border-[0.5px] border-[rgba(0,0,0,0.14)] text-txt-muted hover:text-txt-primary transition-colors"
+                >
+                  Collapse
+                </button>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       {/* Date/time */}
@@ -703,42 +810,40 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                 </div>
               )}
 
-              {!call.aiSummary && improvements.length === 0 && objectionReplies.length === 0 && (
-                <EmptyState icon={<Lightbulb size={24} />} message="No coaching data available yet" />
-              )}
-            </div>
-          )}
-
-          {/* ── CRITERIA TAB ─────────────────────────────────────── */}
-          {tab === 'criteria' && (
-            <div>
-              {Object.keys(call.rubricScores).length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(call.rubricScores).map(([cat, data]) => {
-                    const pct = data.maxScore > 0 ? Math.round((data.score / data.maxScore) * 100) : 0
-                    // Color tiers: green (80%+), gold/yellow (60-79%), red (<40%), blue (40-59%)
-                    const barColor = pct >= 80 ? 'bg-semantic-green' : pct >= 60 ? 'bg-yellow-500' : pct >= 40 ? 'bg-semantic-blue' : 'bg-semantic-red'
-                    const textColor = pct >= 80 ? 'text-semantic-green' : pct >= 60 ? 'text-yellow-600' : pct >= 40 ? 'text-semantic-blue' : 'text-semantic-red'
-                    return (
-                      <div key={cat} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[14px] font-medium text-txt-primary">{formatFieldLabel(cat)}</span>
-                          <span className={`text-[14px] font-semibold ${textColor}`}>
-                            {data.score}/{data.maxScore}
-                          </span>
+              {/* Criteria breakdown — folded in from the old Criteria tab */}
+              {Object.keys(call.rubricScores).length > 0 && (
+                <div>
+                  <h3 className="text-[10px] font-medium tracking-[0.08em] text-semantic-blue uppercase flex items-center gap-2 mb-2 px-1">
+                    <Target size={11} /> Criteria Breakdown
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(call.rubricScores).map(([cat, data]) => {
+                      const pct = data.maxScore > 0 ? Math.round((data.score / data.maxScore) * 100) : 0
+                      const barColor = pct >= 80 ? 'bg-semantic-green' : pct >= 60 ? 'bg-yellow-500' : pct >= 40 ? 'bg-semantic-blue' : 'bg-semantic-red'
+                      const textColor = pct >= 80 ? 'text-semantic-green' : pct >= 60 ? 'text-yellow-600' : pct >= 40 ? 'text-semantic-blue' : 'text-semantic-red'
+                      return (
+                        <div key={cat} className="bg-surface-primary border-[0.5px] rounded-[14px] p-4" style={{ borderColor: 'var(--border-light)' }}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[14px] font-medium text-txt-primary">{formatFieldLabel(cat)}</span>
+                            <span className={`text-[14px] font-semibold ${textColor}`}>
+                              {data.score}/{data.maxScore}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-surface-tertiary rounded-full overflow-hidden mb-3">
+                            <div className={`h-full rounded-full ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                          </div>
+                          {data.notes && (
+                            <p className="text-[12px] text-txt-secondary leading-relaxed">{data.notes}</p>
+                          )}
                         </div>
-                        <div className="h-2 bg-surface-tertiary rounded-full overflow-hidden mb-3">
-                          <div className={`h-full rounded-full ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }} />
-                        </div>
-                        {data.notes && (
-                          <p className="text-[12px] text-txt-secondary leading-relaxed">{data.notes}</p>
-                        )}
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              ) : (
-                <EmptyState icon={<Star size={24} />} message="No criteria breakdown available" />
+              )}
+
+              {!call.aiSummary && improvements.length === 0 && objectionReplies.length === 0 && Object.keys(call.rubricScores).length === 0 && (
+                <EmptyState icon={<Lightbulb size={24} />} message="No coaching data available yet" />
               )}
             </div>
           )}

@@ -32,6 +32,16 @@ export default async function CallDetailPage({
     },
   })
 
+  // All properties linked to this contact (not just the one linked to this call)
+  // — powers the multi-property header pills.
+  const relatedProperties = call?.ghlContactId
+    ? await db.property.findMany({
+        where: { tenantId, ghlContactId: call.ghlContactId },
+        select: { id: true, address: true, city: true, state: true, status: true },
+        orderBy: { createdAt: 'desc' },
+      })
+    : []
+
   // Safe-cast aiNextSteps from Json to typed array
   const aiNextSteps = (call?.aiNextSteps as Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null) ?? null
 
@@ -114,6 +124,7 @@ export default async function CallDetailPage({
           ghlPipelineStage: call.property.ghlPipelineStage,
           sellerName: call.property.sellers[0]?.seller.name ?? null,
         } : null,
+        relatedProperties,
         aiNextSteps,
         isCalibration: call.isCalibration,
         calibrationNotes: call.calibrationNotes,

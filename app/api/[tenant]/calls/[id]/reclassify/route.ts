@@ -1,5 +1,6 @@
 // app/api/[tenant]/calls/[id]/reclassify/route.ts
-// Handles both call type reclassification and manual outcome setting
+// Handles both call type reclassification and manual outcome setting.
+// Every reclassification is captured in call_reclassifications for later LLM training.
 import { NextRequest, NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
@@ -16,34 +17,47 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
+  // Snapshot the call BEFORE mutating — feeds the training log
   const call = await db.call.findFirst({
     where: { id: params.id, tenantId: ctx.tenantId },
-    select: { id: true },
+    select: { id: true, callType: true, callOutcome: true, aiSummary: true },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
-  // Setting outcome only — no re-grade needed
-  if (parsed.data.callOutcome && !parsed.data.callType) {
-    await db.call.update({
-      where: { id: params.id },
-      data: { callOutcome: parsed.data.callOutcome },
-    })
-    return NextResponse.json({ success: true })
+  const typeChanged = !!parsed.data.callType && parsed.data.callType !== call.callType
+  const outcomeChanged = !!parsed.data.callOutcome && parsed.data.callOutcome !== call.callOutcome
+  if (!typeChanged && !outcomeChanged) {
+    return NextResponse.json({ success: true, noop: true })
   }
 
-  // Reclassifying call type — triggers re-grade
-  if (parsed.data.callType) {
-    await db.call.update({
-      where: { id: params.id },
-      data: {
-        callType: parsed.data.callType,
-        ...(parsed.data.callOutcome ? { callOutcome: parsed.data.callOutcome } : {}),
-        gradingStatus: 'PENDING',
-      },
-    })
+  // Type changes trigger a full re-grade so the AI re-scores against the new rubric.
+  // Outcome-only changes do not re-grade.
+  await db.call.update({
+    where: { id: params.id },
+    data: {
+      ...(typeChanged ? { callType: parsed.data.callType, gradingStatus: 'PENDING' } : {}),
+      ...(outcomeChanged ? { callOutcome: parsed.data.callOutcome } : {}),
+    },
+  })
 
+  await db.callReclassification.create({
+    data: {
+      tenantId: ctx.tenantId,
+      callId: params.id,
+      userId: ctx.userId,
+      previousCallType: call.callType,
+      newCallType: typeChanged ? parsed.data.callType! : null,
+      previousCallOutcome: call.callOutcome,
+      newCallOutcome: outcomeChanged ? parsed.data.callOutcome! : null,
+      previousAiSummary: call.aiSummary,
+    },
+  }).catch(err => {
+    console.error(`[Reclassify] Failed to log reclassification for ${params.id}:`, err)
+  })
+
+  if (typeChanged) {
     gradeCall(params.id).catch(err => {
-      console.error(`[Reclassify] Failed for call ${params.id}:`, err)
+      console.error(`[Reclassify] Re-grade failed for call ${params.id}:`, err)
     })
   }
 

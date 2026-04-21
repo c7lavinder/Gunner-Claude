@@ -96,6 +96,7 @@ model Tenant {
   propertyTeamMembers PropertyTeamMember[]
   knowledgeDocuments  KnowledgeDocument[]
   userProfiles        UserProfile[]
+  callReclassifications CallReclassification[]
   assistantMessages   AssistantMessage[]
   actionLogs          ActionLog[]
   aiLogs              AiLog[]
@@ -163,6 +164,7 @@ model User {
   userProfile         UserProfile?
   assistantMessages   AssistantMessage[] @relation("AssistantMessages")
   actionLogs          ActionLog[] @relation("ActionLogs")
+  callReclassifications CallReclassification[] @relation("CallReclassifiedBy")
 
   @@map("users")
 }
@@ -691,8 +693,44 @@ model Call {
   calibrationNotes String? @map("calibration_notes")
 
   recordingFetchJob RecordingFetchJob?
+  reclassifications CallReclassification[]
 
   @@map("calls")
+}
+
+// ─────────────────────────────────────────
+// CALL RECLASSIFICATION EVENTS
+// Captures every human correction (call type / outcome) so the AI can later
+// learn from disagreements between its classification and the rep's judgment.
+// Append-only — never updated or deleted.
+// ─────────────────────────────────────────
+
+model CallReclassification {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  callId String @map("call_id")
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  userId String? @map("user_id")
+  user   User?   @relation("CallReclassifiedBy", fields: [userId], references: [id])
+
+  // Before/after snapshot — nullable because either type or outcome (or both) may change
+  previousCallType    String? @map("previous_call_type")
+  newCallType         String? @map("new_call_type")
+  previousCallOutcome String? @map("previous_call_outcome")
+  newCallOutcome      String? @map("new_call_outcome")
+
+  // Snapshot the AI's justification at the moment of reclassification — lets
+  // future training see "what the AI thought" vs. "what the human decided"
+  previousAiSummary String? @db.Text @map("previous_ai_summary")
+
+  @@index([tenantId, createdAt])
+  @@index([callId])
+  @@map("call_reclassifications")
 }
 
 // ─────────────────────────────────────────
