@@ -32,11 +32,12 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
 
   // Type changes trigger a full re-grade so the AI re-scores against the new rubric.
   // Outcome-only changes do not re-grade.
+  // When the human sets an outcome, lock it against future AI overwrites.
   await db.call.update({
     where: { id: params.id },
     data: {
       ...(typeChanged ? { callType: parsed.data.callType, gradingStatus: 'PENDING' } : {}),
-      ...(outcomeChanged ? { callOutcome: parsed.data.callOutcome } : {}),
+      ...(outcomeChanged ? { callOutcome: parsed.data.callOutcome, outcomeManualOverride: true } : {}),
     },
   })
 

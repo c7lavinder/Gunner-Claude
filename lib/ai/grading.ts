@@ -239,11 +239,15 @@ export async function gradeCall(callId: string): Promise<void> {
         gradedAt: new Date(),
         // 3-tier call type: 1) manual (already set) → 2) AI detection → 3) role fallback
         ...(!call.callType ? { callType: grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role) } : {}),
-        // Auto-classify outcome — validate against call type's valid results
-        callOutcome: validateOutcomeForType(
-          grading.callOutcome,
-          call.callType ?? grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role),
-        ),
+        // Auto-classify outcome — UNLESS a human has explicitly locked it via Reclassify.
+        ...(call.outcomeManualOverride
+          ? {}
+          : {
+              callOutcome: validateOutcomeForType(
+                grading.callOutcome,
+                call.callType ?? grading.callType ?? inferCallTypeFromRole(call.assignedTo?.role),
+              ),
+            }),
         // Follow-up scheduled (separate from outcome)
         ...(grading.followUpScheduled !== undefined ? { callResult: grading.followUpScheduled ? 'follow_up_scheduled' : grading.callOutcome } : {}),
         // Key moments / highlights

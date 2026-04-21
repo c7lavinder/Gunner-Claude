@@ -659,6 +659,10 @@ model Call {
   manualUpload     Boolean @default(false) @map("manual_upload")
   audioStoragePath String? @map("audio_storage_path") // Supabase Storage path: "{tenantId}/{callId}.{ext}"
 
+  // True when a human explicitly set callOutcome via Reclassify — re-grades
+  // MUST preserve the human choice and not let the AI overwrite it.
+  outcomeManualOverride Boolean @default(false) @map("outcome_manual_override")
+
   // Call metadata
   callType     String? @map("call_type")   // from tenant.callTypes config
   callResult   String? @map("call_result") // from tenant.callResults config
