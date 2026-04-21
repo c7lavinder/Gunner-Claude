@@ -1025,7 +1025,11 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
     const NEXT_STEPS_MODEL = 'claude-opus-4-6'
     const res = await anthropic.messages.stream({
       model: NEXT_STEPS_MODEL,
-      max_tokens: 8000,
+      // Bumped from 8000 → 16000: the prompt now carries the full pipelines+stages
+      // dump (all stages across all pipelines) plus the appointmentTypes block,
+      // so responses with 4-5 actions each carrying a full smsBody + verbose
+      // reasoning can easily hit the old cap and truncate mid-JSON.
+      max_tokens: 16000,
       messages: [{
         role: 'user',
         content: `You are a real estate wholesaling CRM assistant. Based on this graded call, generate 3-5 specific next step actions the rep should take.
@@ -1091,14 +1095,37 @@ Return JSON array only:
 
     const stripped = stripJsonFences(text)
     const jsonMatch = stripped.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) return
+    if (!jsonMatch) {
+      // Previously this silently returned, leaving aiNextSteps unset. The caller
+      // never knew parsing failed. Log a failure audit so Railway + audit page
+      // surface the problem, and include the text head so we can see whether
+      // the response was truncated, code-fenced weird, or malformed JSON.
+      const stopReason = (res as { stop_reason?: string }).stop_reason ?? 'unknown'
+      console.error(`[Grading] No JSON array in next_steps output. stop_reason=${stopReason} head=${stripped.slice(0, 200)}`)
+      logFailure(tenantId, 'grading.next_steps_no_json', `call:${callId}`, new Error('No JSON array in response'), {
+        stopReason,
+        outputHead: stripped.slice(0, 500),
+        outputLength: stripped.length,
+      })
+      return
+    }
 
-    const steps = JSON.parse(jsonMatch[0]) as Array<{
+    let steps: Array<{
       type: string; label: string; reasoning: string
       smsBody?: string; sendAt?: string; timezone?: string
       appointmentTypeId?: string; calendarId?: string; appointmentTime?: string; durationMin?: number
       pipelineId?: string; stageId?: string
     }>
+    try {
+      steps = JSON.parse(jsonMatch[0])
+    } catch (parseErr) {
+      console.error(`[Grading] JSON.parse failed on next_steps: ${parseErr instanceof Error ? parseErr.message : parseErr}`)
+      logFailure(tenantId, 'grading.next_steps_parse_error', `call:${callId}`, parseErr, {
+        jsonHead: jsonMatch[0].slice(0, 500),
+        jsonLength: jsonMatch[0].length,
+      })
+      return
+    }
 
     // Legacy collapse: schedule_sms → send_sms with sendAt preserved.
     // Keeps old data in sync with the merged single-type model.

@@ -113,7 +113,10 @@ export async function POST(
     const userContent = `You are a real estate wholesaling CRM assistant. Based on this call, ${typeInstruction}`
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
+      // Bumped from 1500 → 8000: the prompt now carries pipelines+stages +
+      // appointmentTypes, and each action can include smsBody + reasoning.
+      // 1500 was enough for 3-5 short labels but truncates mid-JSON now.
+      max_tokens: 8000,
       messages: [{
         role: 'user',
         content: `You are a real estate wholesaling CRM assistant. Based on this call, ${typeInstruction}
