@@ -89,10 +89,11 @@ export async function GET(
     const conversations = await ghl.getConversations({ limit: 50 })
     const rawConversations = conversations.conversations ?? []
 
-    // Resolve GHL user IDs → name AND phone → name, so we can attribute
-    // each conversation by either signal.
+    // Build maps from BOTH GHL user records AND our local DB users. GHL's user
+    // `phone` field is often the personal cell, not the Twilio number actually
+    // used on outbound SMS — so combining sources widens the chance of a match.
     const userMap = new Map<string, string>()
-    const phoneToUser = new Map<string, { name: string; ghlUserId: string }>()
+    const phoneToUser = new Map<string, { name: string; ghlUserId: string | null }>()
     try {
       const usersResult = await ghl.getLocationUsers()
       for (const u of (usersResult?.users ?? [])) {
@@ -100,6 +101,22 @@ export async function GET(
         if (u.id && name) userMap.set(u.id, name)
         const np = normalizePhone(u.phone)
         if (np && u.id && name) phoneToUser.set(np, { name, ghlUserId: u.id })
+      }
+    } catch { /* non-fatal */ }
+    // Layer in local DB users — if any team member set a Twilio number locally
+    // that GHL doesn't know about, this catches it.
+    try {
+      const dbUsers = await db.user.findMany({
+        where: { tenantId },
+        select: { name: true, phone: true, ghlUserId: true },
+      })
+      for (const u of dbUsers) {
+        const np = normalizePhone(u.phone)
+        if (!np || !u.name) continue
+        // Don't overwrite a GHL match (more authoritative); only fill gaps.
+        if (!phoneToUser.has(np)) {
+          phoneToUser.set(np, { name: u.name, ghlUserId: u.ghlUserId ?? null })
+        }
       }
     } catch { /* non-fatal */ }
 
@@ -124,8 +141,14 @@ export async function GET(
     })
 
     // For each conversation, determine the ACTIVE team member by peeking at the
-    // most recent message's from/to phone. Parallelized with chunks of 10 to
+    // most recent message's from/to phone. Parallelized in chunks of 10 to
     // keep per-request latency under ~1s for a 50-conversation page.
+    //
+    // Important: when neither the phone nor a non-owner userId resolves to a
+    // team member, leave activeByConvId empty for that conversation. Falling
+    // back to GHL's static assignedTo would lock the conversation to the
+    // contact's original owner and hide it from whoever's actually working it.
+    // Unresolved conversations are shown to everyone (admin and view-as alike).
     const activeByConvId = new Map<string, { name: string | null; ghlUserId: string | null }>()
     const CHUNK = 10
     for (let i = 0; i < smsConversations.length; i += CHUNK) {
@@ -133,31 +156,31 @@ export async function GET(
       const results = await Promise.all(slice.map(c => fetchActiveSenderPhone(c.id, authHeader)))
       slice.forEach((conv, idx) => {
         const r = results[idx]
-        if (r) {
-          const u = phoneToUser.get(r.phone)
-          if (u) {
-            activeByConvId.set(conv.id, { name: u.name, ghlUserId: u.ghlUserId })
-            return
-          }
-          // Phone matched no team member — fall back to message's userId
-          if (r.userId && userMap.has(r.userId)) {
-            activeByConvId.set(conv.id, { name: userMap.get(r.userId) ?? null, ghlUserId: r.userId })
-            return
-          }
+        if (!r) return
+        const u = phoneToUser.get(r.phone)
+        if (u) {
+          activeByConvId.set(conv.id, { name: u.name, ghlUserId: u.ghlUserId })
+          return
         }
-        // Final fallback: GHL's static contact-owner assignment
-        const fallbackId = conv.userId || conv.assignedTo || ''
-        activeByConvId.set(conv.id, {
-          name: userMap.get(fallbackId) ?? null,
-          ghlUserId: fallbackId || null,
-        })
+        // Phone didn't match any known team number. Try the message's userId,
+        // but only if it differs from the contact's static owner — otherwise
+        // we'd just re-create the original bug (every conv routes to the owner).
+        const staticOwner = conv.userId || conv.assignedTo || ''
+        if (r.userId && r.userId !== staticOwner && userMap.has(r.userId)) {
+          activeByConvId.set(conv.id, { name: userMap.get(r.userId) ?? null, ghlUserId: r.userId })
+          return
+        }
+        // Unresolved — intentionally leave out of activeByConvId.
       })
     }
 
-    // Apply scope filters using the resolved active team member
+    // Apply scope filters. Conversations with no resolved active sender are
+    // visible to everyone (admin, role tabs, view-as, regular users) so real
+    // work doesn't disappear when our phone-mapping data is incomplete.
     const inScope = (conv: typeof smsConversations[0]): boolean => {
       const active = activeByConvId.get(conv.id)
-      const activeId = active?.ghlUserId ?? ''
+      if (!active) return true // unresolved → visible everywhere
+      const activeId = active.ghlUserId ?? ''
       if (roleGhlIds) return roleGhlIds.has(activeId)
       if (isAdmin || !effective.ghlUserId) return true
       return activeId === effective.ghlUserId
@@ -193,7 +216,28 @@ export async function GET(
     const unread = items.filter(i => i.isUnread)
     const noResponse = items.filter(i => i.isNoResponse)
 
-    return NextResponse.json({ unread, noResponse, total: items.length, locationId })
+    // Diagnostic payload — only included when ?debug=1 is on the URL.
+    // Lets you see exactly which phones the inbox API matched against and
+    // what each conversation's resolved active sender was.
+    const debug = url.searchParams.get('debug') === '1'
+        ? {
+            phoneMapEntries: [...phoneToUser.entries()].map(([p, u]) => ({
+              normalizedPhone: p, name: u.name, ghlUserId: u.ghlUserId,
+            })),
+            convResolution: smsConversations.map(c => {
+              const a = activeByConvId.get(c.id)
+              return {
+                conversationId: c.id,
+                contactName: c.contactName ?? c.fullName,
+                lastDirection: c.lastMessageDirection,
+                resolvedActive: a ?? null,
+              }
+            }),
+            effective: { ghlUserId: effective.ghlUserId, role: effective.role, isAdmin },
+          }
+        : undefined
+
+    return NextResponse.json({ unread, noResponse, total: items.length, locationId, ...(debug ? { debug } : {}) })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch inbox'
     return NextResponse.json({ items: [], total: 0, error: message })

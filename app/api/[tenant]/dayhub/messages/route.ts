@@ -68,7 +68,9 @@ export async function GET(
     // Resolve GHL user IDs → names AND phone numbers → names. The phone map is
     // the source of truth for "who sent this outbound SMS" because GHL's
     // message.userId frequently points to the contact's owner, not the team
-    // member who actually clicked send.
+    // member who actually clicked send. We layer in the local DB User.phone
+    // field too — many tenants have the Twilio number set there, not on the
+    // GHL user profile.
     const userMap = new Map<string, string>()
     const phoneToName = new Map<string, string>()
     try {
@@ -79,6 +81,16 @@ export async function GET(
         if (u.id && name) userMap.set(u.id, name)
         const np = normalizePhone(u.phone)
         if (np && name) phoneToName.set(np, name)
+      }
+    } catch { /* non-fatal */ }
+    try {
+      const dbUsers = await db.user.findMany({
+        where: { tenantId },
+        select: { name: true, phone: true },
+      })
+      for (const u of dbUsers) {
+        const np = normalizePhone(u.phone)
+        if (np && u.name && !phoneToName.has(np)) phoneToName.set(np, u.name)
       }
     } catch { /* non-fatal */ }
 
