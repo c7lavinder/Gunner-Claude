@@ -833,11 +833,11 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
                         </div>
                       </div>
                       <a
-                        href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/conversations/${selectedContact.id}`}
+                        href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${selectedContact.contactId}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1 rounded-[6px] hover:bg-surface-secondary text-txt-muted hover:text-txt-primary transition-colors"
-                        title="Open in GHL"
+                        title="Open contact in GHL"
                       >
                         <ExternalLink size={11} />
                       </a>

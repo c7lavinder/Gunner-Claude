@@ -260,17 +260,22 @@ interface WorkflowOption { id: string; name: string; status: string | null }
 export function WorkflowModal({ open, onClose, tenantSlug, contactId, contactName, toast, onSuccess }: BaseModalProps) {
   const [workflows, setWorkflows] = useState<WorkflowOption[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
     setFilter('')
+    setLoadError(null)
     setLoading(true)
     fetch(`/api/${tenantSlug}/ghl/workflows`)
       .then(r => r.json())
-      .then(d => setWorkflows(d.workflows ?? []))
-      .catch(() => {})
+      .then(d => {
+        setWorkflows(d.workflows ?? [])
+        if (d.error) setLoadError(String(d.error))
+      })
+      .catch(err => setLoadError(err instanceof Error ? err.message : 'Network error'))
       .finally(() => setLoading(false))
   }, [open, tenantSlug])
 
@@ -312,6 +317,12 @@ export function WorkflowModal({ open, onClose, tenantSlug, contactId, contactNam
       />
       {loading ? (
         <div className="py-6 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
+      ) : loadError ? (
+        <div className="py-4 text-center space-y-1">
+          <p className="text-[12px] text-semantic-red font-medium">Could not load workflows</p>
+          <p className="text-[10px] text-txt-muted break-words">{loadError}</p>
+          <p className="text-[10px] text-txt-muted">If you see a permission error, reconnect GHL in Settings → Integrations to grant the workflows scope.</p>
+        </div>
       ) : visible.length === 0 ? (
         <p className="text-[12px] text-txt-muted py-4 text-center">
           {workflows.length === 0 ? 'No workflows in this GHL location' : 'No matches'}
