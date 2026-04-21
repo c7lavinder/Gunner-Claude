@@ -3,7 +3,7 @@
 // GHL recording URLs require authentication, so we download the audio first
 // then send the raw audio buffer to Deepgram
 
-interface TranscriptionResult {
+export interface TranscriptionResult {
   status: 'success' | 'error'
   transcript?: string
   duration?: number
@@ -48,14 +48,45 @@ export async function transcribeRecording(
       return { status: 'error', error: `Recording too small (${audioBuffer.byteLength} bytes) — likely not a valid audio file` }
     }
 
-    // Step 2: Send raw audio to Deepgram
+    return postToDeepgram(audioBuffer, 'audio/mpeg', apiKey)
+  } catch (err) {
+    return {
+      status: 'error',
+      error: err instanceof Error ? err.message : 'Unknown transcription error',
+    }
+  }
+}
+
+export async function transcribeBuffer(
+  buffer: ArrayBuffer | Buffer,
+  mimeType: string,
+): Promise<TranscriptionResult> {
+  const apiKey = process.env.DEEPGRAM_API_KEY
+  if (!apiKey) {
+    return { status: 'error', error: 'DEEPGRAM_API_KEY not configured' }
+  }
+  const audio: ArrayBuffer = Buffer.isBuffer(buffer)
+    ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
+    : buffer
+  if (audio.byteLength < 1000) {
+    return { status: 'error', error: `Audio too small (${audio.byteLength} bytes)` }
+  }
+  return postToDeepgram(audio, mimeType || 'audio/mpeg', apiKey)
+}
+
+async function postToDeepgram(
+  audioBuffer: ArrayBuffer,
+  contentType: string,
+  apiKey: string,
+): Promise<TranscriptionResult> {
+  try {
     const response = await fetch(
       'https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&diarize=true&punctuate=true&utterances=true',
       {
         method: 'POST',
         headers: {
           'Authorization': `Token ${apiKey}`,
-          'Content-Type': 'audio/mpeg',
+          'Content-Type': contentType,
         },
         body: audioBuffer,
       },

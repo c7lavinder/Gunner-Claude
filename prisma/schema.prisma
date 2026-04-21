@@ -653,6 +653,10 @@ model Call {
   recordingUrl   String? @map("recording_url")
   transcript   String? @db.Text
 
+  // Manual upload (MP3/MP4/transcript paste via /calls/upload) — false for GHL-sourced calls
+  manualUpload     Boolean @default(false) @map("manual_upload")
+  audioStoragePath String? @map("audio_storage_path") // Supabase Storage path: "{tenantId}/{callId}.{ext}"
+
   // Call metadata
   callType     String? @map("call_type")   // from tenant.callTypes config
   callResult   String? @map("call_result") // from tenant.callResults config

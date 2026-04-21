@@ -68,6 +68,7 @@ export default async function CallsPage({ params }: { params: { tenant: string }
       tenantSlug={params.tenant}
       canViewAll={canViewAll}
       teamMembers={teamMembers}
+      currentUserId={userId}
     />
   )
 }

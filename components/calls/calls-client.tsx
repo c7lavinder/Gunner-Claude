@@ -7,13 +7,14 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Phone, RotateCcw, Loader2, AlertTriangle, Search, X, Download,
-  Settings, RefreshCw, MoreVertical,
+  RefreshCw, Upload,
   Calendar, User, PhoneOutgoing, PhoneIncoming, MapPin, Clock,
   Archive, FileText, MessageSquare,
 } from 'lucide-react'
 import { format, subDays, subMonths, formatDistanceToNow } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
 import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
+import { UploadCallModal } from '@/components/calls/upload-call-modal'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -87,13 +88,56 @@ const SCORE_RANGES = [
   { label: 'D (<60)', key: 'D', min: 0, max: 59 },
 ]
 
+interface CompletedFilters {
+  dateFilter: string
+  teamFilter: string
+  typeFilter: string
+  outcomeFilter: string
+  scoreFilter: string
+  isViewingAs: boolean
+  viewAsName: string | null
+}
+
+function applyCompletedFilters(list: Call[], f: CompletedFilters): Call[] {
+  let out = list
+  if (f.isViewingAs && f.viewAsName) {
+    out = out.filter(c => c.assignedTo?.name === f.viewAsName)
+  }
+  if (f.teamFilter) out = out.filter(c => c.assignedTo?.id === f.teamFilter)
+  if (f.typeFilter) out = out.filter(c => c.callType === f.typeFilter)
+  if (f.outcomeFilter) out = out.filter(c => c.callOutcome === f.outcomeFilter)
+  if (f.scoreFilter) {
+    const range = SCORE_RANGES.find(r => r.key === f.scoreFilter)
+    if (range) {
+      out = out.filter(c => c.score !== null && c.score >= range.min && c.score <= range.max)
+    }
+  }
+  if (f.dateFilter) {
+    // Use Central time day boundaries so "Today" means today in Central, not last 24h
+    const centralToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+    const centralMidnight = new Date(`${centralToday}T00:00:00`)
+    const centralNoon = new Date(`${centralToday}T12:00:00Z`)
+    const centralNoonLocal = new Date(centralNoon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+    const offsetMs = centralNoon.getTime() - centralNoonLocal.getTime()
+    const todayStart = new Date(centralMidnight.getTime() + offsetMs)
+    const cutoff = f.dateFilter === '1d' ? todayStart
+      : f.dateFilter === '7d' ? subDays(todayStart, 6)
+      : f.dateFilter === '30d' ? subDays(todayStart, 29)
+      : f.dateFilter === '90d' ? subMonths(todayStart, 3)
+      : null
+    if (cutoff) out = out.filter(c => new Date(c.calledAt) >= cutoff)
+  }
+  return out
+}
+
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
+export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, currentUserId }: {
   calls: Call[]
   tenantSlug: string
   canViewAll: boolean
   teamMembers: Array<{ id: string; name: string }>
+  currentUserId: string
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -127,7 +171,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   }
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
 
   // Tab filtering — matches pipeline statuses directly
   const completedCalls = calls.filter(c => c.gradingStatus === 'COMPLETED')
@@ -140,36 +184,24 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
     c.gradingStatus === 'FAILED' && c.callResult !== 'no_answer'
   )
 
-  // Apply filters
-  let filtered = tab === 'completed' ? completedCalls : tab === 'pending' ? pendingCalls : tab === 'skipped' ? skippedCalls : tab === 'failed' ? failedCalls : []
-  // View As: filter to only that user's calls
-  if (isViewingAs && viewAsName) {
-    filtered = filtered.filter(c => c.assignedTo?.name === viewAsName)
-  }
-  if (tab === 'completed') {
-    if (teamFilter) filtered = filtered.filter(c => c.assignedTo?.id === teamFilter)
-    if (typeFilter) filtered = filtered.filter(c => c.callType === typeFilter)
-    if (outcomeFilter) filtered = filtered.filter(c => c.callOutcome === outcomeFilter)
-    if (scoreFilter) {
-      const range = SCORE_RANGES.find(r => r.key === scoreFilter)
-      if (range) filtered = filtered.filter(c => c.score !== null && c.score >= range.min && c.score <= range.max)
-    }
-    if (dateFilter) {
-      // Use Central time day boundaries so "Today" means today in Central, not last 24h
-      const centralToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
-      const centralMidnight = new Date(`${centralToday}T00:00:00`)
-      // Adjust to UTC: Central is UTC-5 (CST) or UTC-6 (CDT)
-      const centralNoon = new Date(`${centralToday}T12:00:00Z`)
-      const centralNoonLocal = new Date(centralNoon.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
-      const offsetMs = centralNoon.getTime() - centralNoonLocal.getTime()
-      const todayStart = new Date(centralMidnight.getTime() + offsetMs)
+  // Completed list with all active filters applied — badge and rendered list share this
+  const completedFiltered = applyCompletedFilters(completedCalls, {
+    dateFilter, teamFilter, typeFilter, outcomeFilter, scoreFilter,
+    isViewingAs, viewAsName,
+  })
 
-      const cutoff = dateFilter === '1d' ? todayStart
-        : dateFilter === '7d' ? subDays(todayStart, 6)
-        : dateFilter === '30d' ? subDays(todayStart, 29)
-        : dateFilter === '90d' ? subMonths(todayStart, 3) : null
-      if (cutoff) filtered = filtered.filter(c => new Date(c.calledAt) >= cutoff)
-    }
+  // Active tab's list
+  let filtered: Call[] = []
+  if (tab === 'completed') {
+    filtered = completedFiltered
+  } else {
+    const source = tab === 'pending' ? pendingCalls
+      : tab === 'skipped' ? skippedCalls
+      : tab === 'failed' ? failedCalls
+      : []
+    filtered = isViewingAs && viewAsName
+      ? source.filter(c => c.assignedTo?.name === viewAsName)
+      : source
   }
 
   const uniqueTypes = [...new Set(calls.map(c => c.callType).filter(Boolean))] as string[]
@@ -188,7 +220,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
   }
 
   const allTabs: Array<{ id: Tab; label: string; count: number; icon: React.ReactNode }> = [
-    { id: 'completed', label: 'Completed', count: completedCalls.length, icon: <Phone size={13} /> },
+    { id: 'completed', label: 'Completed', count: completedFiltered.length, icon: <Phone size={13} /> },
     { id: 'pending', label: 'Pending', count: pendingCalls.length, icon: <Clock size={13} /> },
     { id: 'skipped', label: 'Skipped', count: skippedCalls.length, icon: <X size={13} /> },
     { id: 'failed', label: 'Failed', count: failedCalls.length, icon: <AlertTriangle size={13} /> },
@@ -206,37 +238,23 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
             <p className="text-[13px] text-txt-muted mt-1">Review calls, provide feedback, and get coaching advice</p>
           </div>
           <div className="flex items-center gap-2">
-            <Link href={`/${tenantSlug}/settings`} className="p-2 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors">
-              <Settings size={16} />
-            </Link>
             {syncing && (
               <span className="flex items-center gap-1.5 text-[11px] text-semantic-blue">
                 <RefreshCw size={12} className="animate-spin" /> Syncing...
               </span>
             )}
             <button
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] bg-gunner-red text-white text-[12px] font-medium hover:bg-gunner-red-dark transition-colors"
+            >
+              <Upload size={14} /> Upload Call
+            </button>
+            <button
               onClick={() => { setSyncing(true); startTransition(() => { router.refresh(); setTimeout(() => setSyncing(false), 2000) }) }}
               className="p-2 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors"
             >
               <RefreshCw size={16} />
             </button>
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="p-2 rounded-[10px] text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors"
-              >
-                <MoreVertical size={16} />
-              </button>
-              {showMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 top-10 w-48 bg-surface-primary border rounded-[14px] py-1 shadow-ds-float z-50" style={{ borderColor: 'var(--border-medium)' }}>
-                    <a href={`/${tenantSlug}/ai-coach`} className="w-full text-left px-4 py-2.5 text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary block">AI Coach</a>
-                    <a href={`/${tenantSlug}/training`} className="w-full text-left px-4 py-2.5 text-[13px] text-txt-secondary hover:text-txt-primary hover:bg-surface-secondary block">Training Hub</a>
-                  </div>
-                </>
-              )}
-            </div>
           </div>
         </div>
 
@@ -404,6 +422,17 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers }: {
               ))
             )}
           </div>
+        )}
+
+        {uploadOpen && (
+          <UploadCallModal
+            tenantSlug={tenantSlug}
+            teamMembers={teamMembers}
+            canAssignOthers={effectiveCanViewAll}
+            currentUserId={currentUserId}
+            onClose={() => setUploadOpen(false)}
+            onUploaded={() => startTransition(() => router.refresh())}
+          />
         )}
     </div>
   )
