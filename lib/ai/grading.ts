@@ -181,15 +181,25 @@ export async function gradeCall(callId: string): Promise<void> {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const timer = startTimer()
 
+    // Opus 4.7 with extended thinking — the deepest-reasoning option.
+    // Per-call cost is ~5x Sonnet, but each call origination costs hundreds;
+    // pulling maximum signal out of every graded call is the right trade.
+    const GRADING_MODEL = 'claude-opus-4-7'
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8000,
+      model: GRADING_MODEL,
+      max_tokens: 32000,
+      thinking: { type: 'enabled', budget_tokens: 16000 },
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     })
 
-    const content = response.content[0]
-    if (content.type !== 'text') throw new Error('Unexpected response type from Claude')
+    // Extended thinking prepends a thinking block — grab the first text block,
+    // not content[0], which would be the thinking.
+    const textBlock = response.content.find(b => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('No text block in Claude grading response')
+    }
+    const responseText = textBlock.text
 
     // Log the AI call
     logAiCall({
@@ -198,16 +208,16 @@ export async function gradeCall(callId: string): Promise<void> {
       type: 'call_grading',
       pageContext: `call:${callId}`,
       input: userPrompt.slice(0, 5000),
-      output: content.text.slice(0, 5000),
+      output: responseText.slice(0, 5000),
       tokensIn: response.usage?.input_tokens,
       tokensOut: response.usage?.output_tokens,
       durationMs: timer(),
-      model: 'claude-sonnet-4-6',
+      model: GRADING_MODEL,
     }).catch((err) => {
       logFailure(call.tenantId, 'grading.ai_log_failed', `call:${callId}`, err)
     })
 
-    const grading = parseGradingResponse(content.text)
+    const grading = parseGradingResponse(responseText)
 
     // Update call with grading results + auto-classification
     await db.call.update({
@@ -498,12 +508,10 @@ GRADING PHILOSOPHY:
 - FEEDBACK MUST BE TRANSCRIPT-SPECIFIC — reference exact moments, exact quotes, exact scripts they should have used.
 - When evaluating, account for challenging seller behaviors (interruptions, hostility, noise) — credit the rep for persistence or quick disqualification.`)
 
-  // Layer 2: Industry + company knowledge (from playbook)
+  // Layer 2: Industry + company knowledge (from playbook) — full corpus
   if (ctx.industryKnowledge.length > 0) {
-    // Include the most relevant industry docs (cap at 3 to manage token count)
-    sections.push(`INDUSTRY & COMPANY KNOWLEDGE:\n${ctx.industryKnowledge.slice(0, 3).join('\n\n')}`)
+    sections.push(`INDUSTRY & COMPANY KNOWLEDGE:\n${ctx.industryKnowledge.join('\n\n')}`)
   } else {
-    // Fallback to hardcoded if no playbook loaded
     sections.push(INDUSTRY_KNOWLEDGE)
   }
 
@@ -513,19 +521,19 @@ GRADING PHILOSOPHY:
     if (callTypeInstructions) sections.push(callTypeInstructions)
   }
 
-  // Inject company scripts for this call type
+  // Full company script corpus for this call type
   if (ctx.scripts.length > 0) {
     sections.push(`COMPANY SCRIPTS FOR THIS CALL TYPE — grade the rep against these specific scripts:\n${ctx.scripts.join('\n\n')}`)
   }
 
-  // Inject objection handling guides
+  // Full objection-handling corpus
   if (ctx.objectionHandling.length > 0) {
-    sections.push(`OBJECTION HANDLING REFERENCE — use these to evaluate how the rep handled objections:\n${ctx.objectionHandling.slice(0, 2).join('\n\n')}`)
+    sections.push(`OBJECTION HANDLING REFERENCE — use these to evaluate how the rep handled objections:\n${ctx.objectionHandling.join('\n\n')}`)
   }
 
-  // Inject training materials
+  // Full training materials corpus
   if (ctx.trainingMaterials.length > 0) {
-    sections.push(`TRAINING MATERIALS — additional context for grading:\n${ctx.trainingMaterials.slice(0, 2).join('\n\n')}`)
+    sections.push(`TRAINING MATERIALS — additional context for grading:\n${ctx.trainingMaterials.join('\n\n')}`)
   }
 
   // Layer 4: User-specific context (personalized coaching)
@@ -541,10 +549,10 @@ Total Calls Graded: ${ctx.userProfile.totalCallsGraded}
 IMPORTANT: If this rep makes one of their known common mistakes, call it out specifically in improvements. Reference that this is a pattern, not a one-time thing.`)
   }
 
-  // Layer 5: Cross-call context
+  // Layer 5: Cross-call context — full prior-call history with full summaries
   if (ctx.priorCalls.length > 0) {
-    const priorSummary = ctx.priorCalls.slice(0, 5).map(c =>
-      `- ${c.calledAt?.slice(0, 10) ?? '?'}: Score ${c.score ?? '?'}, Outcome: ${c.callOutcome ?? '?'}, Summary: ${c.aiSummary?.slice(0, 100) ?? 'N/A'}`
+    const priorSummary = ctx.priorCalls.map(c =>
+      `- ${c.calledAt?.slice(0, 10) ?? '?'}: Score ${c.score ?? '?'}, Type: ${c.callType ?? '?'}, Outcome: ${c.callOutcome ?? '?'}, Rep: ${c.assignedToName ?? '?'}\n  Summary: ${c.aiSummary ?? 'N/A'}`
     ).join('\n')
     sections.push(`PRIOR CALLS WITH THIS CONTACT (most recent first):
 ${priorSummary}
@@ -556,10 +564,10 @@ IMPORTANT: Do NOT penalize the rep for skipping qualification steps that were al
     sections.push(`ACCUMULATED DEAL INTELLIGENCE:\n${ctx.dealIntelSummary}`)
   }
 
-  // Layer 6: Calibration + corrections
+  // Layer 6: Calibration + corrections — full summaries, no truncation
   if (ctx.calibrationExamples.length > 0) {
-    const examples = ctx.calibrationExamples.slice(0, 3).map(c =>
-      `- ${c.type.toUpperCase()} example (score: ${c.score}): ${c.summary?.slice(0, 100) ?? 'N/A'}${c.notes ? ` — Notes: ${c.notes}` : ''}`
+    const examples = ctx.calibrationExamples.map(c =>
+      `- ${c.type.toUpperCase()} example (score: ${c.score}): ${c.summary ?? 'N/A'}${c.notes ? `\n  Notes: ${c.notes}` : ''}`
     ).join('\n')
     sections.push(`CALIBRATION EXAMPLES — use these as reference for what good/bad looks like at this company:\n${examples}`)
   }
@@ -960,14 +968,17 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
     })
     if (!call) return
 
-    const transcriptExcerpt = call.transcript ? call.transcript.slice(0, 500) : 'No transcript available'
+    // Feed the FULL transcript — reps often reference specific quotes/timestamps
+    // we want surfaced. Opus handles long context well.
+    const fullTranscript = call.transcript ?? 'No transcript available'
 
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const nsTimer = startTimer()
 
+    const NEXT_STEPS_MODEL = 'claude-opus-4-7'
     const res = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      model: NEXT_STEPS_MODEL,
+      max_tokens: 8000,
       messages: [{
         role: 'user',
         content: `You are a real estate wholesaling CRM assistant. Based on this graded call, generate 3-5 specific next step actions the rep should take.
@@ -986,20 +997,23 @@ Property: ${call.property?.address ?? 'Unknown'}
 Property Condition: ${call.property?.propertyCondition ?? 'Unknown'}
 Score: ${gradingResult.overallScore}/100
 Feedback: ${gradingResult.feedback}
-Transcript excerpt: ${transcriptExcerpt}
+
+Full transcript:
+${fullTranscript}
 
 Return JSON array only:
 [{ "type": "add_note"|"create_task"|"send_sms"|"create_appointment"|"change_stage"|"check_off_task", "label": "specific action description", "reasoning": "why this action matters" }]`,
       }],
     })
 
-    const text = res.content[0].type === 'text' ? res.content[0].text : '[]'
+    const nsTextBlock = res.content.find(b => b.type === 'text')
+    const text = nsTextBlock && nsTextBlock.type === 'text' ? nsTextBlock.text : '[]'
 
     logAiCall({
       tenantId, type: 'next_steps', pageContext: `call:${callId}`,
       input: `Next steps for call ${callId}`, output: text.slice(0, 2000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
-      durationMs: nsTimer(), model: 'claude-sonnet-4-6',
+      durationMs: nsTimer(), model: NEXT_STEPS_MODEL,
     }).catch((err) => {
       logFailure(tenantId, 'grading.next_steps_log_failed', `call:${callId}`, err)
     })

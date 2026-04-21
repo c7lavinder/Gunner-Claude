@@ -52,26 +52,29 @@ export async function extractDealIntel(callId: string): Promise<void> {
     const timer = startTimer()
     const userPrompt = buildExtractionUserPrompt({ ...call, property }, currentDealIntel, batchData)
 
+    const DEAL_INTEL_MODEL = 'claude-opus-4-7'
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 6000,
+      model: DEAL_INTEL_MODEL,
+      max_tokens: 16000,
+      thinking: { type: 'enabled', budget_tokens: 8000 },
       system: buildExtractionSystemPrompt(learningContext),
       messages: [{ role: 'user', content: userPrompt }],
     })
 
-    const content = response.content[0]
-    if (content.type !== 'text') throw new Error('Unexpected response type')
+    const textBlock = response.content.find(b => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') throw new Error('No text block in deal-intel response')
+    const responseText = textBlock.text
 
     logAiCall({
       tenantId: call.tenant.id, userId: call.assignedTo?.id, type: 'deal_intel',
-      pageContext: `call:${callId}`, input: userPrompt.slice(0, 3000), output: content.text.slice(0, 3000),
+      pageContext: `call:${callId}`, input: userPrompt.slice(0, 3000), output: responseText.slice(0, 3000),
       tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
-      durationMs: timer(), model: 'claude-sonnet-4-6',
+      durationMs: timer(), model: DEAL_INTEL_MODEL,
     }).catch((err) => {
       logFailure(call.tenant.id, 'extract_deal_intel.ai_log_failed', `call:${callId}`, err)
     })
 
-    const proposedChanges = parseExtractionResponse(content.text, callId)
+    const proposedChanges = parseExtractionResponse(responseText, callId)
 
     // Store proposed changes on the call record
     await db.call.update({

@@ -95,11 +95,11 @@ export async function buildGradingContext(params: {
       where: { tenantId_userId: { tenantId, userId } },
     }) : null,
 
-    // Prior calls with this contact (last 10)
+    // All prior calls with this contact — full relationship history
     contactId ? db.call.findMany({
       where: { tenantId, ghlContactId: contactId, gradingStatus: 'COMPLETED' },
       orderBy: { calledAt: 'desc' },
-      take: 10,
+      take: 50,
       select: {
         calledAt: true, score: true, aiSummary: true, callOutcome: true, callType: true,
         assignedTo: { select: { name: true } },
@@ -112,11 +112,11 @@ export async function buildGradingContext(params: {
       select: { dealIntel: true, propertyCondition: true },
     }) : null,
 
-    // Calibration calls
+    // Calibration calls — all flagged examples
     db.call.findMany({
       where: { tenantId, isCalibration: true },
       select: { id: true, score: true, aiSummary: true, calibrationNotes: true, isCalibration: true },
-      take: 10,
+      take: 50,
     }),
 
     // Recent feedback corrections (last 30 days)

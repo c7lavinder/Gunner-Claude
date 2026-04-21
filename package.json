@@ -22,7 +22,7 @@
     "sync-ghl": "tsx scripts/sync-ghl.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0",
+    "@anthropic-ai/sdk": "^0.90.0",
     "@prisma/client": "^5.14.0",
     "@react-pdf/renderer": "^4.3.2",
     "@supabase/supabase-js": "^2.104.0",
