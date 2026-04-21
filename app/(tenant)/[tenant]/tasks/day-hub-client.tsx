@@ -479,16 +479,14 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
   }, [tasks, tenantSlug])
 
   // Compute the "visible scope" for this view — drives both the team dropdown
-  // options and the Completed Today list. Admins viewing the full team see all
-  // names; admins in View As see only that user; admins on a role tab see that
-  // team; non-admins see only themselves (server already filtered their tasks).
+  // options and the Completed Today list. Only set when the admin is narrowing
+  // their own view (View As or role tab). Non-admins are already filtered by
+  // the server to just their own data, so we don't apply any extra client-side
+  // scope (which would otherwise wrongly hide their Completed Today when they
+  // have no active tasks for the day).
   let scopedNames: Set<string> | null = null
   if (viewAsUser) scopedNames = new Set([viewAsUser])
   else if (isAdmin && roleTab !== 'ADMIN' && roleTabNames.size > 0) scopedNames = roleTabNames
-  else if (!isAdmin) {
-    const ownNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
-    scopedNames = new Set(ownNames)
-  }
 
   const assignedNames = scopedNames
     ? [...scopedNames]
