@@ -83,6 +83,22 @@ export async function gradeCall(callId: string): Promise<void> {
         }
       } else {
         console.warn(`[Call Grading] Transcription failed: ${transcription.error}`)
+        // Deepgram fails on short/silent audio. If the probed audio length is
+        // <45s, classify as short_call (SKIPPED) instead of a retryable FAILED.
+        const probedDur = transcription.duration ?? 0
+        if (probedDur > 0 && probedDur < 45) {
+          await db.call.update({
+            where: { id: callId },
+            data: {
+              gradingStatus: 'SKIPPED',
+              callResult: 'short_call',
+              durationSeconds: probedDur,
+              aiSummary: `Short call (${probedDur}s) — skipped.`,
+            },
+          })
+          console.log(`[Call Grading] Short call detected from audio probe (${probedDur}s) — skipped`)
+          return
+        }
       }
     }
 
