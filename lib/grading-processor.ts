@@ -183,7 +183,9 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
       where: { status: 'DONE', updatedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
     }).catch(() => {})
 
-    // Step 3: Catch-up deal intel extraction
+    // Step 3: Catch-up deal intel extraction — one per tick so Opus doesn't
+    // block the 60s cadence. Backlog still drains (one/minute), and each tick
+    // stays bounded at ~60-90s worst case.
     const { extractDealIntel } = await import('@/lib/ai/extract-deal-intel')
     const missingIntel = await db.call.findMany({
       where: {
@@ -195,7 +197,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
       },
       select: { id: true, contactName: true },
       orderBy: { gradedAt: 'desc' },
-      take: 5,
+      take: 1,
     })
     for (const call of missingIntel) {
       try {
