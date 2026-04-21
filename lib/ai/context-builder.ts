@@ -51,6 +51,10 @@ export interface GradingContext {
 
   // Recent feedback corrections
   feedbackCorrections: string | null
+
+  // Recent call-type/outcome reclassifications (human overrides of AI judgment).
+  // Feeds in-context learning — the grader sees recent corrections and adjusts.
+  reclassificationCorrections: string | null
 }
 
 export async function buildGradingContext(params: {
@@ -72,6 +76,7 @@ export async function buildGradingContext(params: {
     propertyData,
     calibrationCalls,
     recentFeedback,
+    recentReclassifications,
   ] = await Promise.all([
     // All active knowledge documents for this tenant
     db.knowledgeDocument.findMany({
@@ -124,6 +129,28 @@ export async function buildGradingContext(params: {
       orderBy: { createdAt: 'desc' },
       take: 15,
       select: { payload: true },
+    }),
+
+    // Recent human reclassifications (last 60 days, capped at 20).
+    // Scoped to the same call type as the call being graded when available —
+    // reclassifications on other call types aren't relevant signal.
+    db.callReclassification.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) },
+        ...(callType
+          ? { OR: [{ previousCallType: callType }, { newCallType: callType }] }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        previousCallType: true,
+        newCallType: true,
+        previousCallOutcome: true,
+        newCallOutcome: true,
+        previousAiSummary: true,
+      },
     }),
   ])
 
@@ -207,6 +234,61 @@ export async function buildGradingContext(params: {
       }).filter(Boolean).join('\n')
     : null
 
+  // ── Reclassification corrections ──
+  // Group into "type was wrong" and "outcome was wrong" so the grader sees
+  // patterns rather than raw events. Include the AI's prior summary for the
+  // last few so the model can see WHY it was wrong, not just the flip.
+  const reclassificationCorrections = (() => {
+    if (recentReclassifications.length === 0) return null
+
+    const typeFlips = recentReclassifications
+      .filter(r => r.previousCallType && r.newCallType && r.previousCallType !== r.newCallType)
+    const outcomeFlips = recentReclassifications
+      .filter(r => r.previousCallOutcome && r.newCallOutcome && r.previousCallOutcome !== r.newCallOutcome)
+
+    const lines: string[] = []
+
+    if (typeFlips.length > 0) {
+      lines.push('CALL-TYPE CORRECTIONS (human flipped AI classification):')
+      // Count frequency so the grader sees which mistakes repeat
+      const counts = new Map<string, number>()
+      for (const f of typeFlips) {
+        const k = `${f.previousCallType} → ${f.newCallType}`
+        counts.set(k, (counts.get(k) ?? 0) + 1)
+      }
+      for (const [k, n] of counts) lines.push(`- ${k}${n > 1 ? ` (x${n})` : ''}`)
+    }
+
+    if (outcomeFlips.length > 0) {
+      if (lines.length) lines.push('')
+      lines.push('OUTCOME CORRECTIONS (human overrode AI-predicted outcome):')
+      const counts = new Map<string, number>()
+      for (const f of outcomeFlips) {
+        const k = `${f.previousCallOutcome} → ${f.newCallOutcome}`
+        counts.set(k, (counts.get(k) ?? 0) + 1)
+      }
+      for (const [k, n] of counts) lines.push(`- ${k}${n > 1 ? ` (x${n})` : ''}`)
+    }
+
+    // Up to 3 concrete before/after snippets so the model sees WHY it was wrong
+    const withContext = recentReclassifications
+      .filter(r => r.previousAiSummary && (r.newCallType || r.newCallOutcome))
+      .slice(0, 3)
+    if (withContext.length > 0) {
+      lines.push('')
+      lines.push('RECENT EXAMPLES:')
+      for (const r of withContext) {
+        const summary = (r.previousAiSummary ?? '').slice(0, 220).replace(/\s+/g, ' ').trim()
+        const changes: string[] = []
+        if (r.newCallType) changes.push(`type: ${r.previousCallType ?? '?'} → ${r.newCallType}`)
+        if (r.newCallOutcome) changes.push(`outcome: ${r.previousCallOutcome ?? '?'} → ${r.newCallOutcome}`)
+        lines.push(`- AI said: "${summary}" | Human corrected: ${changes.join('; ')}`)
+      }
+    }
+
+    return lines.length > 0 ? lines.join('\n') : null
+  })()
+
   return {
     companyOverview,
     gradingMethodology,
@@ -220,6 +302,7 @@ export async function buildGradingContext(params: {
     dealIntelSummary,
     calibrationExamples,
     feedbackCorrections,
+    reclassificationCorrections,
   }
 }
 

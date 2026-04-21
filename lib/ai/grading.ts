@@ -568,6 +568,12 @@ IMPORTANT: Do NOT penalize the rep for skipping qualification steps that were al
     sections.push(`GRADING CORRECTIONS FROM MANAGERS — incorporate these calibrations:\n${ctx.feedbackCorrections}`)
   }
 
+  if (ctx.reclassificationCorrections) {
+    // Recent human overrides of AI classification. Treat as high-priority
+    // calibration — if the same mistake repeats, adjust classification logic.
+    sections.push(`RECENT CLASSIFICATION CORRECTIONS — the team overrode the AI's call_type or outcome on recent calls. Study these patterns and bias your classification to match human judgment where similar:\n${ctx.reclassificationCorrections}`)
+  }
+
   if (ctx.companyStandards) {
     sections.push(`COMPANY STANDARDS AND RULES:\n${ctx.companyStandards}`)
   }
