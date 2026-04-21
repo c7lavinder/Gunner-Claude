@@ -191,16 +191,21 @@ export async function GET(
       if (p.ghlContactId) propMap.set(p.ghlContactId, [p.address, p.city, p.state].filter(Boolean).join(', '))
     }
 
-    // Fetch contact details from GHL (batch, rate limited)
-    for (const cid of contactIds.slice(0, 20)) {
-      try {
-        const contact = await ghl.getContact(cid)
-        contactMap.set(cid, {
-          name: `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim(),
-          phone: contact.phone ?? '',
-          address: [contact.address1, contact.city, contact.state].filter(Boolean).join(', '),
-        })
-      } catch {}
+    // Fetch contact details from GHL in parallel — sequential was ~5s for 20 contacts
+    const contactFetches = contactIds.slice(0, 20).map(cid =>
+      ghl.getContact(cid)
+        .then(contact => ({ cid, contact }))
+        .catch(() => null)
+    )
+    const contactResults = await Promise.all(contactFetches)
+    for (const r of contactResults) {
+      if (!r) continue
+      const { cid, contact } = r
+      contactMap.set(cid, {
+        name: `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim(),
+        phone: contact.phone ?? '',
+        address: [contact.address1, contact.city, contact.state].filter(Boolean).join(', '),
+      })
     }
 
     // Build final response

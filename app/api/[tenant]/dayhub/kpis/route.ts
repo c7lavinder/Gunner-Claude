@@ -39,8 +39,41 @@ export async function GET(
       LEAD_MANAGER: 'LM', ACQUISITION_MANAGER: 'AM', DISPOSITION_MANAGER: 'DISPO',
       TEAM_LEAD: 'AM', ADMIN: 'AM', OWNER: 'AM',
     }
-    const goalKey = ROLE_TO_GOAL_KEY[effective.role] ?? 'AM'
-    const goals = allGoals[goalKey] ?? {}
+
+    // Goal computation rules:
+    //  - Admin viewing tenant-wide (no asUserId, no role tab) → sum all non-admin users' role goals
+    //  - Admin viewing a role tab (userIdsParam) → sum only those users' role goals
+    //  - View-as or non-admin → use just that user's role goals (no multiplier)
+    let goals: Record<string, number>
+    const sumAcrossUsers = isAdmin && (roleFilterIds || !asUserId)
+    if (sumAcrossUsers) {
+      const usersInScope = await db.user.findMany({
+        where: {
+          tenantId,
+          ...(roleFilterIds
+            ? { id: { in: roleFilterIds } }
+            : { role: { notIn: ['ADMIN', 'OWNER'] } }),
+        },
+        select: { role: true },
+      })
+      const headcountByGoalKey: Record<string, number> = {}
+      for (const u of usersInScope) {
+        if (!u.role) continue
+        const gk = ROLE_TO_GOAL_KEY[u.role] ?? 'AM'
+        headcountByGoalKey[gk] = (headcountByGoalKey[gk] ?? 0) + 1
+      }
+      goals = {}
+      for (const [gk, roleGoals] of Object.entries(allGoals)) {
+        const headcount = headcountByGoalKey[gk] ?? 0
+        if (!headcount) continue
+        for (const [metric, value] of Object.entries(roleGoals)) {
+          goals[metric] = (goals[metric] ?? 0) + value * headcount
+        }
+      }
+    } else {
+      const goalKey = ROLE_TO_GOAL_KEY[effective.role] ?? 'AM'
+      goals = allGoals[goalKey] ?? {}
+    }
 
     // Scope: role tab filter > view-as > admin (all) > own
     const userScope = roleFilterIds

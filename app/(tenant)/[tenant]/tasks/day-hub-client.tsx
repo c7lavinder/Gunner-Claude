@@ -269,8 +269,6 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
   const [categoryFilter, setCategoryFilter] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
-  const [pushAttemptedDown, setPushAttemptedDown] = useState(false)
-  const [showCompleted, setShowCompleted] = useState(false)
   const [visibleTaskCount, setVisibleTaskCount] = useState(50)
 
   // Map role tabs to team members
@@ -419,7 +417,11 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
 
   // Fetch appointments for selected date
   // Use local date components (not toISOString which converts to UTC and can shift the date)
-  const fetchAppts = useCallback((date: Date) => {
+  // Auto-retries up to 2 times on empty response — GHL's calendars endpoint returns
+  // empty on cold cache, and the user previously had to refresh manually to see appointments.
+  const apptRetryRef = useRef(0)
+  const fetchAppts = useCallback((date: Date, isRetry = false) => {
+    if (!isRetry) apptRetryRef.current = 0
     setLoadingAppts(true)
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     const params = new URLSearchParams({ date: dateStr })
@@ -428,8 +430,15 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
     fetch(`/api/${tenantSlug}/dayhub/appointments?${params}`)
       .then(r => r.json())
       .then(d => {
-        setAppointments(d.appointments ?? [])
+        const appts = d.appointments ?? []
+        setAppointments(appts)
         if (d.locationId) setApptLocationId(d.locationId)
+        // Auto-retry on empty response (GHL cold-cache workaround) up to 2x
+        if (appts.length === 0 && !d.error && apptRetryRef.current < 2) {
+          apptRetryRef.current += 1
+          setTimeout(() => fetchAppts(date, true), 1500)
+          return
+        }
         setLoadingAppts(false)
       })
       .catch(() => setLoadingAppts(false))
@@ -479,26 +488,6 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length
   let displayTasks = filteredTasks
   if (showOverdueOnly) displayTasks = displayTasks.filter(t => t.isOverdue)
-
-  // "Push Attempted Down" toggle — time-of-day aware
-  // If currently AM: push tasks with AM call to bottom. If PM: push tasks with PM call.
-  if (pushAttemptedDown) {
-    const centralHour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hour12: false }), 10)
-    const isCurrentlyAm = centralHour < 12
-    displayTasks = [...displayTasks].sort((a, b) => {
-      const aActivity = activityMap[a.contactId]
-      const bActivity = activityMap[b.contactId]
-      const aAttempted = isCurrentlyAm
-        ? (aActivity?.hasAm ?? a.amDone)
-        : (aActivity?.hasPm ?? a.pmDone)
-      const bAttempted = isCurrentlyAm
-        ? (bActivity?.hasAm ?? b.amDone)
-        : (bActivity?.hasPm ?? b.pmDone)
-      if (aAttempted && !bAttempted) return 1  // push attempted down
-      if (!aAttempted && bAttempted) return -1
-      return 0 // preserve score order within same group
-    })
-  }
 
   const visibleTasks = displayTasks.slice(0, visibleTaskCount)
   const remaining = displayTasks.length - visibleTaskCount
@@ -1072,22 +1061,6 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
             </select>
             <span className="text-[13px] text-txt-muted ml-auto">{displayTasks.length} tasks</span>
             <button
-              onClick={() => setPushAttemptedDown(prev => !prev)}
-              className={`text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                pushAttemptedDown ? 'bg-semantic-blue text-white' : 'bg-blue-50 text-semantic-blue hover:bg-blue-100'
-              }`}
-            >
-              {pushAttemptedDown ? 'Attempted ↓' : 'Attempted'}
-            </button>
-            <button
-              onClick={() => setShowCompleted(prev => !prev)}
-              className={`text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                showCompleted ? 'bg-semantic-green text-white' : 'bg-green-50 text-green-600 hover:bg-green-100'
-              }`}
-            >
-              Completed
-            </button>
-            <button
               onClick={() => setShowOverdueOnly(prev => !prev)}
               className={`text-[10px] font-semibold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${
                 showOverdueOnly ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'
@@ -1146,8 +1119,8 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
             </button>
           )}
 
-          {/* Completed today section */}
-          {showCompleted && completedTasks.length > 0 && (
+          {/* Completed today section — always visible when there are entries */}
+          {completedTasks.length > 0 && (
             <div className="mt-4">
               <p className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider mb-2 px-1">
                 Completed Today ({completedTasks.length})
@@ -1253,8 +1226,21 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
 }) {
   const [activityTab, setActivityTab] = useState<'activity' | 'notes'>('activity')
   const [confirmingComplete, setConfirmingComplete] = useState(false)
-  const activity = preloadedActivity
-  const loadingActivity = isExpanded && !activity
+  // On-demand activity fetch — preload only covers first 10 prioritized tasks,
+  // so clicking any other task would otherwise spin forever.
+  const [localActivity, setLocalActivity] = useState<ContactActivity | null>(null)
+  const [fetchingActivity, setFetchingActivity] = useState(false)
+  useEffect(() => {
+    if (!isExpanded || preloadedActivity || localActivity || fetchingActivity || !task.contactId) return
+    setFetchingActivity(true)
+    fetch(`/api/${tenantSlug}/dayhub/contact-activity?contactId=${task.contactId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setLocalActivity(d) })
+      .catch(() => {})
+      .finally(() => setFetchingActivity(false))
+  }, [isExpanded, preloadedActivity, localActivity, fetchingActivity, tenantSlug, task.contactId])
+  const activity = preloadedActivity ?? localActivity
+  const loadingActivity = isExpanded && !activity && fetchingActivity
 
   const daysOverdue = task.dueDate && task.isOverdue
     ? differenceInDays(new Date(), new Date(task.dueDate))
@@ -1411,6 +1397,8 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
                 <Send size={10} /> Text
               </button>
             )}
+            {/* GHL deep links — v2 uses subpath segments, not ?tab= query params.
+                The previous ?tab= form silently dropped users on the default contact view. */}
             <a
               href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}`}
               target="_blank" rel="noopener noreferrer"
@@ -1419,28 +1407,28 @@ function TaskRow({ task, tenantSlug, onComplete, completing, isExpanded, onToggl
               <ExternalLink size={10} /> View in CRM
             </a>
             <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=appointments`}
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/appointment`}
               target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >
               <Calendar size={10} /> Create Apt
             </a>
             <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=notes`}
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/notes`}
               target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >
               <Pencil size={10} /> Add Note
             </a>
             <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=workflow`}
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/automation`}
               target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >
               <Play size={10} /> Workflow
             </a>
             <a
-              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}?tab=tasks`}
+              href={`https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${task.contactId}/tasks`}
               target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 text-[10px] font-medium px-2.5 py-1.5 rounded-full bg-surface-tertiary text-txt-secondary hover:text-txt-primary transition-colors"
             >

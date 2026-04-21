@@ -221,7 +221,7 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
 
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose} onWheel={e => e.stopPropagation()}>
-      <div className="bg-white rounded-2xl shadow-xl max-w-[480px] w-full mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-[480px] w-full mx-4 h-[640px] max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 pb-3">
           <div className="flex items-center justify-between mb-4">
@@ -310,8 +310,8 @@ export function KpiLedgerModal({ type, isOpen, onClose, tenantSlug }: {
           </div>
         )}
 
-        {/* Entries list — fixed height for ~5 entries, scrollable */}
-        <div className="h-[320px] overflow-y-auto px-6">
+        {/* Entries list — flexes to fill remaining space so modal height stays stable when AddEntry/search appear */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6">
           {loading ? (
             <div className="py-8 text-center"><Loader2 size={14} className="animate-spin text-txt-muted mx-auto" /></div>
           ) : entries.length === 0 ? (
