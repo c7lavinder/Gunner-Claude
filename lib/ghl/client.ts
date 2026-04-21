@@ -38,15 +38,28 @@ export class GHLClient {
   ): Promise<T> {
     const url = `${GHL_BASE_URL}${path}`
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'Version': GHL_API_VERSION,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    })
+    // Network blips (DNS hiccups, connection resets) bubble out of fetch as
+    // thrown errors. Retry once with a short backoff before giving up — this
+    // is the most common cause of the "Could not load tasks from GHL" toast
+    // that disappears on refresh.
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+          'Version': GHL_API_VERSION,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      })
+    } catch (networkErr) {
+      if (retryCount < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)))
+        return this.request<T>(method, path, body, retryCount + 1)
+      }
+      throw new GHLError(0, `Network error: ${networkErr instanceof Error ? networkErr.message : 'unknown'}`, path)
+    }
 
     // Auto-retry on 401 (expired token) — refresh and retry once
     if (response.status === 401 && retryCount < 1) {
@@ -63,6 +76,13 @@ export class GHLClient {
     if (response.status === 429 && retryCount < MAX_RETRIES) {
       const retryAfter = parseInt(response.headers.get('Retry-After') ?? '2')
       await new Promise(resolve => setTimeout(resolve, retryAfter * 1000))
+      return this.request<T>(method, path, body, retryCount + 1)
+    }
+
+    // Auto-retry on transient 5xx (502/503/504 are common GHL hiccups). Skip
+    // 500 because that's often a real error caused by a bad request body.
+    if ((response.status === 502 || response.status === 503 || response.status === 504) && retryCount < MAX_RETRIES) {
+      await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)))
       return this.request<T>(method, path, body, retryCount + 1)
     }
 
