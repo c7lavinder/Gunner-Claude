@@ -626,6 +626,9 @@ model PropertyTeamMember {
 model Call {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @map("created_at")
+  // Auto-updated on every row change. Added 2026-04-20 to power the
+  // grading-worker rescue sweeps (stuck PROCESSING / auto-retry FAILED).
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)

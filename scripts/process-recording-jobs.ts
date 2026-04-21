@@ -32,6 +32,33 @@ export async function processJobs() {
   const startedAt = Date.now()
   const stats = { pending: 0, graded: 0, skipped: 0, waiting: 0, timedOut: 0, legacyJobs: 0, errors: 0 }
 
+  // Fix 2 (2026-04-20): Rescue rows stuck in PROCESSING > 5 min back to PENDING.
+  // Happens when the worker is SIGTERM'd mid-grade (Railway redeploy, OOM, etc.)
+  // or when gradeCall() throws in a path that bypasses the per-row catch.
+  // PROCESSING is normally a 30–60s state; anything older is stuck and safe
+  // to retry. Wrapped in catch so a rescue failure can't block real work.
+  await db.call.updateMany({
+    where: {
+      gradingStatus: 'PROCESSING',
+      updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) },
+    },
+    data: { gradingStatus: 'PENDING' },
+  }).catch(err => console.error('[rescue] PROCESSING reset failed:', err))
+
+  // Fix 3 (2026-04-20): Auto-retry FAILED calls that HAVE a recording but
+  // haven't been touched in > 1 hour. Targets transient failures (Anthropic
+  // credit outage, Deepgram blip, network hiccup). Calls with no recording
+  // stay FAILED — nothing to retry against. Flipping status to PENDING
+  // updates updated_at, so a call that keeps failing won't re-retry in < 1hr.
+  await db.call.updateMany({
+    where: {
+      gradingStatus: 'FAILED',
+      recordingUrl: { not: null },
+      updatedAt: { lt: new Date(Date.now() - 60 * 60 * 1000) },
+    },
+    data: { gradingStatus: 'PENDING' },
+  }).catch(err => console.error('[rescue] FAILED reset failed:', err))
+
   // Heartbeat: fires BEFORE any real work so if the script imports and reaches
   // this line, we have proof the cron ran. Added after the 2026-04-20 outage
   // (cron went silent 04:43 UTC with zero audit trail). Health query:
@@ -99,10 +126,15 @@ export async function processJobs() {
           continue
         }
 
-        if (duration === 0) {
+        // Fix 1 (2026-04-20): NULL duration was slipping through Decision 1
+        // (which gated on `duration !== null`) AND this zero check, then
+        // reaching the grading pipeline. Transcription would often return
+        // empty for no-answer calls, ending them as FAILED. Treat unknown
+        // duration the same as zero — SKIPPED with no_answer.
+        if (duration === null || duration === 0) {
           await db.call.update({
             where: { id: call.id },
-            data: { gradingStatus: 'SKIPPED', aiSummary: 'No answer — zero duration.', callResult: 'no_answer' },
+            data: { gradingStatus: 'SKIPPED', aiSummary: 'No answer — zero or unknown duration.', callResult: 'no_answer' },
           })
           stats.skipped++
           continue
