@@ -43,3 +43,6 @@ audit-results/
 
 # Editor config (personal preferences)
 .vscode/
+
+# Stray CSV exports at repo root (call lists, inventory dumps, etc.)
+/*.csv

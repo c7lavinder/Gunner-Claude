@@ -34,6 +34,17 @@ async function processJobs() {
   const startedAt = Date.now()
   const stats = { pending: 0, graded: 0, skipped: 0, waiting: 0, timedOut: 0, legacyJobs: 0, errors: 0 }
 
+  // Heartbeat — lets the audit page show "is the worker alive?" without needing Railway access
+  await db.auditLog.create({
+    data: {
+      tenantId: null,
+      action: 'cron.process_recording_jobs.started',
+      resource: 'system',
+      source: 'SYSTEM',
+      severity: 'INFO',
+    },
+  }).catch(() => {})
+
   try {
     // ── Step 0: Link unlinked calls to properties BEFORE grading ──────────
     // Must run first so gradeCall() sees propertyId for deal intel extraction.
@@ -217,9 +228,30 @@ async function processJobs() {
     const durationMs = Date.now() - startedAt
     console.log(`[call-processor] ${durationMs}ms | pending=${stats.pending} graded=${stats.graded} skipped=${stats.skipped} waiting=${stats.waiting} timedOut=${stats.timedOut} legacy=${stats.legacyJobs} errors=${stats.errors}`)
 
+    await db.auditLog.create({
+      data: {
+        tenantId: null,
+        action: 'cron.process_recording_jobs.finished',
+        resource: 'system',
+        source: 'SYSTEM',
+        severity: 'INFO',
+        payload: { durationMs, ...stats } as unknown as Prisma.InputJsonValue,
+      },
+    }).catch(() => {})
+
     return NextResponse.json({ ok: true, durationMs, ...stats })
   } catch (err) {
     console.error('[call-processor] Fatal error:', err instanceof Error ? err.message : err)
+    await db.auditLog.create({
+      data: {
+        tenantId: null,
+        action: 'cron.process_recording_jobs.failed',
+        resource: 'system',
+        source: 'SYSTEM',
+        severity: 'ERROR',
+        payload: { error: err instanceof Error ? err.message : String(err) } as unknown as Prisma.InputJsonValue,
+      },
+    }).catch(() => {})
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 },

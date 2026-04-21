@@ -6,6 +6,7 @@ import { redirect, notFound } from 'next/navigation'
 import { CallDetailClient } from '@/components/calls/call-detail-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
+import { getSignedAudioUrl } from '@/lib/storage/supabase'
 
 export default async function CallDetailPage({
   params,
@@ -70,6 +71,13 @@ export default async function CallDetailPage({
   const contactName = call.contactName ?? call.property?.sellers[0]?.seller.name ?? null
   const contactPhone = call.property?.sellers[0]?.seller.phone ?? null
 
+  // Manual uploads: resolve Supabase Storage path to a signed URL for playback
+  let playbackUrl: string | null = call.recordingUrl
+  if (!playbackUrl && call.audioStoragePath) {
+    const signed = await getSignedAudioUrl(call.audioStoragePath, 3600)
+    if (signed.status === 'success' && signed.url) playbackUrl = signed.url
+  }
+
   return (
     <CallDetailClient
       call={{
@@ -81,7 +89,7 @@ export default async function CallDetailPage({
         direction: call.direction,
         durationSeconds: call.durationSeconds,
         calledAt: call.calledAt?.toISOString() ?? call.createdAt.toISOString(),
-        recordingUrl: call.recordingUrl,
+        recordingUrl: playbackUrl,
         transcript: call.transcript,
         aiSummary: call.aiSummary,
         aiFeedback: call.aiFeedback,

@@ -62,6 +62,7 @@ export default async function CallsPage({ params }: { params: { tenant: string }
         aiFeedback: c.aiFeedback,
         contactName: c.contactName ?? null,
         contactAddress: c.contactAddress ?? null,
+        manualUpload: c.manualUpload,
         assignedTo: c.assignedTo ? { id: c.assignedTo.id, name: c.assignedTo.name, role: c.assignedTo.role } : null,
         property: c.property ? { id: c.property.id, address: c.property.address, city: c.property.city, state: c.property.state } : null,
       }))}

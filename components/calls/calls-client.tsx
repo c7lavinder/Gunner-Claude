@@ -24,6 +24,7 @@ interface Call {
   direction: string; durationSeconds: number | null; calledAt: string
   recordingUrl: string | null; aiSummary: string | null; aiFeedback: string | null
   contactName: string | null; contactAddress: string | null
+  manualUpload: boolean
   assignedTo: { id: string; name: string; role: string } | null
   property: { id: string; address: string; city: string; state: string } | null
 }
@@ -173,16 +174,20 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
   const [syncing, setSyncing] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
 
+  // View-As filter applies to every tab so badges match what the user sees
+  const viewAsFilter = (list: Call[]) =>
+    isViewingAs && viewAsName ? list.filter(c => c.assignedTo?.name === viewAsName) : list
+
   // Tab filtering — matches pipeline statuses directly
-  const completedCalls = calls.filter(c => c.gradingStatus === 'COMPLETED')
-  const pendingCalls = calls.filter(c => ['PENDING', 'PROCESSING'].includes(c.gradingStatus))
-  const skippedCalls = calls.filter(c =>
+  const completedCalls = viewAsFilter(calls.filter(c => c.gradingStatus === 'COMPLETED'))
+  const pendingCalls = viewAsFilter(calls.filter(c => ['PENDING', 'PROCESSING'].includes(c.gradingStatus)))
+  const skippedCalls = viewAsFilter(calls.filter(c =>
     c.gradingStatus === 'SKIPPED' ||
     (c.callResult === 'no_answer' && c.gradingStatus !== 'COMPLETED')
-  )
-  const failedCalls = calls.filter(c =>
+  ))
+  const failedCalls = viewAsFilter(calls.filter(c =>
     c.gradingStatus === 'FAILED' && c.callResult !== 'no_answer'
-  )
+  ))
 
   // Completed list with all active filters applied — badge and rendered list share this
   const completedFiltered = applyCompletedFilters(completedCalls, {
@@ -191,18 +196,12 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
   })
 
   // Active tab's list
-  let filtered: Call[] = []
-  if (tab === 'completed') {
-    filtered = completedFiltered
-  } else {
-    const source = tab === 'pending' ? pendingCalls
-      : tab === 'skipped' ? skippedCalls
-      : tab === 'failed' ? failedCalls
-      : []
-    filtered = isViewingAs && viewAsName
-      ? source.filter(c => c.assignedTo?.name === viewAsName)
-      : source
-  }
+  const filtered: Call[] =
+    tab === 'completed' ? completedFiltered
+    : tab === 'pending' ? pendingCalls
+    : tab === 'skipped' ? skippedCalls
+    : tab === 'failed' ? failedCalls
+    : []
 
   const uniqueTypes = [...new Set(calls.map(c => c.callType).filter(Boolean))] as string[]
   const uniqueOutcomes = [...new Set(calls.map(c => c.callOutcome).filter(Boolean))] as string[]
@@ -483,6 +482,12 @@ function CallCard({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
             {call.callOutcome && (
               <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${outcomeBadge(call.callOutcome)}`}>
                 {RESULT_NAMES[call.callOutcome] ?? call.callOutcome.replace(/_/g, ' ')}
+              </span>
+            )}
+
+            {call.manualUpload && (
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-semantic-purple text-semantic-purple flex items-center gap-1">
+                <Upload size={9} /> Uploaded
               </span>
             )}
           </div>

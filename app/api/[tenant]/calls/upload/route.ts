@@ -14,6 +14,22 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 const MAX_FILE_BYTES = 100 * 1024 * 1024 // 100 MB
+const RATE_LIMIT_WINDOW_MS = 60_000 // 1 minute
+const RATE_LIMIT_PER_WINDOW = 3     // 3 uploads per user per minute
+
+// Best-effort in-memory limiter. Resets on restart; per-instance if scaled.
+const uploadAttempts = new Map<string, number[]>()
+function checkRateLimit(userId: string): { ok: true } | { ok: false; retryAfterMs: number } {
+  const now = Date.now()
+  const cutoff = now - RATE_LIMIT_WINDOW_MS
+  const prev = (uploadAttempts.get(userId) ?? []).filter(t => t > cutoff)
+  if (prev.length >= RATE_LIMIT_PER_WINDOW) {
+    return { ok: false, retryAfterMs: RATE_LIMIT_WINDOW_MS - (now - prev[0]) }
+  }
+  prev.push(now)
+  uploadAttempts.set(userId, prev)
+  return { ok: true }
+}
 const ALLOWED_AUDIO_MIMES = [
   'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a', 'audio/x-m4a',
   'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg',
@@ -35,6 +51,14 @@ export async function POST(
 ) {
   const session = await getSession()
   if (!session) return unauthorizedResponse()
+
+  const rate = checkRateLimit(session.userId)
+  if (!rate.ok) {
+    return NextResponse.json(
+      { success: false, error: `Too many uploads. Try again in ${Math.ceil(rate.retryAfterMs / 1000)}s.` },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rate.retryAfterMs / 1000)) } },
+    )
+  }
 
   let form: FormData
   try {
