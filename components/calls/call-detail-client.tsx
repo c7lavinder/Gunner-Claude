@@ -12,6 +12,7 @@ import {
   Heart, AlertTriangle, Target, RotateCcw, Tag, MessageSquare, X, Loader2,
   User, MapPin, Clipboard, PhoneOutgoing, PhoneIncoming, Plus, RefreshCw,
   Play, Pause, SkipBack, SkipForward, Volume2, ChevronDown, Home, Sparkles, Info,
+  Trash2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -294,6 +295,24 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     setActionLoading(null)
   }
 
+  async function deleteCall() {
+    if (!window.confirm(`Delete this call${call.contactName ? ` with ${call.contactName}` : ''}? This cannot be undone.`)) return
+    setActionLoading('delete')
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast('Call deleted', 'success')
+        router.push(`/${tenantSlug}/calls`)
+      } else {
+        toast('Failed to delete', 'error')
+        setActionLoading(null)
+      }
+    } catch {
+      toast('Failed to delete', 'error')
+      setActionLoading(null)
+    }
+  }
+
   async function toggleCalibration() {
     const newValue = !isCalibration
     setIsCalibration(newValue)
@@ -570,6 +589,17 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           >
             <Star size={13} fill={isCalibration ? 'currentColor' : 'none'} />
             {isCalibration ? 'Calibration' : 'Flag'}
+          </button>
+          <button
+            onClick={deleteCall}
+            disabled={actionLoading === 'delete'}
+            aria-label="Delete call"
+            title="Delete this call"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium text-txt-secondary hover:text-semantic-red hover:border-semantic-red disabled:opacity-50 transition-all"
+            style={{ borderColor: 'var(--border-medium)' }}
+          >
+            {actionLoading === 'delete' ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+            Delete
           </button>
         </div>
       </div>

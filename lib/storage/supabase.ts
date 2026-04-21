@@ -65,6 +65,17 @@ export async function getSignedAudioUrl(path: string, ttlSeconds = 3600): Promis
   }
 }
 
+export async function deleteCallAudio(path: string): Promise<{ status: 'success' | 'error'; error?: string }> {
+  try {
+    const client = getClient()
+    const { error } = await client.storage.from(BUCKET).remove([path])
+    if (error) return { status: 'error', error: error.message }
+    return { status: 'success' }
+  } catch (err: unknown) {
+    return { status: 'error', error: err instanceof Error ? err.message : 'delete failed' }
+  }
+}
+
 function extFromMime(mime: string): string {
   const m = mime.toLowerCase()
   if (m.includes('mpeg') || m.includes('mp3')) return '.mp3'

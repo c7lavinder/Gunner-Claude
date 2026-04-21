@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Phone, RotateCcw, Loader2, AlertTriangle, Search, X, Download,
-  RefreshCw, Upload,
+  RefreshCw, Upload, Trash2,
   Calendar, User, PhoneOutgoing, PhoneIncoming, MapPin, Clock,
   Archive, FileText, MessageSquare,
 } from 'lucide-react'
@@ -218,6 +218,19 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
     setActionLoading(null)
   }
 
+  async function deleteCall(callId: string, contactName: string | null) {
+    if (!confirm(`Delete this call${contactName ? ` with ${contactName}` : ''}? This cannot be undone.`)) return
+    setActionLoading(`${callId}-delete`)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${callId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast('Call deleted', 'success')
+        startTransition(() => router.refresh())
+      } else { toast('Delete failed', 'error') }
+    } catch { toast('Delete failed', 'error') }
+    setActionLoading(null)
+  }
+
   const allTabs: Array<{ id: Tab; label: string; count: number; icon: React.ReactNode }> = [
     { id: 'completed', label: 'Completed', count: completedFiltered.length, icon: <Phone size={13} /> },
     { id: 'pending', label: 'Pending', count: pendingCalls.length, icon: <Clock size={13} /> },
@@ -335,7 +348,13 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
               </div>
             ) : (
               filtered.map(call => (
-                <CallCard key={call.id} call={call} tenantSlug={tenantSlug} />
+                <CallCard
+                  key={call.id}
+                  call={call}
+                  tenantSlug={tenantSlug}
+                  onDelete={() => deleteCall(call.id, call.contactName)}
+                  deleting={actionLoading === `${call.id}-delete`}
+                />
               ))
             )}
           </div>
@@ -356,6 +375,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
                     <p className="text-[14px] font-medium text-txt-primary truncate">{c.contactName ?? 'Call'}</p>
                     <p className="text-[11px] text-txt-muted">processing · {format(new Date(c.calledAt), 'MMM d, h:mm a')}</p>
                   </div>
+                  <DeleteButton onClick={() => deleteCall(c.id, c.contactName)} loading={actionLoading === `${c.id}-delete`} />
                 </div>
               ))
             )}
@@ -385,6 +405,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
                       <p className="text-[11px] text-txt-muted">{format(new Date(c.calledAt), 'MMM d, h:mm a')}{c.durationSeconds ? ` · ${formatDuration(c.durationSeconds)}` : ''}</p>
                     </div>
                     <span className="text-[11px] text-txt-muted bg-surface-secondary px-2.5 py-1 rounded-[6px] shrink-0">{reason}</span>
+                    <DeleteButton onClick={() => deleteCall(c.id, c.contactName)} loading={actionLoading === `${c.id}-delete`} />
                   </div>
                 )
               })
@@ -416,6 +437,7 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
                       className="text-[11px] font-medium bg-surface-secondary text-txt-secondary hover:text-txt-primary px-2.5 py-1.5 rounded-[6px] transition-colors">
                       Skip
                     </button>
+                    <DeleteButton onClick={() => deleteCall(c.id, c.contactName)} loading={actionLoading === `${c.id}-delete`} />
                   </div>
                 </div>
               ))
@@ -439,14 +461,24 @@ export function CallsClient({ calls, tenantSlug, canViewAll, teamMembers, curren
 
 // ─── Call Card ───────────────────────────────────────────────────────────────
 
-function CallCard({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
+function CallCard({
+  call,
+  tenantSlug,
+  onDelete,
+  deleting,
+}: {
+  call: Call
+  tenantSlug: string
+  onDelete: () => void
+  deleting: boolean
+}) {
   const letter = gradeLetter(call.score)
   const isNew = call.gradingStatus !== 'COMPLETED'
 
   return (
     <Link
       href={`/${tenantSlug}/calls/${call.id}`}
-      className="block bg-surface-primary border-[0.5px] rounded-[14px] px-5 py-4 hover:shadow-ds-float hover:border-[var(--border-medium)] transition-all"
+      className="group relative block bg-surface-primary border-[0.5px] rounded-[14px] px-5 py-4 hover:shadow-ds-float hover:border-[var(--border-medium)] transition-all"
       style={{ borderColor: 'var(--border-light)' }}
     >
       <div className="flex items-start gap-4">
@@ -533,6 +565,31 @@ function CallCard({ call, tenantSlug }: { call: Call; tenantSlug: string }) {
           )}
         </div>
       </div>
+
+      {/* Delete — shown on hover; stops propagation so the card link doesn't fire */}
+      <button
+        type="button"
+        aria-label="Delete call"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete() }}
+        disabled={deleting}
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1.5 rounded-[8px] text-txt-muted hover:text-semantic-red hover:bg-surface-secondary disabled:opacity-40"
+      >
+        {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+      </button>
     </Link>
+  )
+}
+
+function DeleteButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label="Delete call"
+      onClick={onClick}
+      disabled={loading}
+      className="shrink-0 p-1.5 rounded-[6px] text-txt-muted hover:text-semantic-red hover:bg-surface-secondary disabled:opacity-40 transition-colors"
+    >
+      {loading ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+    </button>
   )
 }
