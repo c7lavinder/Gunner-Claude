@@ -289,15 +289,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         .map(t => t.id)
     )
 
-    let todayCompleted = completedTasks.filter(t => completedTodayByTaskId.has(t.id) || ghlUpdatedTodayIds.has(t.id))
-
-    // Fallback: GHL didn't return dateUpdated AND nobody completed via Gunner.
-    // Show all completed tasks (capped) so the panel isn't silently empty.
-    let usedFallback = false
-    if (todayCompleted.length === 0 && completedTasks.length > 0) {
-      todayCompleted = completedTasks.slice(0, 30)
-      usedFallback = true
-    }
+    const todayCompleted = completedTasks.filter(t => completedTodayByTaskId.has(t.id) || ghlUpdatedTodayIds.has(t.id))
 
     // Non-admin scoping: only show tasks they completed or are assigned to.
     let filteredCompleted = todayCompleted
@@ -307,7 +299,6 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         return c?.byGhlUserId === currentUser.ghlUserId || t.assignedTo === currentUser.ghlUserId
       })
     }
-    void usedFallback // reserved for future telemetry
 
     completedTodayTasks = filteredCompleted.slice(0, 30).map(t => {
       const contact = contactMap.get(t.contactId)

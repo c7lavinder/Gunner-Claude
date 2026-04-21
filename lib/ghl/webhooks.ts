@@ -704,7 +704,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
 // ─── Task Completed → Sync to our DB ───────────────────────────────────────
 
 async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
-  const taskData = event as { taskId?: string; id?: string }
+  const taskData = event as { taskId?: string; id?: string; userId?: string }
   const ghlTaskId = taskData.taskId ?? taskData.id
   if (!ghlTaskId) return
 
@@ -716,6 +716,26 @@ async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
   await db.task.updateMany({
     where: { tenantId, ghlTaskId },
     data: { status: 'COMPLETED', completedAt: new Date() },
+  })
+
+  // Write an audit log entry so the Day Hub "Completed Today" panel can detect
+  // GHL-UI completions the same way it detects Gunner-UI ones (we key off this
+  // action). The webhook payload doesn't include a reliable "completed by"
+  // user, so fall back to the task's assignee for attribution.
+  await db.auditLog.create({
+    data: {
+      tenantId,
+      // Map GHL user (if provided) → our internal user. Fallback to assignee.
+      userId: updated?.assignedToId ?? null,
+      action: 'task.completed_ghl',
+      resource: 'task',
+      resourceId: ghlTaskId,
+      source: 'GHL_WEBHOOK',
+      severity: 'INFO',
+      payload: { taskId: ghlTaskId, viaWebhook: true },
+    },
+  }).catch(err => {
+    console.warn(`[Webhook] Audit log write failed for task ${ghlTaskId}:`, err)
   })
 
   if (updated?.assignedToId) {
