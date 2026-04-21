@@ -478,8 +478,23 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
     return () => { cancelled = true }
   }, [tasks, tenantSlug])
 
+  // Compute the "visible scope" for this view — drives both the team dropdown
+  // options and the Completed Today list. Admins viewing the full team see all
+  // names; admins in View As see only that user; admins on a role tab see that
+  // team; non-admins see only themselves (server already filtered their tasks).
+  let scopedNames: Set<string> | null = null
+  if (viewAsUser) scopedNames = new Set([viewAsUser])
+  else if (isAdmin && roleTab !== 'ADMIN' && roleTabNames.size > 0) scopedNames = roleTabNames
+  else if (!isAdmin) {
+    const ownNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
+    scopedNames = new Set(ownNames)
+  }
+
+  const assignedNames = scopedNames
+    ? [...scopedNames]
+    : ([...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[])
+
   // Filter tasks (exclude optimistically completed)
-  const assignedNames = [...new Set(tasks.map(t => t.assignedToName).filter(Boolean))] as string[]
   let filteredTasks = tasks.filter(t => !completedTaskIds.has(t.id))
   // View As filter: when admin is viewing as a specific team member, only show their tasks
   if (viewAsUser && isAdmin) filteredTasks = filteredTasks.filter(t => t.assignedToName === viewAsUser)
@@ -487,6 +502,11 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
   else if (roleTab !== 'ADMIN' && roleTabNames.size > 0) filteredTasks = filteredTasks.filter(t => roleTabNames.has(t.assignedToName ?? ''))
   if (categoryFilter) filteredTasks = filteredTasks.filter(t => t.category === categoryFilter)
   if (teamFilter) filteredTasks = filteredTasks.filter(t => t.assignedToName === teamFilter)
+
+  // Completed Today: restrict to the same scope so view-as Daniel sees only Daniel's completions
+  const visibleCompletedTasks = scopedNames
+    ? completedTasks.filter(t => t.assignedToName && scopedNames!.has(t.assignedToName))
+    : completedTasks
   const overdueCount = filteredTasks.filter(t => t.isOverdue).length
   let displayTasks = filteredTasks
   if (showOverdueOnly) displayTasks = displayTasks.filter(t => t.isOverdue)
@@ -1123,14 +1143,14 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
             </button>
           )}
 
-          {/* Completed today section — always visible when there are entries */}
-          {completedTasks.length > 0 && (
+          {/* Completed today section — scoped to the active view (view-as / role tab / non-admin) */}
+          {visibleCompletedTasks.length > 0 && (
             <div className="mt-4">
               <p className="text-[11px] font-semibold text-txt-muted uppercase tracking-wider mb-2 px-1">
-                Completed Today ({completedTasks.length})
+                Completed Today ({visibleCompletedTasks.length})
               </p>
               <div className="space-y-1.5 opacity-70">
-                {completedTasks.map(task => (
+                {visibleCompletedTasks.map(task => (
                   <div
                     key={task.id}
                     className="bg-surface-primary border-[0.5px] rounded-[10px] px-4 py-2.5 flex items-center gap-3"
