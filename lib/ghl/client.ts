@@ -678,6 +678,13 @@ export interface GHLTaskItem {
   contactDetails?: { firstName?: string; lastName?: string }
   assignedToUserDetails?: { id?: string; firstName?: string; lastName?: string }
   searchAfter?: unknown[]
+  // GHL returns these on most task objects but doesn't document them in the OpenAPI
+  // spec. They're the only signal we get for "completed today" when a user marks a
+  // task complete inside GHL's UI (not through Gunner). Use as a fallback for the
+  // audit log, which only sees Gunner-side completions.
+  dateUpdated?: number | string
+  updatedAt?: number | string
+  dateAdded?: number | string
 }
 
 interface GHLTaskSearchResponse {

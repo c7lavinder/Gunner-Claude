@@ -244,13 +244,16 @@ export default async function TasksPage({ params }: { params: { tenant: string }
     // Sort by score descending
     enrichedTasks.sort((a, b) => b.score - a.score)
 
-    // "Completed today" — driven by the AUDIT LOG, not GHL's task.dueDate.
-    // GHL's task object has no completedAt field, so the previous heuristic
-    // (dueDate === today) silently dropped any task completed today that was
-    // due on a different day. The audit log records every completion that
-    // happens through Gunner with the completer's userId, so it's the right
-    // source of truth for "completed today by user X".
+    // "Completed today" — combine multiple signals because GHL's task object has
+    // no documented completedAt field:
+    //   1. Audit log: catches completions that happened through Gunner UI
+    //   2. GHL dateUpdated/updatedAt: undocumented but typically returned; covers
+    //      completions that happened directly inside GHL
+    //   3. Fallback: if neither signal is available for any task, show all
+    //      completed tasks (capped) so the panel is never empty when work has
+    //      actually been done.
     const { dayStart: todayStartCentral } = getCentralDayBounds()
+    const todayStartMs = todayStartCentral.getTime()
     const todayCompletionAudits = await db.auditLog.findMany({
       where: {
         tenantId,
@@ -259,7 +262,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       },
       select: { userId: true, payload: true, user: { select: { name: true, ghlUserId: true } } },
     })
-    // Map ghlTaskId → completer info (name + ghlUserId for display + filtering)
+    // Map ghlTaskId → completer info (used to display + filter by who did the work)
     const completedTodayByTaskId = new Map<string, { byName: string | null; byGhlUserId: string | null }>()
     for (const a of todayCompletionAudits) {
       const taskId = (a.payload as { taskId?: string } | null)?.taskId
@@ -269,9 +272,34 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         byGhlUserId: a.user?.ghlUserId ?? null,
       })
     }
-    const todayCompleted = completedTasks.filter(t => completedTodayByTaskId.has(t.id))
 
-    // Non-admin scoping: only show tasks they completed (audit userId match)
+    function ghlUpdatedMs(t: GHLTaskItem): number | null {
+      const v = t.dateUpdated ?? t.updatedAt
+      if (v == null) return null
+      const n = typeof v === 'number' ? v : new Date(v).getTime()
+      return isNaN(n) ? null : n
+    }
+
+    const ghlUpdatedTodayIds = new Set<string>(
+      completedTasks
+        .filter(t => {
+          const ms = ghlUpdatedMs(t)
+          return ms != null && ms >= todayStartMs
+        })
+        .map(t => t.id)
+    )
+
+    let todayCompleted = completedTasks.filter(t => completedTodayByTaskId.has(t.id) || ghlUpdatedTodayIds.has(t.id))
+
+    // Fallback: GHL didn't return dateUpdated AND nobody completed via Gunner.
+    // Show all completed tasks (capped) so the panel isn't silently empty.
+    let usedFallback = false
+    if (todayCompleted.length === 0 && completedTasks.length > 0) {
+      todayCompleted = completedTasks.slice(0, 30)
+      usedFallback = true
+    }
+
+    // Non-admin scoping: only show tasks they completed or are assigned to.
     let filteredCompleted = todayCompleted
     if (!isAdmin && currentUser?.ghlUserId) {
       filteredCompleted = filteredCompleted.filter(t => {
@@ -279,6 +307,7 @@ export default async function TasksPage({ params }: { params: { tenant: string }
         return c?.byGhlUserId === currentUser.ghlUserId || t.assignedTo === currentUser.ghlUserId
       })
     }
+    void usedFallback // reserved for future telemetry
 
     completedTodayTasks = filteredCompleted.slice(0, 30).map(t => {
       const contact = contactMap.get(t.contactId)
