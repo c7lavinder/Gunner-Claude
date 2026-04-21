@@ -184,7 +184,7 @@ export async function gradeCall(callId: string): Promise<void> {
     // Opus 4.7 with extended thinking — the deepest-reasoning option.
     // Per-call cost is ~5x Sonnet, but each call origination costs hundreds;
     // pulling maximum signal out of every graded call is the right trade.
-    const GRADING_MODEL = 'claude-opus-4-7'
+    const GRADING_MODEL = 'claude-opus-4-6'
     const response = await anthropic.messages.create({
       model: GRADING_MODEL,
       max_tokens: 32000,
@@ -975,7 +975,7 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const nsTimer = startTimer()
 
-    const NEXT_STEPS_MODEL = 'claude-opus-4-7'
+    const NEXT_STEPS_MODEL = 'claude-opus-4-6'
     const res = await anthropic.messages.create({
       model: NEXT_STEPS_MODEL,
       max_tokens: 8000,

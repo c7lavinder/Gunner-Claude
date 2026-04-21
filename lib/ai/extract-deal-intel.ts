@@ -52,7 +52,7 @@ export async function extractDealIntel(callId: string): Promise<void> {
     const timer = startTimer()
     const userPrompt = buildExtractionUserPrompt({ ...call, property }, currentDealIntel, batchData)
 
-    const DEAL_INTEL_MODEL = 'claude-opus-4-7'
+    const DEAL_INTEL_MODEL = 'claude-opus-4-6'
     const response = await anthropic.messages.create({
       model: DEAL_INTEL_MODEL,
       max_tokens: 16000,
