@@ -20,6 +20,25 @@ const configSchema = z.object({
   config: z.record(z.unknown()).optional(),
 })
 
+export async function GET() {
+  const session = await getSession()
+  if (!session) return unauthorizedResponse()
+
+  const tenant = await db.tenant.findUnique({
+    where: { id: session.tenantId },
+    select: {
+      id: true, slug: true,
+      callTypes: true, callResults: true, gradingMaterials: true,
+      propertyPipelineId: true, propertyTriggerStage: true,
+      dispoPipelineId: true, dispoTriggerStage: true,
+      config: true,
+    },
+  })
+  if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
+
+  return NextResponse.json({ tenant })
+}
+
 export async function PATCH(request: NextRequest) {
   const session = await getSession()
   if (!session) return unauthorizedResponse()

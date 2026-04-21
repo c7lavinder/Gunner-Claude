@@ -21,6 +21,16 @@ const schema = z.object({
   stageId: z.string().optional(),      // required for change_stage (defect #4)
   pipelineId: z.string().optional(),   // optional hint for stageId lookup; otherwise scan all pipelines
   smsBody: z.string().optional(),      // lets SMS body diverge from display label
+  // SMS scheduling (merged schedule_sms into send_sms).
+  sendAt: z.string().optional(),       // ISO datetime when the SMS should fire; empty/null = send immediately
+  timezone: z.string().optional(),     // IANA zone, e.g. "America/Chicago"
+  fromNumber: z.string().optional(),   // LC outbound number (overrides location default)
+  // Appointment fields — create_appointment now calls the real GHL
+  // /calendars/events/appointments endpoint instead of creating a task.
+  calendarId: z.string().optional(),          // GHL calendar id
+  appointmentTypeId: z.string().optional(),   // local tenant.config.appointmentTypes id (for auditing)
+  appointmentTime: z.string().optional(),     // ISO datetime start (user may edit)
+  durationMin: z.number().optional(),         // defaults to 30 or config default
 })
 
 const patchSchema = z.object({
@@ -38,6 +48,13 @@ const patchSchema = z.object({
     pipelineId: z.string().optional(),
     smsBody: z.string().optional(),
     originalLabel: z.string().optional(),
+    sendAt: z.string().optional(),
+    timezone: z.string().optional(),
+    fromNumber: z.string().optional(),
+    calendarId: z.string().optional(),
+    appointmentTypeId: z.string().optional(),
+    appointmentTime: z.string().optional(),
+    durationMin: z.number().optional(),
   })),
 })
 
@@ -113,27 +130,62 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
         break
       }
 
-      // ── Send SMS via GHL ────────────────────────────────────────────────
+      // ── Send SMS via GHL (send now, or queue if sendAt is set) ──────────
       case 'send_sms': {
         const body = parsed.data.smsBody || label
         if (!body) {
           return NextResponse.json({ success: false, message: 'SMS message text is required' }, { status: 400 })
         }
-        await ghl.sendSMS(contactId, body)
+
+        // Scheduled send is UI-wired but the queue/cron is a follow-up.
+        // Reject loudly so users don't silently get immediate sends.
+        if (parsed.data.sendAt) {
+          const scheduledTime = new Date(parsed.data.sendAt)
+          if (!Number.isNaN(scheduledTime.getTime()) && scheduledTime.getTime() > Date.now() + 60_000) {
+            return NextResponse.json({
+              success: false,
+              message: 'Scheduled SMS not yet available — leave "Send At" empty to send immediately. Scheduling queue is a follow-up.',
+            }, { status: 501 })
+          }
+          // past / near-now → treat as immediate
+        }
+
+        await ghl.sendSMS(contactId, body, parsed.data.fromNumber)
         break
       }
 
-      // ── Create Appointment (as a scheduled task in GHL) ─────────────────
+      // ── Create Appointment — real GHL /calendars/events/appointments ────
       case 'create_appointment': {
+        if (!parsed.data.calendarId) {
+          return NextResponse.json({
+            success: false,
+            message: 'calendarId is required. Configure Appointment Types in Settings → Call config so the AI can auto-select one.',
+          }, { status: 400 })
+        }
+        if (!parsed.data.appointmentTime) {
+          return NextResponse.json({
+            success: false,
+            message: 'appointmentTime (ISO datetime) is required.',
+          }, { status: 400 })
+        }
+
+        const start = new Date(parsed.data.appointmentTime)
+        if (Number.isNaN(start.getTime())) {
+          return NextResponse.json({ success: false, message: 'Invalid appointmentTime format.' }, { status: 400 })
+        }
+        const durationMin = parsed.data.durationMin && parsed.data.durationMin > 0 ? parsed.data.durationMin : 30
+        const end = new Date(start.getTime() + durationMin * 60_000)
+
         const title = label || `Appointment: ${call.property?.address ?? 'Contact'}`
-        const dueDate = resolveDueDate(parsed.data.dueDate, addDays(new Date(), 1))
-        // TODO: once calendar/datetime fields are supported in schema, switch from
-        // task-style to real GHL appointment via /calendars/events.
-        await ghl.createTask(contactId, {
-          title: `📅 ${title}`,
-          body: parsed.data.description || undefined,
-          dueDate,
-          assignedTo: resolvedAssignedTo,
+
+        await ghl.createAppointment({
+          calendarId: parsed.data.calendarId,
+          contactId,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          title,
+          assignedUserId: resolvedAssignedTo,
+          address: call.property?.address || undefined,
         })
         break
       }
@@ -233,6 +285,13 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
           stageId: parsed.data.stageId,
           pipelineId: parsed.data.pipelineId,
           smsBody: parsed.data.smsBody,
+          sendAt: parsed.data.sendAt,
+          timezone: parsed.data.timezone,
+          fromNumber: parsed.data.fromNumber,
+          calendarId: parsed.data.calendarId,
+          appointmentTypeId: parsed.data.appointmentTypeId,
+          appointmentTime: parsed.data.appointmentTime,
+          durationMin: parsed.data.durationMin,
         },
       },
     })
@@ -281,6 +340,13 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
           stageId: parsed.data.stageId,
           pipelineId: parsed.data.pipelineId,
           smsBody: parsed.data.smsBody,
+          sendAt: parsed.data.sendAt,
+          timezone: parsed.data.timezone,
+          fromNumber: parsed.data.fromNumber,
+          calendarId: parsed.data.calendarId,
+          appointmentTypeId: parsed.data.appointmentTypeId,
+          appointmentTime: parsed.data.appointmentTime,
+          durationMin: parsed.data.durationMin,
           errorMessage,
           errorStack,
         },

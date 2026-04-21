@@ -24,10 +24,40 @@ export async function POST(
       id: true, aiSummary: true, callOutcome: true, callType: true,
       transcript: true, contactName: true, aiNextSteps: true,
       assignedTo: { select: { name: true, role: true } },
-      property: { select: { address: true, city: true, state: true, status: true, ghlPipelineStage: true } },
+      property: { select: { address: true, city: true, state: true, status: true, ghlPipelineStage: true, ghlPipelineId: true } },
     },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
+
+  // Tenant-configured appointment types + live pipelines for explicit-ID routing
+  const tenant = await db.tenant.findUnique({
+    where: { id: session.tenantId },
+    select: { config: true },
+  })
+  const appointmentTypes = (((tenant?.config ?? {}) as { appointmentTypes?: Array<{ id: string; label: string; calendarId: string; defaultDurationMin?: number; titleTemplate?: string }> }).appointmentTypes) ?? []
+
+  let pipelinesBlock = ''
+  try {
+    const { getGHLClient } = await import('@/lib/ghl/client')
+    const ghl = await getGHLClient(session.tenantId)
+    const pipelinesResp = await ghl.getPipelines()
+    const lines: string[] = []
+    for (const p of pipelinesResp.pipelines ?? []) {
+      lines.push(`- pipelineId="${p.id}" name="${p.name}"`)
+      for (const s of p.stages ?? []) {
+        lines.push(`    stageId="${s.id}" name="${s.name}"`)
+      }
+    }
+    pipelinesBlock = lines.join('\n')
+  } catch {
+    pipelinesBlock = '(pipelines unavailable)'
+  }
+
+  const appointmentTypesBlock = appointmentTypes.length === 0
+    ? '(none configured — do NOT emit create_appointment without calendarId)'
+    : appointmentTypes
+        .map(t => `- id="${t.id}" label="${t.label}" calendarId="${t.calendarId}" defaultDurationMin=${t.defaultDurationMin ?? 30}${t.titleTemplate ? ` titleTemplate="${t.titleTemplate}"` : ''}`)
+        .join('\n')
 
   // Load playbook knowledge for better next step suggestions
   const { buildKnowledgeContext, formatKnowledgeForPrompt } = await import('@/lib/ai/context-builder')
@@ -93,10 +123,9 @@ VALID ACTION TYPES (use these exact strings):
 - create_task: Create a follow-up task (specific title like "Contact Name: Follow up on Address after outcome")
 - check_off_task: Mark an existing task as completed
 - update_task: Update an existing task's details
-- change_stage: Move contact to a different pipeline stage (reference exact pipeline and stage names)
-- create_appointment: Schedule an appointment
-- send_sms: Send an SMS message to the contact
-- schedule_sms: Schedule an SMS for a future date/time
+- change_stage: Move contact to a different pipeline stage — MUST include explicit pipelineId + stageId from the list below
+- create_appointment: Schedule an appointment — MUST include appointmentTypeId, calendarId, appointmentTime (ISO datetime) from the list below
+- send_sms: Send an SMS — "label" is a short summary, "smsBody" is the actual text the contact receives. Optional "sendAt" (ISO datetime) + "timezone" to schedule.
 - add_to_workflow: Add the contact to an automation workflow
 - remove_from_workflow: Remove from a workflow
 
@@ -107,15 +136,38 @@ RULES:
 - Only suggest actions the transcript actually supports
 - For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
 - For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
+- For send_sms: "label" is a short action-card summary like "Follow-up text after walkthrough". "smsBody" is the REAL message text that will be sent — written in first person as the rep, casual/friendly but professional. Never duplicate label text into smsBody.
+- For create_appointment: ONLY emit if an appointment type matches the call. Set appointmentTypeId + calendarId from the matching type. appointmentTime = ISO datetime (next reasonable slot — 2-3 business days out, 10am or 2pm, weekdays only). Set "label" using the titleTemplate if given; otherwise "{typeLabel} at {address} w/ {contactName}".
+- For change_stage: ALWAYS emit explicit pipelineId AND stageId from the list. Never use stage names. Skip if no appropriate stage exists.
+
+AVAILABLE APPOINTMENT TYPES (use these exact ids and calendarIds):
+${appointmentTypesBlock}
+
+AVAILABLE PIPELINES AND STAGES (use these exact ids for change_stage):
+${pipelinesBlock}
 
 Return JSON array only, no other text:
-[{ "type": "<action_type>", "label": "<specific action description>", "reasoning": "<why this action based on the call>" }]
+[{
+  "type": "<action_type>",
+  "label": "<specific action description>",
+  "reasoning": "<why this action based on the call>",
+  "smsBody": "only for send_sms",
+  "sendAt": "only for send_sms if scheduling — ISO datetime",
+  "timezone": "only for send_sms if scheduling — IANA zone like America/Chicago",
+  "appointmentTypeId": "only for create_appointment",
+  "calendarId": "only for create_appointment",
+  "appointmentTime": "only for create_appointment — ISO datetime",
+  "durationMin": 30,
+  "pipelineId": "only for change_stage",
+  "stageId": "only for change_stage"
+}]
 
 Rep: ${call.assignedTo?.name ?? 'Unknown'} (${call.assignedTo?.role ?? 'Unknown'})
 Contact: ${call.contactName ?? 'Unknown'}
 Property: ${call.property ? `${call.property.address}, ${call.property.city}, ${call.property.state}` : 'Unknown'}
 Property status: ${call.property?.status ?? 'Unknown'}
 Pipeline stage: ${call.property?.ghlPipelineStage ?? 'Unknown'}
+Current pipeline id: ${call.property?.ghlPipelineId ?? 'Unknown'}
 Call summary: ${call.aiSummary ?? 'No summary'}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
 Call type: ${call.callType ?? 'Unknown'}
@@ -139,7 +191,21 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
     const jsonMatch = text.text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) throw new Error('No JSON array found in response')
 
-    const rawSteps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>
+    const rawSteps = JSON.parse(jsonMatch[0]) as Array<{
+      type: string; label: string; reasoning: string
+      smsBody?: string; sendAt?: string; timezone?: string
+      appointmentTypeId?: string; calendarId?: string; appointmentTime?: string; durationMin?: number
+      pipelineId?: string; stageId?: string
+    }>
+
+    // Legacy: AI may still emit "schedule_sms" despite the prompt update.
+    // Collapse it into send_sms with sendAt preserved.
+    for (const s of rawSteps) {
+      if (s.type === 'schedule_sms') {
+        s.type = 'send_sms'
+        if (!s.sendAt && (s as { sendAtIso?: string; scheduleAt?: string }).sendAtIso) s.sendAt = (s as { sendAtIso?: string }).sendAtIso
+      }
+    }
 
     // Server-side dedup: only keep one action per type
     const seenTypes = new Set<string>()

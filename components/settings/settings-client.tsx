@@ -767,6 +767,8 @@ export function SettingsClient({
 
           <CallResultsMap canManage={canManage} tenantId={tenant.id} />
 
+          <AppointmentTypesSection tenantConfig={tenant.config} canManage={canManage} />
+
           <CallTypeRubrics />
 
           {canManage && (
@@ -1965,6 +1967,224 @@ function ProfileEditField({ label, value, onChange }: { label: string; value: st
         ))}
         <button onClick={() => onChange([...value, ''])} className="text-[10px] text-semantic-blue hover:underline">+ Add</button>
       </div>
+    </div>
+  )
+}
+
+// ─── Appointment Types Section (Call config tab) ─────────────────────────────
+//
+// WRITES TO: tenants.config → { appointmentTypes: Array<{
+//   id, label, calendarId, defaultDurationMin, titleTemplate?
+// }> }
+// API ENDPOINT: PATCH /api/tenants/config
+// READ BY:
+//   - lib/ai/grading.ts → generateAndSaveNextSteps() (prompt context)
+//   - app/api/[tenant]/calls/[id]/generate-next-steps/route.ts (prompt context)
+//   - app/api/[tenant]/calls/[id]/actions/route.ts → create_appointment handler
+// DROPDOWN SOURCE: GET /api/ghl/calendars → calendars[]
+//
+// Each type maps "what is this appointment for" (e.g. Walkthrough) to a real
+// GHL calendar. The AI uses this to auto-select the correct calendar + build
+// a clean title + pick a reasonable time when it proposes a create_appointment.
+interface AppointmentType {
+  id: string
+  label: string
+  calendarId: string
+  defaultDurationMin: number
+  titleTemplate?: string
+}
+
+function AppointmentTypesSection({ tenantConfig, canManage }: { tenantConfig: Record<string, unknown>; canManage: boolean }) {
+  const initial = (tenantConfig.appointmentTypes as AppointmentType[] | undefined) ?? []
+  const [types, setTypes] = useState<AppointmentType[]>(initial)
+  const [calendars, setCalendars] = useState<Array<{ id: string; name: string }>>([])
+  const [calendarsLoading, setCalendarsLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+
+  useEffect(() => {
+    fetch('/api/ghl/calendars')
+      .then(r => r.json())
+      .then(d => setCalendars(d.calendars ?? []))
+      .catch(() => setCalendars([]))
+      .finally(() => setCalendarsLoading(false))
+  }, [])
+
+  // Seed the NAH defaults for a fresh tenant so the list isn't empty. The user
+  // can still delete any of these if they don't use them.
+  function seedDefaults() {
+    const defaults: AppointmentType[] = [
+      { id: 'walkthrough', label: 'Property Walkthrough', calendarId: '', defaultDurationMin: 60, titleTemplate: 'Walkthrough at {propertyAddress} w/ {contactName}' },
+      { id: 'cash_offer', label: 'Cash Offer Call', calendarId: '', defaultDurationMin: 30, titleTemplate: 'Cash Offer Call w/ {contactName} — {propertyAddress}' },
+      { id: 'qualification', label: 'Property Qualification Call', calendarId: '', defaultDurationMin: 30, titleTemplate: 'Qualification Call w/ {contactName} — {propertyAddress}' },
+      { id: 'purchase_agreement', label: 'Purchase Agreement Call', calendarId: '', defaultDurationMin: 30, titleTemplate: 'Purchase Agreement Call w/ {contactName} — {propertyAddress}' },
+    ]
+    setTypes(defaults)
+  }
+
+  function addType() {
+    const newId = `type_${Date.now()}`
+    setTypes(prev => [...prev, {
+      id: newId,
+      label: '',
+      calendarId: '',
+      defaultDurationMin: 30,
+      titleTemplate: '{label} at {propertyAddress} w/ {contactName}',
+    }])
+  }
+
+  function removeType(id: string) {
+    setTypes(prev => prev.filter(t => t.id !== id))
+  }
+
+  function updateType(id: string, patch: Partial<AppointmentType>) {
+    setTypes(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t))
+  }
+
+  async function save() {
+    setSaving(true)
+    setSaveMsg('')
+    try {
+      // Validate: every row needs a label + calendar. Silently drop empty rows.
+      const cleaned = types
+        .map(t => ({ ...t, label: t.label.trim() }))
+        .filter(t => t.label && t.calendarId)
+
+      const res = await fetch('/api/tenants/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: { ...tenantConfig, appointmentTypes: cleaned } }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setSaveMsg('Saved')
+      setTimeout(() => setSaveMsg(''), 2000)
+    } catch (err) {
+      setSaveMsg(err instanceof Error ? `Save failed: ${err.message}` : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5 space-y-4">
+      <div>
+        <h2 className="text-ds-label font-medium text-txt-primary">Appointment Types</h2>
+        <p className="text-ds-fine text-txt-muted mt-1">
+          Map each appointment type (walkthrough, cash offer, etc.) to its GHL calendar. Gunner uses these so the AI can pre-fill the calendar, title, and time when it proposes a <code>create_appointment</code> action on a call.
+        </p>
+      </div>
+
+      {types.length === 0 && (
+        <div className="bg-surface-secondary rounded-[10px] p-4 flex items-center justify-between">
+          <p className="text-ds-fine text-txt-muted">No appointment types yet.</p>
+          {canManage && (
+            <div className="flex gap-2">
+              <button onClick={seedDefaults} className="text-[12px] font-medium text-semantic-blue hover:underline">Seed NAH defaults</button>
+              <button onClick={addType} className="text-[12px] font-medium text-semantic-blue hover:underline">Add one</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {types.length > 0 && (
+        <div className="space-y-2">
+          {types.map(t => (
+            <div key={t.id} className="border-[0.5px] rounded-[10px] p-3 space-y-2" style={{ borderColor: 'var(--border-light)' }}>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Label</label>
+                  <input
+                    value={t.label}
+                    onChange={e => updateType(t.id, { label: e.target.value })}
+                    placeholder="e.g. Property Walkthrough"
+                    className="w-full bg-surface-secondary border-[0.5px] rounded-[8px] px-2.5 py-1.5 text-[12px] text-txt-primary"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                    disabled={!canManage}
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">GHL Calendar</label>
+                  <select
+                    value={t.calendarId}
+                    onChange={e => updateType(t.id, { calendarId: e.target.value })}
+                    className="w-full bg-surface-secondary border-[0.5px] rounded-[8px] px-2.5 py-1.5 text-[12px] text-txt-primary"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                    disabled={!canManage || calendarsLoading}
+                  >
+                    <option value="">{calendarsLoading ? 'Loading calendars…' : 'Select a calendar…'}</option>
+                    {calendars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-[1fr_100px_auto] gap-2 items-end">
+                <div>
+                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Title template</label>
+                  <input
+                    value={t.titleTemplate ?? ''}
+                    onChange={e => updateType(t.id, { titleTemplate: e.target.value })}
+                    placeholder="{label} at {propertyAddress} w/ {contactName}"
+                    className="w-full bg-surface-secondary border-[0.5px] rounded-[8px] px-2.5 py-1.5 text-[11px] text-txt-primary font-mono"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                    disabled={!canManage}
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Duration (min)</label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={480}
+                    value={t.defaultDurationMin}
+                    onChange={e => updateType(t.id, { defaultDurationMin: Number(e.target.value) || 30 })}
+                    className="w-full bg-surface-secondary border-[0.5px] rounded-[8px] px-2.5 py-1.5 text-[11px] text-txt-primary"
+                    style={{ borderColor: 'var(--border-medium)' }}
+                    disabled={!canManage}
+                  />
+                </div>
+                {canManage && (
+                  <button
+                    onClick={() => removeType(t.id)}
+                    className="text-txt-muted hover:text-semantic-red p-1.5 rounded-[6px]"
+                    aria-label="Remove appointment type"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canManage && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={addType}
+            className="flex items-center gap-1 text-[12px] font-medium text-semantic-blue hover:underline"
+          >
+            <Plus size={12} /> Add appointment type
+          </button>
+          <div className="flex-1" />
+          {saveMsg && <span className="text-[11px] text-txt-muted">{saveMsg}</span>}
+          <button
+            onClick={save}
+            disabled={saving}
+            className="bg-gunner-red hover:bg-gunner-red-dark text-white text-[12px] font-semibold px-3 py-1.5 rounded-[8px] disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={11} className="animate-spin" /> : 'Save'}
+          </button>
+        </div>
+      )}
+
+      <details className="text-[11px] text-txt-muted">
+        <summary className="cursor-pointer hover:text-txt-secondary">Template placeholders</summary>
+        <div className="mt-2 space-y-1 font-mono">
+          <div><code>{'{label}'}</code> — the type's label (e.g. "Property Walkthrough")</div>
+          <div><code>{'{contactName}'}</code> — seller / contact on the call</div>
+          <div><code>{'{propertyAddress}'}</code> — property street address</div>
+          <div><code>{'{propertyCity}'}</code> — property city</div>
+        </div>
+      </details>
     </div>
   )
 }

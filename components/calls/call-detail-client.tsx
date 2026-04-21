@@ -67,7 +67,51 @@ interface NextStep {
   assignedTo?: string
   stageId?: string
   pipelineId?: string
+  // SMS — send_sms subsumes the old schedule_sms. Empty sendAt = send now.
   smsBody?: string
+  sendAt?: string       // ISO datetime
+  timezone?: string     // IANA zone, e.g. America/Chicago
+  fromNumber?: string   // LC outbound number override
+  // Appointment (Phase 1) — AI emits appointmentTypeId + calendarId +
+  // appointmentTime; edit panel lets the user adjust any of them.
+  appointmentTypeId?: string
+  calendarId?: string
+  appointmentTime?: string  // ISO datetime
+  durationMin?: number
+}
+
+// Tenant-configured appointment type → calendar mapping. Loaded once on mount
+// and used by the create_appointment edit panel + title template.
+interface AppointmentType {
+  id: string
+  label: string
+  calendarId: string
+  defaultDurationMin: number
+  titleTemplate?: string
+}
+
+const DEFAULT_SMS_TIMEZONES = [
+  { id: 'America/Chicago', label: 'Central (CT)' },
+  { id: 'America/New_York', label: 'Eastern (ET)' },
+  { id: 'America/Denver', label: 'Mountain (MT)' },
+  { id: 'America/Los_Angeles', label: 'Pacific (PT)' },
+]
+
+// Replace {label}, {contactName}, {propertyAddress}, {propertyCity} tokens.
+// Used when building the default appointment title from a type's titleTemplate.
+function renderAppointmentTitle(
+  template: string | undefined,
+  fallbackLabel: string,
+  ctx: { contactName: string | null; propertyAddress: string | null; propertyCity: string | null },
+): string {
+  const tpl = template ?? '{label} at {propertyAddress} w/ {contactName}'
+  return tpl
+    .replace(/\{label\}/g, fallbackLabel || 'Appointment')
+    .replace(/\{contactName\}/g, ctx.contactName ?? 'contact')
+    .replace(/\{propertyAddress\}/g, ctx.propertyAddress ?? 'property')
+    .replace(/\{propertyCity\}/g, ctx.propertyCity ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -108,8 +152,9 @@ const STEP_ICONS: Record<string, { icon: typeof CheckCircle; color: string; bg: 
   update_task:           { icon: RefreshCw,     color: 'text-sky-700',     bg: 'bg-sky-100',      cardBg: 'bg-sky-50',       label: 'Update Task' },
   change_stage:          { icon: RefreshCw,     color: 'text-orange-700',  bg: 'bg-orange-100',   cardBg: 'bg-orange-50',    label: 'Change Pipeline Stage' },
   create_appointment:    { icon: CalendarCheck, color: 'text-purple-700',  bg: 'bg-purple-100',   cardBg: 'bg-purple-50',    label: 'Create Appointment' },
+  // send_sms now subsumes the old schedule_sms — empty sendAt = send now,
+  // populated sendAt = schedule. The UI shows the same card either way.
   send_sms:              { icon: Send,          color: 'text-teal-700',    bg: 'bg-teal-100',     cardBg: 'bg-teal-50',      label: 'Send SMS' },
-  schedule_sms:          { icon: Clock,         color: 'text-teal-700',    bg: 'bg-teal-100',     cardBg: 'bg-teal-50',      label: 'Schedule SMS' },
   add_to_workflow:       { icon: Zap,           color: 'text-gray-700',    bg: 'bg-gray-100',     cardBg: 'bg-gray-50',      label: 'Add to Workflow' },
   remove_from_workflow:  { icon: X,             color: 'text-gray-700',    bg: 'bg-gray-100',     cardBg: 'bg-gray-50',      label: 'Remove from Workflow' },
 }
@@ -119,9 +164,13 @@ const ALL_ACTION_TYPES = Object.keys(STEP_ICONS)
 // ─── High-stakes confirm-modal helpers ──────────────────────────────────────
 
 // Which action types route through the confirmation modal before executing.
-// Low/medium stakes stay single-click (add_note, create_task, create_appointment,
-// check_off_task, schedule_sms, add_to_workflow, remove_from_workflow).
-const HIGH_STAKES_TYPES = new Set(['send_sms', 'change_stage'])
+// Low/medium stakes stay single-click (add_note, create_task, check_off_task,
+// add_to_workflow, remove_from_workflow).
+//
+// create_appointment is gated because it books a real GHL calendar event on
+// the seller's contact record — undoing one after the fact is a manual GHL
+// chore, so we surface a confirm modal with the rendered title + time.
+const HIGH_STAKES_TYPES = new Set(['send_sms', 'change_stage', 'create_appointment'])
 
 type PipelineList = Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>
 
@@ -148,8 +197,12 @@ function buildPreview(
   beforeAfter?: { label: string; before: string; after: string }
 } {
   if (step.type === 'send_sms') {
+    const scheduledAt = step.sendAt ? new Date(step.sendAt) : null
+    const whenLabel = scheduledAt && !Number.isNaN(scheduledAt.getTime())
+      ? `Scheduled for ${format(scheduledAt, "MMM d 'at' h:mm a")}${step.timezone ? ` (${step.timezone})` : ''}`
+      : 'Send now'
     return {
-      title: `Send SMS to ${call.contactName ?? 'contact'}`,
+      title: `${whenLabel} — SMS to ${call.contactName ?? 'contact'}`,
       recipientLabel: call.contactPhone
         ? `To: ${call.contactName ?? ''} (${call.contactPhone})`
         : undefined,
@@ -162,6 +215,16 @@ function buildPreview(
     return {
       title: 'Change pipeline stage',
       beforeAfter: { label: 'Pipeline stage', before, after },
+    }
+  }
+  if (step.type === 'create_appointment') {
+    const when = step.appointmentTime ? new Date(step.appointmentTime) : null
+    const whenLabel = when && !Number.isNaN(when.getTime())
+      ? format(when, "EEE MMM d 'at' h:mm a")
+      : 'time not set'
+    return {
+      title: step.label || 'Create appointment',
+      recipientLabel: `${whenLabel} · ${step.durationMin ?? 30} min`,
     }
   }
   // Fallback — shouldn't be hit (modal only opens for HIGH_STAKES_TYPES).
@@ -198,13 +261,34 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
       // Dedup: same type + similar label → keep only the first
       const seen = new Map<string, boolean>()
       return call.aiNextSteps
-        .map(s => ({
-          type: s.type,
-          label: s.label,
-          reasoning: s.reasoning,
-          status: s.status as 'pending' | 'pushed' | 'skipped',
-          pushedAt: s.pushedAt ?? undefined,
-        }))
+        .map(s => {
+          // Legacy collapse: schedule_sms is gone — merge into send_sms and
+          // promote scheduleAt fields into sendAt if any pre-merge records
+          // still live in the DB.
+          const raw = s as unknown as NextStep & { scheduleAt?: string }
+          const type = raw.type === 'schedule_sms' ? 'send_sms' : raw.type
+          const sendAt = raw.sendAt ?? raw.scheduleAt ?? undefined
+          return {
+            type,
+            label: raw.label,
+            reasoning: raw.reasoning,
+            status: raw.status as 'pending' | 'pushed' | 'skipped',
+            pushedAt: raw.pushedAt,
+            description: raw.description,
+            dueDate: raw.dueDate,
+            assignedTo: raw.assignedTo,
+            stageId: raw.stageId,
+            pipelineId: raw.pipelineId,
+            smsBody: raw.smsBody,
+            sendAt,
+            timezone: raw.timezone,
+            fromNumber: raw.fromNumber,
+            appointmentTypeId: raw.appointmentTypeId,
+            calendarId: raw.calendarId,
+            appointmentTime: raw.appointmentTime,
+            durationMin: raw.durationMin,
+          } satisfies NextStep
+        })
         .filter(s => {
           const key = `${s.type}::${s.label.toLowerCase().replace(/\s+/g, ' ').trim()}`
           if (seen.has(key)) return false
@@ -227,15 +311,20 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // Data for next steps edit forms
-  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; phone: string | null; userId: string }>>([])
+  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; phone: string | null; label?: string | null; userId: string }>>([])
+  const [defaultLcNumber, setDefaultLcNumber] = useState<string | null>(null)
   const [pipelines, setPipelines] = useState<Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>>([])
   const [workflows, setWorkflows] = useState<Array<{ id: string; name: string }>>([])
   const [calendars, setCalendars] = useState<Array<{ id: string; name: string }>>([])
+  const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>([])
 
   useEffect(() => {
-    // Fetch team members
+    // Fetch team members (with LC outbound numbers — NOT personal cells)
     fetch(`/api/${tenantSlug}/dayhub/team-numbers`).then(r => r.json())
-      .then(d => setTeamMembers(d.numbers ?? []))
+      .then(d => {
+        setTeamMembers(d.numbers ?? [])
+        setDefaultLcNumber(d.defaultLcNumber ?? null)
+      })
       .catch(() => {})
     // Fetch pipelines + stages
     fetch(`/api/ghl/pipelines`).then(r => r.json())
@@ -248,6 +337,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     // Fetch calendars
     fetch(`/api/ghl/calendars`).then(r => r.json())
       .then(d => setCalendars((d.calendars ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))))
+      .catch(() => {})
+    // Fetch appointment type → calendar mappings (tenant.config.appointmentTypes)
+    fetch(`/api/tenants/config`).then(r => r.json())
+      .then(d => {
+        const cfg = d?.tenant?.config as { appointmentTypes?: AppointmentType[] } | undefined
+        setAppointmentTypes(cfg?.appointmentTypes ?? [])
+      })
       .catch(() => {})
   }, [tenantSlug])
 
@@ -403,6 +499,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           stageId: step.stageId,
           pipelineId: step.pipelineId,
           smsBody: step.smsBody,
+          sendAt: step.sendAt,
+          timezone: step.timezone,
+          fromNumber: step.fromNumber,
+          calendarId: step.calendarId,
+          appointmentTypeId: step.appointmentTypeId,
+          appointmentTime: step.appointmentTime,
+          durationMin: step.durationMin,
         }),
       })
       if (res.ok) {
@@ -1259,16 +1362,20 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                               </>
                             )}
 
-                            {/* ── SEND SMS ── */}
+                            {/* ── SEND SMS (subsumes old schedule_sms) ── */}
                             {step.type === 'send_sms' && (
                               <>
                                 <div>
-                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Message</label>
-                                  <textarea value={editFields.label ?? step.label}
-                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Message (sent to contact)</label>
+                                  <textarea value={editFields.smsBody ?? step.smsBody ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, smsBody: e.target.value }))}
                                     rows={3}
+                                    placeholder="Hey Darlene, following up on our call earlier..."
                                     className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
                                     style={{ borderColor: 'var(--border-medium)' }} />
+                                  <p className="text-[9px] text-txt-muted mt-1">
+                                    This is the exact text the contact will see. Card title is separate (edit via AI Change Box).
+                                  </p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
@@ -1278,55 +1385,52 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                                     </p>
                                   </div>
                                   <div>
-                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Send From</label>
-                                    <select value={editFields.fromUser ?? call.assignedTo?.id ?? ''}
-                                      onChange={e => setEditFields(prev => ({ ...prev, fromUser: e.target.value }))}
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">
+                                      Send From (LC number)
+                                    </label>
+                                    <select value={editFields.fromNumber ?? step.fromNumber ?? ''}
+                                      onChange={e => setEditFields(prev => ({ ...prev, fromNumber: e.target.value }))}
                                       className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
                                       style={{ borderColor: 'var(--border-medium)' }}>
-                                      <option value="">Select sender...</option>
-                                      {teamMembers.map(m => <option key={m.userId} value={m.userId}>{m.name}{m.phone ? ` (${m.phone})` : ''}</option>)}
+                                      <option value="">{defaultLcNumber ? `Default (${defaultLcNumber})` : 'Location default'}</option>
+                                      {teamMembers
+                                        .filter(m => m.phone)
+                                        .map(m => (
+                                          <option key={m.userId} value={m.phone ?? ''}>
+                                            {m.name} — {m.phone}{m.label ? ` (${m.label})` : ''}
+                                          </option>
+                                        ))}
                                     </select>
                                   </div>
-                                </div>
-                              </>
-                            )}
-
-                            {/* ── SCHEDULE SMS ── */}
-                            {step.type === 'schedule_sms' && (
-                              <>
-                                <div>
-                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Message</label>
-                                  <textarea value={editFields.label ?? step.label}
-                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
-                                    rows={3}
-                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
-                                    style={{ borderColor: 'var(--border-medium)' }} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
-                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">To</label>
-                                    <p className="text-[11px] text-txt-primary bg-surface-secondary rounded-[6px] px-2.5 py-1.5">
-                                      {call.contactName ?? 'Unknown'} {call.contactPhone ? `(${call.contactPhone})` : ''}
-                                    </p>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">
+                                      Send At <span className="text-txt-muted normal-case">(empty = send now)</span>
+                                    </label>
+                                    <input type="datetime-local"
+                                      value={editFields.sendAt ?? (step.sendAt ? step.sendAt.slice(0, 16) : '')}
+                                      onChange={e => setEditFields(prev => ({ ...prev, sendAt: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }} />
                                   </div>
                                   <div>
-                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Send From</label>
-                                    <select value={editFields.fromUser ?? call.assignedTo?.id ?? ''}
-                                      onChange={e => setEditFields(prev => ({ ...prev, fromUser: e.target.value }))}
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Timezone</label>
+                                    <select value={editFields.timezone ?? step.timezone ?? 'America/Chicago'}
+                                      onChange={e => setEditFields(prev => ({ ...prev, timezone: e.target.value }))}
                                       className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
                                       style={{ borderColor: 'var(--border-medium)' }}>
-                                      <option value="">Select sender...</option>
-                                      {teamMembers.map(m => <option key={m.userId} value={m.userId}>{m.name}{m.phone ? ` (${m.phone})` : ''}</option>)}
+                                      {DEFAULT_SMS_TIMEZONES.map(tz => (
+                                        <option key={tz.id} value={tz.id}>{tz.label}</option>
+                                      ))}
                                     </select>
                                   </div>
                                 </div>
-                                <div>
-                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Send At</label>
-                                  <input type="datetime-local" value={editFields.sendAt ?? ''}
-                                    onChange={e => setEditFields(prev => ({ ...prev, sendAt: e.target.value }))}
-                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
-                                    style={{ borderColor: 'var(--border-medium)' }} />
-                                </div>
+                                {editFields.sendAt && (
+                                  <p className="text-[10px] text-amber-700 bg-amber-50 border-[0.5px] border-amber-200 rounded-[6px] px-2 py-1.5">
+                                    Scheduled SMS queue isn't live yet — for now, please send immediately (clear Send At) or schedule in GHL directly.
+                                  </p>
+                                )}
                               </>
                             )}
 
@@ -1379,8 +1483,41 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                             {/* ── CREATE APPOINTMENT ── */}
                             {step.type === 'create_appointment' && (
                               <>
+                                {appointmentTypes.length > 0 && (
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Appointment Type</label>
+                                    <select
+                                      value={editFields.appointmentTypeId ?? step.appointmentTypeId ?? ''}
+                                      onChange={e => {
+                                        const newTypeId = e.target.value
+                                        const type = appointmentTypes.find(t => t.id === newTypeId)
+                                        // Re-render the title from the new type's template so the rep
+                                        // gets a clean default on every type change.
+                                        const newTitle = type
+                                          ? renderAppointmentTitle(type.titleTemplate, type.label, {
+                                              contactName: call.contactName,
+                                              propertyAddress: call.property?.address ?? null,
+                                              propertyCity: call.property?.city ?? null,
+                                            })
+                                          : (editFields.label ?? step.label)
+                                        setEditFields(prev => ({
+                                          ...prev,
+                                          appointmentTypeId: newTypeId,
+                                          calendarId: type?.calendarId ?? prev.calendarId ?? '',
+                                          durationMin: String(type?.defaultDurationMin ?? prev.durationMin ?? 30),
+                                          label: newTitle,
+                                        }))
+                                      }}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }}>
+                                      <option value="">Custom (manual)</option>
+                                      {appointmentTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                    </select>
+                                    <p className="text-[9px] text-txt-muted mt-1">Picking a type auto-fills calendar, duration, and title.</p>
+                                  </div>
+                                )}
                                 <div>
-                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Appointment Title</label>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Title</label>
                                   <input value={editFields.label ?? step.label}
                                     onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
                                     className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
@@ -1388,19 +1525,33 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                                 </div>
                                 <div>
                                   <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Calendar</label>
-                                  <select value={editFields.calendarId ?? ''}
+                                  <select value={editFields.calendarId ?? step.calendarId ?? ''}
                                     onChange={e => setEditFields(prev => ({ ...prev, calendarId: e.target.value }))}
                                     className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
                                     style={{ borderColor: 'var(--border-medium)' }}>
                                     <option value="">Select calendar...</option>
                                     {calendars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                   </select>
+                                  {appointmentTypes.length === 0 && (
+                                    <p className="text-[9px] text-amber-700 mt-1">
+                                      Tip: configure Appointment Types in Settings → Call config so the AI can auto-pick a calendar.
+                                    </p>
+                                  )}
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-[1fr_110px_1fr] gap-2">
                                   <div>
                                     <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Date & Time (CT)</label>
-                                    <input type="datetime-local" value={editFields.appointmentTime ?? ''}
+                                    <input type="datetime-local"
+                                      value={editFields.appointmentTime ?? (step.appointmentTime ? step.appointmentTime.slice(0, 16) : '')}
                                       onChange={e => setEditFields(prev => ({ ...prev, appointmentTime: e.target.value }))}
+                                      className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                      style={{ borderColor: 'var(--border-medium)' }} />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Duration (min)</label>
+                                    <input type="number" min={5} max={480}
+                                      value={editFields.durationMin ?? String(step.durationMin ?? 30)}
+                                      onChange={e => setEditFields(prev => ({ ...prev, durationMin: e.target.value }))}
                                       className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
                                       style={{ borderColor: 'var(--border-medium)' }} />
                                   </div>
@@ -1420,7 +1571,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                             )}
 
                             {/* ── GENERIC (update_task, etc.) ── */}
-                            {!['add_note', 'create_task', 'check_off_task', 'change_stage', 'send_sms', 'schedule_sms', 'add_to_workflow', 'remove_from_workflow', 'create_appointment'].includes(step.type) && (
+                            {!['add_note', 'create_task', 'check_off_task', 'change_stage', 'send_sms', 'add_to_workflow', 'remove_from_workflow', 'create_appointment'].includes(step.type) && (
                               <div>
                                 <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Action</label>
                                 <input value={editFields.label ?? step.label}
@@ -1461,9 +1612,11 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
                             <div className="flex gap-2 pt-1">
                               <button
-                                onClick={() => {
+                                onClick={async () => {
                                   // Persist ALL edit-panel fields, not just label — defect #1 fix.
                                   // Fall back to existing step values when editFields didn't set a key.
+                                  const durationMinRaw = editFields.durationMin
+                                  const durationMinParsed = durationMinRaw ? Number(durationMinRaw) : undefined
                                   const updatedSteps = generatedSteps.map((s, si) => si === i ? {
                                     ...s,
                                     label: editFields.label ?? s.label,
@@ -1472,13 +1625,31 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                                     assignedTo: editFields.assignedTo ?? s.assignedTo,
                                     stageId: editFields.stageId ?? s.stageId,
                                     pipelineId: editFields.pipelineId ?? s.pipelineId,
-                                    smsBody: (s.type === 'send_sms' ? (editFields.label ?? s.smsBody) : s.smsBody),
+                                    // SMS: smsBody is the real message text, label stays as the
+                                    // action-card title.
+                                    smsBody: s.type === 'send_sms' ? (editFields.smsBody ?? s.smsBody) : s.smsBody,
+                                    sendAt: s.type === 'send_sms' ? (editFields.sendAt || undefined) : s.sendAt,
+                                    timezone: s.type === 'send_sms' ? (editFields.timezone ?? s.timezone) : s.timezone,
+                                    fromNumber: s.type === 'send_sms' ? (editFields.fromNumber || undefined) : s.fromNumber,
+                                    // Appointment edits
+                                    appointmentTypeId: s.type === 'create_appointment' ? (editFields.appointmentTypeId ?? s.appointmentTypeId) : s.appointmentTypeId,
+                                    calendarId: s.type === 'create_appointment' ? (editFields.calendarId ?? s.calendarId) : s.calendarId,
+                                    appointmentTime: s.type === 'create_appointment' ? (editFields.appointmentTime || s.appointmentTime) : s.appointmentTime,
+                                    durationMin: s.type === 'create_appointment' ? (Number.isFinite(durationMinParsed) ? durationMinParsed : s.durationMin) : s.durationMin,
                                   } : s)
                                   setGeneratedSteps(updatedSteps)
-                                  fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
-                                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ aiNextSteps: updatedSteps }),
-                                  }).catch(() => {})
+                                  try {
+                                    const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/actions`, {
+                                      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ aiNextSteps: updatedSteps }),
+                                    })
+                                    if (!res.ok) {
+                                      const errText = await res.text().catch(() => '')
+                                      toast(errText || 'Could not persist edits', 'error')
+                                    }
+                                  } catch (err) {
+                                    toast(err instanceof Error ? `Save failed: ${err.message}` : 'Save failed', 'error')
+                                  }
                                   setEditingStep(null)
                                   setEditFields({})
                                 }}
@@ -1509,17 +1680,46 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                           </button>
                           <button onClick={() => {
                             if (isEditing) { setEditingStep(null); setEditFields({}); return }
-                            // Pre-populate fields based on action type
+                            // Pre-populate fields based on action type. Persisted step values win
+                            // over defaults so an AI-proposed appointmentTime survives the Edit click.
                             const fields: Record<string, string> = { label: step.label }
                             if (step.type === 'create_task' || step.type === 'check_off_task') {
-                              fields.assignedTo = call.assignedTo?.id ?? ''
-                              fields.description = step.reasoning ?? ''
-                              // Default due date: tomorrow
+                              fields.assignedTo = step.assignedTo ?? call.assignedTo?.id ?? ''
+                              fields.description = step.description ?? step.reasoning ?? ''
                               const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
-                              fields.dueDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
+                              fields.dueDate = step.dueDate ?? `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
                             }
-                            if (step.type === 'send_sms' || step.type === 'schedule_sms') {
-                              fields.fromUser = call.assignedTo?.id ?? ''
+                            if (step.type === 'send_sms') {
+                              // smsBody is the real message text; seed it from AI output or
+                              // fall back to the label (legacy rows that didn't split the two).
+                              fields.smsBody = step.smsBody ?? step.label
+                              fields.fromNumber = step.fromNumber ?? ''
+                              fields.sendAt = step.sendAt ? step.sendAt.slice(0, 16) : ''
+                              fields.timezone = step.timezone ?? 'America/Chicago'
+                            }
+                            if (step.type === 'change_stage') {
+                              // Rule 2: IDs always. AI should be emitting both.
+                              fields.stageId = step.stageId ?? ''
+                              fields.pipelineId = step.pipelineId ?? ''
+                            }
+                            if (step.type === 'create_appointment') {
+                              const type = step.appointmentTypeId
+                                ? appointmentTypes.find(t => t.id === step.appointmentTypeId)
+                                : undefined
+                              fields.appointmentTypeId = step.appointmentTypeId ?? ''
+                              fields.calendarId = step.calendarId ?? type?.calendarId ?? ''
+                              fields.appointmentTime = step.appointmentTime ? step.appointmentTime.slice(0, 16) : ''
+                              fields.durationMin = String(step.durationMin ?? type?.defaultDurationMin ?? 30)
+                              fields.assignedTo = step.assignedTo ?? call.assignedTo?.id ?? ''
+                              // Auto-render a clean title if the step doesn't have one yet
+                              // and we have a matching type.
+                              if (type && (!step.label || step.label === step.type)) {
+                                fields.label = renderAppointmentTitle(type.titleTemplate, type.label, {
+                                  contactName: call.contactName,
+                                  propertyAddress: call.property?.address ?? null,
+                                  propertyCity: call.property?.city ?? null,
+                                })
+                              }
                             }
                             setEditingStep(i)
                             setEditFields(fields)

@@ -157,6 +157,26 @@ export class GHLClient {
     })
   }
 
+  // ─── LC Phone Numbers (outbound SMS "from" numbers) ──────────────────────
+  //
+  // GHL's LC Phone System exposes the location-owned outbound numbers at
+  // /phone-system/numbers/location/{locationId}. Each number may be assigned
+  // to a user via `userId`. This is DIFFERENT from user.phone (personal cell
+  // returned by /users/) — that's the user's human contact number and is
+  // NOT send-capable. Always prefer LC numbers for the Send From dropdown.
+  async getPhoneNumbers() {
+    return this.request<{
+      numbers: Array<{
+        phoneNumber: string
+        phoneNumberSid?: string
+        userId?: string | null
+        locationId?: string
+        friendlyName?: string
+        isDefault?: boolean
+      }>
+    }>('GET', `/phone-system/numbers/location/${this.locationId}`)
+  }
+
   async sendEmail(contactId: string, subject: string, html: string, emailFrom?: string) {
     return this.request('POST', `/conversations/messages`, {
       type: 'Email',

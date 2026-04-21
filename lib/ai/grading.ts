@@ -971,13 +971,53 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
   try {
     const call = await db.call.findUnique({
       where: { id: callId },
-      select: { aiSummary: true, callOutcome: true, callType: true, transcript: true, property: { select: { address: true, propertyCondition: true } } },
+      select: {
+        aiSummary: true, callOutcome: true, callType: true, transcript: true, contactName: true,
+        property: { select: { address: true, city: true, state: true, propertyCondition: true, ghlPipelineStage: true, ghlPipelineId: true } },
+      },
     })
     if (!call) return
 
     // Feed the FULL transcript — reps often reference specific quotes/timestamps
     // we want surfaced. Opus handles long context well.
     const fullTranscript = call.transcript ?? 'No transcript available'
+
+    // Load tenant-configured appointment types + GHL pipelines so the AI can
+    // emit explicit calendarId / pipelineId / stageId values instead of names.
+    // Rule 2: IDs, never fuzzy names.
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { config: true },
+    })
+    const appointmentTypes = (((tenant?.config ?? {}) as { appointmentTypes?: Array<{ id: string; label: string; calendarId: string; defaultDurationMin?: number; titleTemplate?: string }> }).appointmentTypes) ?? []
+
+    let pipelinesBlock = ''
+    try {
+      const { getGHLClient } = await import('@/lib/ghl/client')
+      const ghl = await getGHLClient(tenantId)
+      const pipelinesResp = await ghl.getPipelines()
+      const lines: string[] = []
+      for (const p of pipelinesResp.pipelines ?? []) {
+        lines.push(`- pipelineId="${p.id}" name="${p.name}"`)
+        for (const s of p.stages ?? []) {
+          lines.push(`    stageId="${s.id}" name="${s.name}"`)
+        }
+      }
+      pipelinesBlock = lines.join('\n')
+    } catch {
+      pipelinesBlock = '(pipelines unavailable)'
+    }
+
+    const appointmentTypesBlock = appointmentTypes.length === 0
+      ? '(none configured — do NOT emit create_appointment without calendarId)'
+      : appointmentTypes
+          .map(t => `- id="${t.id}" label="${t.label}" calendarId="${t.calendarId}" defaultDurationMin=${t.defaultDurationMin ?? 30}${t.titleTemplate ? ` titleTemplate="${t.titleTemplate}"` : ''}`)
+          .join('\n')
+
+    const contactName = call.contactName ?? 'the contact'
+    const propertyAddress = call.property?.address
+      ? `${call.property.address}${call.property.city ? ', ' + call.property.city : ''}`
+      : 'Unknown'
 
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const nsTimer = startTimer()
@@ -997,11 +1037,24 @@ CRITICAL RULES:
 - For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
 - For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
 
+- For send_sms: The "label" field is a short summary shown on the action card. The "smsBody" field MUST contain the actual message text the contact will receive — written as the rep in first person, casual/friendly but professional. Do not put the SMS copy in the label field.
+- For create_appointment: ONLY emit this type if a matching appointment type exists below. Set "appointmentTypeId" to the matching id, "calendarId" to that type's calendarId, and "appointmentTime" to an ISO datetime (next reasonable slot based on the call — e.g. 2-3 business days out, 10am or 2pm default, weekdays only). Set "label" using the type's titleTemplate if given, otherwise "{typeLabel} at {address} w/ {contactName}".
+- For change_stage: ALWAYS emit explicit "pipelineId" AND "stageId" picked from the pipelines list below. If no appropriate stage exists, do NOT emit change_stage. Never return stage names instead of IDs.
+
+AVAILABLE APPOINTMENT TYPES (use these exact ids and calendarIds):
+${appointmentTypesBlock}
+
+AVAILABLE PIPELINES AND STAGES (use these exact ids for change_stage):
+${pipelinesBlock}
+
+Contact name: ${contactName}
+Property: ${propertyAddress}
+Property Condition: ${call.property?.propertyCondition ?? 'Unknown'}
+Current pipeline stage: ${call.property?.ghlPipelineStage ?? 'Unknown'}
+Current pipeline id: ${call.property?.ghlPipelineId ?? 'Unknown'}
 Call summary: ${gradingResult.summary}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
 Call type: ${call.callType ?? 'Unknown'}
-Property: ${call.property?.address ?? 'Unknown'}
-Property Condition: ${call.property?.propertyCondition ?? 'Unknown'}
 Score: ${gradingResult.overallScore}/100
 Feedback: ${gradingResult.feedback}
 
@@ -1009,7 +1062,18 @@ Full transcript:
 ${fullTranscript}
 
 Return JSON array only:
-[{ "type": "add_note"|"create_task"|"send_sms"|"create_appointment"|"change_stage"|"check_off_task", "label": "specific action description", "reasoning": "why this action matters" }]`,
+[{
+  "type": "add_note"|"create_task"|"send_sms"|"create_appointment"|"change_stage"|"check_off_task",
+  "label": "specific action description",
+  "reasoning": "why this action matters",
+  "smsBody": "only for send_sms — the actual SMS text",
+  "appointmentTypeId": "only for create_appointment",
+  "calendarId": "only for create_appointment",
+  "appointmentTime": "only for create_appointment — ISO datetime",
+  "durationMin": 30,
+  "pipelineId": "only for change_stage",
+  "stageId": "only for change_stage"
+}]`,
       }],
     }).finalMessage()
 
@@ -1029,7 +1093,18 @@ Return JSON array only:
     const jsonMatch = stripped.match(/\[[\s\S]*\]/)
     if (!jsonMatch) return
 
-    const steps = JSON.parse(jsonMatch[0]) as Array<{ type: string; label: string; reasoning: string }>
+    const steps = JSON.parse(jsonMatch[0]) as Array<{
+      type: string; label: string; reasoning: string
+      smsBody?: string; sendAt?: string; timezone?: string
+      appointmentTypeId?: string; calendarId?: string; appointmentTime?: string; durationMin?: number
+      pipelineId?: string; stageId?: string
+    }>
+
+    // Legacy collapse: schedule_sms → send_sms with sendAt preserved.
+    // Keeps old data in sync with the merged single-type model.
+    for (const s of steps) {
+      if (s.type === 'schedule_sms') s.type = 'send_sms'
+    }
 
     // Server-side dedup: only keep one action per type
     const seenTypes = new Set<string>()
