@@ -14,6 +14,11 @@ const nextConfig = {
   // Strict mode for better error detection
   reactStrictMode: true,
 
+  // Enable instrumentation.ts (self-driving grading worker loop)
+  experimental: {
+    instrumentationHook: true,
+  },
+
   // Security headers
   async headers() {
     return [
