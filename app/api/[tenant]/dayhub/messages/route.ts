@@ -15,6 +15,18 @@ interface GHLMessage {
   contentType?: string
   attachments?: string[]
   userId?: string
+  // GHL records the actual phone numbers on each SMS message. For outbound,
+  // `from` is the team member's phone — the only reliable signal for who
+  // really sent it (userId often points to the contact's owner, not the sender).
+  from?: string
+  to?: string
+}
+
+// Normalize a phone number to its last 10 digits so "+15551234567",
+// "(555) 123-4567", and "5551234567" all compare equal.
+function normalizePhone(p: string | null | undefined): string {
+  if (!p) return ''
+  return p.replace(/\D/g, '').slice(-10)
 }
 
 interface GHLMessagePage {
@@ -53,14 +65,20 @@ export async function GET(
       'Version': '2021-07-28',
     }
 
-    // Resolve GHL user IDs → names for outbound message labels
+    // Resolve GHL user IDs → names AND phone numbers → names. The phone map is
+    // the source of truth for "who sent this outbound SMS" because GHL's
+    // message.userId frequently points to the contact's owner, not the team
+    // member who actually clicked send.
     const userMap = new Map<string, string>()
+    const phoneToName = new Map<string, string>()
     try {
       const ghl = await getGHLClient(tenantId)
       const usersResult = await ghl.getLocationUsers()
       for (const u of (usersResult?.users ?? [])) {
         const name = u.name || `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim()
         if (u.id && name) userMap.set(u.id, name)
+        const np = normalizePhone(u.phone)
+        if (np && name) phoneToName.set(np, name)
       }
     } catch { /* non-fatal */ }
 
@@ -91,16 +109,23 @@ export async function GET(
     // Take last N SMS, reverse for chronological order
     const messages = smsMessages
       .slice(0, TARGET_SMS)
-      .map(m => ({
-        id: m.id,
-        body: m.body ?? '',
-        direction: (m.direction ?? '').toLowerCase(),
-        type: 'SMS',
-        time: m.dateAdded ?? '',
-        senderName: m.direction?.toLowerCase() === 'outbound' && m.userId
-          ? userMap.get(m.userId) ?? null
-          : null,
-      }))
+      .map(m => {
+        const direction = (m.direction ?? '').toLowerCase()
+        let senderName: string | null = null
+        if (direction === 'outbound') {
+          // Phone-based lookup is the truth: m.from is the team member's number.
+          // userId fallback handles tasks where phone wasn't stored on the message.
+          senderName = phoneToName.get(normalizePhone(m.from)) ?? (m.userId ? userMap.get(m.userId) ?? null : null)
+        }
+        return {
+          id: m.id,
+          body: m.body ?? '',
+          direction,
+          type: 'SMS',
+          time: m.dateAdded ?? '',
+          senderName,
+        }
+      })
       .reverse()
 
     return NextResponse.json({ messages })
