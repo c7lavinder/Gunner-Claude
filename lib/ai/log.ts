@@ -7,7 +7,7 @@ import { db } from '@/lib/db/client'
 interface AiLogParams {
   tenantId: string
   userId?: string | null
-  type: 'assistant_chat' | 'call_grading' | 'deal_intel' | 'next_steps' | 'blast_gen' | 'buyer_scoring' | 'property_enrich' | 'action_execution'
+  type: 'assistant_chat' | 'call_grading' | 'deal_intel' | 'next_steps' | 'blast_gen' | 'buyer_scoring' | 'property_enrich' | 'action_execution' | 'property_story'
   pageContext?: string | null
   input: string              // full input/prompt
   output: string             // full output/response

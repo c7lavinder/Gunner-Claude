@@ -48,6 +48,15 @@ name = "weekly-profiles"
 schedule = "0 3 * * 0"
 command = "npx tsx scripts/generate-profiles.ts"
 
+# Cron job: regenerate Property Stories for properties with activity since
+# last generation. Runs daily at 7am UTC. Call-graded events trigger story
+# regen in real time; this cron catches properties touched by edits, milestone
+# changes, buyer activity, or blasts that don't go through the grading path.
+[[cron]]
+name = "regenerate-stories"
+schedule = "0 7 * * *"
+command = "npx tsx scripts/regenerate-stories.ts"
+
 # Long-running service: grading worker. Replaces the broken
 # process-recording-jobs [[cron]]. Runs processJobs() forever with a 60s
 # sleep between iterations. Railway keeps the process alive and SIGTERMs
