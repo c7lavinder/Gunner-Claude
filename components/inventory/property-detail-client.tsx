@@ -2775,15 +2775,22 @@ function NumbersColumn({
       <div className="space-y-0.5">
         {NUMBERS_FIELDS.map(f => {
           // Risk Factor is derived: (construction + max offer) / arv for the
-          // active offer-type tab. Read-only, no source color, no edit affordance.
+          // active offer-type tab. Read-only — rendered in the blue "AI" pill
+          // styling since the value originates from a computation, not a user
+          // edit. Falls back to muted plain text when inputs are incomplete.
           if (f.key === 'riskFactor') {
             const display = computedRiskFactor()
+            const ai = sourceStyles('ai')
             return (
               <div key={f.key} className="flex items-center justify-between gap-2 h-[28px]" title="(Construction + Max Offer) / ARV">
                 <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
-                <span className={`text-ds-fine font-medium ${display ? 'text-txt-primary' : 'text-txt-muted'}`}>
-                  {display ?? '—'}
-                </span>
+                {display ? (
+                  <span className={`inline-flex items-center text-ds-fine font-medium px-2 py-0.5 rounded-[6px] ${ai.bg} ${ai.value}`}>
+                    {display}
+                  </span>
+                ) : (
+                  <span className="text-ds-fine font-medium text-txt-muted">—</span>
+                )}
               </div>
             )
           }
