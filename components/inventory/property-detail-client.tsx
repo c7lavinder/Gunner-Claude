@@ -5564,90 +5564,92 @@ function ActivityTab({ property, tenantSlug }: {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Persistent side sections — same components rendered on Overview so
-          Contacts / Team / AI Actions are reachable from Activity too. Three
-          columns on wide screens, stacked on narrow. */}
-      <div className="grid lg:grid-cols-3 gap-5">
+    // Same 3-col split as Overview's bottom section: Contacts / Team / AI on
+    // the left column, internal messaging fills the right 2 columns. Matching
+    // the Overview grid keeps the side panels identical in width and spacing.
+    <div className="grid lg:grid-cols-3 gap-5">
+      <div className="space-y-4">
         <ContactsSection propertyId={property.id} tenantSlug={tenantSlug} initialSellers={property.sellers} />
         <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />
         <InlineAI propertyId={property.id} />
       </div>
 
-      {/* Message input with @mention */}
-      <div className="relative">
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <textarea
-              value={input}
-              onChange={e => handleInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-              placeholder="Type a message... use @ to tag someone"
-              rows={2}
-              className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2.5 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red/20 resize-none"
-            />
-            {/* @mention dropdown */}
-            {showMentions && filteredTeam.length > 0 && (
-              <div className="absolute bottom-full left-0 mb-1 w-56 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-1 z-20">
-                {filteredTeam.slice(0, 6).map(m => (
-                  <button key={m.id} onClick={() => insertMention(m)}
-                    className="w-full text-left px-3 py-1.5 rounded-[6px] hover:bg-surface-secondary text-ds-fine transition-colors">
-                    <span className="font-medium text-txt-primary">{m.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <button onClick={sendMessage} disabled={!input.trim() || saving}
-            className="self-end bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white px-4 py-2.5 rounded-[10px] transition-colors shrink-0">
-            <Send size={14} />
-          </button>
-        </div>
-        {pendingMentions.length > 0 && (
-          <div className="flex items-center gap-1 mt-1.5">
-            <span className="text-[9px] text-txt-muted">Tagging:</span>
-            {pendingMentions.map(m => (
-              <span key={m.id} className="text-[9px] font-semibold text-semantic-blue bg-blue-50 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                @{m.name}
-                <button onClick={() => setPendingMentions(prev => prev.filter(p => p.id !== m.id))} className="hover:text-semantic-red"><X size={7} /></button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Messages thread */}
-      <div className="space-y-0">
-        {messages.length === 0 ? (
-          <div className="bg-surface-secondary rounded-[12px] p-8 text-center">
-            <MessageSquare size={20} className="text-txt-muted mx-auto mb-2 opacity-40" />
-            <p className="text-ds-body text-txt-muted">No messages yet</p>
-            <p className="text-[10px] text-txt-muted mt-1">Start a conversation — use @ to tag team members</p>
-          </div>
-        ) : (
-          messages.map((m, i) => (
-            <div key={m.id} className="flex gap-3 relative py-3">
-              {/* Vertical line */}
-              {i < messages.length - 1 && (
-                <div className="absolute left-[13px] top-[40px] bottom-0 w-px bg-[rgba(0,0,0,0.06)]" />
-              )}
-              {/* Avatar */}
-              <div className="w-7 h-7 rounded-full bg-gunner-red-light flex items-center justify-center shrink-0 mt-0.5">
-                <span className="text-gunner-red text-[10px] font-semibold">{m.userName?.[0]?.toUpperCase() ?? '?'}</span>
-              </div>
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-ds-fine font-semibold text-txt-primary">{m.userName}</p>
-                  <p className="text-[10px] text-txt-muted">{formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}</p>
+      <div className="lg:col-span-2 space-y-4">
+        {/* Message input with @mention */}
+        <div className="relative">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <textarea
+                value={input}
+                onChange={e => handleInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                placeholder="Type a message... use @ to tag someone"
+                rows={2}
+                className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2.5 text-ds-fine text-txt-primary placeholder-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red/20 resize-none"
+              />
+              {/* @mention dropdown */}
+              {showMentions && filteredTeam.length > 0 && (
+                <div className="absolute bottom-full left-0 mb-1 w-56 bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg p-1 z-20">
+                  {filteredTeam.slice(0, 6).map(m => (
+                    <button key={m.id} onClick={() => insertMention(m)}
+                      className="w-full text-left px-3 py-1.5 rounded-[6px] hover:bg-surface-secondary text-ds-fine transition-colors">
+                      <span className="font-medium text-txt-primary">{m.name}</span>
+                    </button>
+                  ))}
                 </div>
-                <p className="text-ds-fine text-txt-secondary mt-0.5 whitespace-pre-wrap">
-                  {renderText(m.text, m.mentions)}
-                </p>
-              </div>
+              )}
             </div>
-          ))
-        )}
+            <button onClick={sendMessage} disabled={!input.trim() || saving}
+              className="self-end bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white px-4 py-2.5 rounded-[10px] transition-colors shrink-0">
+              <Send size={14} />
+            </button>
+          </div>
+          {pendingMentions.length > 0 && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <span className="text-[9px] text-txt-muted">Tagging:</span>
+              {pendingMentions.map(m => (
+                <span key={m.id} className="text-[9px] font-semibold text-semantic-blue bg-blue-50 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                  @{m.name}
+                  <button onClick={() => setPendingMentions(prev => prev.filter(p => p.id !== m.id))} className="hover:text-semantic-red"><X size={7} /></button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Messages thread */}
+        <div className="space-y-0">
+          {messages.length === 0 ? (
+            <div className="bg-surface-secondary rounded-[12px] p-8 text-center">
+              <MessageSquare size={20} className="text-txt-muted mx-auto mb-2 opacity-40" />
+              <p className="text-ds-body text-txt-muted">No messages yet</p>
+              <p className="text-[10px] text-txt-muted mt-1">Start a conversation — use @ to tag team members</p>
+            </div>
+          ) : (
+            messages.map((m, i) => (
+              <div key={m.id} className="flex gap-3 relative py-3">
+                {/* Vertical line */}
+                {i < messages.length - 1 && (
+                  <div className="absolute left-[13px] top-[40px] bottom-0 w-px bg-[rgba(0,0,0,0.06)]" />
+                )}
+                {/* Avatar */}
+                <div className="w-7 h-7 rounded-full bg-gunner-red-light flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-gunner-red text-[10px] font-semibold">{m.userName?.[0]?.toUpperCase() ?? '?'}</span>
+                </div>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-ds-fine font-semibold text-txt-primary">{m.userName}</p>
+                    <p className="text-[10px] text-txt-muted">{formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}</p>
+                  </div>
+                  <p className="text-ds-fine text-txt-secondary mt-0.5 whitespace-pre-wrap">
+                    {renderText(m.text, m.mentions)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   )
