@@ -217,6 +217,10 @@ model Property {
   dispoStatus PropertyStatus? @map("dispo_status")
   // Moment the current stage was entered — powers days-in-stage badge. Updated on every status/dispoStatus change.
   stageEnteredAt DateTime? @map("stage_entered_at")
+  // When true, GHL webhook stage updates skip this property. Used after an
+  // auto-split when one property continues in the GHL opp and the other needs
+  // to diverge — user manages the locked property's stage manually.
+  ghlSyncLocked Boolean @default(false) @map("ghl_sync_locked")
 
   // Lead tracking
   leadSource       String? @map("lead_source") // GHL opportunity source — tracked for KPIs

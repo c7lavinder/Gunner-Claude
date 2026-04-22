@@ -6,6 +6,7 @@ import { hasPermission } from '@/types/roles'
 import { PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
 import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
+import { splitCombinedAddressIfNeeded } from '@/lib/properties'
 
 const propertySchema = z.object({
   address: z.string().min(1),
@@ -110,12 +111,24 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // AI auto-enrichment (fire-and-forget — non-blocking)
-    enrichPropertyWithAI(property.id).catch(err =>
-      console.error('[AI Enrich] Background error:', err)
-    )
+    // If the user entered a combined address (e.g., "2716 & 2720 Enterprise Ave")
+    // split it into two properties now. Non-blocking decision: we created the
+    // combined row in the transaction and let the splitter delete + replace it.
+    const splitResult = await splitCombinedAddressIfNeeded(property.id).catch(err => {
+      console.error('[Properties POST] Split check failed:', err)
+      return { splitInto: null as [string, string] | null }
+    })
+    const returnedId = splitResult.splitInto?.[0] ?? property.id
 
-    return NextResponse.json({ property: { id: property.id } }, { status: 201 })
+    // AI auto-enrichment (fire-and-forget — non-blocking). If split, enrich both halves.
+    const enrichIds = splitResult.splitInto ?? [property.id]
+    for (const id of enrichIds) {
+      enrichPropertyWithAI(id).catch(err =>
+        console.error('[AI Enrich] Background error:', err)
+      )
+    }
+
+    return NextResponse.json({ property: { id: returnedId }, split: splitResult.splitInto }, { status: 201 })
   } catch (err) {
     console.error('[Properties] Create error:', err)
     return NextResponse.json({ error: 'Failed to create property' }, { status: 500 })

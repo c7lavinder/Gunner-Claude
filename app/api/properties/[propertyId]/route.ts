@@ -8,6 +8,7 @@ import { Prisma, PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
 import { awardPropertyXP } from '@/lib/gamification/xp'
 import type { UserRole } from '@/types/roles'
+import { splitCombinedAddressIfNeeded } from '@/lib/properties'
 
 const updateSchema = z.object({
   address: z.string().min(1).optional(),
@@ -75,6 +76,8 @@ const updateSchema = z.object({
   dealBlastArvOverride: z.string().nullable().optional(),
   dealBlastContractOverride: z.string().nullable().optional(),
   dealBlastAssignmentFeeOverride: z.string().nullable().optional(),
+  // GHL sync toggle — when true, webhook stage updates skip this property.
+  ghlSyncLocked: z.boolean().optional(),
 })
 
 export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
@@ -114,6 +117,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
     market: marketName,
+    ghlSyncLocked,
   } = parsed.data
 
   try {
@@ -219,6 +223,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           // Merged inside the transaction above under pg_advisory_xact_lock —
           // prevents concurrent-PATCH clobber on { fieldName: "ai" | "user" }.
           ...(mergedFieldSources !== undefined && { fieldSources: mergedFieldSources }),
+          ...(ghlSyncLocked !== undefined && { ghlSyncLocked }),
         },
       })
 
@@ -266,6 +271,15 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
         payload: JSON.parse(JSON.stringify(parsed.data)) as Prisma.InputJsonValue,
       },
     })
+
+    // If this PATCH set the address to a combined pattern (rare via form, more
+    // common via AI extraction / GHL sync), split it here. No-op if the address
+    // is single. Skips gracefully if the property has already been deleted.
+    if (rawAddress) {
+      await splitCombinedAddressIfNeeded(params.propertyId).catch(err => {
+        console.error('[Properties PATCH] Split check failed:', err)
+      })
+    }
 
     // Award XP for status milestones (Under Contract, Sold)
     if (status && (status === 'UNDER_CONTRACT' || status === 'SOLD')) {

@@ -8,7 +8,7 @@
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { getGHLClient } from '@/lib/ghl/client'
-import { createPropertyFromContact } from '@/lib/properties'
+import { createPropertyFromContact, splitCombinedAddressIfNeeded } from '@/lib/properties'
 import { awardTaskXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { logFailure } from '@/lib/audit'
@@ -489,11 +489,21 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       select: { id: true, address: true, status: true },
     })
     if (existing) {
-      await db.property.update({
+      // Respect the per-property sync lock — user may have paused sync on one
+      // half of a split so the other half can continue following the GHL opp.
+      const locked = await db.property.findUnique({
         where: { id: existing.id },
-        data: { dispoStatus: 'IN_DISPOSITION', stageEnteredAt: new Date() },
+        select: { ghlSyncLocked: true },
       })
-      console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → dispoStatus=IN_DISPOSITION (acq stays ${existing.status})`)
+      if (locked?.ghlSyncLocked) {
+        console.log(`[GHL Webhook] Dispo trigger skipped (sync locked): ${existing.address}`)
+      } else {
+        await db.property.update({
+          where: { id: existing.id },
+          data: { dispoStatus: 'IN_DISPOSITION', stageEnteredAt: new Date() },
+        })
+        console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → dispoStatus=IN_DISPOSITION (acq stays ${existing.status})`)
+      }
     } else {
       await createPropertyFromContact(tenantId, oppData.contactId, {
         ghlPipelineId: oppData.pipelineId,
@@ -590,8 +600,11 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     }
 
     if (Object.keys(updateData).length > 0) {
+      // Only push stage updates to properties that still follow this GHL opp.
+      // Properties with ghlSyncLocked=true have been intentionally diverged
+      // by the user (e.g., split-pair where one moves and the other stays).
       await db.property.updateMany({
-        where: { tenantId, ghlContactId: oppData.contactId },
+        where: { tenantId, ghlContactId: oppData.contactId, ghlSyncLocked: false },
         data: updateData,
       })
     }
@@ -820,6 +833,15 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
       if (Object.keys(updates).length > 0) {
         await db.property.update({ where: { id: property.id }, data: updates })
         console.log(`[GHL Webhook] Property ${property.id} address updated: ${JSON.stringify(updates)}`)
+
+        // If the newly synced address is a combined pattern (this was the root
+        // cause of the historical doubles: empty address at creation, combined
+        // address arrives here after GHL contact is enriched), split now.
+        if (updates.address) {
+          await splitCombinedAddressIfNeeded(property.id).catch(err => {
+            console.error('[GHL Webhook] Address split failed:', err)
+          })
+        }
 
         // Auto-assign market by zip if property has no market and we now have a zip
         if (!property.marketId && (updates.zip || newZip)) {

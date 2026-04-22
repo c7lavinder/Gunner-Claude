@@ -32,6 +32,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
       select: {
         id: true, address: true, city: true, state: true, zip: true,
         status: true, dispoStatus: true, createdAt: true, stageEnteredAt: true,
+        ghlSyncLocked: true,
         arv: true, askingPrice: true, mao: true, contractPrice: true,
         assignmentFee: true, currentOffer: true, highestOffer: true,
         acceptedPrice: true, finalProfit: true,
@@ -115,6 +116,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         fieldSources: (p.fieldSources ?? {}) as Record<string, string>,
         createdAt: p.createdAt.toISOString(),
         stageEnteredAt: p.stageEnteredAt?.toISOString() ?? null,
+        ghlSyncLocked: p.ghlSyncLocked,
         ...pipelineTimestamps(p.milestones, p.createdAt),
         sellerName: p.sellers[0]?.seller.name ?? null,
         sellerPhone: p.sellers[0]?.seller.phone ?? null,

@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
-  ExternalLink, X, Send, Users, AlertTriangle, Flag,
+  ExternalLink, X, Send, Users, AlertTriangle, Flag, Lock, Unlock,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { formatPhone, titleCase } from '@/lib/format'
@@ -27,6 +27,7 @@ interface Property {
   acqStageEnteredAt: string
   dispoPipelineEnteredAt: string | null
   dispoStageEnteredAt: string | null
+  ghlSyncLocked: boolean
   sellerName: string | null; sellerPhone: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string } | null
@@ -784,6 +785,13 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPro
 
       {/* Body — scrollable */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {/* GHL sync toggle — off when user wants this property to diverge from the shared opportunity */}
+        <GhlSyncToggle
+          propertyId={p.id}
+          initialLocked={p.ghlSyncLocked}
+          onChange={(locked) => onPropertyUpdate(p.id, { ghlSyncLocked: locked })}
+        />
+
         {/* Row 1 — Pricing Intent */}
         <div>
           <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Pricing Intent</p>
@@ -1100,6 +1108,66 @@ function DrawerTeam({ propertyId, tenantSlug }: { propertyId: string; tenantSlug
         </div>
       )}
     </div>
+  )
+}
+
+// ─── GHL Sync Toggle ────────────────────────────────────────────────────────
+// Pause/resume whether GHL webhook stage updates flow to this property. Used
+// after a split when one property continues following the shared GHL
+// opportunity and the other needs to track independently. Saves optimistically,
+// reverts on failure.
+function GhlSyncToggle({ propertyId, initialLocked, onChange }: {
+  propertyId: string
+  initialLocked: boolean
+  onChange: (locked: boolean) => void
+}) {
+  const [locked, setLocked] = useState(initialLocked)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setLocked(initialLocked) }, [initialLocked, propertyId])
+
+  async function toggle() {
+    if (saving) return
+    const next = !locked
+    setLocked(next)
+    setSaving(true)
+    onChange(next)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ghlSyncLocked: next }),
+      })
+      if (!res.ok) {
+        setLocked(!next)
+        onChange(!next)
+        console.error('[GhlSyncToggle] PATCH failed:', await res.text())
+      }
+    } catch (err) {
+      setLocked(!next)
+      onChange(!next)
+      console.error('[GhlSyncToggle] Error:', err)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={saving}
+      title={locked
+        ? 'Sync paused — GHL stage changes will not update this property. Click to resume.'
+        : 'Synced — GHL stage changes update this property. Click to pause.'}
+      className={`w-full flex items-center gap-2 px-3 py-2 rounded-[8px] border-[0.5px] text-[10px] font-semibold transition-colors ${
+        locked
+          ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+          : 'bg-green-50 border-green-200 text-green-800 hover:bg-green-100'
+      }`}
+    >
+      {locked ? <Lock size={10} /> : <Unlock size={10} />}
+      <span className="flex-1 text-left">{locked ? 'GHL sync paused' : 'GHL sync active'}</span>
+      <span className="text-[9px] opacity-70">{locked ? 'Click to resume' : 'Click to pause'}</span>
+    </button>
   )
 }
 
