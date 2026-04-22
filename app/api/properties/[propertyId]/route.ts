@@ -134,6 +134,24 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     }
 
     await db.$transaction(async (tx) => {
+      // If fieldSources is in the patch we MUST read + merge + write atomically
+      // or a second concurrent PATCH on the same property can clobber the first
+      // writer's keys. Advisory lock keyed on the property id makes concurrent
+      // PATCHes for the same row serialize while leaving unrelated properties
+      // free to proceed in parallel.
+      let mergedFieldSources: Record<string, string> | undefined
+      if (fieldSources) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${params.propertyId}))`
+        const fresh = await tx.property.findUnique({
+          where: { id: params.propertyId, tenantId: ctx.tenantId },
+          select: { fieldSources: true },
+        })
+        const current = (fresh?.fieldSources as Record<string, string>) ?? {}
+        const merged: Record<string, string> = { ...current, ...fieldSources }
+        for (const k of Object.keys(merged)) { if (!merged[k]) delete merged[k] }
+        mergedFieldSources = merged
+      }
+
       // Update property
       await tx.property.update({
         where: { id: params.propertyId, tenantId: ctx.tenantId },
@@ -143,7 +161,10 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(rawCity && { city: standardizeCity(rawCity) }),
           ...(rawState && { state: standardizeState(rawState) }),
           ...(rawZip !== undefined && { zip: standardizeZip(rawZip ?? '') }),
-          ...(status && { status: status as PropertyStatus }),
+          ...(status && status !== property.status && {
+            status: status as PropertyStatus,
+            stageEnteredAt: new Date(),
+          }),
           ...(arv !== undefined && { arv: arv ? parseFloat(arv) : null }),
           ...(askingPrice !== undefined && { askingPrice: askingPrice ? parseFloat(askingPrice) : null }),
           ...(mao !== undefined && { mao: mao ? parseFloat(mao) : null }),
@@ -195,14 +216,9 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),
           ...(dealBlastContractOverride !== undefined && { dealBlastContractOverride: dealBlastContractOverride ? parseFloat(dealBlastContractOverride) : null }),
           ...(dealBlastAssignmentFeeOverride !== undefined && { dealBlastAssignmentFeeOverride: dealBlastAssignmentFeeOverride ? parseFloat(dealBlastAssignmentFeeOverride) : null }),
-          // Merge field sources (AI vs user tracking) — empty string removes the key
-          ...(fieldSources && {
-            fieldSources: (() => {
-              const merged = { ...((property.fieldSources as Record<string, string>) ?? {}), ...fieldSources }
-              for (const k of Object.keys(merged)) { if (!merged[k]) delete merged[k] }
-              return merged
-            })(),
-          }),
+          // Merged inside the transaction above under pg_advisory_xact_lock —
+          // prevents concurrent-PATCH clobber on { fieldName: "ai" | "user" }.
+          ...(mergedFieldSources !== undefined && { fieldSources: mergedFieldSources }),
         },
       })
 

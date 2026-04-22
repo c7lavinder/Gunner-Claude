@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
           state: standardizeState(rawState),
           zip: standardizeZip(rawZip ?? ''),
           status: status as PropertyStatus,
+          stageEnteredAt: new Date(),
           arv: arv ? parseFloat(arv) : null,
           askingPrice: askingPrice ? parseFloat(askingPrice) : null,
           mao: mao ? parseFloat(mao) : null,

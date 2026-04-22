@@ -115,57 +115,41 @@ export async function createPropertyFromContact(
       if (localUser) assignedToId = localUser.id
     }
 
-    // Auto-assign market by zip code (check DB first, then config fallback)
-    let marketId: string | null = null
-    if (zip) {
-      const market = await db.market.findFirst({
-        where: { tenantId, zipCodes: { has: zip } },
-        select: { id: true },
-      })
-      if (market) {
-        marketId = market.id
-      } else {
-        // Check config and auto-create market if zip is in our network
-        try {
-          const { getMarketsForZip, MARKETS } = await import('@/lib/config/crm.config')
-          const marketNames = getMarketsForZip(zip)
-          if (marketNames.length > 0) {
-            const name = marketNames[0]
-            const zips = [...MARKETS[name].zips] as string[]
-            const created = await db.market.create({
-              data: { tenantId, name, zipCodes: zips },
-            })
-            marketId = created.id
-          } else {
-            // No match — assign to "Global" catch-all market
-            let global = await db.market.findFirst({
-              where: { tenantId, name: 'Global' },
-              select: { id: true },
-            })
-            if (!global) {
-              global = await db.market.create({
-                data: { tenantId, name: 'Global', zipCodes: [] },
-              })
-            }
-            marketId = global.id
-          }
-        } catch { /* config lookup optional */ }
-      }
-    }
+    // Auto-assign market by zip code (check DB first, then config fallback, then Global)
+    const marketId = await resolveMarketForZip(tenantId, zip)
 
-    // Map GHL stage to app status
-    let status: string = 'NEW_LEAD'
+    // Map GHL stage → acquisition status + disposition status separately.
+    // `status` is acquisition-only; `dispoStatus` is disposition-only. A property
+    // created via the dispo trigger sets status=UNDER_CONTRACT (entering dispo
+    // implies an acquisition contract already exists) + dispoStatus=<dispo enum>.
+    let status = 'NEW_LEAD'
+    let dispoStatus: string | null = null
     if (context.ghlPipelineStage) {
       try {
         const { getAppStage } = await import('@/lib/ghl-stage-map')
         const appStage = getAppStage(context.ghlPipelineStage)
-        const stageToStatus: Record<string, string> = {
-          'acquisition.new_lead': 'NEW_LEAD', 'acquisition.appt_set': 'APPOINTMENT_SET',
-          'acquisition.offer_made': 'OFFER_MADE', 'acquisition.contract': 'UNDER_CONTRACT',
-          'acquisition.closed': 'SOLD', 'disposition.new_deal': 'IN_DISPOSITION',
-          'longterm.follow_up': 'CONTACTED', 'longterm.dead': 'DEAD',
+        const ACQ_MAP: Record<string, string> = {
+          'acquisition.new_lead': 'NEW_LEAD',
+          'acquisition.appt_set': 'APPOINTMENT_SET',
+          'acquisition.offer_made': 'OFFER_MADE',
+          'acquisition.contract': 'UNDER_CONTRACT',
+          'acquisition.closed': 'SOLD',
+          'longterm.follow_up': 'CONTACTED',
+          'longterm.dead': 'DEAD',
         }
-        status = stageToStatus[appStage] ?? 'NEW_LEAD'
+        const DISPO_MAP: Record<string, string> = {
+          'disposition.new_deal': 'IN_DISPOSITION',
+          'disposition.pushed_out': 'DISPO_PUSHED',
+          'disposition.offers_received': 'DISPO_OFFERS',
+          'disposition.contracted': 'DISPO_CONTRACTED',
+          'disposition.closed': 'DISPO_CLOSED',
+        }
+        if (appStage?.startsWith('disposition')) {
+          status = 'UNDER_CONTRACT'
+          dispoStatus = DISPO_MAP[appStage] ?? 'IN_DISPOSITION'
+        } else {
+          status = ACQ_MAP[appStage] ?? 'NEW_LEAD'
+        }
       } catch { /* use default */ }
     }
 
@@ -182,6 +166,8 @@ export async function createPropertyFromContact(
         state: state || '',
         zip: zip || '',
         status: status as 'NEW_LEAD',
+        dispoStatus: dispoStatus as 'IN_DISPOSITION' | null,
+        stageEnteredAt: new Date(),
         assignedToId,
         marketId,
       },
@@ -343,6 +329,76 @@ async function researchProperty(propertyId: string, address: string, city: strin
   })
 
   console.log(`[Property] Auto-researched ${address}: ${place.formattedAddress ?? 'no result'}`)
+}
+
+// Resolve (or lazily create) the market for a given zip.
+// Tiered lookup: existing tenant markets → config MARKETS → Global catch-all.
+// Never silently fails — any exception is logged as an audit row so missing
+// market assignments are visible in ops instead of manifesting as "zip set,
+// market null" rows on the inventory data-quality tile.
+export async function resolveMarketForZip(tenantId: string, zip: string): Promise<string | null> {
+  if (!zip) return null
+
+  // Tier 1 — existing tenant markets with this zip
+  try {
+    const existing = await db.market.findFirst({
+      where: { tenantId, zipCodes: { has: zip } },
+      select: { id: true },
+    })
+    if (existing) return existing.id
+  } catch (err) {
+    console.error(`[Market] findFirst failed for zip ${zip}:`, err)
+  }
+
+  // Tier 2 — config/crm.config MARKETS (auto-creates a market record on first hit)
+  try {
+    const { getMarketsForZip, MARKETS } = await import('@/lib/config/crm.config')
+    const names = getMarketsForZip(zip)
+    if (names.length > 0) {
+      const name = names[0]
+      const zips = [...MARKETS[name].zips] as string[]
+      const created = await db.market.create({ data: { tenantId, name, zipCodes: zips } })
+      return created.id
+    }
+  } catch (err) {
+    console.error(`[Market] Config lookup failed for zip ${zip}:`, err)
+  }
+
+  // Tier 3 — Global catch-all. findFirst-or-create with race protection.
+  try {
+    const global = await db.market.findFirst({
+      where: { tenantId, name: 'Global' },
+      select: { id: true },
+    })
+    if (global) return global.id
+    try {
+      const created = await db.market.create({ data: { tenantId, name: 'Global', zipCodes: [] } })
+      return created.id
+    } catch (createErr) {
+      // Concurrent request already created it — re-read
+      const retry = await db.market.findFirst({ where: { tenantId, name: 'Global' }, select: { id: true } })
+      if (retry) return retry.id
+      console.error(`[Market] Global create + retry failed for zip ${zip}:`, createErr)
+    }
+  } catch (err) {
+    console.error(`[Market] Global resolution failed for zip ${zip}:`, err)
+  }
+
+  // Last resort — leave null but audit the gap
+  try {
+    await db.auditLog.create({
+      data: {
+        tenantId,
+        action: 'market.resolve.failed',
+        resource: 'property',
+        source: 'SYSTEM',
+        severity: 'WARNING',
+        payload: { zip },
+      },
+    })
+  } catch { /* audit is best-effort */ }
+
+  return null
 }
 
 // Normalize street address for dedup matching

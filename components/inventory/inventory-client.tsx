@@ -21,6 +21,12 @@ interface Property {
   currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
   fieldSources: Record<string, string>
   createdAt: string
+  stageEnteredAt: string | null
+  // Per-pipeline entry + stage timestamps for the days badges.
+  acqPipelineEnteredAt: string
+  acqStageEnteredAt: string
+  dispoPipelineEnteredAt: string | null
+  dispoStageEnteredAt: string | null
   sellerName: string | null; sellerPhone: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string } | null
@@ -33,7 +39,7 @@ interface Property {
   lastContactedDate: string | null
 }
 
-export function InventoryClient({ properties, statusCounts, tenantSlug, canManage, ghlLocationId }: {
+export function InventoryClient({ properties: initialProperties, statusCounts, tenantSlug, canManage, ghlLocationId }: {
   properties: Property[]
   statusCounts: Record<string, number>
   tenantSlug: string
@@ -49,6 +55,15 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
   const [dataQualityFilter, setDataQualityFilter] = useState<string | null>(null)
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
+  const [visibleCount, setVisibleCount] = useState(50)
+
+  // Local state so drawer edits immediately reflect in the table row.
+  // Re-syncs if the server re-fetches (e.g., via router.refresh).
+  const [properties, setProperties] = useState(initialProperties)
+  useEffect(() => { setProperties(initialProperties) }, [initialProperties])
+  const updateProperty = (id: string, patch: Partial<Property>) => {
+    setProperties(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)))
+  }
 
   // Handle ?filter= deeplinks from KPI page
   useEffect(() => {
@@ -57,6 +72,11 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
     else if (filter === 'missing_source') setDataQualityFilter('source')
     else if (filter === 'missing_address') setDataQualityFilter('address')
   }, [searchParams])
+
+  // Reset pagination whenever filters or search change
+  useEffect(() => {
+    setVisibleCount(50)
+  }, [search, selectedStage, selectedMarket, selectedSource, dataQualityFilter])
 
   // Convert DB status counts to AppStage counts
   const stageCounts: Partial<Record<AppStage, number>> = {}
@@ -253,13 +273,30 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
               </p>
             </div>
           ) : (
-            <PropertyTable
-              properties={filtered}
-              tenantSlug={tenantSlug}
-              selectedId={selectedPropertyId}
-              onSelect={setSelectedPropertyId}
-              ghlLocationId={ghlLocationId}
-            />
+            <>
+              <PropertyTable
+                properties={filtered.slice(0, visibleCount)}
+                tenantSlug={tenantSlug}
+                selectedId={selectedPropertyId}
+                onSelect={setSelectedPropertyId}
+                ghlLocationId={ghlLocationId}
+                selectedStage={selectedStage}
+              />
+              {filtered.length > visibleCount && (
+                <div className="flex items-center justify-between px-4 py-3 mt-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px]">
+                  <p className="text-ds-fine text-txt-muted">
+                    Showing <span className="font-semibold text-txt-primary">{visibleCount}</span> of{' '}
+                    <span className="font-semibold text-txt-primary">{filtered.length.toLocaleString()}</span>
+                  </p>
+                  <button
+                    onClick={() => setVisibleCount(v => v + 50)}
+                    className="flex items-center gap-1.5 bg-surface-secondary hover:bg-surface-tertiary text-txt-primary text-ds-fine font-semibold px-4 py-[7px] rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] transition-colors"
+                  >
+                    + Next {Math.min(50, filtered.length - visibleCount)}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -270,11 +307,45 @@ export function InventoryClient({ properties, statusCounts, tenantSlug, canManag
             tenantSlug={tenantSlug}
             ghlLocationId={ghlLocationId}
             onClose={() => setSelectedPropertyId(null)}
+            onPropertyUpdate={updateProperty}
+            selectedStage={selectedStage}
           />
         )}
       </div>
     </div>
   )
+}
+
+// ─── Pipeline-aware days helper ─────────────────────────────────────────────
+// Returns the pair of timestamps to show for a given property + current
+// filter context. Rule:
+//   - If a stage tab is selected, use that stage's track (acq vs dispo).
+//   - If no tab selected, default to the property's "current" pipeline:
+//     dispo if dispoStatus is set, otherwise acq.
+// Disposition fields can be null for acq-only properties; we fall back to acq
+// in that case so the badge is never blank.
+function pipelinePair(p: Property, selectedStage: AppStage | null): {
+  pipelineAnchor: string
+  stageAnchor: string
+  track: 'acquisition' | 'disposition'
+} {
+  const filterTrack = selectedStage?.startsWith('disposition') ? 'disposition'
+    : selectedStage?.startsWith('acquisition') ? 'acquisition'
+    : null
+  const wantsDispo = filterTrack === 'disposition'
+    || (filterTrack === null && !!p.dispoStatus)
+  if (wantsDispo && p.dispoPipelineEnteredAt && p.dispoStageEnteredAt) {
+    return {
+      pipelineAnchor: p.dispoPipelineEnteredAt,
+      stageAnchor: p.dispoStageEnteredAt,
+      track: 'disposition',
+    }
+  }
+  return {
+    pipelineAnchor: p.acqPipelineEnteredAt,
+    stageAnchor: p.acqStageEnteredAt,
+    track: 'acquisition',
+  }
 }
 
 // ─── Property Table ──────────────────────────────────────────────────────────
@@ -400,12 +471,13 @@ const MARKET_COLORS: Record<string, string> = {
   'Global': 'bg-gray-100 text-gray-600',
 }
 
-function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
+function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedStage }: {
   properties: Property[]
   tenantSlug: string
   selectedId: string | null
   onSelect: (id: string | null) => void
   ghlLocationId?: string
+  selectedStage: AppStage | null
 }) {
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
@@ -415,8 +487,12 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
         const isSelected = selectedId === p.id
         const sourceColor = p.leadSource ? getSourceColor(p.leadSource) : ''
         const marketColor = MARKET_COLORS[p.market ?? ''] ?? 'bg-surface-tertiary text-txt-secondary'
-        const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
-        const domColor = dom < 6 ? 'text-green-600 bg-green-50' : dom <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+        const { pipelineAnchor, stageAnchor, track } = pipelinePair(p, selectedStage)
+        const domPipeline = Math.floor((Date.now() - new Date(pipelineAnchor).getTime()) / 86400000)
+        const domStage = Math.floor((Date.now() - new Date(stageAnchor).getTime()) / 86400000)
+        const pipelineColor = domPipeline < 6 ? 'text-green-600 bg-green-50' : domPipeline <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+        const stageColor = domStage < 6 ? 'text-green-600 bg-green-50' : domStage <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+        const trackLabel = track === 'disposition' ? 'disposition' : 'acquisition'
 
         return (
           <button
@@ -426,10 +502,15 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect }: {
               isSelected ? 'bg-gunner-red-light' : ''
             }`}
           >
-            {/* Days in stage */}
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-[6px] whitespace-nowrap shrink-0 ${domColor}`}>
-              {dom}d
-            </span>
+            {/* Days in current pipeline · days in current stage (pipeline = acq or dispo based on filter / property state) */}
+            <div className="flex items-center gap-1 shrink-0" title={`${domPipeline}d in ${trackLabel} · ${domStage}d in stage`}>
+              <span className={`text-[11px] font-bold px-2 py-1 rounded-[6px] whitespace-nowrap ${pipelineColor}`}>
+                {domPipeline}d
+              </span>
+              <span className={`text-[11px] font-bold px-2 py-1 rounded-[6px] whitespace-nowrap ${stageColor}`}>
+                {domStage}d
+              </span>
+            </div>
             {/* Address */}
             <div className="min-w-0 shrink-0" style={{ maxWidth: '40%' }}>
               <p className="text-ds-body font-medium text-txt-primary truncate">{p.address || <span className="text-txt-muted italic">Address missing</span>}</p>
@@ -538,16 +619,26 @@ function DrawerEditCard({ label, value, field, propertyId, source, onSaved }: {
   )
 }
 
-function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
+function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPropertyUpdate, selectedStage }: {
   property: Property
   tenantSlug: string
   ghlLocationId?: string
   onClose: () => void
+  onPropertyUpdate: (id: string, patch: Partial<Property>) => void
+  selectedStage: AppStage | null
 }) {
-  const appStage = STATUS_TO_APP_STAGE[p.dispoStatus ?? p.status] ?? 'acquisition.new_lead'
+  const { pipelineAnchor, stageAnchor, track } = pipelinePair(p, selectedStage)
+  // App-stage chip follows the same pipeline context so it reads the pipeline
+  // the user is currently viewing, not always the dispo side.
+  const appStage = track === 'disposition' && p.dispoStatus
+    ? STATUS_TO_APP_STAGE[p.dispoStatus] ?? 'acquisition.new_lead'
+    : STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
   const badgeColor = APP_STAGE_BADGE_COLORS[appStage]
-  const dom = Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86400000)
-  const domColor = dom < 6 ? 'text-green-600 bg-green-50' : dom <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+  const domPipeline = Math.floor((Date.now() - new Date(pipelineAnchor).getTime()) / 86400000)
+  const domStage = Math.floor((Date.now() - new Date(stageAnchor).getTime()) / 86400000)
+  const pipelineColor = domPipeline < 6 ? 'text-green-600 bg-green-50' : domPipeline <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+  const stageColor = domStage < 6 ? 'text-green-600 bg-green-50' : domStage <= 10 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+  const trackLabel = track === 'disposition' ? 'disposition' : 'acquisition'
 
   const [vals, setVals] = useState({
     askingPrice: p.askingPrice, mao: p.mao, currentOffer: p.currentOffer,
@@ -601,12 +692,14 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
       })
       if (res.ok) {
         setEditingAddress(false)
-        // Update local display
-        p.address = addrFields.address
-        p.city = addrFields.city
-        p.state = addrFields.state
-        p.zip = addrFields.zip
-        p.market = addrMarket
+        // Propagate to parent so the table row reflects the new address without a page refresh.
+        onPropertyUpdate(p.id, {
+          address: addrFields.address,
+          city: addrFields.city,
+          state: addrFields.state,
+          zip: addrFields.zip,
+          market: addrMarket,
+        })
       }
     } catch {}
     setSavingAddress(false)
@@ -617,6 +710,11 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
     setSources(prev => {
       const next = { ...prev }
       if (src) next[field] = src; else delete next[field]
+      // Keep parent in sync so other views of this property pick up the change.
+      onPropertyUpdate(p.id, {
+        [field]: val,
+        fieldSources: next,
+      } as Partial<Property>)
       return next
     })
   }
@@ -633,7 +731,10 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose }: {
             <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full ${badgeColor}`}>
               {APP_STAGE_LABELS[appStage]}
             </span>
-            <span className={`text-[10px] font-bold px-1.5 py-[2px] rounded-[4px] ${domColor}`}>{dom}d</span>
+            <span className="flex items-center gap-1" title={`${domPipeline}d in ${trackLabel} · ${domStage}d in stage`}>
+              <span className={`text-[10px] font-bold px-1.5 py-[2px] rounded-[4px] ${pipelineColor}`}>{domPipeline}d</span>
+              <span className={`text-[10px] font-bold px-1.5 py-[2px] rounded-[4px] ${stageColor}`}>{domStage}d</span>
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Link href={`/${tenantSlug}/inventory/${p.id}`}

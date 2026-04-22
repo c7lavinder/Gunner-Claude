@@ -491,7 +491,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     if (existing) {
       await db.property.update({
         where: { id: existing.id },
-        data: { dispoStatus: 'IN_DISPOSITION' },
+        data: { dispoStatus: 'IN_DISPOSITION', stageEnteredAt: new Date() },
       })
       console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → dispoStatus=IN_DISPOSITION (acq stays ${existing.status})`)
     } else {
@@ -576,11 +576,17 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     const updateData: Record<string, unknown> = {}
 
     if (isDispoStage) {
-      if (newStatus) updateData.dispoStatus = newStatus
+      if (newStatus) {
+        updateData.dispoStatus = newStatus
+        updateData.stageEnteredAt = new Date()
+      }
     } else {
       updateData.ghlPipelineStage = stageName ?? stageId
       updateData.ghlPipelineId = oppData.pipelineId
-      if (newStatus) updateData.status = newStatus
+      if (newStatus) {
+        updateData.status = newStatus
+        updateData.stageEnteredAt = new Date()
+      }
     }
 
     if (Object.keys(updateData).length > 0) {

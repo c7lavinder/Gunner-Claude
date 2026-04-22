@@ -28,10 +28,10 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         ...(!canViewAll ? { assignedToId: userId } : {}),
       },
       orderBy: { createdAt: 'desc' },
-      take: 500,
+      take: 20000,
       select: {
         id: true, address: true, city: true, state: true, zip: true,
-        status: true, dispoStatus: true, createdAt: true,
+        status: true, dispoStatus: true, createdAt: true, stageEnteredAt: true,
         arv: true, askingPrice: true, mao: true, contractPrice: true,
         assignmentFee: true, currentOffer: true, highestOffer: true,
         acceptedPrice: true, finalProfit: true,
@@ -44,6 +44,13 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         },
         assignedTo: { select: { id: true, name: true } },
         market: { select: { name: true } },
+        // Milestones feed the context-aware days badges. Acq-type milestones
+        // (LEAD / APPOINTMENT_SET / OFFER_MADE / UNDER_CONTRACT / CLOSED)
+        // drive the acq-pipeline numbers; DISPO_* drive the dispo numbers.
+        milestones: {
+          select: { type: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
         _count: { select: { calls: true, tasks: true } },
       },
     })
@@ -67,6 +74,24 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
     select: { ghlLocationId: true },
   })
 
+  // Per-pipeline entry + stage timestamps derived from the milestones table.
+  // Acq pipeline enters at the first LEAD milestone (≈ createdAt); dispo pipeline
+  // enters at the first DISPO_* milestone. Stage-entered = latest milestone of
+  // the matching kind. Returns ISO strings or null when the property has never
+  // been in that pipeline.
+  const ACQ_MILESTONE_TYPES = new Set(['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED'])
+  const DISPO_MILESTONE_TYPES = new Set(['DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED'])
+  function pipelineTimestamps(milestones: Array<{ type: string; createdAt: Date }>, createdAt: Date) {
+    const acq = milestones.filter(m => ACQ_MILESTONE_TYPES.has(m.type))
+    const dispo = milestones.filter(m => DISPO_MILESTONE_TYPES.has(m.type))
+    return {
+      acqPipelineEnteredAt: (acq[0]?.createdAt ?? createdAt).toISOString(),
+      acqStageEnteredAt: (acq[acq.length - 1]?.createdAt ?? createdAt).toISOString(),
+      dispoPipelineEnteredAt: dispo[0]?.createdAt.toISOString() ?? null,
+      dispoStageEnteredAt: dispo[dispo.length - 1]?.createdAt.toISOString() ?? null,
+    }
+  }
+
   return (
     <Suspense fallback={<div className="p-8 text-center text-txt-muted">Loading inventory...</div>}>
     <InventoryClient
@@ -89,6 +114,8 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         finalProfit: p.finalProfit?.toString() ?? null,
         fieldSources: (p.fieldSources ?? {}) as Record<string, string>,
         createdAt: p.createdAt.toISOString(),
+        stageEnteredAt: p.stageEnteredAt?.toISOString() ?? null,
+        ...pipelineTimestamps(p.milestones, p.createdAt),
         sellerName: p.sellers[0]?.seller.name ?? null,
         sellerPhone: p.sellers[0]?.seller.phone ?? null,
         sellers: p.sellers.map((ps) => ({

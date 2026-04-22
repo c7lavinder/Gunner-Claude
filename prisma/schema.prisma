@@ -215,6 +215,8 @@ model Property {
   status PropertyStatus @default(NEW_LEAD)
   // Disposition pipeline position — null means not in dispo yet
   dispoStatus PropertyStatus? @map("dispo_status")
+  // Moment the current stage was entered — powers days-in-stage badge. Updated on every status/dispoStatus change.
+  stageEnteredAt DateTime? @map("stage_entered_at")
 
   // Lead tracking
   leadSource       String? @map("lead_source") // GHL opportunity source — tracked for KPIs
