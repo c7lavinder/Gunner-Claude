@@ -191,10 +191,31 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
       durationMs: timer(), model: 'claude-sonnet-4-20250514',
     }).catch(() => {})
 
-    const jsonMatch = text.text.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) throw new Error('No JSON array found in response')
+    // Walk brackets with a string-aware counter so trailing prose after the
+    // JSON array doesn't poison JSON.parse with "Unexpected non-whitespace
+    // character after JSON". Symptom was silent empty aiNextSteps when the
+    // model appended explanatory paragraphs. Mirrors grading.ts.
+    const arrayText = (function extractFirstJsonArray(t: string): string | null {
+      const start = t.indexOf('[')
+      if (start < 0) return null
+      let depth = 0, inString = false, escaped = false
+      for (let i = start; i < t.length; i++) {
+        const ch = t[i]
+        if (escaped) { escaped = false; continue }
+        if (ch === '\\') { escaped = true; continue }
+        if (ch === '"') { inString = !inString; continue }
+        if (inString) continue
+        if (ch === '[') depth++
+        else if (ch === ']') {
+          depth--
+          if (depth === 0) return t.slice(start, i + 1)
+        }
+      }
+      return null
+    })(text.text)
+    if (!arrayText) throw new Error('No balanced JSON array found in response')
 
-    const rawSteps = JSON.parse(jsonMatch[0]) as Array<{
+    const rawSteps = JSON.parse(arrayText) as Array<{
       type: string; label: string; reasoning: string
       smsBody?: string; sendAt?: string; timezone?: string
       appointmentTypeId?: string; calendarId?: string; appointmentTime?: string; durationMin?: number
