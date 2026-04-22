@@ -88,6 +88,13 @@ interface PropertyDetail {
   // Deal Blast overrides
   dealBlastAskingOverride: string | null; dealBlastArvOverride: string | null
   dealBlastContractOverride: string | null; dealBlastAssignmentFeeOverride: string | null
+  // Alt offer types — Cash lives in askingPrice/mao/contractPrice/etc.
+  offerTypes: string[]
+  altPrices: Record<string, Record<string, string | null>>
+  // Property Story — AI-generated narrative
+  story: string | null
+  storyUpdatedAt: string | null
+  storyVersion: number
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
@@ -1879,6 +1886,419 @@ function ContactsSection({ propertyId, tenantSlug, initialSellers }: {
   )
 }
 
+// ─── Offer Type Manager ──────────────────────────────────────────────────────
+// Single header control that manages the per-property list of alt offer types
+// (Cash is always implicit and never appears in this list). Adding a type makes
+// it appear as a sub-row in every PriceMatrixCard below; removing it strips
+// every price entered under that type server-side.
+
+const OFFER_TYPE_PRESETS = ['Novation', 'Subto', 'Partnership', 'Seller Finance']
+
+function OfferTypeManager({ propertyId, offerTypes, onChange }: {
+  propertyId: string
+  offerTypes: string[]
+  onChange: (next: string[]) => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save(next: string[]) {
+    setSaving(true)
+    try {
+      await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ offerTypes: next }),
+      })
+      onChange(next)
+    } catch {}
+    setSaving(false)
+  }
+
+  function addType(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.toLowerCase() === 'cash' || offerTypes.includes(trimmed)) {
+      setAdding(false); setNewName(''); return
+    }
+    save([...offerTypes, trimmed])
+    setAdding(false); setNewName('')
+  }
+
+  function removeType(name: string) {
+    if (!window.confirm(`Remove "${name}" offer type? Any values entered for this type will be cleared.`)) return
+    save(offerTypes.filter(t => t !== name))
+  }
+
+  const availablePresets = OFFER_TYPE_PRESETS.filter(p => !offerTypes.includes(p))
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mr-0.5">Offer Types</span>
+      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gunner-red-light text-gunner-red border-[0.5px] border-gunner-red/20">Cash</span>
+      {offerTypes.map(t => (
+        <span key={t} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-surface-secondary text-txt-primary border-[0.5px] border-[rgba(0,0,0,0.08)]">
+          {t}
+          <button onClick={() => removeType(t)} disabled={saving} className="hover:text-semantic-red transition-colors"><X size={8} /></button>
+        </span>
+      ))}
+      {adding ? (
+        <div className="inline-flex items-center gap-1">
+          <input
+            autoFocus value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') addType(newName)
+              if (e.key === 'Escape') { setAdding(false); setNewName('') }
+            }}
+            placeholder="Type name…"
+            className="text-[10px] bg-white border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+          />
+          {availablePresets.slice(0, 3).map(p => (
+            <button key={p} onClick={() => addType(p)} disabled={saving}
+              className="text-[9px] text-txt-secondary hover:text-gunner-red underline transition-colors">{p}</button>
+          ))}
+          <button onClick={() => { setAdding(false); setNewName('') }} className="text-txt-muted hover:text-semantic-red transition-colors"><X size={10} /></button>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)}
+          className="text-[10px] font-medium text-gunner-red hover:text-gunner-red-dark inline-flex items-center gap-0.5 transition-colors">
+          <Plus size={10} /> Add type
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Price Matrix Card ────────────────────────────────────────────────────────
+// One card per price field (Asking, MAO, Contract, etc.). Cash value lives big
+// at the top (mirrors legacy InlineEditCard); alt-type rows render underneath
+// as a small grey list. Each cell is independently inline-editable and saves
+// through the shared PATCH /api/properties/[id] — altPrices is merge-by-key
+// server-side so concurrent edits on different cells don't clobber.
+
+function PriceMatrixCard({
+  label, field, cashValue, source, altPrices, offerTypes, propertyId, onCashSaved, onAltSaved,
+}: {
+  label: string
+  field: string
+  cashValue: string | null
+  source?: string | null
+  altPrices: Record<string, Record<string, string | null>>
+  offerTypes: string[]
+  propertyId: string
+  onCashSaved: (field: string, val: string | null, src: string) => void
+  onAltSaved: (type: string, field: string, val: string | null) => void
+}) {
+  const [editing, setEditing] = useState<'cash' | string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const s = sourceStyles(source || null)
+
+  function startEdit(key: 'cash' | string) {
+    const current = key === 'cash' ? (cashValue ?? '') : (altPrices[key]?.[field] ?? '')
+    setEditValue(String(current ?? ''))
+    setEditing(key)
+  }
+
+  async function saveEdit() {
+    if (saving || editing == null) return
+    const raw = editValue.trim()
+    const currentValue = editing === 'cash' ? (cashValue ?? '') : (altPrices[editing]?.[field] ?? '')
+    if (raw === String(currentValue ?? '')) { setEditing(null); return }
+
+    setSaving(true)
+    try {
+      if (editing === 'cash') {
+        const newVal = raw || null
+        await fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: newVal, fieldSources: newVal ? { [field]: 'user' } : { [field]: '' } }),
+        })
+        onCashSaved(field, newVal, newVal ? 'user' : '')
+      } else {
+        const type = editing
+        const newVal = raw || null
+        await fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ altPrices: { [type]: { [field]: newVal } } }),
+        })
+        onAltSaved(type, field, newVal)
+      }
+    } catch {}
+    setSaving(false)
+    setEditing(null)
+  }
+
+  const cashDisplay = cashValue ? `$${Number(cashValue).toLocaleString()}` : null
+
+  return (
+    <div className={`${s.bg} rounded-[10px] px-3 py-2.5 flex flex-col gap-1 group relative`}>
+      {s.tag && (
+        <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+      )}
+
+      {/* Cash hero */}
+      <div>
+        <p className={`text-[9px] font-semibold uppercase tracking-wider flex items-center justify-between ${s.label}`}>
+          {label}
+          <Pencil size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+        </p>
+        {editing === 'cash' ? (
+          <input
+            autoFocus type="number" value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={saveEdit}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(null) }}
+            className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-ds-card font-semibold text-txt-primary mt-0.5 focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+            disabled={saving}
+          />
+        ) : (
+          <button onClick={() => startEdit('cash')} className="text-left w-full mt-0.5 flex items-baseline gap-1.5 cursor-pointer">
+            <span className={`text-ds-card font-semibold ${cashDisplay ? s.value : 'text-txt-muted'}`}>
+              {cashDisplay ?? '—'}
+            </span>
+            <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Cash</span>
+          </button>
+        )}
+      </div>
+
+      {/* Alt-type rows */}
+      {offerTypes.length > 0 && (
+        <div className="border-t border-[rgba(0,0,0,0.06)] pt-1 space-y-0.5">
+          {offerTypes.map(type => {
+            const altValue = altPrices[type]?.[field] ?? null
+            const altDisplay = altValue ? `$${Number(altValue).toLocaleString()}` : null
+            const isEditing = editing === type
+            return (
+              <div key={type} className="flex items-center justify-between text-[10px]">
+                <span className="text-txt-muted font-medium truncate pr-1">{type}</span>
+                {isEditing ? (
+                  <input
+                    autoFocus type="number" value={editValue}
+                    onChange={e => setEditValue(e.target.value)}
+                    onBlur={saveEdit}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(null) }}
+                    className="w-24 bg-white border-[0.5px] border-gunner-red/30 rounded-[4px] px-1.5 py-0 text-[10px] font-medium text-right focus:outline-none"
+                    disabled={saving}
+                  />
+                ) : (
+                  <button onClick={() => startEdit(type)}
+                    className={`font-semibold hover:text-gunner-red transition-colors ${altDisplay ? 'text-txt-primary' : 'text-txt-muted'}`}>
+                    {altDisplay ?? '—'}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Property Story Card ──────────────────────────────────────────────────────
+// Replaces Description + Internal Notes on Overview. AI-generated paragraph
+// that updates after each graded call + daily 7am cron. Manual refresh button
+// for on-demand regen. Empty state shown when there's not enough signal.
+
+function PropertyStoryCard({
+  propertyId, initialStory, initialUpdatedAt,
+}: {
+  propertyId: string
+  initialStory: string | null
+  initialUpdatedAt: string | null
+}) {
+  const [story, setStory] = useState(initialStory)
+  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt)
+  const [regenerating, setRegenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  async function regenerate() {
+    setRegenerating(true); setError(null)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/story`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Regeneration failed')
+        toast('Story regeneration failed', 'error')
+      } else if (data.status === 'skipped') {
+        setError(data.reason ?? 'Not enough signal yet')
+      } else {
+        setStory(data.story ?? null)
+        setUpdatedAt(data.storyUpdatedAt ?? null)
+        toast('Story refreshed', 'success')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error')
+      toast('Story regeneration failed', 'error')
+    }
+    setRegenerating(false)
+  }
+
+  const updatedLabel = updatedAt
+    ? `Updated ${formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}`
+    : 'Not generated yet'
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles size={11} className="text-semantic-purple" />
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Story</p>
+          <span className="text-[8px] text-txt-muted">{updatedLabel}</span>
+        </div>
+        <button onClick={regenerate} disabled={regenerating}
+          className="text-[9px] font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 disabled:opacity-50 transition-colors">
+          {regenerating ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+          {regenerating ? 'Regenerating…' : 'Regenerate'}
+        </button>
+      </div>
+      <div className="p-4">
+        {regenerating && !story ? (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-3 bg-surface-secondary rounded w-full" />
+            <div className="h-3 bg-surface-secondary rounded w-5/6" />
+            <div className="h-3 bg-surface-secondary rounded w-4/5" />
+          </div>
+        ) : story ? (
+          <p className="text-ds-fine text-txt-primary whitespace-pre-wrap leading-relaxed">{story}</p>
+        ) : (
+          <p className="text-ds-fine text-txt-muted italic">
+            {error ?? 'No story yet. Grade a call, add sellers or milestones, or hit Regenerate to build one.'}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Compact Detail Cell ─────────────────────────────────────────────────────
+// Label + clickable value pill, styled to match the Target Markets tag row.
+// Replaces the big-box DetailCell grid inside Property Details on Overview.
+
+function CompactDetailCell({
+  label, value, field, propertyId, type = 'text', options, source, suffix, onSaved,
+}: {
+  label: string
+  value: string | number | null
+  field: string
+  propertyId: string
+  type?: 'number' | 'text' | 'select'
+  options?: string[]
+  source?: string | null
+  suffix?: string
+  onSaved: (field: string, val: string | number | null, src: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  const s = sourceStyles(source ?? null)
+  const display = value != null && value !== ''
+    ? (typeof value === 'number'
+        ? (field === 'yearBuilt' ? String(value) : value.toLocaleString())
+        : String(value))
+    : null
+  const displayWithSuffix = display && suffix ? `${display} ${suffix}` : display
+
+  async function save(val: string | number | null) {
+    if (saving) return
+    setSaving(true)
+    try {
+      const hasVal = val != null && val !== ''
+      await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: val, fieldSources: { [field]: hasVal ? 'user' : '' } }),
+      })
+      onSaved(field, val, hasVal ? 'user' : '')
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+    setDropdownOpen(false)
+  }
+
+  const pillClass = `inline-flex items-center gap-1 text-ds-fine font-medium transition-colors ${
+    source ? `${s.bg} px-2 py-0.5 rounded-[6px]` : ''
+  } ${display ? (source ? s.value : 'text-txt-primary') : 'text-txt-muted'} hover:text-gunner-red group`
+
+  if (editing && type !== 'select') {
+    return (
+      <div className="flex items-center justify-between gap-2 py-1">
+        <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
+        <input
+          autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={() => {
+            const raw = editValue.trim()
+            const next = type === 'number' ? (raw ? Number(raw) : null) : (raw || null)
+            save(next)
+          }}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
+          className="w-32 bg-white border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-0.5 text-ds-fine text-right focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+          disabled={saving}
+        />
+      </div>
+    )
+  }
+
+  const pill = (
+    <button
+      onClick={() => {
+        if (type === 'select') { setDropdownOpen(o => !o); return }
+        setEditValue(value != null ? String(value) : '')
+        setEditing(true)
+      }}
+      className={pillClass}
+    >
+      {displayWithSuffix ?? '—'}
+      {source && s.tag && (
+        <span className={`text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+      )}
+      <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+    </button>
+  )
+
+  if (type === 'select') {
+    return (
+      <div className="flex items-center justify-between gap-2 py-1">
+        <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
+        <FloatingDropdown
+          open={dropdownOpen}
+          onOpenChange={setDropdownOpen}
+          width={160}
+          trigger={pill}
+        >
+          <div className="py-0.5 max-h-48 overflow-y-auto">
+            {(options ?? []).map(o => (
+              <button key={o} onClick={() => save(o)}
+                className={`block w-full text-left px-3 py-1.5 text-ds-fine hover:bg-surface-secondary transition-colors ${
+                  o === value ? 'font-semibold text-gunner-red' : 'text-txt-primary'
+                }`}>{o}</button>
+            ))}
+            {value && (
+              <button onClick={() => save(null)}
+                className="block w-full text-left px-3 py-1.5 text-ds-fine text-semantic-red hover:bg-surface-secondary transition-colors border-t border-[rgba(0,0,0,0.06)]">
+                Clear
+              </button>
+            )}
+          </div>
+        </FloatingDropdown>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2 py-1">
+      <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
+      {pill}
+    </div>
+  )
+}
+
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
 function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId, projectTypeOptions }: {
@@ -1987,6 +2407,33 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Alt offer types + per-type price overrides (Novation, Subto, Partnership, …)
+  const [offerTypes, setOfferTypes] = useState<string[]>(property.offerTypes ?? [])
+  const [altPrices, setAltPrices] = useState<Record<string, Record<string, string | null>>>(property.altPrices ?? {})
+
+  function handleOfferTypesChange(next: string[]) {
+    setOfferTypes(next)
+    // When a type is removed server-side it also clears altPrices for that key;
+    // mirror that in local state so the UI stays consistent without a refetch.
+    setAltPrices(prev => {
+      const pruned: Record<string, Record<string, string | null>> = {}
+      for (const t of next) if (prev[t]) pruned[t] = prev[t]
+      return pruned
+    })
+  }
+
+  function handleAltSaved(type: string, field: string, val: string | null) {
+    setAltPrices(prev => {
+      const next = { ...prev }
+      const forType = { ...(next[type] ?? {}) }
+      if (val == null || val === '') delete forType[field]
+      else forType[field] = val
+      if (Object.keys(forType).length > 0) next[type] = forType
+      else delete next[type]
+      return next
+    })
+  }
+
   function handleArraySaved(field: string, vals: string[]) {
     setVals(prev => ({ ...prev, [field]: vals }))
     setSources(prev => ({ ...prev, [field]: 'user' }))
@@ -2059,13 +2506,16 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
   return (
     <div className="space-y-5">
+      {/* Offer type manager — one control, populates sub-rows in every price card below */}
+      <OfferTypeManager propertyId={property.id} offerTypes={offerTypes} onChange={handleOfferTypesChange} />
+
       {/* Row 1 — Pricing Intent */}
       <div>
         <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Pricing Intent</p>
         <div className="grid grid-cols-3 gap-3">
-          <InlineEditCard label="ASKING PRICE" value={vals.askingPrice} field="askingPrice" propertyId={property.id} source={sources.askingPrice} onSaved={handleSaved} />
-          <InlineEditCard label="MAX ALLOWABLE OFFER" value={vals.mao} field="mao" propertyId={property.id} source={sources.mao} onSaved={handleSaved} />
-          <InlineEditCard label="CURRENT OFFER" value={vals.currentOffer} field="currentOffer" propertyId={property.id} source={sources.currentOffer} onSaved={handleSaved} />
+          <PriceMatrixCard label="ASKING PRICE" field="askingPrice" cashValue={vals.askingPrice} source={sources.askingPrice} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+          <PriceMatrixCard label="MAX ALLOWABLE OFFER" field="mao" cashValue={vals.mao} source={sources.mao} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+          <PriceMatrixCard label="CURRENT OFFER" field="currentOffer" cashValue={vals.currentOffer} source={sources.currentOffer} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
         </div>
       </div>
 
@@ -2073,9 +2523,9 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
       <div>
         <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Deal Outcomes</p>
         <div className="grid grid-cols-3 gap-3">
-          <InlineEditCard label="CONTRACT PRICE" value={vals.contractPrice} field="contractPrice" propertyId={property.id} source={sources.contractPrice} onSaved={handleSaved} />
-          <InlineEditCard label="HIGHEST OFFER" value={vals.highestOffer} field="highestOffer" propertyId={property.id} source={sources.highestOffer} onSaved={handleSaved} />
-          <InlineEditCard label="ACCEPTED PRICE" value={vals.acceptedPrice} field="acceptedPrice" propertyId={property.id} source={sources.acceptedPrice} onSaved={handleSaved} />
+          <PriceMatrixCard label="CONTRACT PRICE" field="contractPrice" cashValue={vals.contractPrice} source={sources.contractPrice} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+          <PriceMatrixCard label="HIGHEST OFFER" field="highestOffer" cashValue={vals.highestOffer} source={sources.highestOffer} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+          <PriceMatrixCard label="ACCEPTED PRICE" field="acceptedPrice" cashValue={vals.acceptedPrice} source={sources.acceptedPrice} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
         </div>
       </div>
 
@@ -2083,22 +2533,22 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
       <div>
         <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Profit Summary</p>
         <div className="grid grid-cols-3 gap-3">
-          {/* Est. Spread — computed, read-only */}
+          {/* Est. Spread — computed, read-only (Cash only) */}
           <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
             <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">EST. SPREAD</p>
             <p className={`text-ds-card font-semibold mt-0.5 ${spread != null ? (spread > 0 ? 'text-semantic-green' : 'text-semantic-red') : 'text-txt-muted'}`}>
               {spread != null ? `$${spread.toLocaleString()}` : '—'}
             </p>
+            <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Cash</span>
           </div>
-          <InlineEditCard label="ASSIGNMENT FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={property.id} source={sources.assignmentFee} onSaved={handleSaved} />
-          <InlineEditCard label="FINAL PROFIT" value={vals.finalProfit} field="finalProfit" propertyId={property.id} source={sources.finalProfit} onSaved={handleSaved} />
+          <PriceMatrixCard label="ASSIGNMENT FEE" field="assignmentFee" cashValue={vals.assignmentFee} source={sources.assignmentFee} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+          <PriceMatrixCard label="FINAL PROFIT" field="finalProfit" cashValue={vals.finalProfit} source={sources.finalProfit} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
         </div>
-        {/* Rental/Repair estimates moved to Research tab */}
       </div>
 
-      {/* Property Details — structured grid */}
+      {/* Property Details — compact 2-col tag-style grid.
+          Target Markets + Project Type tag rows stay at the bottom as before. */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-        {/* Section header with source legend */}
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Details</p>
           <div className="flex items-center gap-2">
@@ -2108,43 +2558,38 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
           </div>
         </div>
 
-        {/* Row 1: Type + Physical attributes (5 cols) */}
-        <div className="grid grid-cols-5 divide-x divide-[rgba(0,0,0,0.04)]">
-          <DetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={handleSaved} />
-          <DetailCell label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
-          <DetailCell label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
-          <DetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} onSaved={handleSaved} />
-          <DetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
+        {/* 2-col compact grid — label left, value pill right */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 px-4 py-2 divide-y sm:divide-y-0 divide-[rgba(0,0,0,0.04)]">
+          <CompactDetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={handleSaved} />
+          <CompactDetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
+          <CompactDetailCell label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
+          <CompactDetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={handleSaved} />
+          <CompactDetailCell label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
+          <CompactDetailCell label="Access" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
+          <CompactDetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} suffix="sqft" onSaved={handleSaved} />
+          <CompactDetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
         </div>
 
-        {/* Row 2: Lot, Occupancy, Access (3 cols) */}
-        <div className="grid grid-cols-3 divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)]">
-          <DetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
-          <DetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={handleSaved} />
-          <DetailCell label="Access" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
-        </div>
-
-        {/* Row 3: Market tags */}
+        {/* Market tags */}
         <div className="border-t border-[rgba(0,0,0,0.04)]">
           <TagRow label="Target Markets" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
             field="propertyMarkets" propertyId={property.id} allowCustom source={sources.propertyMarkets} onSaved={handleArraySaved} />
         </div>
 
-        {/* Row 4: Project Type tags */}
+        {/* Project Type tags */}
         <div className="border-t border-[rgba(0,0,0,0.04)]">
           <TagRow label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
             field="projectType" propertyId={property.id} allowCustom source={sources.projectType} onSaved={handleArraySaved} />
         </div>
       </div>
 
-      {/* Description — click to edit, blue when AI-generated */}
-      <InlineTextArea label="Description" value={vals.description} field="description" propertyId={property.id} onSaved={handleSaved}
-        {...(sources.description === 'ai' ? { labelColor: 'text-blue-700', bgColor: 'bg-blue-50 border-[0.5px] border-blue-200', textColor: 'text-blue-900' } : {})}
-        source={sources.description} />
-
-      {/* Internal notes — click to edit */}
-      <InlineTextArea label="Internal Notes" value={vals.internalNotes} field="internalNotes" propertyId={property.id}
-        labelColor="text-amber-700" bgColor="bg-amber-50 border-[0.5px] border-amber-200" textColor="text-amber-900" onSaved={handleSaved} />
+      {/* Deal Story — AI-generated narrative, replaces the old Description + Internal Notes
+          blocks. Those fields now live on the Deal Blast tab where they feed blast copy. */}
+      <PropertyStoryCard
+        propertyId={property.id}
+        initialStory={property.story}
+        initialUpdatedAt={property.storyUpdatedAt}
+      />
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Left: seller + assigned + actions */}
@@ -4865,6 +5310,22 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
   })
   const [savingOverride, setSavingOverride] = useState(false)
 
+  // Description + Internal Notes moved here from Overview — these feed blast copy
+  // (description shows in the PDF flyer / AI-generated emails) and are the sales
+  // team's private deal-prep space (internal notes).
+  const [description, setDescription] = useState<string | null>(property.description)
+  const [internalNotes, setInternalNotes] = useState<string | null>(property.internalNotes)
+  const [descriptionSource, setDescriptionSource] = useState<string | undefined>(property.fieldSources?.description)
+
+  function handleBlastFieldSaved(field: string, val: string | number | null, src?: string) {
+    if (field === 'description') {
+      setDescription(val as string | null)
+      if (src !== undefined) setDescriptionSource(src || undefined)
+    } else if (field === 'internalNotes') {
+      setInternalNotes(val as string | null)
+    }
+  }
+
   async function saveDealOverride(overrideKey: string, value: string) {
     setSavingOverride(true)
     try {
@@ -5036,7 +5497,7 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
               askingPrice: property.askingPrice, arv: property.arv, contractPrice: property.contractPrice,
               assignmentFee: property.assignmentFee, mao: property.mao,
               beds: property.beds, baths: property.baths, sqft: property.sqft, yearBuilt: property.yearBuilt,
-              description: property.description,
+              description,
             }))
           }}
           className="text-ds-fine font-medium text-txt-secondary hover:text-txt-primary bg-surface-secondary px-3 py-1.5 rounded-[8px] border-[0.5px] border-[rgba(0,0,0,0.08)] flex items-center gap-1 transition-colors"
@@ -5044,6 +5505,19 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
           <FileText size={11} /> PDF Flyer
         </button>
       </div>
+
+      {/* Internal Notes — private team prep. Lives at the top of Deal Blast now
+          (moved from Overview); not included in buyer-facing blasts or the flyer. */}
+      <InlineTextArea
+        label="Internal Notes"
+        value={internalNotes}
+        field="internalNotes"
+        propertyId={property.id}
+        labelColor="text-amber-700"
+        bgColor="bg-amber-50 border-[0.5px] border-amber-200"
+        textColor="text-amber-900"
+        onSaved={handleBlastFieldSaved}
+      />
 
       {/* Property summary card — key deal numbers with inline-editable overrides */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
@@ -5142,9 +5616,20 @@ function DealBlastTab({ property, tenantSlug }: { property: PropertyDetail; tena
         {property.neighborhoodSummary && (
           <p className="text-[10px] text-txt-secondary mt-2 italic">{property.neighborhoodSummary}</p>
         )}
-        {property.description && (
-          <p className="text-[10px] text-txt-muted mt-1 line-clamp-2">{property.description}</p>
-        )}
+        {/* Description — editable; feeds blast copy + PDF flyer. Blue when AI-generated. */}
+        <div className="mt-3">
+          <InlineTextArea
+            label="Description"
+            value={description}
+            field="description"
+            propertyId={property.id}
+            onSaved={handleBlastFieldSaved}
+            {...(descriptionSource === 'ai'
+              ? { labelColor: 'text-blue-700', bgColor: 'bg-blue-50 border-[0.5px] border-blue-200', textColor: 'text-blue-900' }
+              : {})}
+            source={descriptionSource}
+          />
+        </div>
         {/* AI enrichment extras row */}
         {(property.repairEstimate || property.rentalEstimate || property.floodZone) && (
           <div className="flex items-center gap-3 mt-2 text-[9px] text-txt-secondary">

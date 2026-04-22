@@ -78,6 +78,12 @@ const updateSchema = z.object({
   dealBlastAssignmentFeeOverride: z.string().nullable().optional(),
   // GHL sync toggle — when true, webhook stage updates skip this property.
   ghlSyncLocked: z.boolean().optional(),
+  // Alt offer types (Novation / Subto / Partnership / custom) — Cash stays in
+  // askingPrice/mao/contractPrice/etc. columns. offerTypes is the list of alt
+  // type names for this property; altPrices is keyed by offer type →
+  // { [priceField]: stringValue } where priceField is one of the Cash columns.
+  offerTypes: z.array(z.string()).optional(),
+  altPrices: z.record(z.string(), z.record(z.string(), z.string().nullable())).optional(),
 })
 
 export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
@@ -118,6 +124,8 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
     market: marketName,
     ghlSyncLocked,
+    offerTypes,
+    altPrices,
   } = parsed.data
 
   try {
@@ -144,16 +152,35 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
       // PATCHes for the same row serialize while leaving unrelated properties
       // free to proceed in parallel.
       let mergedFieldSources: Record<string, string> | undefined
-      if (fieldSources) {
+      let mergedAltPrices: Record<string, Record<string, string | null>> | undefined
+      if (fieldSources || altPrices) {
+        // Both fieldSources and altPrices are merge-by-key fields. We read +
+        // merge + write under a per-property advisory lock so concurrent PATCHes
+        // on the same row serialize. Unrelated properties stay parallel.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${params.propertyId}))`
         const fresh = await tx.property.findUnique({
           where: { id: params.propertyId, tenantId: ctx.tenantId },
-          select: { fieldSources: true },
+          select: { fieldSources: true, altPrices: true },
         })
-        const current = (fresh?.fieldSources as Record<string, string>) ?? {}
-        const merged: Record<string, string> = { ...current, ...fieldSources }
-        for (const k of Object.keys(merged)) { if (!merged[k]) delete merged[k] }
-        mergedFieldSources = merged
+        if (fieldSources) {
+          const current = (fresh?.fieldSources as Record<string, string>) ?? {}
+          const merged: Record<string, string> = { ...current, ...fieldSources }
+          for (const k of Object.keys(merged)) { if (!merged[k]) delete merged[k] }
+          mergedFieldSources = merged
+        }
+        if (altPrices) {
+          const current = (fresh?.altPrices as Record<string, Record<string, string | null>>) ?? {}
+          const merged: Record<string, Record<string, string | null>> = { ...current }
+          for (const [type, patch] of Object.entries(altPrices)) {
+            const existing = merged[type] ?? {}
+            const next: Record<string, string | null> = { ...existing, ...patch }
+            // Drop null/empty cells so the blob doesn't grow unbounded
+            for (const k of Object.keys(next)) { if (next[k] == null || next[k] === '') delete next[k] }
+            if (Object.keys(next).length > 0) merged[type] = next
+            else delete merged[type]
+          }
+          mergedAltPrices = merged
+        }
       }
 
       // Update property
@@ -224,6 +251,8 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           // prevents concurrent-PATCH clobber on { fieldName: "ai" | "user" }.
           ...(mergedFieldSources !== undefined && { fieldSources: mergedFieldSources }),
           ...(ghlSyncLocked !== undefined && { ghlSyncLocked }),
+          ...(offerTypes !== undefined && { offerTypes }),
+          ...(mergedAltPrices !== undefined && { altPrices: mergedAltPrices as unknown as Prisma.InputJsonValue }),
         },
       })
 

@@ -50,6 +50,8 @@ export default async function PropertyDetailPage({
         tcpScore: true, tcpFactors: true, tcpUpdatedAt: true,
         competingOfferCount: true, dealHealthScore: true,
         zillowData: true, countyData: true, constructionEstimate: true,
+        offerTypes: true, altPrices: true,
+        story: true, storyUpdatedAt: true, storyVersion: true,
         sellers: {
           include: {
             seller: {
@@ -229,6 +231,13 @@ export default async function PropertyDetailPage({
         dealBlastArvOverride: property.dealBlastArvOverride?.toString() ?? null,
         dealBlastContractOverride: property.dealBlastContractOverride?.toString() ?? null,
         dealBlastAssignmentFeeOverride: property.dealBlastAssignmentFeeOverride?.toString() ?? null,
+        // Alt offer types + per-type price overrides
+        offerTypes: (property.offerTypes ?? []) as string[],
+        altPrices: (property.altPrices ?? {}) as Record<string, Record<string, string | null>>,
+        // Property Story
+        story: property.story,
+        storyUpdatedAt: property.storyUpdatedAt?.toISOString() ?? null,
+        storyVersion: property.storyVersion,
         sellers: property.sellers.map((ps) => ({
           id: ps.seller.id,
           name: ps.seller.name,
