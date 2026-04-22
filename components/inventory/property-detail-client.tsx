@@ -2125,36 +2125,34 @@ function ComputedSpreadCard({
 
   const cashSpread = spreadFor(cashAccepted, cashContract)
   const cashDisplay = cashSpread != null ? `$${cashSpread.toLocaleString()}` : null
-  const cashColor = cashSpread != null
-    ? (cashSpread > 0 ? 'text-semantic-green' : cashSpread < 0 ? 'text-semantic-red' : 'text-txt-primary')
-    : 'text-txt-muted'
 
+  // Computed values render in the blue "AI" style so the card visually reads
+  // as derived (not user-entered). No green/red signaling on the number —
+  // distinction is carried by the blue card container, matching other cards.
   return (
-    <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5 flex flex-col gap-1 relative">
+    <div className="bg-blue-50 border-[0.5px] border-blue-200 rounded-[10px] px-3 py-2.5 flex flex-col gap-1 relative">
+      <span className="absolute top-1 right-1.5 text-[7px] font-bold uppercase text-blue-400">AI</span>
       {/* Cash hero — matches PriceMatrixCard structure */}
       <div>
-        <p className="text-[9px] font-semibold uppercase tracking-wider text-txt-muted">EST. SPREAD</p>
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">EST. SPREAD</p>
         <div className="mt-0.5 flex items-baseline gap-1.5">
-          <span className={`text-ds-card font-semibold ${cashColor}`}>
+          <span className={`text-ds-card font-semibold ${cashDisplay ? 'text-blue-900' : 'text-blue-300'}`}>
             {cashDisplay ?? '—'}
           </span>
-          <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Cash</span>
+          <span className="text-[8px] font-semibold text-blue-400 uppercase tracking-wider">Cash</span>
         </div>
       </div>
 
       {/* Alt-type sub-rows */}
       {offerTypes.length > 0 && (
-        <div className="border-t border-[rgba(0,0,0,0.06)] pt-1 space-y-0.5">
+        <div className="border-t border-blue-200/60 pt-1 space-y-0.5">
           {offerTypes.map(type => {
             const altSpread = spreadFor(altPrices[type]?.acceptedPrice, altPrices[type]?.contractPrice)
             const display = altSpread != null ? `$${altSpread.toLocaleString()}` : null
-            const color = altSpread != null
-              ? (altSpread > 0 ? 'text-semantic-green' : altSpread < 0 ? 'text-semantic-red' : 'text-txt-primary')
-              : 'text-txt-muted'
             return (
               <div key={type} className="flex items-center justify-between text-[10px]">
-                <span className="text-txt-muted font-medium truncate pr-1">{type}</span>
-                <span className={`font-semibold ${color}`}>{display ?? '—'}</span>
+                <span className="text-blue-700 font-medium truncate pr-1">{type}</span>
+                <span className={`font-semibold ${display ? 'text-blue-900' : 'text-blue-300'}`}>{display ?? '—'}</span>
               </div>
             )
           })}
@@ -2293,7 +2291,7 @@ function CompactDetailCell({
 
   if (editing && type !== 'select') {
     return (
-      <div className="flex items-center justify-between gap-2 py-1">
+      <div className="flex items-center justify-between gap-2 h-[28px]">
         <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
         <input
           autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
@@ -2330,7 +2328,7 @@ function CompactDetailCell({
 
   if (type === 'select') {
     return (
-      <div className="flex items-center justify-between gap-2 py-1">
+      <div className="flex items-center justify-between gap-2 h-[28px]">
         <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
         <FloatingDropdown
           open={dropdownOpen}
@@ -2358,7 +2356,7 @@ function CompactDetailCell({
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 py-1">
+    <div className="flex items-center justify-between gap-2 h-[28px]">
       <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
       {pill}
     </div>
@@ -2418,11 +2416,15 @@ function CompactMultiTag({
     : 'bg-gunner-red-light text-gunner-red'
 
   return (
-    <div className="py-1">
-      <p className="text-[10px] text-txt-muted font-medium mb-1">{label}</p>
-      <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex items-center justify-between gap-2 h-[28px]">
+      <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
+      {/* Right side: pills + Add button. flex-nowrap + overflow-hidden keeps the
+          row at a fixed height no matter how many tags are entered — content
+          never pushes sibling rows down. Pills remain readable for typical
+          1–3 values; open the dropdown to manage the full list. */}
+      <div className="flex items-center gap-1 flex-nowrap overflow-hidden justify-end min-w-0">
         {local.map(v => (
-          <span key={v} className={`inline-flex items-center gap-1 ${pillStyle} text-[10px] font-semibold px-2 py-0.5 rounded-full`}>
+          <span key={v} className={`inline-flex items-center gap-1 ${pillStyle} text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0`}>
             {v}
             <button onClick={() => toggle(v)} className="hover:opacity-60 transition-opacity"><X size={8} /></button>
           </span>
@@ -2433,7 +2435,7 @@ function CompactMultiTag({
           width={200}
           trigger={
             <button onClick={() => setOpen(!open)}
-              className="inline-flex items-center gap-0.5 text-[10px] text-txt-muted hover:text-gunner-red px-1.5 py-0.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] hover:border-gunner-red/30 transition-all">
+              className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-txt-muted hover:text-gunner-red px-1.5 py-0.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] hover:border-gunner-red/30 transition-all">
               <Plus size={8} /> Add
             </button>
           }
@@ -2548,10 +2550,10 @@ function NumbersColumn({
   }
 
   return (
-    <div className="py-1">
-      {/* Section header + tab bar */}
-      <div className="flex items-center justify-between mb-2 gap-2">
-        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider shrink-0">Numbers</p>
+    <div>
+      {/* Section header + tab bar — matched underline treatment with sibling columns */}
+      <div className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">
+        <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] shrink-0">Numbers</p>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           {tabs.map(t => {
             const isActive = activeTab === t
@@ -2586,7 +2588,7 @@ function NumbersColumn({
 
           if (isEditing) {
             return (
-              <div key={f.key} className="flex items-center justify-between gap-2 py-1">
+              <div key={f.key} className="flex items-center justify-between gap-2 h-[28px]">
                 <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
                 <input
                   autoFocus
@@ -2606,7 +2608,7 @@ function NumbersColumn({
           }
 
           return (
-            <div key={f.key} className="flex items-center justify-between gap-2 py-1">
+            <div key={f.key} className="flex items-center justify-between gap-2 h-[28px]">
               <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
               <button
                 onClick={() => { setEditValue(val ?? ''); setEditingField(f.key) }}
@@ -2830,10 +2832,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
     }
   }
 
-  // Computed: Est. Spread = Accepted (or Contract) - Asking
-  const spread = vals.acceptedPrice && vals.contractPrice
-    ? Number(vals.acceptedPrice) - Number(vals.contractPrice)
-    : null
+  // Est. Spread is now computed inside ComputedSpreadCard per offer type.
 
   return (
     <div className="space-y-5">
@@ -2889,7 +2888,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)]">
           {/* Column 1 — Details */}
           <div className="px-4 py-2">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Details</p>
+            <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Details</p>
             <CompactDetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={handleSaved} />
             <CompactMultiTag label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
               field="propertyMarkets" propertyId={property.id} allowCustom source={sources.propertyMarkets} onSaved={handleArraySaved} />
@@ -2901,7 +2900,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
 
           {/* Column 2 — Specs */}
           <div className="px-4 py-2">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Specs</p>
+            <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Specs</p>
             <CompactDetailCell label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
             <CompactDetailCell label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
             <CompactDetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} suffix="sqft" onSaved={handleSaved} />
