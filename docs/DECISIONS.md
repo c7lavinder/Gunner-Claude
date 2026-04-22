@@ -336,3 +336,73 @@ daily-kpi-snapshot, weekly-profiles).
 | D-013 | Call transcript source | GHL native vs Deepgram vs AssemblyAI | Deepgram integrated (D-006), GHL native not available |
 | D-015 | Queue system for grading | BullMQ (Redis) vs SQS vs none | Add when volume exceeds ~100 calls/day/tenant |
 | D-016 | GHL Marketplace submission | Submit now vs wait for MVP validation | Wait — needs real user testing first |
+| D-017 | Deal intel storage model when a seller has multiple properties | See below | Open — impacts multi-property sellers |
+
+---
+
+### D-017 — Split deal intel between Seller (contact) and Property records
+
+**Status:** OPEN — decision needed before multi-property sellers become common.
+
+**Problem:**
+Today all deal intel lives on `property.dealIntel`. That model assumes one property per
+conversation. When a single seller owns or is discussing multiple properties, we either
+duplicate person-level signals (motivation, timeline, decision makers, communication
+style, family situation) across every property, or we only capture them on the first
+one and lose them on the rest. Neither is correct, and the rep's mental model is
+"this person sells, this house is the asset" — intel about *the person* should not be
+property-scoped.
+
+**Why it matters:**
+- Rule 5 (True Conversion Probability) weights seller motivation + responsiveness. If
+  those live per-property and get out of sync across a seller's portfolio, TCP is wrong.
+- Rule 4 (Worker Agent Architecture) — downstream LLMs reading deal intel to decide
+  next steps will see contradictory or duplicate signals.
+- Cross-property analytics (Sharpe ratio, revenue correlation) can't join cleanly.
+
+**Options:**
+
+**A. Keep per-property, accept duplication.**
+Simplest. Each property's dealIntel is a full snapshot. Duplicated seller signals stay
+in sync only if the extraction pipeline writes to all of the seller's properties on
+every call. Diverges otherwise.
+
+**B. Split: Seller-level vs Property-level intel.**
+Schema change: move person-scoped fields (motivation, timeline, decision makers,
+communication style, family situation, rapport, financial distress, online behavior,
+exactTriggerPhrases, whatNotToSay, sellerAskingHistory) onto the Seller/Contact record.
+Keep asset-scoped fields (condition, liens, tenants, title, offers, walkthrough,
+back taxes, HOA, zoning, environmental) on Property. Extraction prompt asks the AI to
+disambiguate "which house is this about" and writes to the right record.
+  - Cleanest long-term model.
+  - Requires: Prisma migration, extraction prompt rewrite, PATCH route split by scope,
+    UI rewrite of PropertyDataTab + snapshot section on Seller page, regrading consideration.
+  - Cross-call learning becomes easier (seller profile builds over a career, not per asset).
+
+**C. Property-level primary, with a pointer up to Seller.**
+Hybrid. Seller record holds only the latest-observed values for person-scoped fields,
+derived from the most recent call involving that seller. Property dealIntel keeps
+asset-scoped fields only. Seller fields are read-through; writes still happen at the
+property extraction step, but the pipeline bubbles them up.
+  - Less disruptive than B but still needs migration + prompt changes.
+  - Risk: "latest observed" semantics means older per-property snapshots lose person-level
+    context over time.
+
+**Recommended path (not locked):** B, done incrementally.
+  1. Add Seller-level JSONB column `sellerIntel` (empty).
+  2. Mark each DealIntel field in `lib/types/deal-intel.ts` as `scope: 'seller' | 'property'`.
+  3. Update extraction prompt to write seller fields to Seller.sellerIntel and property
+     fields to Property.dealIntel. PATCH route branches on scope.
+  4. PropertyDataTab keeps working for property fields. Seller fields surface on a
+     new Seller page (or as a "About the seller" section above the property section).
+  5. Backfill existing Property.dealIntel → copy seller-scoped fields up to the
+     associated Seller if populated.
+
+**Open sub-questions:**
+- Do we need a `Seller` model today, or does GHL contact record (via `Property.sellerName`
+  or a FK) serve? Check prisma/schema.prisma before committing.
+- How do we handle conflicting seller signals across properties mid-migration?
+  (Latest-wins, or manual reconciliation in UI.)
+- Does TCP (lib/ai/scoring.ts) need to change to read from both scopes?
+
+**Date opened:** 2026-04-22 | Raised during Property tab UX review.

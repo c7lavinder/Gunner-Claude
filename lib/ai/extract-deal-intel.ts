@@ -109,10 +109,26 @@ YOUR TASK:
 - Extract any NEW or UPDATED information from THIS call
 - For single-value fields: propose an update if the new value is different or more specific
 - For list/accumulated fields: propose ADDITIONS (new items to add to the existing list)
+- For progress-semantic list fields (see below): propose the SHRUNK list — remove items that were addressed on this call
 - Write a cumulative rolling deal summary incorporating ALL previous calls + this one
 - Flag what topics STILL haven't been discussed
 - ONLY propose changes for information actually mentioned in the call — do NOT fabricate or infer beyond what was said
 - Include the EXACT quote from the transcript that supports each extraction
+
+RECONCILIATION — how THIS call's info relates to prior state:
+Every proposed change must include a "changeKind" field. Use it to tell the rep what kind of update this is:
+  - "new"          — field was empty / unknown before; this is the first write
+  - "refined"      — same direction as prior state, but more specific or quantified
+                     (e.g. prior: "motivated", now: "motivation 8/10 due to foreclosure 90 days out")
+  - "contradicted" — this call CONFLICTS with prior state (seller changed mind, earlier extraction
+                     was wrong, or new facts invalidate old ones). In the evidence field, explicitly
+                     note what changed and why. The rep needs to notice contradictions.
+  - "resolved"     — this change REMOVES an item from a list because it was addressed on the call
+                     (used for progress-semantic lists — see below)
+When you emit a "contradicted" or "resolved" change, the evidence field should briefly explain the delta,
+not just the new fact. Example:
+  evidence: "Seller previously said 'no rush', now says 'actually we need to close within 30 days
+             because we have a cash offer on the new house'. Timeline contradicted."
 
 CONFIDENCE LEVELS:
 - high: seller stated it directly ("I owe $120,000 on the mortgage")
@@ -129,8 +145,9 @@ RESPONSE FORMAT — valid JSON only, no markdown:
       "currentValue": <what's currently stored, or null>,
       "proposedValue": <the new/updated value>,
       "confidence": "<high|medium|low>",
-      "evidence": "<exact quote or close paraphrase from transcript>",
-      "updateType": "<overwrite|accumulate>"
+      "evidence": "<exact quote or close paraphrase from transcript; for contradicted/resolved, explain the delta>",
+      "updateType": "<overwrite|accumulate>",
+      "changeKind": "<new|refined|contradicted|resolved>"
     }
   ],
   "rollingDealSummary": "<cumulative paragraph summarizing ALL calls to date including this one>",
@@ -184,6 +201,31 @@ IMPORTANT:
 - Do NOT propose a change if the exact same value is already stored.
 - If a field was not discussed on this call and no change is warranted, OMIT it from proposedChanges entirely. Never emit "not discussed", "unknown", "n/a", or similar placeholder strings as a proposedValue — just leave the field out.
 - For list/array fields (topics, green flags, red flags, etc.), use short clear items — each item should be a concise phrase, not a full sentence.
+
+PROGRESS-SEMANTIC LIST FIELDS — these SHRINK as the deal progresses, they do not accumulate:
+  - topicsNotYetDiscussed     — remove any topic that was addressed on this call
+  - stickingPoints            — remove any that were resolved or removed by the seller
+  - disqualificationRisks     — remove any that were mitigated / no longer in play
+  - dealRedFlags              — remove any flag that was resolved (but KEEP flags that still apply)
+When any of these are emitted:
+  - updateType MUST be "overwrite" (not "accumulate")
+  - proposedValue MUST be ONLY the still-outstanding items, not a cumulative list
+  - changeKind: "refined" if items were removed since last call; "new" if the list is being written for the first time; "contradicted" if the seller reopened a previously-resolved item
+  - The evidence field should briefly note WHICH items were removed/closed out this call so the rep sees the delta. Example:
+      prior stickingPoints = ["asking price", "title cloud", "tenant eviction"]
+      this call resolved title cloud →
+        proposedValue: ["asking price", "tenant eviction"]
+        updateType: "overwrite"
+        changeKind: "refined"
+        evidence: "Title cloud resolved — seller confirmed title work cleared Tuesday. Asking price and tenant eviction still open."
+
+HISTORICAL LIST FIELDS — these NEVER shrink, they are permanent record:
+  - objectionsEncountered, commitmentsWeMade, promisesTheyMade, promiseDeadlines
+  - exactTriggerPhrases, toneShiftMoments, questionsSellerAskedUs, infoVolunteeredVsExtracted
+  - sellerAskingHistory, counterOffers, offersWeHaveMade, competingOffers
+  - walkthroughRepairList, titleIssuesMentioned, liensMentioned, legalComplications
+  - whatNotToSay, triggerEvents
+These use updateType="accumulate" — only propose NEW items to append.
 
 TIME-RELATIVE FIELDS (sellerTimeline, sellerTimelineUrgency, promiseDeadlines, nextStepAgreed, triggerEvents, commitmentsWeMade, promisesTheyMade):
 For these fields the proposedValue MUST be a structured object that resolves the relative phrase to absolute dates so downstream LLMs can correlate timing with revenue. Use this exact shape:

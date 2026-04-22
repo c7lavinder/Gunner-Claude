@@ -68,8 +68,16 @@ interface DealIntelChange {
   currentValue: unknown; proposedValue: unknown
   confidence: 'high' | 'medium' | 'low'; evidence: string
   updateType: 'overwrite' | 'accumulate'
+  changeKind?: 'new' | 'refined' | 'contradicted' | 'resolved'
   decision?: 'approved' | 'edited' | 'skipped' | 'auto_approved'
   editedValue?: unknown; decidedAt?: string
+}
+
+const CHANGE_KIND_STYLES: Record<NonNullable<DealIntelChange['changeKind']>, { bg: string; text: string; label: string }> = {
+  new:          { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'New' },
+  refined:      { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Refined' },
+  contradicted: { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Contradicted' },
+  resolved:     { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Resolved' },
 }
 
 interface NextStep {
@@ -2206,7 +2214,12 @@ function DealIntelRow({ change, catConfig, callAnchor, isEditing, editValue, act
             </span>
           </span>
         )}
-        <span className={`ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+        {change.changeKind && CHANGE_KIND_STYLES[change.changeKind] && (
+          <span className={`ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full ${CHANGE_KIND_STYLES[change.changeKind].bg} ${CHANGE_KIND_STYLES[change.changeKind].text}`}>
+            {CHANGE_KIND_STYLES[change.changeKind].label}
+          </span>
+        )}
+        <span className={`${change.changeKind ? '' : 'ml-auto'} text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
           change.confidence === 'high' ? 'bg-green-100 text-green-700'
           : change.confidence === 'medium' ? 'bg-amber-100 text-amber-700'
           : 'bg-gray-100 text-gray-600'

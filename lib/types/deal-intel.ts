@@ -159,6 +159,15 @@ export interface ProposedDealIntelChange {
   confidence: 'high' | 'medium' | 'low'
   evidence: string              // verbatim quote or paraphrase from transcript
   updateType: 'overwrite' | 'accumulate' // single-value vs list append
+  // Reconciliation hint — how this change relates to prior state. Populated
+  // when the AI has previous deal intel to compare against.
+  //   new         — field was empty before; first-write
+  //   refined     — same direction as prior, but more specific / quantified
+  //   contradicted — directly conflicts with prior state (seller changed mind
+  //                  or earlier extraction was wrong); rep should pay attention
+  //   resolved    — prior list-item was addressed / closed on this call
+  //                 (used for shrinking lists like topicsNotYetDiscussed)
+  changeKind?: 'new' | 'refined' | 'contradicted' | 'resolved'
   // Decision tracking (filled when user acts)
   decision?: 'approved' | 'edited' | 'skipped' | 'auto_approved'
   editedValue?: unknown         // if user edited before approving
