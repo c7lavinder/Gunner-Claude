@@ -2126,33 +2126,40 @@ function ComputedSpreadCard({
   const cashSpread = spreadFor(cashAccepted, cashContract)
   const cashDisplay = cashSpread != null ? `$${cashSpread.toLocaleString()}` : null
 
-  // Computed values render in the blue "AI" style so the card visually reads
-  // as derived (not user-entered). No green/red signaling on the number —
-  // distinction is carried by the blue card container, matching other cards.
+  // Reuse the exact same source-style tokens as PriceMatrixCard with source='ai'
+  // so wrapper, label, and value colors are byte-identical to the cards next to
+  // us. This is the only way to guarantee visual parity — hand-rolled hex
+  // shades drift.
+  const s = sourceStyles('ai')
+
   return (
-    <div className="bg-blue-50 border-[0.5px] border-blue-200 rounded-[10px] px-3 py-2.5 flex flex-col gap-1 relative">
-      <span className="absolute top-1 right-1.5 text-[7px] font-bold uppercase text-blue-400">AI</span>
-      {/* Cash hero — matches PriceMatrixCard structure */}
+    <div className={`${s.bg} rounded-[10px] px-3 py-2.5 flex flex-col gap-1 relative`}>
+      {s.tag && (
+        <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+      )}
+      {/* Cash hero — matches PriceMatrixCard markup, minus the Pencil (read-only) */}
       <div>
-        <p className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">EST. SPREAD</p>
+        <p className={`text-[9px] font-semibold uppercase tracking-wider ${s.label}`}>EST. SPREAD</p>
         <div className="mt-0.5 flex items-baseline gap-1.5">
-          <span className={`text-ds-card font-semibold ${cashDisplay ? 'text-blue-900' : 'text-blue-300'}`}>
+          <span className={`text-ds-card font-semibold ${cashDisplay ? s.value : 'text-txt-muted'}`}>
             {cashDisplay ?? '—'}
           </span>
-          <span className="text-[8px] font-semibold text-blue-400 uppercase tracking-wider">Cash</span>
+          <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Cash</span>
         </div>
       </div>
 
-      {/* Alt-type sub-rows */}
+      {/* Alt-type sub-rows — same markup as PriceMatrixCard's alt rows */}
       {offerTypes.length > 0 && (
-        <div className="border-t border-blue-200/60 pt-1 space-y-0.5">
+        <div className="border-t border-[rgba(0,0,0,0.06)] pt-1 space-y-0.5">
           {offerTypes.map(type => {
             const altSpread = spreadFor(altPrices[type]?.acceptedPrice, altPrices[type]?.contractPrice)
             const display = altSpread != null ? `$${altSpread.toLocaleString()}` : null
             return (
               <div key={type} className="flex items-center justify-between text-[10px]">
-                <span className="text-blue-700 font-medium truncate pr-1">{type}</span>
-                <span className={`font-semibold ${display ? 'text-blue-900' : 'text-blue-300'}`}>{display ?? '—'}</span>
+                <span className="text-txt-muted font-medium truncate pr-1">{type}</span>
+                <span className={`font-semibold ${display ? 'text-txt-primary' : 'text-txt-muted'}`}>
+                  {display ?? '—'}
+                </span>
               </div>
             )
           })}
@@ -2319,9 +2326,7 @@ function CompactDetailCell({
       className={pillClass}
     >
       {displayWithSuffix ?? '—'}
-      {source && s.tag && (
-        <span className={`text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
-      )}
+      {/* Tag text intentionally omitted — panel header legend carries the color key */}
       <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
     </button>
   )
@@ -2410,10 +2415,12 @@ function CompactMultiTag({
     setSearch('')
   }
 
+  // Neutral grey by default so the row reads the same weight as a plain
+  // CompactDetailCell value; source-tagged styling only when set explicitly.
   const pillStyle = source === 'api' ? 'bg-purple-100 text-purple-700'
     : source === 'ai' ? 'bg-blue-100 text-blue-700'
     : source === 'user' ? 'bg-green-100 text-green-700'
-    : 'bg-gunner-red-light text-gunner-red'
+    : 'bg-surface-secondary text-txt-secondary'
 
   return (
     <div className="flex items-center justify-between gap-2 h-[28px]">
@@ -2615,9 +2622,7 @@ function NumbersColumn({
                 className={pillClass}
               >
                 {display ?? '—'}
-                {src && s.tag && (
-                  <span className={`text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
-                )}
+                {/* Tag text intentionally omitted — panel header legend carries the color key */}
                 <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
               </button>
             </div>
