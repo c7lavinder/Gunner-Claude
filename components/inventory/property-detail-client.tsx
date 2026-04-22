@@ -2530,6 +2530,19 @@ function NumbersColumn({
     return val
   }
 
+  // Risk Factor is computed: (Construction + Max Offer) / ARV for the active
+  // offer-type tab. Returns null when any input is missing or ARV is zero.
+  // Displayed as a percentage — lower = less exposure against the as-repaired
+  // value. Intentionally read-only: users edit the three inputs, not the ratio.
+  function computedRiskFactor(): string | null {
+    const src = activeTab === 'Cash' ? cashValues : (altPrices[activeTab] ?? {})
+    const construction = Number(src.constructionEstimate)
+    const maxOffer = Number(src.mao)
+    const arv = Number(src.arv)
+    if (!Number.isFinite(construction) || !Number.isFinite(maxOffer) || !Number.isFinite(arv) || arv <= 0) return null
+    return ((construction + maxOffer) / arv * 100).toFixed(1) + '%'
+  }
+
   async function save(field: string) {
     if (saving) return
     const raw = editValue.trim()
@@ -2584,6 +2597,20 @@ function NumbersColumn({
       {/* 5 field rows */}
       <div className="space-y-0.5">
         {NUMBERS_FIELDS.map(f => {
+          // Risk Factor is derived: (construction + max offer) / arv for the
+          // active offer-type tab. Read-only, no source color, no edit affordance.
+          if (f.key === 'riskFactor') {
+            const display = computedRiskFactor()
+            return (
+              <div key={f.key} className="flex items-center justify-between gap-2 h-[28px]" title="(Construction + Max Offer) / ARV">
+                <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
+                <span className={`text-ds-fine font-medium ${display ? 'text-txt-primary' : 'text-txt-muted'}`}>
+                  {display ?? '—'}
+                </span>
+              </div>
+            )
+          }
+
           const val = getValue(f.key)
           const src = getSource(f.key)
           const display = formatDisplay(f.key, val)
