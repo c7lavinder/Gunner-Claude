@@ -18,6 +18,12 @@ name = "gunner-ai-web"
 [services.env]
 PORT = "3000"
 NODE_ENV = "production"
+# Force npm to install devDependencies even under NODE_ENV=production.
+# Next.js build requires autoprefixer/postcss/tailwind at build time even
+# though they're not runtime deps. Without this, a Nixpacks/npm version
+# update can silently prune them and the build fails with
+# "Cannot find module 'autoprefixer'".
+NPM_CONFIG_PRODUCTION = "false"
 
 # Cron job: poll GHL for new calls every minute (CallCompleted webhook unavailable)
 [[cron]]
