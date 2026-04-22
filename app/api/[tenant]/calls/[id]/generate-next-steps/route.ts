@@ -22,12 +22,20 @@ export async function POST(
     where: { id: params.id, tenantId: session.tenantId },
     select: {
       id: true, aiSummary: true, callOutcome: true, callType: true,
-      transcript: true, contactName: true, aiNextSteps: true,
+      transcript: true, contactName: true, aiNextSteps: true, calledAt: true,
       assignedTo: { select: { name: true, role: true } },
       property: { select: { address: true, city: true, state: true, status: true, ghlPipelineStage: true, ghlPipelineId: true } },
     },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
+
+  // Anchor relative dates + signal the rep's name so SMS bodies aren't signed
+  // with a hallucinated name. Mirrors the grading.ts prompt.
+  const anchorDate = call.calledAt ?? new Date()
+  const todayIso = anchorDate.toISOString().slice(0, 10)
+  const todayDow = anchorDate.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' })
+  const repName = call.assignedTo?.name ?? 'the rep'
+  const repFirst = repName.split(/\s+/)[0] ?? repName
 
   // Tenant-configured appointment types + live pipelines for explicit-ID routing
   const tenant = await db.tenant.findUnique({
@@ -121,6 +129,10 @@ export async function POST(
         role: 'user',
         content: `You are a real estate wholesaling CRM assistant. Based on this call, ${typeInstruction}
 
+TODAY'S DATE: ${todayIso} (${todayDow}, America/Chicago). Any appointmentTime or sendAt MUST be at or after today — past dates are a bug.
+
+THE REP ON THIS CALL: ${repFirst} (${repName}). Any SMS is FROM ${repFirst} — sign with their first name, not anyone else.
+
 VALID ACTION TYPES (use these exact strings):
 - add_note: Add a note to the contact record (full narrative paragraph, first person from rep's perspective)
 - create_task: Create a follow-up task (specific title like "Contact Name: Follow up on Address after outcome")
@@ -139,8 +151,8 @@ RULES:
 - Only suggest actions the transcript actually supports
 - For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
 - For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
-- For send_sms: "label" is a short action-card summary like "Follow-up text after walkthrough". "smsBody" is the REAL message text that will be sent — written in first person as the rep, casual/friendly but professional. Never duplicate label text into smsBody.
-- For create_appointment: ONLY emit if an appointment type matches the call. Set appointmentTypeId + calendarId from the matching type. appointmentTime = ISO datetime (next reasonable slot — 2-3 business days out, 10am or 2pm, weekdays only). Set "label" using the titleTemplate if given; otherwise "{typeLabel} at {address} w/ {contactName}".
+- For send_sms: "label" is a short action-card summary like "Follow-up text after walkthrough". "smsBody" is the REAL message text that will be sent — written in first person as ${repFirst}, casual/friendly but professional, signed off as ${repFirst}. Never duplicate label text into smsBody. Never sign as a name other than ${repFirst}.
+- For create_appointment: ONLY emit if an appointment type matches the call. Set appointmentTypeId + calendarId from the matching type. appointmentTime = ISO datetime AT OR AFTER ${todayIso}. If the transcript mentions a day like "Friday", resolve to the NEXT ${todayIso}-or-later Friday — never a past date. Weekdays only, 10am or 2pm local default. Set "label" using the titleTemplate if given; otherwise "{typeLabel} at {address} w/ {contactName}".
 - For change_stage: ALWAYS emit explicit pipelineId AND stageId from the list. Never use stage names. Skip if no appropriate stage exists.
 
 AVAILABLE APPOINTMENT TYPES (use these exact ids and calendarIds):

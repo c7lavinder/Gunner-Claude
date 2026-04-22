@@ -1004,10 +1004,26 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
       where: { id: callId },
       select: {
         aiSummary: true, callOutcome: true, callType: true, transcript: true, contactName: true,
+        calledAt: true,
+        assignedTo: { select: { name: true, role: true } },
         property: { select: { address: true, city: true, state: true, propertyCondition: true, ghlPipelineStage: true, ghlPipelineId: true } },
       },
     })
     if (!call) return
+
+    // Today's date anchors relative references in the transcript ("Friday",
+    // "Monday", "next week") to real dates. Without this the model defaults
+    // to training-data-stale dates and we end up with appointmentTime in the
+    // past (e.g. "2025-01-24" on a 2026 call).
+    const anchorDate = call.calledAt ?? new Date()
+    const todayIso = anchorDate.toISOString().slice(0, 10)
+    const todayDow = anchorDate.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' })
+    // Rep name + role so the model signs SMS messages as the actual rep, not
+    // a random name pulled from context. Was hallucinating "Carl" on a
+    // Kyle-assigned call before this landed.
+    const repName = call.assignedTo?.name ?? 'the rep'
+    const repFirst = repName.split(/\s+/)[0] ?? repName
+    const repRole = call.assignedTo?.role ?? 'Unknown'
 
     // Feed the FULL transcript — reps often reference specific quotes/timestamps
     // we want surfaced. Opus handles long context well.
@@ -1065,6 +1081,10 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
         role: 'user',
         content: `You are a real estate wholesaling CRM assistant. Based on this graded call, generate 3-5 specific next step actions the rep should take.
 
+TODAY'S DATE: ${todayIso} (${todayDow}, America/Chicago). Any appointmentTime or sendAt you produce MUST be at or after today — past dates are a bug.
+
+THE REP ON THIS CALL: ${repFirst} (${repName}, role ${repRole}). Any SMS you write is FROM ${repFirst} — sign it with their first name, not a placeholder or a hallucinated name.
+
 CRITICAL RULES:
 - Each action type can only appear ONCE. Do NOT generate two actions of the same type.
 - Every label must be specific with real names, addresses, and details from the call.
@@ -1072,8 +1092,8 @@ CRITICAL RULES:
 - For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
 - For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
 
-- For send_sms: The "label" field is a short summary shown on the action card. The "smsBody" field MUST contain the actual message text the contact will receive — written as the rep in first person, casual/friendly but professional. Do not put the SMS copy in the label field.
-- For create_appointment: ONLY emit this type if a matching appointment type exists below. Set "appointmentTypeId" to the matching id, "calendarId" to that type's calendarId, and "appointmentTime" to an ISO datetime (next reasonable slot based on the call — e.g. 2-3 business days out, 10am or 2pm default, weekdays only). Set "label" using the type's titleTemplate if given, otherwise "{typeLabel} at {address} w/ {contactName}".
+- For send_sms: The "label" field is a short summary shown on the action card. The "smsBody" field MUST contain the actual message text the contact will receive — written as ${repFirst} in first person, casual/friendly but professional. Sign off as ${repFirst}, not anyone else. Do not put the SMS copy in the label field.
+- For create_appointment: ONLY emit this type if a matching appointment type exists below. Set "appointmentTypeId" to the matching id, "calendarId" to that type's calendarId, and "appointmentTime" to an ISO datetime AT OR AFTER ${todayIso}. If the transcript mentions a day like "Friday", resolve it to the NEXT ${todayIso}-or-later Friday — never a past date. Weekdays only, 10am or 2pm local default. Set "label" using the type's titleTemplate if given, otherwise "{typeLabel} at {address} w/ {contactName}".
 - For change_stage: ALWAYS emit explicit "pipelineId" AND "stageId" picked from the pipelines list below. If no appropriate stage exists, do NOT emit change_stage. Never return stage names instead of IDs.
 
 AVAILABLE APPOINTMENT TYPES (use these exact ids and calendarIds):
