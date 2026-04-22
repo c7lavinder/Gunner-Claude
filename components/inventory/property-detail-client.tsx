@@ -148,6 +148,159 @@ export function PropertyDetailClient({
   const { toast } = useToast()
   const [actionMsg, setActionMsg] = useState('')
 
+  // ── Shared editable state (lifted from OverviewTab) ─────────────────────────
+  // Lifted so the Property Details panel can render above the tab bar and stay
+  // in sync with the Overview-tab price matrix cards. Any field the user edits
+  // in the panel (arv / construction / mao / price) is reflected immediately in
+  // the Overview pricing rows, and vice-versa, because both views read from the
+  // same vals / sources / altPrices / offerTypes state below.
+  const [vals, setVals] = useState({
+    askingPrice: property.askingPrice,
+    mao: property.mao,
+    currentOffer: property.currentOffer,
+    contractPrice: property.contractPrice,
+    highestOffer: property.highestOffer,
+    acceptedPrice: property.acceptedPrice,
+    assignmentFee: property.assignmentFee,
+    finalProfit: property.finalProfit,
+    beds: property.beds,
+    baths: property.baths,
+    sqft: property.sqft,
+    yearBuilt: property.yearBuilt,
+    lotSize: property.lotSize,
+    propertyType: property.propertyType,
+    projectType: property.projectType,
+    propertyMarkets: property.propertyMarkets,
+    occupancy: property.occupancy,
+    lockboxCode: property.lockboxCode,
+    waterType: property.waterType,
+    waterNotes: property.waterNotes,
+    sewerType: property.sewerType,
+    sewerCondition: property.sewerCondition,
+    sewerNotes: property.sewerNotes,
+    electricType: property.electricType,
+    electricNotes: property.electricNotes,
+    description: property.description,
+    internalNotes: property.internalNotes,
+    propertyCondition: property.propertyCondition,
+    arv: property.arv,
+    constructionEstimate: property.constructionEstimate,
+    riskFactor: property.riskFactor,
+  })
+  const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
+  const [offerTypes, setOfferTypes] = useState<string[]>(property.offerTypes ?? [])
+  const [altPrices, setAltPrices] = useState<Record<string, Record<string, string | null>>>(property.altPrices ?? {})
+  const isClosed = property.status === 'SOLD' || property.status === 'DISPO_CLOSED'
+
+  // Auto-compute assignment fee + final profit on mount if inputs exist and
+  // values are empty. Final profit only auto-populates once the deal is closed.
+  useEffect(() => {
+    const updates: Record<string, unknown> = {}
+    const srcUpdates: Record<string, string> = {}
+    if (!vals.assignmentFee && vals.acceptedPrice && vals.contractPrice) {
+      const fee = Number(vals.acceptedPrice) - Number(vals.contractPrice)
+      if (fee >= 0) { updates.assignmentFee = String(fee); srcUpdates.assignmentFee = 'ai' }
+    }
+    if (isClosed && !vals.finalProfit && property.arv && vals.contractPrice) {
+      const repair = property.repairEstimate ? Number(property.repairEstimate) : 0
+      const profit = Number(property.arv) - Number(vals.contractPrice) - repair
+      updates.finalProfit = String(profit); srcUpdates.finalProfit = 'ai'
+    }
+    // Clear stale AI-generated finalProfit on non-closed deals
+    if (!isClosed && vals.finalProfit && sources.finalProfit === 'ai') {
+      updates.finalProfit = null
+      srcUpdates.finalProfit = ''
+    }
+    if (Object.keys(updates).length > 0) {
+      setVals(prev => ({ ...prev, ...updates }))
+      setSources(prev => ({ ...prev, ...srcUpdates }))
+      fetch(`/api/properties/${property.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...updates, fieldSources: srcUpdates }),
+      }).catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handleOfferTypesChange(next: string[]) {
+    setOfferTypes(next)
+    setAltPrices(prev => {
+      const pruned: Record<string, Record<string, string | null>> = {}
+      for (const t of next) if (prev[t]) pruned[t] = prev[t]
+      return pruned
+    })
+  }
+
+  function handleAltSaved(type: string, field: string, val: string | null) {
+    setAltPrices(prev => {
+      const next = { ...prev }
+      const forType = { ...(next[type] ?? {}) }
+      if (val == null || val === '') delete forType[field]
+      else forType[field] = val
+      if (Object.keys(forType).length > 0) next[type] = forType
+      else delete next[type]
+      return next
+    })
+  }
+
+  function handleArraySaved(field: string, newVals: string[]) {
+    setVals(prev => ({ ...prev, [field]: newVals }))
+    setSources(prev => ({ ...prev, [field]: 'user' }))
+  }
+
+  function handleSaved(field: string, val: string | number | null, src?: string) {
+    setVals(prev => {
+      const next = { ...prev, [field]: val }
+      // Auto-calc assignment fee when accepted/contract price changes
+      if (field === 'acceptedPrice' && val && next.contractPrice && sources.assignmentFee !== 'user') {
+        const fee = Number(val) - Number(next.contractPrice)
+        if (fee >= 0) {
+          next.assignmentFee = String(fee)
+          fetch(`/api/properties/${property.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
+          }).catch(() => {})
+          setSources(p => ({ ...p, assignmentFee: 'ai' }))
+        }
+      }
+      if (field === 'contractPrice' && val && next.acceptedPrice && sources.assignmentFee !== 'user') {
+        const fee = Number(next.acceptedPrice) - Number(val)
+        if (fee >= 0) {
+          next.assignmentFee = String(fee)
+          fetch(`/api/properties/${property.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
+          }).catch(() => {})
+          setSources(p => ({ ...p, assignmentFee: 'ai' }))
+        }
+      }
+      // Auto-calc final profit once closed
+      if (isClosed && ['contractPrice', 'arv'].includes(field) && sources.finalProfit !== 'user') {
+        const arvVal = field === 'arv' ? val : property.arv
+        const contractVal = field === 'contractPrice' ? val : next.contractPrice
+        if (arvVal && contractVal) {
+          const repair = property.repairEstimate ? Number(property.repairEstimate) : 0
+          const profit = Number(arvVal) - Number(contractVal) - repair
+          next.finalProfit = String(profit)
+          fetch(`/api/properties/${property.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ finalProfit: String(profit), fieldSources: { finalProfit: 'ai' } }),
+          }).catch(() => {})
+          setSources(p => ({ ...p, finalProfit: 'ai' }))
+        }
+      }
+      return next
+    })
+    if (src !== undefined) {
+      setSources(prev => {
+        const next = { ...prev }
+        if (src) next[field] = src; else delete next[field]
+        return next
+      })
+    }
+  }
+
   // Contact suggestion state
   const [pendingSuggestionCount, setPendingSuggestionCount] = useState(0)
   const [suggestions, setSuggestions] = useState<Array<{
@@ -309,6 +462,21 @@ export function PropertyDetailClient({
         <DealProgress currentStatus={property.status} dispoStatus={property.dispoStatus} milestones={property.milestones} propertyId={property.id} canEdit={canEdit} teamMembers={property.teamMembers} />
       </div>
 
+      {/* Property Details panel — persistent across tabs, sits between the
+          pipeline visual and the tab bar. Reads/writes the same shared state
+          so edits here are reflected in the Overview pricing rows instantly. */}
+      <PropertyDetailsPanel
+        propertyId={property.id}
+        vals={vals}
+        sources={sources}
+        altPrices={altPrices}
+        offerTypes={offerTypes}
+        onSaved={handleSaved}
+        onArraySaved={handleArraySaved}
+        onAltSaved={handleAltSaved}
+        projectTypeOptions={projectTypeOptions}
+      />
+
       {/* Tab bar */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
         <div className="flex border-b border-[rgba(0,0,0,0.06)] overflow-x-auto">
@@ -340,7 +508,14 @@ export function PropertyDetailClient({
         {/* Tab content */}
         <div className="p-5">
           {activeTab === 'overview' && (
-            <OverviewTab property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg} ghlContactId={ghlContactId} projectTypeOptions={projectTypeOptions} />
+            <OverviewTab
+              property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug}
+              runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg}
+              ghlContactId={ghlContactId} projectTypeOptions={projectTypeOptions}
+              vals={vals} sources={sources} altPrices={altPrices} offerTypes={offerTypes}
+              onSaved={handleSaved} onArraySaved={handleArraySaved} onAltSaved={handleAltSaved}
+              onOfferTypesChange={handleOfferTypesChange}
+            />
           )}
           {activeTab === 'data' && (
             <div className="space-y-6">
@@ -358,7 +533,9 @@ export function PropertyDetailClient({
           )}
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'outreach' && <OutreachTab property={property} />}
-          {activeTab === 'activity' && <ActivityTab property={property} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} ghlContactId={ghlContactId} />}
+          {activeTab === 'activity' && (
+            <ActivityTab property={property} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} ghlContactId={ghlContactId} />
+          )}
           {activeTab === 'blast' && <DealBlastTab property={property} tenantSlug={tenantSlug} />}
         </div>
       </div>
@@ -2662,12 +2839,141 @@ function NumbersColumn({
 
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
-function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId, projectTypeOptions }: {
+// Shape of the shared editable state passed down from PropertyDetailClient.
+// Declared here so OverviewTab and PropertyDetailsPanel share a single type
+// instead of each re-declaring the same field list. Fields come from the
+// Property row + a handful of derived columns (arv / construction estimate).
+interface SharedVals {
+  askingPrice: string | null
+  mao: string | null
+  currentOffer: string | null
+  contractPrice: string | null
+  highestOffer: string | null
+  acceptedPrice: string | null
+  assignmentFee: string | null
+  finalProfit: string | null
+  beds: number | null
+  baths: number | null
+  sqft: number | null
+  yearBuilt: number | null
+  lotSize: string | null
+  propertyType: string | null
+  projectType: string[]
+  propertyMarkets: string[]
+  occupancy: string | null
+  lockboxCode: string | null
+  waterType: string | null
+  waterNotes: string | null
+  sewerType: string | null
+  sewerCondition: string | null
+  sewerNotes: string | null
+  electricType: string | null
+  electricNotes: string | null
+  description: string | null
+  internalNotes: string | null
+  propertyCondition: string | null
+  arv: string | null
+  constructionEstimate: string | null
+  riskFactor: string | null
+}
+
+// ─── Property Details Panel ─────────────────────────────────────────────────
+// Lives at page level, above the tab bar. Three-column layout (Details /
+// Specs / Numbers) kept in sync with the Overview tab's pricing rows via the
+// shared state in PropertyDetailClient.
+
+function PropertyDetailsPanel({
+  propertyId, vals, sources, altPrices, offerTypes, onSaved, onArraySaved, onAltSaved, projectTypeOptions,
+}: {
+  propertyId: string
+  vals: SharedVals
+  sources: Record<string, string>
+  altPrices: Record<string, Record<string, string | null>>
+  offerTypes: string[]
+  onSaved: (field: string, val: string | number | null, src?: string) => void
+  onArraySaved: (field: string, vals: string[]) => void
+  onAltSaved: (type: string, field: string, val: string | null) => void
+  projectTypeOptions?: string[]
+}) {
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Details</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">API</span>
+          <span className="text-[7px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">AI</span>
+          <span className="text-[7px] font-bold text-green-500 bg-green-50 px-1 py-0.5 rounded">EDITED</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)]">
+        {/* Column 1 — Details */}
+        <div className="px-4 py-2">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Details</p>
+          <CompactDetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={propertyId} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={onSaved} />
+          <CompactMultiTag label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
+            field="propertyMarkets" propertyId={propertyId} allowCustom source={sources.propertyMarkets} onSaved={onArraySaved} />
+          <CompactMultiTag label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
+            field="projectType" propertyId={propertyId} allowCustom source={sources.projectType} onSaved={onArraySaved} />
+          <CompactDetailCell label="Access" value={vals.lockboxCode} field="lockboxCode" propertyId={propertyId} source={sources.lockboxCode} onSaved={onSaved} />
+          <CompactDetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={propertyId} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={onSaved} />
+        </div>
+
+        {/* Column 2 — Specs */}
+        <div className="px-4 py-2">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Specs</p>
+          <CompactDetailCell label="Beds" value={vals.beds} field="beds" propertyId={propertyId} type="number" source={sources.beds} onSaved={onSaved} />
+          <CompactDetailCell label="Baths" value={vals.baths} field="baths" propertyId={propertyId} type="number" source={sources.baths} onSaved={onSaved} />
+          <CompactDetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={propertyId} type="number" source={sources.sqft} suffix="sqft" onSaved={onSaved} />
+          <CompactDetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={propertyId} source={sources.lotSize} onSaved={onSaved} />
+          <CompactDetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={propertyId} type="number" source={sources.yearBuilt} onSaved={onSaved} />
+        </div>
+
+        {/* Column 3 — Numbers (tabbed per offer type) */}
+        <div className="px-4 py-2">
+          <NumbersColumn
+            propertyId={propertyId}
+            cashValues={{
+              arv: vals.arv,
+              constructionEstimate: vals.constructionEstimate,
+              mao: vals.mao,
+              riskFactor: vals.riskFactor,
+              askingPrice: vals.askingPrice,
+            }}
+            cashSources={sources}
+            altPrices={altPrices}
+            offerTypes={offerTypes}
+            onCashSaved={onSaved}
+            onAltSaved={onAltSaved}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OverviewTab({
+  property, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId, projectTypeOptions,
+  vals, sources, altPrices, offerTypes, onSaved, onArraySaved, onAltSaved, onOfferTypesChange,
+}: {
   property: PropertyDetail; dom: number; domColor: string
   tenantSlug: string; runGhlAction: (type: string, payload: Record<string, string>) => void
   sending: boolean; actionMsg: string; ghlContactId: string | null
   projectTypeOptions?: string[]
+  vals: SharedVals
+  sources: Record<string, string>
+  altPrices: Record<string, Record<string, string | null>>
+  offerTypes: string[]
+  onSaved: (field: string, val: string | number | null, src?: string) => void
+  onArraySaved: (field: string, vals: string[]) => void
+  onAltSaved: (type: string, field: string, val: string | null) => void
+  onOfferTypesChange: (next: string[]) => void
 }) {
+  // Local alias so the rest of the body can keep using the same names it used
+  // when this state was declared locally inside OverviewTab.
+  const handleSaved = onSaved
+  const handleAltSaved = onAltSaved
+  const handleOfferTypesChange = onOfferTypesChange
   // Appointments for this property's contact — fetch past 7 days + next 7 days
   const [appointments, setAppointments] = useState<Array<{ id: string; startTime: string; calendarName: string; status: string }>>([])
   useEffect(() => {
@@ -2697,174 +3003,8 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
     })
   }, [tenantSlug, ghlContactId])
 
-  // Local editable state — updates on save without page reload
-  const [vals, setVals] = useState({
-    askingPrice: property.askingPrice,
-    mao: property.mao,
-    currentOffer: property.currentOffer,
-    contractPrice: property.contractPrice,
-    highestOffer: property.highestOffer,
-    acceptedPrice: property.acceptedPrice,
-    assignmentFee: property.assignmentFee,
-    finalProfit: property.finalProfit,
-    beds: property.beds,
-    baths: property.baths,
-    sqft: property.sqft,
-    yearBuilt: property.yearBuilt,
-    lotSize: property.lotSize,
-    propertyType: property.propertyType,
-    projectType: property.projectType,
-    propertyMarkets: property.propertyMarkets,
-    occupancy: property.occupancy,
-    lockboxCode: property.lockboxCode,
-    waterType: property.waterType,
-    waterNotes: property.waterNotes,
-    sewerType: property.sewerType,
-    sewerCondition: property.sewerCondition,
-    sewerNotes: property.sewerNotes,
-    electricType: property.electricType,
-    electricNotes: property.electricNotes,
-    description: property.description,
-    internalNotes: property.internalNotes,
-    propertyCondition: property.propertyCondition,
-    // Numbers-panel fields (Cash tab). Alt-tab values live in altPrices[type].
-    arv: property.arv,
-    constructionEstimate: property.constructionEstimate,
-    riskFactor: property.riskFactor,
-  })
-
-  const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
-
-  // Auto-compute assignment fee + final profit on mount if inputs exist and values are empty
-  // Final profit only auto-populates once the deal reaches a closed stage.
-  const isClosed = property.status === 'SOLD' || property.status === 'DISPO_CLOSED'
-  useEffect(() => {
-    const updates: Record<string, unknown> = {}
-    const srcUpdates: Record<string, string> = {}
-    // Assignment fee = accepted - contract
-    if (!vals.assignmentFee && vals.acceptedPrice && vals.contractPrice) {
-      const fee = Number(vals.acceptedPrice) - Number(vals.contractPrice)
-      if (fee >= 0) {
-        updates.assignmentFee = String(fee); srcUpdates.assignmentFee = 'ai'
-      }
-    }
-    // Final profit = ARV - contract - repair (repair optional, default 0) — closed deals only
-    if (isClosed && !vals.finalProfit && property.arv && vals.contractPrice) {
-      const repair = property.repairEstimate ? Number(property.repairEstimate) : 0
-      const profit = Number(property.arv) - Number(vals.contractPrice) - repair
-      updates.finalProfit = String(profit); srcUpdates.finalProfit = 'ai'
-    }
-    // One-time cleanup: clear stale AI-generated finalProfit on non-closed deals
-    // (earlier builds wrote these prematurely; only closed deals should carry a final profit)
-    if (!isClosed && vals.finalProfit && sources.finalProfit === 'ai') {
-      updates.finalProfit = null
-      srcUpdates.finalProfit = ''
-    }
-    if (Object.keys(updates).length > 0) {
-      setVals(prev => ({ ...prev, ...updates }))
-      setSources(prev => ({ ...prev, ...srcUpdates }))
-      fetch(`/api/properties/${property.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...updates, fieldSources: srcUpdates }),
-      }).catch(() => {})
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Alt offer types + per-type price overrides (Novation, Subto, Partnership, …)
-  const [offerTypes, setOfferTypes] = useState<string[]>(property.offerTypes ?? [])
-  const [altPrices, setAltPrices] = useState<Record<string, Record<string, string | null>>>(property.altPrices ?? {})
-
-  function handleOfferTypesChange(next: string[]) {
-    setOfferTypes(next)
-    // When a type is removed server-side it also clears altPrices for that key;
-    // mirror that in local state so the UI stays consistent without a refetch.
-    setAltPrices(prev => {
-      const pruned: Record<string, Record<string, string | null>> = {}
-      for (const t of next) if (prev[t]) pruned[t] = prev[t]
-      return pruned
-    })
-  }
-
-  function handleAltSaved(type: string, field: string, val: string | null) {
-    setAltPrices(prev => {
-      const next = { ...prev }
-      const forType = { ...(next[type] ?? {}) }
-      if (val == null || val === '') delete forType[field]
-      else forType[field] = val
-      if (Object.keys(forType).length > 0) next[type] = forType
-      else delete next[type]
-      return next
-    })
-  }
-
-  function handleArraySaved(field: string, vals: string[]) {
-    setVals(prev => ({ ...prev, [field]: vals }))
-    setSources(prev => ({ ...prev, [field]: 'user' }))
-  }
-
-  function handleSaved(field: string, val: string | number | null, src?: string) {
-    setVals(prev => {
-      const next = { ...prev, [field]: val }
-
-      // Auto-calculate assignment fee when accepted price is set and contract price exists
-      // Only auto-calc if assignmentFee wasn't manually set (source !== 'user')
-      if (field === 'acceptedPrice' && val && next.contractPrice && sources.assignmentFee !== 'user') {
-        const fee = Number(val) - Number(next.contractPrice)
-        if (fee >= 0) {
-          next.assignmentFee = String(fee)
-          fetch(`/api/properties/${property.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
-          }).catch(() => {})
-          setSources(p => ({ ...p, assignmentFee: 'ai' }))
-        }
-      }
-      // Also recalculate if contract price changes and accepted price exists
-      if (field === 'contractPrice' && val && next.acceptedPrice && sources.assignmentFee !== 'user') {
-        const fee = Number(next.acceptedPrice) - Number(val)
-        if (fee >= 0) {
-          next.assignmentFee = String(fee)
-          fetch(`/api/properties/${property.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ assignmentFee: String(fee), fieldSources: { assignmentFee: 'ai' } }),
-          }).catch(() => {})
-          setSources(p => ({ ...p, assignmentFee: 'ai' }))
-        }
-      }
-
-      // Auto-calculate final profit: ARV - Contract - Repair — only once the deal is closed
-      if (isClosed && ['contractPrice', 'arv'].includes(field) && sources.finalProfit !== 'user') {
-        const arvVal = field === 'arv' ? val : property.arv
-        const contractVal = field === 'contractPrice' ? val : next.contractPrice
-        if (arvVal && contractVal) {
-          const repair = property.repairEstimate ? Number(property.repairEstimate) : 0
-          const profit = Number(arvVal) - Number(contractVal) - repair
-          next.finalProfit = String(profit)
-          fetch(`/api/properties/${property.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ finalProfit: String(profit), fieldSources: { finalProfit: 'ai' } }),
-          }).catch(() => {})
-          setSources(p => ({ ...p, finalProfit: 'ai' }))
-        }
-      }
-
-      return next
-    })
-    if (src !== undefined) {
-      setSources(prev => {
-        const next = { ...prev }
-        if (src) next[field] = src; else delete next[field]
-        return next
-      })
-    }
-  }
-
-  // Est. Spread is now computed inside ComputedSpreadCard per offer type.
+  // State + handlers are now lifted to PropertyDetailClient and passed as props.
+  // This tab stays in sync with the persistent Property Details panel above.
 
   return (
     <div className="space-y-5">
@@ -2906,60 +3046,9 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         </div>
       </div>
 
-      {/* Property Details — 3-col layout: Details · Specs · Numbers (tabbed by offer type) */}
-      <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
-          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Details</p>
-          <div className="flex items-center gap-2">
-            <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">API</span>
-            <span className="text-[7px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">AI</span>
-            <span className="text-[7px] font-bold text-green-500 bg-green-50 px-1 py-0.5 rounded">EDITED</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)]">
-          {/* Column 1 — Details */}
-          <div className="px-4 py-2">
-            <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Details</p>
-            <CompactDetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={handleSaved} />
-            <CompactMultiTag label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
-              field="propertyMarkets" propertyId={property.id} allowCustom source={sources.propertyMarkets} onSaved={handleArraySaved} />
-            <CompactMultiTag label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
-              field="projectType" propertyId={property.id} allowCustom source={sources.projectType} onSaved={handleArraySaved} />
-            <CompactDetailCell label="Access" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
-            <CompactDetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={handleSaved} />
-          </div>
-
-          {/* Column 2 — Specs */}
-          <div className="px-4 py-2">
-            <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Specs</p>
-            <CompactDetailCell label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
-            <CompactDetailCell label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
-            <CompactDetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} suffix="sqft" onSaved={handleSaved} />
-            <CompactDetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
-            <CompactDetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
-          </div>
-
-          {/* Column 3 — Numbers (tabbed per offer type) */}
-          <div className="px-4 py-2">
-            <NumbersColumn
-              propertyId={property.id}
-              cashValues={{
-                arv: vals.arv,
-                constructionEstimate: vals.constructionEstimate,
-                mao: vals.mao,
-                riskFactor: vals.riskFactor,
-                askingPrice: vals.askingPrice,
-              }}
-              cashSources={sources}
-              altPrices={altPrices}
-              offerTypes={offerTypes}
-              onCashSaved={handleSaved}
-              onAltSaved={handleAltSaved}
-            />
-          </div>
-        </div>
-      </div>
+      {/* Property Details panel lives at page level above the tab bar now,
+          so it persists across tabs. See <PropertyDetailsPanel /> in the
+          parent render. */}
 
       {/* Deal Story — AI-generated narrative, replaces the old Description + Internal Notes
           blocks. Those fields now live on the Deal Blast tab where they feed blast copy. */}
@@ -5392,7 +5481,7 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
 
 // ─── Activity / Messaging Tab ────────────────────────────────────────────────
 
-function ActivityTab({ property }: {
+function ActivityTab({ property, tenantSlug }: {
   property: PropertyDetail
   tenantSlug: string
   runGhlAction: (type: string, payload: Record<string, string>) => void
@@ -5475,7 +5564,16 @@ function ActivityTab({ property }: {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Persistent side sections — same components rendered on Overview so
+          Contacts / Team / AI Actions are reachable from Activity too. Three
+          columns on wide screens, stacked on narrow. */}
+      <div className="grid lg:grid-cols-3 gap-5">
+        <ContactsSection propertyId={property.id} tenantSlug={tenantSlug} initialSellers={property.sellers} />
+        <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />
+        <InlineAI propertyId={property.id} />
+      </div>
+
       {/* Message input with @mention */}
       <div className="relative">
         <div className="flex gap-2">
