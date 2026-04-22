@@ -149,7 +149,7 @@ RULES:
 - Labels must be specific: "Drema Wrye: Follow up on 225 Edgewater Dr after offer rejection" NOT "Follow up with seller"
 - Each action type can only appear ONCE. Do NOT generate two actions of the same type.
 - Only suggest actions the transcript actually supports
-- For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
+- For add_note: "label" is a short action-card title like "Follow-up call with {contactName} — walkthrough scheduled". "noteBody" is the FULL paragraph in first person as ${repFirst} that gets pushed to GHL as the CRM note — include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. noteBody must be the full narrative; label is just the Gunner card title. Never duplicate the short label into noteBody.
 - For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
 - For send_sms: "label" is a short action-card summary like "Follow-up text after walkthrough". "smsBody" is the REAL message text that will be sent — written in first person as ${repFirst}, casual/friendly but professional, signed off as ${repFirst}. Never duplicate label text into smsBody. Never sign as a name other than ${repFirst}.
 - For create_appointment: ONLY emit if an appointment type matches the call. Set appointmentTypeId + calendarId from the matching type. appointmentTime = ISO datetime AT OR AFTER ${todayIso}. If the transcript mentions a day like "Friday", resolve to the NEXT ${todayIso}-or-later Friday — never a past date. Weekdays only, 10am or 2pm local default. Set "label" using the titleTemplate if given; otherwise "{typeLabel} at {address} w/ {contactName}".
@@ -166,6 +166,7 @@ Return JSON array only, no other text:
   "type": "<action_type>",
   "label": "<specific action description>",
   "reasoning": "<why this action based on the call>",
+  "noteBody": "only for add_note — the full paragraph pushed to GHL",
   "smsBody": "only for send_sms",
   "sendAt": "only for send_sms if scheduling — ISO datetime",
   "timezone": "only for send_sms if scheduling — IANA zone like America/Chicago",
@@ -229,6 +230,7 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
 
     const rawSteps = JSON.parse(arrayText) as Array<{
       type: string; label: string; reasoning: string
+      noteBody?: string
       smsBody?: string; sendAt?: string; timezone?: string
       appointmentTypeId?: string; calendarId?: string; appointmentTime?: string; durationMin?: number
       pipelineId?: string; stageId?: string

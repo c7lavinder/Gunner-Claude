@@ -21,6 +21,7 @@ const schema = z.object({
   stageId: z.string().optional(),      // required for change_stage (defect #4)
   pipelineId: z.string().optional(),   // optional hint for stageId lookup; otherwise scan all pipelines
   smsBody: z.string().optional(),      // lets SMS body diverge from display label
+  noteBody: z.string().optional(),     // full CRM note text (label is just the card title)
   // SMS scheduling (merged schedule_sms into send_sms).
   sendAt: z.string().optional(),       // ISO datetime when the SMS should fire; empty/null = send immediately
   timezone: z.string().optional(),     // IANA zone, e.g. "America/Chicago"
@@ -47,6 +48,7 @@ const patchSchema = z.object({
     stageId: z.string().optional(),
     pipelineId: z.string().optional(),
     smsBody: z.string().optional(),
+    noteBody: z.string().optional(),
     originalLabel: z.string().optional(),
     sendAt: z.string().optional(),
     timezone: z.string().optional(),
@@ -109,11 +111,18 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
 
     switch (parsed.data.type) {
       // ── Add Note to GHL Contact ─────────────────────────────────────────
+      //
+      // Push priority: noteBody (full narrative paragraph) → description →
+      // label (legacy fallback for old rows where label held the body) →
+      // autosummary from aiSummary. The AI now emits noteBody separately
+      // from label so the card can show a short title while the pushed CRM
+      // note carries the full paragraph.
       case 'add_note': {
-        const noteBody = parsed.data.description
+        const noteText = parsed.data.noteBody
+          || parsed.data.description
           || label
           || `Call on ${callDate}: ${call.aiSummary ?? 'Call graded — see Gunner AI for details.'}`
-        await ghl.addNote(contactId, noteBody)
+        await ghl.addNote(contactId, noteText)
         break
       }
 
@@ -285,6 +294,7 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
           stageId: parsed.data.stageId,
           pipelineId: parsed.data.pipelineId,
           smsBody: parsed.data.smsBody,
+          noteBody: parsed.data.noteBody,
           sendAt: parsed.data.sendAt,
           timezone: parsed.data.timezone,
           fromNumber: parsed.data.fromNumber,
@@ -340,6 +350,7 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
           stageId: parsed.data.stageId,
           pipelineId: parsed.data.pipelineId,
           smsBody: parsed.data.smsBody,
+          noteBody: parsed.data.noteBody,
           sendAt: parsed.data.sendAt,
           timezone: parsed.data.timezone,
           fromNumber: parsed.data.fromNumber,

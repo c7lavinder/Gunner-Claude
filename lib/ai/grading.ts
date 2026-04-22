@@ -1089,7 +1089,7 @@ CRITICAL RULES:
 - Each action type can only appear ONCE. Do NOT generate two actions of the same type.
 - Every label must be specific with real names, addresses, and details from the call.
 - Only suggest actions the call actually supports.
-- For add_note: Write a full paragraph summary in first person from the rep's perspective. Include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. This is the CRM note that gets pushed.
+- For add_note: "label" is a short action-card title like "Follow-up call with {contactName} — walkthrough scheduled". "noteBody" is the FULL paragraph in first person as ${repFirst} that gets pushed to GHL as the CRM note — include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. noteBody must be the full narrative; label is just the Gunner card title. Never duplicate the short label into noteBody.
 - For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
 
 - For send_sms: The "label" field is a short summary shown on the action card. The "smsBody" field MUST contain the actual message text the contact will receive — written as ${repFirst} in first person, casual/friendly but professional. Sign off as ${repFirst}, not anyone else. Do not put the SMS copy in the label field.
@@ -1121,6 +1121,7 @@ Return JSON array only:
   "type": "add_note"|"create_task"|"send_sms"|"create_appointment"|"change_stage"|"check_off_task",
   "label": "specific action description",
   "reasoning": "why this action matters",
+  "noteBody": "only for add_note — the full paragraph pushed to GHL as the CRM note",
   "smsBody": "only for send_sms — the actual SMS text",
   "appointmentTypeId": "only for create_appointment",
   "calendarId": "only for create_appointment",
@@ -1159,6 +1160,7 @@ Return JSON array only:
 
     let steps: Array<{
       type: string; label: string; reasoning: string
+      noteBody?: string
       smsBody?: string; sendAt?: string; timezone?: string
       appointmentTypeId?: string; calendarId?: string; appointmentTime?: string; durationMin?: number
       pipelineId?: string; stageId?: string

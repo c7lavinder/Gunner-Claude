@@ -72,6 +72,9 @@ interface NextStep {
   sendAt?: string       // ISO datetime
   timezone?: string     // IANA zone, e.g. America/Chicago
   fromNumber?: string   // LC outbound number override
+  // Note — full paragraph pushed to GHL as the CRM note body. `label` is just
+  // the card title on the Next Steps tab; noteBody is the real content.
+  noteBody?: string
   // Appointment (Phase 1) — AI emits appointmentTypeId + calendarId +
   // appointmentTime; edit panel lets the user adjust any of them.
   appointmentTypeId?: string
@@ -283,6 +286,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
             sendAt,
             timezone: raw.timezone,
             fromNumber: raw.fromNumber,
+            noteBody: raw.noteBody,
             appointmentTypeId: raw.appointmentTypeId,
             calendarId: raw.calendarId,
             appointmentTime: raw.appointmentTime,
@@ -499,6 +503,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
           stageId: step.stageId,
           pipelineId: step.pipelineId,
           smsBody: step.smsBody,
+          noteBody: step.noteBody,
           sendAt: step.sendAt,
           timezone: step.timezone,
           fromNumber: step.fromNumber,
@@ -1235,14 +1240,27 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                           <div className="border-t pt-3 mb-3 space-y-2.5" style={{ borderColor: 'var(--border-light)' }}>
                             {/* ── ADD NOTE ── */}
                             {step.type === 'add_note' && (
-                              <div>
-                                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Note to Push</label>
-                                <textarea value={editFields.label ?? step.label}
-                                  onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
-                                  rows={4}
-                                  className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
-                                  style={{ borderColor: 'var(--border-medium)' }} />
-                              </div>
+                              <>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Card Title</label>
+                                  <input value={editFields.label ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, label: e.target.value }))}
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-1.5 text-[11px] text-txt-primary focus:outline-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Note to Push (full narrative)</label>
+                                  <textarea value={editFields.noteBody ?? step.noteBody ?? step.label}
+                                    onChange={e => setEditFields(prev => ({ ...prev, noteBody: e.target.value }))}
+                                    rows={6}
+                                    placeholder="Full paragraph in first person — what was discussed, numbers, dates, outcomes…"
+                                    className="w-full bg-white border-[0.5px] rounded-[8px] px-3 py-2 text-[11px] text-txt-primary focus:outline-none resize-none"
+                                    style={{ borderColor: 'var(--border-medium)' }} />
+                                  <p className="text-[9px] text-txt-muted mt-1">
+                                    This exact text is pushed to GHL as the contact note. Card title above stays here in Gunner.
+                                  </p>
+                                </div>
+                              </>
                             )}
 
                             {/* ── CREATE TASK ── */}
@@ -1628,6 +1646,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                                     // SMS: smsBody is the real message text, label stays as the
                                     // action-card title.
                                     smsBody: s.type === 'send_sms' ? (editFields.smsBody ?? s.smsBody) : s.smsBody,
+                                    noteBody: s.type === 'add_note' ? (editFields.noteBody ?? s.noteBody) : s.noteBody,
                                     sendAt: s.type === 'send_sms' ? (editFields.sendAt || undefined) : s.sendAt,
                                     timezone: s.type === 'send_sms' ? (editFields.timezone ?? s.timezone) : s.timezone,
                                     fromNumber: s.type === 'send_sms' ? (editFields.fromNumber || undefined) : s.fromNumber,
@@ -1683,6 +1702,11 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
                             // Pre-populate fields based on action type. Persisted step values win
                             // over defaults so an AI-proposed appointmentTime survives the Edit click.
                             const fields: Record<string, string> = { label: step.label }
+                            if (step.type === 'add_note') {
+                              // Seed noteBody from AI output; fall back to the
+                              // label when legacy rows pre-date the split.
+                              fields.noteBody = step.noteBody ?? step.label
+                            }
                             if (step.type === 'create_task' || step.type === 'check_off_task') {
                               fields.assignedTo = step.assignedTo ?? call.assignedTo?.id ?? ''
                               fields.description = step.description ?? step.reasoning ?? ''
