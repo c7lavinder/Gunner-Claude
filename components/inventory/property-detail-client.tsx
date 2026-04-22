@@ -81,6 +81,7 @@ interface PropertyDetail {
   lastOfferDate: string | null; lastContactedDate: string | null
   // AI enrichment fields
   repairEstimate: string | null; rentalEstimate: string | null
+  constructionEstimate: string | null
   neighborhoodSummary: string | null; zestimate: string | null
   floodZone: string | null
   taxAssessment: string | null; annualTax: string | null
@@ -95,6 +96,8 @@ interface PropertyDetail {
   story: string | null
   storyUpdatedAt: string | null
   storyVersion: number
+  // Risk factor — Cash-tab value; alt values live in altPrices[type].riskFactor
+  riskFactor: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
@@ -2098,6 +2101,69 @@ function PriceMatrixCard({
   )
 }
 
+// ─── Computed Spread Card ────────────────────────────────────────────────────
+// Read-only matrix card mirroring PriceMatrixCard's visual structure. Cash hero
+// plus alt-type sub-rows, all computed as acceptedPrice − contractPrice for
+// that offer type. Keeps the Profit Summary row in visual lockstep with the
+// Assignment Fee + Final Profit cards next to it (same height, same layout,
+// same alt-type sub-rows populated from offerTypes).
+
+function ComputedSpreadCard({
+  cashAccepted, cashContract, altPrices, offerTypes,
+}: {
+  cashAccepted: string | null
+  cashContract: string | null
+  altPrices: Record<string, Record<string, string | null>>
+  offerTypes: string[]
+}) {
+  function spreadFor(accepted: string | null | undefined, contract: string | null | undefined): number | null {
+    if (!accepted || !contract) return null
+    const a = Number(accepted), c = Number(contract)
+    if (!Number.isFinite(a) || !Number.isFinite(c)) return null
+    return a - c
+  }
+
+  const cashSpread = spreadFor(cashAccepted, cashContract)
+  const cashDisplay = cashSpread != null ? `$${cashSpread.toLocaleString()}` : null
+  const cashColor = cashSpread != null
+    ? (cashSpread > 0 ? 'text-semantic-green' : cashSpread < 0 ? 'text-semantic-red' : 'text-txt-primary')
+    : 'text-txt-muted'
+
+  return (
+    <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5 flex flex-col gap-1 relative">
+      {/* Cash hero — matches PriceMatrixCard structure */}
+      <div>
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-txt-muted">EST. SPREAD</p>
+        <div className="mt-0.5 flex items-baseline gap-1.5">
+          <span className={`text-ds-card font-semibold ${cashColor}`}>
+            {cashDisplay ?? '—'}
+          </span>
+          <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Cash</span>
+        </div>
+      </div>
+
+      {/* Alt-type sub-rows */}
+      {offerTypes.length > 0 && (
+        <div className="border-t border-[rgba(0,0,0,0.06)] pt-1 space-y-0.5">
+          {offerTypes.map(type => {
+            const altSpread = spreadFor(altPrices[type]?.acceptedPrice, altPrices[type]?.contractPrice)
+            const display = altSpread != null ? `$${altSpread.toLocaleString()}` : null
+            const color = altSpread != null
+              ? (altSpread > 0 ? 'text-semantic-green' : altSpread < 0 ? 'text-semantic-red' : 'text-txt-primary')
+              : 'text-txt-muted'
+            return (
+              <div key={type} className="flex items-center justify-between text-[10px]">
+                <span className="text-txt-muted font-medium truncate pr-1">{type}</span>
+                <span className={`font-semibold ${color}`}>{display ?? '—'}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Property Story Card ──────────────────────────────────────────────────────
 // Replaces Description + Internal Notes on Overview. AI-generated paragraph
 // that updates after each graded call + daily 7am cron. Manual refresh button
@@ -2299,6 +2365,267 @@ function CompactDetailCell({
   )
 }
 
+// ─── Compact Multi-Tag Cell ──────────────────────────────────────────────────
+// Vertical label + wrapping pills + inline +Add affordance. Used for Market +
+// Project Type inside the narrow Details column of the Property Details panel.
+// Same API semantics as TagRow (saves via PATCH [field]: string[]).
+
+function CompactMultiTag({
+  label, values, options, field, propertyId, source, allowCustom, onSaved,
+}: {
+  label: string
+  values: string[]
+  options: string[]
+  field: string
+  propertyId: string
+  source?: string | null
+  allowCustom?: boolean
+  onSaved: (field: string, vals: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [local, setLocal] = useState(values)
+
+  useEffect(() => { setLocal(values) }, [values])
+
+  const filtered = options.filter(o =>
+    !local.includes(o) && o.toLowerCase().includes(search.toLowerCase())
+  )
+  const showCustom = allowCustom && search.length >= 2 &&
+    !options.some(o => o.toLowerCase() === search.toLowerCase()) &&
+    !local.some(v => v.toLowerCase() === search.toLowerCase())
+
+  async function toggle(val: string) {
+    const next = local.includes(val) ? local.filter(v => v !== val) : [...local, val]
+    setLocal(next)
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: next, fieldSources: { [field]: 'user' } }),
+      })
+      if (res.ok) onSaved(field, next)
+      else setLocal(values)
+    } catch { setLocal(values) }
+    setSaving(false)
+    setSearch('')
+  }
+
+  const pillStyle = source === 'api' ? 'bg-purple-100 text-purple-700'
+    : source === 'ai' ? 'bg-blue-100 text-blue-700'
+    : source === 'user' ? 'bg-green-100 text-green-700'
+    : 'bg-gunner-red-light text-gunner-red'
+
+  return (
+    <div className="py-1">
+      <p className="text-[10px] text-txt-muted font-medium mb-1">{label}</p>
+      <div className="flex items-center gap-1 flex-wrap">
+        {local.map(v => (
+          <span key={v} className={`inline-flex items-center gap-1 ${pillStyle} text-[10px] font-semibold px-2 py-0.5 rounded-full`}>
+            {v}
+            <button onClick={() => toggle(v)} className="hover:opacity-60 transition-opacity"><X size={8} /></button>
+          </span>
+        ))}
+        <FloatingDropdown
+          open={open}
+          onOpenChange={(v) => { setOpen(v); if (!v) setSearch('') }}
+          width={200}
+          trigger={
+            <button onClick={() => setOpen(!open)}
+              className="inline-flex items-center gap-0.5 text-[10px] text-txt-muted hover:text-gunner-red px-1.5 py-0.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] hover:border-gunner-red/30 transition-all">
+              <Plus size={8} /> Add
+            </button>
+          }
+        >
+          <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={allowCustom ? 'Search or add custom…' : 'Search…'}
+            className="w-full bg-surface-secondary rounded-[4px] px-2 py-1 text-[10px] placeholder-txt-muted focus:outline-none mb-1" />
+          <div className="max-h-36 overflow-y-auto space-y-0.5">
+            {filtered.map(o => (
+              <button key={o} onClick={() => toggle(o)} disabled={saving}
+                className="w-full text-left text-[10px] text-txt-primary px-2 py-1 rounded hover:bg-surface-secondary transition-colors">{o}</button>
+            ))}
+            {showCustom && (
+              <button onClick={() => toggle(search)} disabled={saving}
+                className="w-full text-left text-[10px] text-gunner-red font-semibold px-2 py-1 rounded hover:bg-surface-secondary transition-colors">
+                + Add &ldquo;{search}&rdquo;
+              </button>
+            )}
+            {filtered.length === 0 && !showCustom && (
+              <p className="text-[10px] text-txt-muted px-2 py-1">No options</p>
+            )}
+          </div>
+        </FloatingDropdown>
+      </div>
+    </div>
+  )
+}
+
+// ─── Numbers Column — tabbed per offer type ─────────────────────────────────
+// Third column of the Property Details panel. Tab bar at top (Cash persistent
+// default + any alt offer types from OfferTypeManager). Each tab shows the 5
+// fields (ARV, Construction, Max Offer, Risk Factor, Price) with source color
+// coding. Cash tab writes to top-level property columns via handleSaved; alt
+// tabs write to altPrices[type][field] via handleAltSaved. Same purple/blue/
+// green source scheme as the rest of the panel.
+
+const NUMBERS_FIELDS: Array<{ key: string; label: string; kind: 'money' | 'text' }> = [
+  { key: 'arv',                 label: 'ARV',          kind: 'money' },
+  { key: 'constructionEstimate', label: 'Construction', kind: 'money' },
+  { key: 'mao',                 label: 'Max Offer',    kind: 'money' },
+  { key: 'riskFactor',          label: 'Risk Factor',  kind: 'text'  },
+  { key: 'askingPrice',         label: 'Price',        kind: 'money' },
+]
+
+function NumbersColumn({
+  propertyId, cashValues, cashSources, altPrices, offerTypes,
+  onCashSaved, onAltSaved,
+}: {
+  propertyId: string
+  cashValues: Record<string, string | null>
+  cashSources: Record<string, string>
+  altPrices: Record<string, Record<string, string | null>>
+  offerTypes: string[]
+  onCashSaved: (field: string, val: string | null, src: string) => void
+  onAltSaved: (type: string, field: string, val: string | null) => void
+}) {
+  const [activeTab, setActiveTab] = useState<string>('Cash')
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // If the active tab was an alt type that got removed, snap back to Cash
+  useEffect(() => {
+    if (activeTab !== 'Cash' && !offerTypes.includes(activeTab)) setActiveTab('Cash')
+  }, [offerTypes, activeTab])
+
+  const tabs = ['Cash', ...offerTypes]
+
+  function getValue(field: string): string | null {
+    if (activeTab === 'Cash') return cashValues[field] ?? null
+    return altPrices[activeTab]?.[field] ?? null
+  }
+
+  function getSource(field: string): string | null {
+    if (activeTab === 'Cash') return cashSources[field] ?? null
+    // Alt-price values don't have API/AI source tracking — they originate from
+    // user edits, so the presence of a value implies user-edited.
+    return altPrices[activeTab]?.[field] ? 'user' : null
+  }
+
+  function formatDisplay(field: string, val: string | null): string | null {
+    if (val == null || val === '') return null
+    const f = NUMBERS_FIELDS.find(x => x.key === field)
+    if (f?.kind === 'money') return `$${Number(val).toLocaleString()}`
+    return val
+  }
+
+  async function save(field: string) {
+    if (saving) return
+    const raw = editValue.trim()
+    const current = getValue(field) ?? ''
+    if (raw === String(current ?? '')) { setEditingField(null); return }
+    setSaving(true)
+    try {
+      const newVal = raw || null
+      if (activeTab === 'Cash') {
+        await fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [field]: newVal, fieldSources: { [field]: newVal ? 'user' : '' } }),
+        })
+        onCashSaved(field, newVal, newVal ? 'user' : '')
+      } else {
+        await fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ altPrices: { [activeTab]: { [field]: newVal } } }),
+        })
+        onAltSaved(activeTab, field, newVal)
+      }
+    } catch {}
+    setSaving(false)
+    setEditingField(null)
+  }
+
+  return (
+    <div className="py-1">
+      {/* Section header + tab bar */}
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider shrink-0">Numbers</p>
+        <div className="flex items-center gap-1 flex-wrap justify-end">
+          {tabs.map(t => {
+            const isActive = activeTab === t
+            return (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-colors ${
+                  isActive
+                    ? (t === 'Cash' ? 'bg-gunner-red text-white' : 'bg-txt-primary text-white')
+                    : 'bg-surface-secondary text-txt-muted hover:text-txt-secondary'
+                }`}
+              >
+                {t}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 5 field rows */}
+      <div className="space-y-0.5">
+        {NUMBERS_FIELDS.map(f => {
+          const val = getValue(f.key)
+          const src = getSource(f.key)
+          const display = formatDisplay(f.key, val)
+          const s = sourceStyles(src ?? null)
+          const isEditing = editingField === f.key
+          const pillClass = `inline-flex items-center gap-1 text-ds-fine font-medium transition-colors ${
+            src ? `${s.bg} px-2 py-0.5 rounded-[6px]` : ''
+          } ${display ? (src ? s.value : 'text-txt-primary') : 'text-txt-muted'} hover:text-gunner-red group`
+
+          if (isEditing) {
+            return (
+              <div key={f.key} className="flex items-center justify-between gap-2 py-1">
+                <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
+                <input
+                  autoFocus
+                  type={f.kind === 'money' ? 'number' : 'text'}
+                  value={editValue}
+                  onChange={e => setEditValue(e.target.value)}
+                  onBlur={() => save(f.key)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    if (e.key === 'Escape') setEditingField(null)
+                  }}
+                  disabled={saving}
+                  className="w-28 bg-white border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-0.5 text-ds-fine text-right focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+                />
+              </div>
+            )
+          }
+
+          return (
+            <div key={f.key} className="flex items-center justify-between gap-2 py-1">
+              <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
+              <button
+                onClick={() => { setEditValue(val ?? ''); setEditingField(f.key) }}
+                className={pillClass}
+              >
+                {display ?? '—'}
+                {src && s.tag && (
+                  <span className={`text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
+                )}
+                <Pencil size={7} className="opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
 function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sending, actionMsg, ghlContactId, projectTypeOptions }: {
@@ -2366,6 +2693,10 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
     description: property.description,
     internalNotes: property.internalNotes,
     propertyCondition: property.propertyCondition,
+    // Numbers-panel fields (Cash tab). Alt-tab values live in altPrices[type].
+    arv: property.arv,
+    constructionEstimate: property.constructionEstimate,
+    riskFactor: property.riskFactor,
   })
 
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
@@ -2533,21 +2864,18 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
       <div>
         <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Profit Summary</p>
         <div className="grid grid-cols-3 gap-3">
-          {/* Est. Spread — computed, read-only (Cash only) */}
-          <div className="bg-surface-secondary rounded-[10px] px-3 py-2.5">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">EST. SPREAD</p>
-            <p className={`text-ds-card font-semibold mt-0.5 ${spread != null ? (spread > 0 ? 'text-semantic-green' : 'text-semantic-red') : 'text-txt-muted'}`}>
-              {spread != null ? `$${spread.toLocaleString()}` : '—'}
-            </p>
-            <span className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">Cash</span>
-          </div>
+          <ComputedSpreadCard
+            cashAccepted={vals.acceptedPrice}
+            cashContract={vals.contractPrice}
+            altPrices={altPrices}
+            offerTypes={offerTypes}
+          />
           <PriceMatrixCard label="ASSIGNMENT FEE" field="assignmentFee" cashValue={vals.assignmentFee} source={sources.assignmentFee} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
           <PriceMatrixCard label="FINAL PROFIT" field="finalProfit" cashValue={vals.finalProfit} source={sources.finalProfit} altPrices={altPrices} offerTypes={offerTypes} propertyId={property.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
         </div>
       </div>
 
-      {/* Property Details — compact 2-col tag-style grid.
-          Target Markets + Project Type tag rows stay at the bottom as before. */}
+      {/* Property Details — 3-col layout: Details · Specs · Numbers (tabbed by offer type) */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Details</p>
@@ -2558,28 +2886,47 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
           </div>
         </div>
 
-        {/* 2-col compact grid — label left, value pill right */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 px-4 py-2 divide-y sm:divide-y-0 divide-[rgba(0,0,0,0.04)]">
-          <CompactDetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={handleSaved} />
-          <CompactDetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
-          <CompactDetailCell label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
-          <CompactDetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={handleSaved} />
-          <CompactDetailCell label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
-          <CompactDetailCell label="Access" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
-          <CompactDetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} suffix="sqft" onSaved={handleSaved} />
-          <CompactDetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
-        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)]">
+          {/* Column 1 — Details */}
+          <div className="px-4 py-2">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Details</p>
+            <CompactDetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={property.id} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={handleSaved} />
+            <CompactMultiTag label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
+              field="propertyMarkets" propertyId={property.id} allowCustom source={sources.propertyMarkets} onSaved={handleArraySaved} />
+            <CompactMultiTag label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
+              field="projectType" propertyId={property.id} allowCustom source={sources.projectType} onSaved={handleArraySaved} />
+            <CompactDetailCell label="Access" value={vals.lockboxCode} field="lockboxCode" propertyId={property.id} source={sources.lockboxCode} onSaved={handleSaved} />
+            <CompactDetailCell label="Occupancy" value={vals.occupancy} field="occupancy" propertyId={property.id} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} source={sources.occupancy} onSaved={handleSaved} />
+          </div>
 
-        {/* Market tags */}
-        <div className="border-t border-[rgba(0,0,0,0.04)]">
-          <TagRow label="Target Markets" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
-            field="propertyMarkets" propertyId={property.id} allowCustom source={sources.propertyMarkets} onSaved={handleArraySaved} />
-        </div>
+          {/* Column 2 — Specs */}
+          <div className="px-4 py-2">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Specs</p>
+            <CompactDetailCell label="Beds" value={vals.beds} field="beds" propertyId={property.id} type="number" source={sources.beds} onSaved={handleSaved} />
+            <CompactDetailCell label="Baths" value={vals.baths} field="baths" propertyId={property.id} type="number" source={sources.baths} onSaved={handleSaved} />
+            <CompactDetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={property.id} type="number" source={sources.sqft} suffix="sqft" onSaved={handleSaved} />
+            <CompactDetailCell label="Lot Size" value={vals.lotSize} field="lotSize" propertyId={property.id} source={sources.lotSize} onSaved={handleSaved} />
+            <CompactDetailCell label="Year Built" value={vals.yearBuilt} field="yearBuilt" propertyId={property.id} type="number" source={sources.yearBuilt} onSaved={handleSaved} />
+          </div>
 
-        {/* Project Type tags */}
-        <div className="border-t border-[rgba(0,0,0,0.04)]">
-          <TagRow label="Project Type" values={vals.projectType} options={projectTypeOptions ?? PROJECT_TYPE_OPTIONS}
-            field="projectType" propertyId={property.id} allowCustom source={sources.projectType} onSaved={handleArraySaved} />
+          {/* Column 3 — Numbers (tabbed per offer type) */}
+          <div className="px-4 py-2">
+            <NumbersColumn
+              propertyId={property.id}
+              cashValues={{
+                arv: vals.arv,
+                constructionEstimate: vals.constructionEstimate,
+                mao: vals.mao,
+                riskFactor: vals.riskFactor,
+                askingPrice: vals.askingPrice,
+              }}
+              cashSources={sources}
+              altPrices={altPrices}
+              offerTypes={offerTypes}
+              onCashSaved={handleSaved}
+              onAltSaved={handleAltSaved}
+            />
+          </div>
         </div>
       </div>
 

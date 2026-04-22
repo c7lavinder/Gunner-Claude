@@ -321,6 +321,10 @@ model Property {
   storyUpdatedAt  DateTime? @map("story_updated_at")
   storyVersion    Int       @default(0) @map("story_version")
 
+  // Risk factor — free-form per-deal risk label (e.g. "High", "8/10", "title issue").
+  // Per-offer-type values live in altPrices[type].riskFactor; this column is the Cash value.
+  riskFactor      String?   @map("risk_factor")
+
   // Flexible custom fields per tenant config
   customFields Json @default("{}") @map("custom_fields")
 

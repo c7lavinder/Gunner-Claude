@@ -62,6 +62,7 @@ const updateSchema = z.object({
   // AI enrichment fields
   repairEstimate: z.string().nullable().optional(),
   rentalEstimate: z.string().nullable().optional(),
+  constructionEstimate: z.string().nullable().optional(),
   neighborhoodSummary: z.string().nullable().optional(),
   zestimate: z.string().nullable().optional(),
   deedDate: z.string().nullable().optional(),
@@ -71,6 +72,8 @@ const updateSchema = z.object({
   aiEnrichmentStatus: z.string().nullable().optional(),
   // Deal Intel
   propertyCondition: z.string().nullable().optional(),
+  // Risk factor — free-form string, editable per offer type (Cash column + altPrices[type].riskFactor)
+  riskFactor: z.string().nullable().optional(),
   // Deal Blast overrides
   dealBlastAskingOverride: z.string().nullable().optional(),
   dealBlastArvOverride: z.string().nullable().optional(),
@@ -116,10 +119,11 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     waterType, waterNotes, sewerType, sewerCondition, sewerNotes, electricType, electricNotes,
     description, internalNotes, lastOfferDate, lastContactedDate,
     // AI enrichment fields
-    repairEstimate, rentalEstimate, neighborhoodSummary, zestimate, deedDate,
+    repairEstimate, rentalEstimate, constructionEstimate, neighborhoodSummary, zestimate, deedDate,
     taxAssessment, annualTax, floodZone, aiEnrichmentStatus,
     // Deal Intel
     propertyCondition,
+    riskFactor,
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
     market: marketName,
@@ -233,6 +237,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           // AI enrichment fields
           ...(repairEstimate !== undefined && { repairEstimate: repairEstimate ? parseFloat(repairEstimate) : null }),
           ...(rentalEstimate !== undefined && { rentalEstimate: rentalEstimate ? parseFloat(rentalEstimate) : null }),
+          ...(constructionEstimate !== undefined && { constructionEstimate: constructionEstimate ? parseFloat(constructionEstimate) : null }),
           ...(neighborhoodSummary !== undefined && { neighborhoodSummary }),
           ...(zestimate !== undefined && { zestimate: zestimate ? parseFloat(zestimate) : null }),
           ...(deedDate !== undefined && { deedDate: deedDate ? new Date(deedDate) : null }),
@@ -242,6 +247,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(aiEnrichmentStatus !== undefined && { aiEnrichmentStatus }),
           // Deal Intel
           ...(propertyCondition !== undefined && { propertyCondition }),
+          ...(riskFactor !== undefined && { riskFactor }),
           // Deal Blast overrides
           ...(dealBlastAskingOverride !== undefined && { dealBlastAskingOverride: dealBlastAskingOverride ? parseFloat(dealBlastAskingOverride) : null }),
           ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),

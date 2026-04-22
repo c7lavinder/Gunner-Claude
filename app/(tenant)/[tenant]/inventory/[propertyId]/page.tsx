@@ -52,6 +52,7 @@ export default async function PropertyDetailPage({
         zillowData: true, countyData: true, constructionEstimate: true,
         offerTypes: true, altPrices: true,
         story: true, storyUpdatedAt: true, storyVersion: true,
+        riskFactor: true,
         sellers: {
           include: {
             seller: {
@@ -238,6 +239,9 @@ export default async function PropertyDetailPage({
         story: property.story,
         storyUpdatedAt: property.storyUpdatedAt?.toISOString() ?? null,
         storyVersion: property.storyVersion,
+        // Risk factor — Cash-tab value lives here; alt values live in altPrices[type].riskFactor
+        riskFactor: property.riskFactor,
+        constructionEstimate: property.constructionEstimate?.toString() ?? null,
         sellers: property.sellers.map((ps) => ({
           id: ps.seller.id,
           name: ps.seller.name,
