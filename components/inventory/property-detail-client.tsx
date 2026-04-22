@@ -826,7 +826,7 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
 // ─── Inline Edit Components ──────────────────────────────────────────────────
 
 // Source-based color styles: "api"=purple, "ai"=blue, "user"=green, null=gray
-function sourceStyles(source: string | null) {
+export function sourceStyles(source: string | null) {
   if (source === 'api') return { bg: 'bg-purple-50 border-[0.5px] border-purple-300', label: 'text-purple-700', value: 'text-purple-800', tag: 'API', tagColor: 'text-purple-400' }
   if (source === 'ai') return { bg: 'bg-blue-50 border-[0.5px] border-blue-300', label: 'text-blue-700', value: 'text-blue-800', tag: 'AI', tagColor: 'text-blue-400' }
   if (source === 'user') return { bg: 'bg-green-50 border-[0.5px] border-green-300', label: 'text-green-700', value: 'text-green-800', tag: 'EDITED', tagColor: 'text-green-400' }
@@ -1980,7 +1980,7 @@ function OfferTypeManager({ propertyId, offerTypes, onChange }: {
 // through the shared PATCH /api/properties/[id] — altPrices is merge-by-key
 // server-side so concurrent edits on different cells don't clobber.
 
-function PriceMatrixCard({
+export function PriceMatrixCard({
   label, field, cashValue, source, altPrices, offerTypes, propertyId, onCashSaved, onAltSaved,
 }: {
   label: string
@@ -2108,7 +2108,7 @@ function PriceMatrixCard({
 // Assignment Fee + Final Profit cards next to it (same height, same layout,
 // same alt-type sub-rows populated from offerTypes).
 
-function ComputedSpreadCard({
+export function ComputedSpreadCard({
   cashAccepted, cashContract, altPrices, offerTypes,
 }: {
   cashAccepted: string | null

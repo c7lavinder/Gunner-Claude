@@ -11,6 +11,7 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 import { formatPhone, titleCase } from '@/lib/format'
 import { PipelineStageTabs } from './PipelineStageTabs'
+import { PriceMatrixCard, ComputedSpreadCard } from './property-detail-client'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
 
@@ -19,6 +20,8 @@ interface Property {
   status: string; dispoStatus: string | null; arv: string | null; askingPrice: string | null
   mao: string | null; contractPrice: string | null; assignmentFee: string | null
   currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
+  offerTypes: string[]
+  altPrices: Record<string, Record<string, string | null>>
   fieldSources: Record<string, string>
   createdAt: string
   stageEnteredAt: string | null
@@ -555,71 +558,6 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedS
 
 // ─── Property Drawer (quick detail on row click) ─────────────────────────────
 
-// Source-based color styles for drawer inline edit cards
-function drawerSourceStyles(source: string | null) {
-  if (source === 'ai') return { bg: 'bg-blue-50 border-[0.5px] border-blue-300', label: 'text-blue-700', value: 'text-blue-800' }
-  if (source === 'user') return { bg: 'bg-green-50 border-[0.5px] border-green-300', label: 'text-green-700', value: 'text-green-800' }
-  return { bg: 'bg-surface-secondary', label: 'text-txt-muted', value: 'text-txt-primary' }
-}
-
-function DrawerEditCard({ label, value, field, propertyId, source, onSaved }: {
-  label: string; value: string | null; field: string; propertyId: string
-  source?: string | null; onSaved: (field: string, val: string | null, src: string) => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  async function save() {
-    if (saving) return
-    const raw = editValue.trim()
-    if (raw === (value ?? '')) { setEditing(false); return }
-    setSaving(true)
-    try {
-      const newVal = raw || null
-      const res = await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: newVal, fieldSources: newVal ? { [field]: 'user' } : { [field]: '' } }),
-      })
-      if (res.ok) { onSaved(field, newVal, newVal ? 'user' : '') }
-      else { console.error('[DrawerEdit] Save failed:', field, await res.text()) }
-    } catch (e) { console.error('[DrawerEdit] Error:', e) }
-    setSaving(false)
-    setEditing(false)
-  }
-
-  const displayValue = value ? `$${Number(value).toLocaleString()}` : null
-  const s = drawerSourceStyles(source || null)
-
-  if (editing) {
-    return (
-      <div className={`${s.bg} rounded-[8px] px-2.5 py-2`}>
-        <p className={`text-[8px] font-semibold uppercase tracking-wider ${s.label}`}>{label}</p>
-        <input autoFocus type="number" value={editValue}
-          onChange={e => setEditValue(e.target.value)}
-          onBlur={save}
-          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
-          className="w-full bg-white border-[0.5px] border-gunner-red/30 rounded px-1.5 py-0.5 text-ds-fine font-semibold text-txt-primary mt-0.5 focus:outline-none"
-          disabled={saving} placeholder="0"
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div onClick={() => { setEditValue(value ?? ''); setEditing(true) }}
-      className={`${s.bg} rounded-[8px] px-2.5 py-2 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group`}>
-      <p className={`text-[8px] font-semibold uppercase tracking-wider flex items-center justify-between ${s.label}`}>
-        {label}
-      </p>
-      <p className={`text-ds-fine font-semibold mt-0.5 ${displayValue ? s.value : 'text-txt-muted'}`}>
-        {displayValue ?? '—'}
-      </p>
-    </div>
-  )
-}
-
 function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPropertyUpdate, selectedStage }: {
   property: Property
   tenantSlug: string
@@ -647,6 +585,7 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPro
     assignmentFee: p.assignmentFee, finalProfit: p.finalProfit,
   })
   const [sources, setSources] = useState<Record<string, string>>(p.fieldSources ?? {})
+  const [altPrices, setAltPrices] = useState<Record<string, Record<string, string | null>>>(p.altPrices ?? {})
 
   // Address editing state
   const [editingAddress, setEditingAddress] = useState(false)
@@ -662,6 +601,7 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPro
       assignmentFee: p.assignmentFee, finalProfit: p.finalProfit,
     })
     setSources(p.fieldSources ?? {})
+    setAltPrices(p.altPrices ?? {})
     setEditingAddress(false)
     setAddrFields({ address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', zip: p.zip ?? '' })
     setAddrMarket(p.market ?? '')
@@ -720,8 +660,14 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPro
     })
   }
 
-  const spread = vals.acceptedPrice && vals.contractPrice
-    ? Number(vals.acceptedPrice) - Number(vals.contractPrice) : null
+  function handleAltSaved(type: string, field: string, val: string | null) {
+    setAltPrices(prev => {
+      const typeRow = { ...(prev[type] ?? {}), [field]: val }
+      const next = { ...prev, [type]: typeRow }
+      onPropertyUpdate(p.id, { altPrices: next } as Partial<Property>)
+      return next
+    })
+  }
 
   return (
     <div className="w-[420px] max-w-[50vw] shrink-0 bg-white border-l border-[rgba(0,0,0,0.08)] shadow-sm flex flex-col max-h-[calc(100vh-120px)] sticky top-[60px]">
@@ -796,9 +742,9 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPro
         <div>
           <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Pricing Intent</p>
           <div className="grid grid-cols-3 gap-2">
-            <DrawerEditCard label="ASKING" value={vals.askingPrice} field="askingPrice" propertyId={p.id} source={sources.askingPrice} onSaved={handleSaved} />
-            <DrawerEditCard label="MAO" value={vals.mao} field="mao" propertyId={p.id} source={sources.mao} onSaved={handleSaved} />
-            <DrawerEditCard label="CURRENT OFFER" value={vals.currentOffer} field="currentOffer" propertyId={p.id} source={sources.currentOffer} onSaved={handleSaved} />
+            <PriceMatrixCard label="ASKING" field="askingPrice" cashValue={vals.askingPrice} source={sources.askingPrice} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+            <PriceMatrixCard label="MAO" field="mao" cashValue={vals.mao} source={sources.mao} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+            <PriceMatrixCard label="CURRENT OFFER" field="currentOffer" cashValue={vals.currentOffer} source={sources.currentOffer} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
           </div>
         </div>
 
@@ -806,9 +752,9 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPro
         <div>
           <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Deal Outcomes</p>
           <div className="grid grid-cols-3 gap-2">
-            <DrawerEditCard label="CONTRACT" value={vals.contractPrice} field="contractPrice" propertyId={p.id} source={sources.contractPrice} onSaved={handleSaved} />
-            <DrawerEditCard label="HIGHEST OFFER" value={vals.highestOffer} field="highestOffer" propertyId={p.id} source={sources.highestOffer} onSaved={handleSaved} />
-            <DrawerEditCard label="ACCEPTED" value={vals.acceptedPrice} field="acceptedPrice" propertyId={p.id} source={sources.acceptedPrice} onSaved={handleSaved} />
+            <PriceMatrixCard label="CONTRACT" field="contractPrice" cashValue={vals.contractPrice} source={sources.contractPrice} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+            <PriceMatrixCard label="HIGHEST OFFER" field="highestOffer" cashValue={vals.highestOffer} source={sources.highestOffer} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+            <PriceMatrixCard label="ACCEPTED" field="acceptedPrice" cashValue={vals.acceptedPrice} source={sources.acceptedPrice} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
           </div>
         </div>
 
@@ -816,14 +762,9 @@ function PropertyDrawer({ property: p, tenantSlug, ghlLocationId, onClose, onPro
         <div>
           <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider mb-1.5">Profit Summary</p>
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-surface-secondary rounded-[8px] px-2.5 py-2">
-              <p className="text-[8px] font-semibold text-txt-muted uppercase tracking-wider">EST. SPREAD</p>
-              <p className={`text-ds-fine font-semibold mt-0.5 ${spread != null ? (spread > 0 ? 'text-semantic-green' : 'text-semantic-red') : 'text-txt-muted'}`}>
-                {spread != null ? `$${spread.toLocaleString()}` : '—'}
-              </p>
-            </div>
-            <DrawerEditCard label="ASSIGN. FEE" value={vals.assignmentFee} field="assignmentFee" propertyId={p.id} source={sources.assignmentFee} onSaved={handleSaved} />
-            <DrawerEditCard label="FINAL PROFIT" value={vals.finalProfit} field="finalProfit" propertyId={p.id} source={sources.finalProfit} onSaved={handleSaved} />
+            <ComputedSpreadCard cashAccepted={vals.acceptedPrice} cashContract={vals.contractPrice} altPrices={altPrices} offerTypes={p.offerTypes} />
+            <PriceMatrixCard label="ASSIGN. FEE" field="assignmentFee" cashValue={vals.assignmentFee} source={sources.assignmentFee} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
+            <PriceMatrixCard label="FINAL PROFIT" field="finalProfit" cashValue={vals.finalProfit} source={sources.finalProfit} altPrices={altPrices} offerTypes={p.offerTypes} propertyId={p.id} onCashSaved={handleSaved} onAltSaved={handleAltSaved} />
           </div>
         </div>
 
