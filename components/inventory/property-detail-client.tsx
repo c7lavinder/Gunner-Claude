@@ -180,7 +180,7 @@ export function PropertyDetailClient({
   }
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="max-w-7xl space-y-4">
       {/* Back to inventory */}
       <button onClick={() => router.back()} className="inline-flex items-center gap-1.5 text-ds-body font-medium text-gunner-red hover:text-gunner-red-dark transition-colors">
         <ArrowLeft size={14} /> Back to Inventory
@@ -208,7 +208,11 @@ export function PropertyDetailClient({
               {property.leadSource}
             </span>
           )}
-          <span className={`text-ds-fine font-semibold ${domColor}`}>{dom}d</span>
+          <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${
+            dom <= 7 ? 'bg-green-100 text-green-700'
+            : dom <= 30 ? 'bg-amber-100 text-amber-700'
+            : 'bg-red-100 text-red-700'
+          }`}>{dom}d</span>
         </div>
 
         <div className="flex items-start justify-between gap-4">
@@ -1215,7 +1219,7 @@ function DetailCell({
   const cellContent = (
     <div
       onClick={startEdit}
-      className={`px-3 py-2.5 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors group relative ${source ? s.bg : ''}`}
+      className={`h-full px-3 py-2.5 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors group relative ${source ? s.bg : ''}`}
     >
       {source && s.tag && (
         <span className={`absolute top-0.5 right-1.5 text-[6px] font-bold uppercase ${s.tagColor}`}>{s.tag}</span>
@@ -1266,9 +1270,7 @@ function DetailCell({
     )
   }
 
-  return (
-    <div>{cellContent}</div>
-  )
+  return cellContent
 }
 
 // ─── Tag Row (for Market / Project Type multi-select) ───────────────────────
@@ -1722,8 +1724,9 @@ function InlineAI({ propertyId }: { propertyId: string }) {
 
 const CONTACT_ROLES = ['Primary Seller', 'Co-Seller', 'Spouse', 'Buyer', 'Buyer Agent', 'Attorney', 'Agent', 'Other']
 
-function ContactsSection({ propertyId, initialSellers }: {
+function ContactsSection({ propertyId, tenantSlug, initialSellers }: {
   propertyId: string
+  tenantSlug: string
   initialSellers: PropertyDetail['sellers']
 }) {
   const [sellers, setSellers] = useState(initialSellers)
@@ -1851,7 +1854,10 @@ function ContactsSection({ propertyId, initialSellers }: {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <p className="text-ds-body text-txt-primary font-medium truncate">{titleCase(s.name)}</p>
+                    <Link href={`/${tenantSlug}/sellers/${s.id}`}
+                      className="text-ds-body text-txt-primary font-medium truncate hover:text-gunner-red hover:underline transition-colors">
+                      {titleCase(s.name)}
+                    </Link>
                     <select value={s.role} onChange={e => updateRole(s.id, e.target.value)}
                       className="text-[9px] font-medium bg-transparent text-gunner-red cursor-pointer border-none focus:outline-none">
                       {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
@@ -1945,6 +1951,8 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
 
   // Auto-compute assignment fee + final profit on mount if inputs exist and values are empty
+  // Final profit only auto-populates once the deal reaches a closed stage.
+  const isClosed = property.status === 'SOLD' || property.status === 'DISPO_CLOSED'
   useEffect(() => {
     const updates: Record<string, unknown> = {}
     const srcUpdates: Record<string, string> = {}
@@ -1955,11 +1963,17 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         updates.assignmentFee = String(fee); srcUpdates.assignmentFee = 'ai'
       }
     }
-    // Final profit = ARV - contract - repair (repair optional, default 0)
-    if (!vals.finalProfit && property.arv && vals.contractPrice) {
+    // Final profit = ARV - contract - repair (repair optional, default 0) — closed deals only
+    if (isClosed && !vals.finalProfit && property.arv && vals.contractPrice) {
       const repair = property.repairEstimate ? Number(property.repairEstimate) : 0
       const profit = Number(property.arv) - Number(vals.contractPrice) - repair
       updates.finalProfit = String(profit); srcUpdates.finalProfit = 'ai'
+    }
+    // One-time cleanup: clear stale AI-generated finalProfit on non-closed deals
+    // (earlier builds wrote these prematurely; only closed deals should carry a final profit)
+    if (!isClosed && vals.finalProfit && sources.finalProfit === 'ai') {
+      updates.finalProfit = null
+      srcUpdates.finalProfit = ''
     }
     if (Object.keys(updates).length > 0) {
       setVals(prev => ({ ...prev, ...updates }))
@@ -2010,8 +2024,8 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         }
       }
 
-      // Auto-calculate final profit: ARV - Contract - Repair
-      if (['contractPrice', 'arv'].includes(field) && sources.finalProfit !== 'user') {
+      // Auto-calculate final profit: ARV - Contract - Repair — only once the deal is closed
+      if (isClosed && ['contractPrice', 'arv'].includes(field) && sources.finalProfit !== 'user') {
         const arvVal = field === 'arv' ? val : property.arv
         const contractVal = field === 'contractPrice' ? val : next.contractPrice
         if (arvVal && contractVal) {
@@ -2136,7 +2150,7 @@ function OverviewTab({ property, dom, domColor, tenantSlug, runGhlAction, sendin
         {/* Left: seller + assigned + actions */}
         <div className="space-y-4">
           {/* Contacts (linked GHL contacts) */}
-          <ContactsSection propertyId={property.id} initialSellers={property.sellers} />
+          <ContactsSection propertyId={property.id} tenantSlug={tenantSlug} initialSellers={property.sellers} />
 
           {/* Team Members */}
           <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />

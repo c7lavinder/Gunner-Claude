@@ -186,6 +186,17 @@ export default async function PropertyDetailPage({
           // Same for projectType
           const pts = (property.projectType ?? []) as string[]
           if (pts.length > 0 && !fs.projectType) fs.projectType = 'user'
+          // Physical-attribute fields populated by API/AI enrichment — show the tag
+          // when a value exists but no source was recorded. 'api' is the right default
+          // since these originate from BatchData / Zillow enrichment, not user input.
+          const apiDefaults: Array<keyof typeof property> = [
+            'yearBuilt', 'lotSize', 'propertyType', 'beds', 'baths', 'sqft',
+          ]
+          for (const k of apiDefaults) {
+            if (property[k] != null && property[k] !== '' && !fs[k as string]) {
+              fs[k as string] = 'api'
+            }
+          }
           return fs
         })(),
         ghlContactId: property.ghlContactId,
