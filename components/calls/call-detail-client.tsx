@@ -19,6 +19,14 @@ import { useToast } from '@/components/ui/toaster'
 import { ConfirmActionModal } from '@/components/ui/confirm-action-modal'
 import { CALL_TYPES, RESULT_NAMES } from '@/lib/call-types'
 import { formatFieldLabel } from '@/lib/format'
+import {
+  formatDealIntelValue,
+  isBlankValue,
+  capitalizeFirst,
+  humanizeKey,
+  resolveRelativeTimeline,
+  isTimeRelativeField,
+} from '@/lib/deal-intel/format'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +62,15 @@ interface CallDetail {
 }
 
 type Tab = 'coaching' | 'transcript' | 'next-steps' | 'property'
+
+interface DealIntelChange {
+  field: string; label: string; category: string
+  currentValue: unknown; proposedValue: unknown
+  confidence: 'high' | 'medium' | 'low'; evidence: string
+  updateType: 'overwrite' | 'accumulate'
+  decision?: 'approved' | 'edited' | 'skipped' | 'auto_approved'
+  editedValue?: unknown; decidedAt?: string
+}
 
 interface NextStep {
   type: string; label: string; reasoning: string
@@ -310,7 +327,9 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [addingAction, setAddingAction] = useState(false)
   const [editingStep, setEditingStep] = useState<number | null>(null)
   const [editFields, setEditFields] = useState<Record<string, string>>({})
-  const [propertyPendingCount, setPropertyPendingCount] = useState(0)
+  const [dealIntelChanges, setDealIntelChanges] = useState<DealIntelChange[]>([])
+  const [dealIntelLoading, setDealIntelLoading] = useState(true)
+  const propertyPendingCount = dealIntelChanges.filter(c => !c.decision).length
   const [isCalibration, setIsCalibration] = useState(call.isCalibration)
   const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -349,7 +368,16 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
         setAppointmentTypes(cfg?.appointmentTypes ?? [])
       })
       .catch(() => {})
-  }, [tenantSlug])
+    // Fetch deal intel changes on mount so the Property tab badge count is
+    // visible without requiring a click. PropertyDataTab reads from this state.
+    fetch(`/api/${tenantSlug}/calls/${call.id}/deal-intel`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.changes) setDealIntelChanges(d.changes as DealIntelChange[])
+        setDealIntelLoading(false)
+      })
+      .catch(() => setDealIntelLoading(false))
+  }, [tenantSlug, call.id])
 
   const grade = gradeInfo(call.score)
   const outcome = call.callOutcome ?? call.property?.status ?? null
@@ -852,7 +880,7 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               >
                 {t.icon} {t.label}
                 {t.badge !== undefined && t.badge > 0 && (
-                  <span className="bg-gunner-red text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{t.badge}</span>
+                  <span className="bg-gunner-red text-white text-[10px] font-semibold min-w-[18px] h-[18px] px-1.5 rounded-full inline-flex items-center justify-center">{t.badge}</span>
                 )}
               </button>
             ))}
@@ -1805,7 +1833,13 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
 
           {/* ── PROPERTY TAB ───────────────────────────────────────── */}
           {tab === 'property' && (
-            <PropertyDataTab call={call} tenantSlug={tenantSlug} onPendingCount={setPropertyPendingCount} />
+            <PropertyDataTab
+              call={call}
+              tenantSlug={tenantSlug}
+              changes={dealIntelChanges}
+              loading={dealIntelLoading}
+              onChangesUpdate={setDealIntelChanges}
+            />
           )}
         </div>
       </div>
@@ -1920,15 +1954,6 @@ function FeedbackModal({ callId, tenantSlug, onClose }: { callId: string; tenant
   )
 }
 
-interface DealIntelChange {
-  field: string; label: string; category: string
-  currentValue: unknown; proposedValue: unknown
-  confidence: 'high' | 'medium' | 'low'; evidence: string
-  updateType: 'overwrite' | 'accumulate'
-  decision?: 'approved' | 'edited' | 'skipped' | 'auto_approved'
-  editedValue?: unknown; decidedAt?: string
-}
-
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   seller_profile:      { bg: 'bg-blue-50',    text: 'text-blue-700',    label: 'Seller Profile' },
   decision_making:     { bg: 'bg-purple-50',  text: 'text-purple-700',  label: 'Decision Making' },
@@ -1978,28 +2003,17 @@ const FIELD_OPTIONS: Record<string, string[]> = {
   previousDealFellThrough: ['Yes', 'No', 'Unknown'],
 }
 
-function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetail; tenantSlug: string; onPendingCount?: (count: number) => void }) {
-  const [changes, setChanges] = useState<DealIntelChange[]>([])
-  const [loading, setLoading] = useState(true)
+function PropertyDataTab({ call, tenantSlug, changes, loading, onChangesUpdate }: {
+  call: CallDetail
+  tenantSlug: string
+  changes: DealIntelChange[]
+  loading: boolean
+  onChangesUpdate: (changes: DealIntelChange[]) => void
+}) {
   const [acting, setActing] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
+  const [editValue, setEditValue] = useState<unknown>('')
   const { toast } = useToast()
-
-  // Load deal intel changes for this call
-  useEffect(() => {
-    fetch(`/api/${tenantSlug}/calls/${call.id}/deal-intel`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.changes) {
-          setChanges(data.changes)
-          const pendingCount = (data.changes as DealIntelChange[]).filter((c: DealIntelChange) => !c.decision).length
-          onPendingCount?.(pendingCount)
-        }
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [tenantSlug, call.id])
 
   async function handleDecision(field: string, decision: 'approved' | 'edited' | 'skipped') {
     setActing(field)
@@ -2014,16 +2028,13 @@ function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetai
         }),
       })
       if (res.ok) {
-        setChanges(prev => prev.map(c => c.field === field ? {
+        onChangesUpdate(changes.map(c => c.field === field ? {
           ...c,
           decision,
           editedValue: decision === 'edited' ? editValue : undefined,
           decidedAt: new Date().toISOString(),
         } : c))
         setEditingField(null)
-        // Update pending count
-        const newPending = changes.filter(c => c.field !== field && !c.decision).length
-        onPendingCount?.(newPending)
         toast(decision === 'skipped' ? 'Skipped' : `Updated ${field}`, 'success')
       }
     } catch { toast('Failed', 'error') }
@@ -2040,16 +2051,17 @@ function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetai
         body: JSON.stringify({ field: c.field, decision: 'approved' }),
       }).catch(() => {})
     }
-    setChanges(prev => prev.map(c => !c.decision ? { ...c, decision: 'approved', decidedAt: new Date().toISOString() } : c))
+    onChangesUpdate(changes.map(c => !c.decision ? { ...c, decision: 'approved', decidedAt: new Date().toISOString() } : c))
     setActing(null)
-    onPendingCount?.(0)
     toast(`Approved ${pending.length} updates`, 'success')
   }
 
-  const pending = changes.filter(c => !c.decision)
+  // Filter out pending rows where the proposed value collapses to blank after
+  // placeholder filtering (e.g. "not discussed"). Keeps the tab honest — we
+  // only prompt the rep to decide on real information.
+  const pending = changes.filter(c => !c.decision && !isBlankValue(c.proposedValue))
   const decided = changes.filter(c => c.decision)
 
-  // Group pending by category
   const grouped: Record<string, DealIntelChange[]> = {}
   for (const c of pending) {
     const cat = c.category || 'deal_status'
@@ -2057,12 +2069,14 @@ function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetai
     grouped[cat].push(c)
   }
 
+  const callAnchor = call.calledAt ? new Date(call.calledAt) : new Date()
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[14px] font-medium text-txt-primary">Deal Intelligence from Call</p>
-          <p className="text-[12px] text-txt-muted">AI-extracted data points — approve, edit, or skip each</p>
+          <p className="text-[12px] text-txt-muted">AI-extracted data points. Approve, edit, or skip each.</p>
         </div>
         <div className="flex items-center gap-2">
           {pending.length > 0 && (
@@ -2092,7 +2106,6 @@ function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetai
         const catConfig = CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.deal_status
         return (
           <div key={cat} className="bg-surface-primary border-[0.5px] rounded-[14px] overflow-hidden" style={{ borderColor: 'var(--border-light)' }}>
-            {/* Category header */}
             <div className={`${catConfig.bg} px-4 py-2 border-b-[0.5px] flex items-center gap-2`} style={{ borderColor: 'var(--border-light)' }}>
               <span className={`text-[10px] font-bold uppercase tracking-wider ${catConfig.text}`}>
                 {catConfig.label}
@@ -2100,99 +2113,25 @@ function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetai
               <span className="text-[9px] text-txt-muted bg-white/60 px-1.5 py-0.5 rounded-full">{items.length}</span>
             </div>
             <div className="divide-y" style={{ borderColor: 'var(--border-light)' }}>
-              {items.map(c => {
-                const isEditing = editingField === c.field
-                const fieldInfo = FIELD_INFO[c.field]
-                const selectOptions = FIELD_OPTIONS[c.field]
-                return (
-                  <div key={c.field} className="px-4 py-3">
-                    {/* Title row: label + info icon + confidence */}
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className={`text-[11px] font-semibold ${catConfig.text}`}>{c.label}</span>
-                      {fieldInfo && (
-                        <span className="group relative">
-                          <Info size={10} className="text-txt-muted cursor-help" />
-                          <span className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[9px] px-2 py-1 rounded-[6px] whitespace-nowrap z-10 shadow-lg">
-                            {fieldInfo}
-                          </span>
-                        </span>
-                      )}
-                      <span className={`ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
-                        c.confidence === 'high' ? 'bg-green-100 text-green-700'
-                        : c.confidence === 'medium' ? 'bg-amber-100 text-amber-700'
-                        : 'bg-gray-100 text-gray-600'
-                      }`}>{c.confidence}</span>
-                    </div>
-
-                    {/* Current value — muted, smaller */}
-                    {c.currentValue != null && (
-                      <p className="text-[9px] text-txt-muted mb-1">was: {typeof c.currentValue === 'object' ? JSON.stringify(c.currentValue) : String(c.currentValue)}</p>
-                    )}
-
-                    {/* Proposed/Edit value */}
-                    {isEditing ? (
-                      selectOptions ? (
-                        <select value={editValue} onChange={e => setEditValue(e.target.value)}
-                          className="w-full bg-white border-[0.5px] rounded-[6px] px-2.5 py-1.5 text-[11px] text-txt-primary mt-0.5 focus:outline-none"
-                          style={{ borderColor: 'var(--border-medium)' }}>
-                          {selectOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : (
-                        <textarea value={editValue} onChange={e => setEditValue(e.target.value)} rows={2}
-                          className="w-full bg-white border-[0.5px] rounded-[6px] px-2.5 py-1.5 text-[11px] text-txt-primary mt-0.5 focus:outline-none resize-none"
-                          style={{ borderColor: 'var(--border-medium)' }} />
-                      )
-                    ) : (
-                      Array.isArray(c.proposedValue) ? (
-                        <div className="flex flex-wrap gap-1 mt-0.5">
-                          {(c.proposedValue as string[]).map((item, idx) => (
-                            <span key={idx} className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${catConfig.bg} ${catConfig.text}`}>
-                              {String(item)}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[11px] text-txt-primary font-medium leading-snug">
-                          {String(c.proposedValue)}
-                          {/* Add call date context for time-relative fields */}
-                          {(c.field.includes('deadline') || c.field.includes('Deadline') || c.field.includes('timeline') || c.field.includes('Timeline')) && call.calledAt && (
-                            <span className="text-[9px] text-txt-muted ml-1.5">(call: {format(new Date(call.calledAt), 'MMM d, yyyy')})</span>
-                          )}
-                        </p>
-                      )
-                    )}
-
-                    {/* Evidence quote — compact */}
-                    {c.evidence && !isEditing && (
-                      <p className="text-[9px] text-txt-muted italic mt-1 pl-2 border-l-2 border-gray-200">{c.evidence}</p>
-                    )}
-
-                    {/* Action buttons — tighter */}
-                    <div className="flex items-center gap-2 mt-2">
-                      <button onClick={() => handleDecision(c.field, isEditing ? 'edited' : 'approved')}
-                        disabled={acting === c.field}
-                        className="flex items-center gap-1 bg-semantic-green hover:opacity-90 text-white text-[10px] font-semibold px-2 py-1 rounded-[6px]">
-                        {acting === c.field ? <Loader2 size={8} className="animate-spin" /> : <CheckCircle size={8} />}
-                        {isEditing ? 'Save' : 'Approve'}
-                      </button>
-                      <button onClick={() => {
-                        if (isEditing) { setEditingField(null); return }
-                        setEditingField(c.field)
-                        // Arrays → comma-separated for easier editing; objects → JSON; else string
-                        setEditValue(
-                          Array.isArray(c.proposedValue) ? (c.proposedValue as string[]).join(', ')
-                          : typeof c.proposedValue === 'object' ? JSON.stringify(c.proposedValue)
-                          : String(c.proposedValue)
-                        )
-                      }} className="text-[10px] font-medium text-txt-secondary hover:text-txt-primary">
-                        {isEditing ? 'Cancel' : 'Edit'}
-                      </button>
-                      <button onClick={() => handleDecision(c.field, 'skipped')}
-                        className="text-[10px] text-txt-muted hover:text-txt-secondary">Skip</button>
-                    </div>
-                  </div>
-                )
-              })}
+              {items.map(c => (
+                <DealIntelRow
+                  key={c.field}
+                  change={c}
+                  catConfig={catConfig}
+                  callAnchor={callAnchor}
+                  isEditing={editingField === c.field}
+                  editValue={editValue}
+                  acting={acting === c.field}
+                  onEditStart={() => {
+                    setEditingField(c.field)
+                    setEditValue(cloneForEdit(c.proposedValue))
+                  }}
+                  onEditCancel={() => setEditingField(null)}
+                  onEditChange={setEditValue}
+                  onApprove={() => handleDecision(c.field, editingField === c.field ? 'edited' : 'approved')}
+                  onSkip={() => handleDecision(c.field, 'skipped')}
+                />
+              ))}
             </div>
           </div>
         )
@@ -2218,6 +2157,304 @@ function PropertyDataTab({ call, tenantSlug, onPendingCount }: { call: CallDetai
         </div>
       )}
     </div>
+  )
+}
+
+// Deep clone a proposed value for editing. For arrays of objects, we want each
+// pill to be independently editable without mutating the original change record.
+function cloneForEdit(val: unknown): unknown {
+  if (val === null || val === undefined) return val
+  if (Array.isArray(val)) return val.map(cloneForEdit)
+  if (typeof val === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      out[k] = cloneForEdit(v)
+    }
+    return out
+  }
+  return val
+}
+
+// Single pending deal-intel row: Current / Suggested / Why layout with
+// inline bubble-aligned edit UX for array values.
+function DealIntelRow({ change, catConfig, callAnchor, isEditing, editValue, acting, onEditStart, onEditCancel, onEditChange, onApprove, onSkip }: {
+  change: DealIntelChange
+  catConfig: { bg: string; text: string; label: string }
+  callAnchor: Date
+  isEditing: boolean
+  editValue: unknown
+  acting: boolean
+  onEditStart: () => void
+  onEditCancel: () => void
+  onEditChange: (v: unknown) => void
+  onApprove: () => void
+  onSkip: () => void
+}) {
+  const fieldInfo = FIELD_INFO[change.field]
+  const selectOptions = FIELD_OPTIONS[change.field]
+
+  return (
+    <div className="px-4 py-3">
+      {/* Title row */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className={`text-[11px] font-semibold ${catConfig.text}`}>{change.label}</span>
+        {fieldInfo && (
+          <span className="group relative">
+            <Info size={10} className="text-txt-muted cursor-help" />
+            <span className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-[9px] px-2 py-1 rounded-[6px] whitespace-nowrap z-10 shadow-lg">
+              {fieldInfo}
+            </span>
+          </span>
+        )}
+        <span className={`ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+          change.confidence === 'high' ? 'bg-green-100 text-green-700'
+          : change.confidence === 'medium' ? 'bg-amber-100 text-amber-700'
+          : 'bg-gray-100 text-gray-600'
+        }`}>{change.confidence}</span>
+      </div>
+
+      {/* Current / Suggested / Why — 3-line layout */}
+      <dl className="grid grid-cols-[64px_1fr] gap-x-3 gap-y-1 text-[11px]">
+        <dt className="text-[10px] font-semibold uppercase tracking-wider text-txt-muted pt-0.5">Current</dt>
+        <dd>
+          <DealIntelValueDisplay
+            value={change.currentValue}
+            field={change.field}
+            catConfig={catConfig}
+            callAnchor={callAnchor}
+            muted
+          />
+        </dd>
+
+        <dt className="text-[10px] font-semibold uppercase tracking-wider text-txt-muted pt-0.5">Suggested</dt>
+        <dd>
+          {isEditing ? (
+            <DealIntelEditor
+              field={change.field}
+              value={editValue}
+              selectOptions={selectOptions}
+              onChange={onEditChange}
+              catConfig={catConfig}
+            />
+          ) : (
+            <DealIntelValueDisplay
+              value={change.proposedValue}
+              field={change.field}
+              catConfig={catConfig}
+              callAnchor={callAnchor}
+            />
+          )}
+        </dd>
+
+        {change.evidence && !isEditing && (
+          <>
+            <dt className="text-[10px] font-semibold uppercase tracking-wider text-txt-muted pt-0.5">Why</dt>
+            <dd className="text-[10px] text-txt-muted italic leading-snug">
+              &ldquo;{capitalizeFirst(change.evidence)}&rdquo;
+            </dd>
+          </>
+        )}
+      </dl>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 mt-2.5">
+        <button onClick={onApprove}
+          disabled={acting}
+          className="flex items-center gap-1 bg-semantic-green hover:opacity-90 text-white text-[10px] font-semibold px-2 py-1 rounded-[6px]">
+          {acting ? <Loader2 size={8} className="animate-spin" /> : <CheckCircle size={8} />}
+          {isEditing ? 'Save' : 'Approve'}
+        </button>
+        <button onClick={isEditing ? onEditCancel : onEditStart}
+          className="text-[10px] font-medium text-txt-secondary hover:text-txt-primary">
+          {isEditing ? 'Cancel' : 'Edit'}
+        </button>
+        <button onClick={onSkip}
+          className="text-[10px] text-txt-muted hover:text-txt-secondary">Skip</button>
+      </div>
+    </div>
+  )
+}
+
+// Read-only value display. Handles objects (via formatSingleItem), arrays
+// (bubble list), placeholders (render blank "—"), and relative timeline
+// resolution (appends the resolved window in parens for old string data).
+function DealIntelValueDisplay({ value, field, catConfig, callAnchor, muted }: {
+  value: unknown
+  field: string
+  catConfig: { bg: string; text: string; label: string }
+  callAnchor: Date
+  muted?: boolean
+}) {
+  const formatted = formatDealIntelValue(value)
+
+  if (formatted.kind === 'empty') {
+    return <span className="text-[11px] text-txt-muted">—</span>
+  }
+
+  const textClass = muted
+    ? 'text-[11px] text-txt-muted leading-snug'
+    : 'text-[11px] text-txt-primary font-medium leading-snug'
+
+  if (formatted.kind === 'list' && formatted.items.length > 1) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {formatted.items.map((item, idx) => (
+          <span key={idx}
+            className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${catConfig.bg} ${catConfig.text} ${muted ? 'opacity-70' : ''}`}>
+            {capitalizeFirst(item)}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  const displayText = capitalizeFirst(formatted.text)
+  const resolved = isTimeRelativeField(field) && typeof value === 'string'
+    ? resolveRelativeTimeline(value, callAnchor)
+    : null
+
+  return (
+    <p className={textClass}>
+      {displayText}
+      {resolved?.humanLabel && (
+        <span className={`text-[9px] ml-1.5 ${muted ? 'text-txt-muted' : 'text-txt-muted'}`}>
+          ({resolved.humanLabel})
+        </span>
+      )}
+    </p>
+  )
+}
+
+// Inline editor. Branches on value shape:
+//   - array of strings  → bubble pills with × to remove + add-item input
+//   - array of objects  → per-item card with editable fields + remove + add
+//   - plain object      → per-key editable fields
+//   - scalar + options  → <select>
+//   - scalar            → <textarea>
+function DealIntelEditor({ field, value, selectOptions, onChange, catConfig }: {
+  field: string
+  value: unknown
+  selectOptions?: string[]
+  onChange: (v: unknown) => void
+  catConfig: { bg: string; text: string; label: string }
+}) {
+  const inputBase = 'bg-white border-[0.5px] rounded-[6px] px-2 py-1 text-[11px] text-txt-primary focus:outline-none'
+  const inputStyle = { borderColor: 'var(--border-medium)' } as const
+
+  // Scalar with options → dropdown
+  if (selectOptions && !Array.isArray(value)) {
+    return (
+      <select value={String(value ?? '')} onChange={e => onChange(e.target.value)}
+        className={`w-full ${inputBase}`} style={inputStyle}>
+        {selectOptions.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    )
+  }
+
+  // Array editor
+  if (Array.isArray(value)) {
+    const items = value as unknown[]
+    const isObjectArray = items.some(i => i && typeof i === 'object')
+
+    function updateAt(idx: number, next: unknown) {
+      const copy = [...items]
+      copy[idx] = next
+      onChange(copy)
+    }
+    function removeAt(idx: number) {
+      onChange(items.filter((_, i) => i !== idx))
+    }
+    function addItem() {
+      if (isObjectArray && items[0] && typeof items[0] === 'object') {
+        const template: Record<string, unknown> = {}
+        for (const k of Object.keys(items[0] as Record<string, unknown>)) template[k] = ''
+        onChange([...items, template])
+      } else {
+        onChange([...items, ''])
+      }
+    }
+
+    return (
+      <div className="flex flex-col gap-1.5">
+        {items.length === 0 && (
+          <p className="text-[10px] text-txt-muted italic">No items — add one below.</p>
+        )}
+        {items.map((item, idx) => (
+          isObjectArray && item && typeof item === 'object' ? (
+            <div key={idx} className={`rounded-[8px] p-2 ${catConfig.bg} border-[0.5px]`} style={{ borderColor: 'var(--border-light)' }}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 space-y-1">
+                  {Object.entries(item as Record<string, unknown>)
+                    .filter(([k]) => !['_addedAt', '_sourceCallId', 'sourceCallId', 'updatedAt', 'confidence', 'callId'].includes(k))
+                    .map(([k, v]) => (
+                      <div key={k} className="flex items-center gap-1.5">
+                        <label className="text-[9px] font-semibold uppercase tracking-wider text-txt-muted w-20 shrink-0">
+                          {humanizeKey(k)}
+                        </label>
+                        <input
+                          value={v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                          onChange={e => updateAt(idx, { ...(item as Record<string, unknown>), [k]: e.target.value })}
+                          className={`flex-1 ${inputBase}`} style={inputStyle}
+                        />
+                      </div>
+                    ))}
+                </div>
+                <button type="button" onClick={() => removeAt(idx)}
+                  className="text-txt-muted hover:text-gunner-red shrink-0 mt-0.5" title="Remove">
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div key={idx} className="flex items-center gap-1.5">
+              <input
+                value={item === null || item === undefined ? '' : String(item)}
+                onChange={e => updateAt(idx, e.target.value)}
+                className={`flex-1 ${inputBase}`} style={inputStyle}
+              />
+              <button type="button" onClick={() => removeAt(idx)}
+                className="text-txt-muted hover:text-gunner-red" title="Remove">
+                <X size={12} />
+              </button>
+            </div>
+          )
+        ))}
+        <button type="button" onClick={addItem}
+          className="self-start flex items-center gap-1 text-[10px] font-medium text-txt-secondary hover:text-txt-primary">
+          <Plus size={10} /> Add item
+        </button>
+      </div>
+    )
+  }
+
+  // Plain object editor
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    return (
+      <div className={`rounded-[8px] p-2 ${catConfig.bg} border-[0.5px] space-y-1`} style={{ borderColor: 'var(--border-light)' }}>
+        {Object.entries(obj)
+          .filter(([k]) => !['_addedAt', '_sourceCallId', 'sourceCallId', 'updatedAt', 'confidence', 'callId'].includes(k))
+          .map(([k, v]) => (
+            <div key={k} className="flex items-center gap-1.5">
+              <label className="text-[9px] font-semibold uppercase tracking-wider text-txt-muted w-20 shrink-0">
+                {humanizeKey(k)}
+              </label>
+              <input
+                value={v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                onChange={e => onChange({ ...obj, [k]: e.target.value })}
+                className={`flex-1 ${inputBase}`} style={inputStyle}
+              />
+            </div>
+          ))}
+      </div>
+    )
+  }
+
+  // Scalar fallback
+  return (
+    <textarea value={value === null || value === undefined ? '' : String(value)}
+      onChange={e => onChange(e.target.value)} rows={2}
+      className={`w-full ${inputBase} resize-none`} style={inputStyle} />
   )
 }
 

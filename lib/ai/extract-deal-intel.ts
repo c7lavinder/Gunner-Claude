@@ -92,7 +92,11 @@ export async function extractDealIntel(callId: string): Promise<void> {
 // ─── Prompt builders ────────────────────────────────────────────────────────
 
 function buildExtractionSystemPrompt(learningContext: string): string {
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   return `You are a deal intelligence extraction system for a real estate wholesaling company.
+
+TODAY'S DATE: ${todayStr} — anchor all time-relative references to this date.
 
 Your job: analyze a call transcript and extract EVERY data point mentioned that relates to the property, seller, deal status, or negotiation.
 
@@ -178,8 +182,21 @@ IMPORTANT:
 - The rolling deal summary should read like a CRM note that gives anyone full context on the deal in 30 seconds.
 - Be generous with extractions but honest with confidence levels.
 - Do NOT propose a change if the exact same value is already stored.
-- For any deadline or time-relative field (promiseDeadlines, sellerTimeline, nextStepAgreed), ALWAYS include the actual date, not just "same day" or "tomorrow". Use the Call Date provided to calculate absolute dates.
+- If a field was not discussed on this call and no change is warranted, OMIT it from proposedChanges entirely. Never emit "not discussed", "unknown", "n/a", or similar placeholder strings as a proposedValue — just leave the field out.
 - For list/array fields (topics, green flags, red flags, etc.), use short clear items — each item should be a concise phrase, not a full sentence.
+
+TIME-RELATIVE FIELDS (sellerTimeline, sellerTimelineUrgency, promiseDeadlines, nextStepAgreed, triggerEvents, commitmentsWeMade, promisesTheyMade):
+For these fields the proposedValue MUST be a structured object that resolves the relative phrase to absolute dates so downstream LLMs can correlate timing with revenue. Use this exact shape:
+  {
+    "label": "<the seller's verbatim phrasing, e.g. '3-6 months', 'ASAP', 'after tax season'>",
+    "window": { "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" },
+    "humanLabel": "<a short human description of the window, e.g. 'late summer 2026', 'by May 6, 2026', 'Q4 2026'>"
+  }
+Use the Call Date provided plus TODAY'S DATE anchor to compute the window. Examples (assuming today = 2026-04-22):
+  - Seller says "3-6 months" → { label: "3-6 months", window: { start: "2026-07-22", end: "2026-10-22" }, humanLabel: "Jul–Oct 2026" }
+  - Seller says "ASAP" → { label: "ASAP", window: { start: "2026-04-22", end: "2026-05-06" }, humanLabel: "by May 6, 2026" }
+  - Seller says "end of year" → { label: "end of year", window: { start: "2026-10-01", end: "2026-12-31" }, humanLabel: "Q4 2026" }
+For list-typed time fields (promiseDeadlines, triggerEvents, etc.) each array item should follow the same pattern — include the structured timing inside the item object alongside whatever other fields that item has (e.g. promiseDeadlines item: { what, label, window, humanLabel }).
 ${learningContext}`
 }
 
