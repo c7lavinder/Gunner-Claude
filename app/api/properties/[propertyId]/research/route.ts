@@ -115,9 +115,10 @@ export async function POST(
       },
     })
 
-    // Also trigger full multi-vendor enrichment (non-blocking).
+    // Also trigger full multi-vendor enrichment (non-blocking). User hit
+    // the research button → force BD even if the PR gate would normally skip.
     import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
-      enrichProperty(params.propertyId).catch(err =>
+      enrichProperty(params.propertyId, { forceBatchData: true }).catch(err =>
         console.warn('[Research] Multi-vendor enrich failed:', err)
       )
     )

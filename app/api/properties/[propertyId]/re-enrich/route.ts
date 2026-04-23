@@ -26,10 +26,12 @@ export async function POST(
   }
 
   // Fire both enrichment paths in parallel:
-  //   1. Multi-vendor orchestrator — BatchData/PR/Google/CourtListener
-  //   2. Claude AI estimates — ARV, repair, rental
+  //   1. Multi-vendor orchestrator — BatchData/PR/Google/CourtListener.
+  //      User explicitly clicked "re-enrich" so force BD regardless of
+  //      the PR qualification gate — they want the full dataset.
+  //   2. Claude AI estimates — ARV, repair, rental.
   import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
-    enrichProperty(property.id).catch(err =>
+    enrichProperty(property.id, { forceBatchData: true }).catch(err =>
       console.error('[Re-Enrich Vendor] Background error:', err)
     )
   )

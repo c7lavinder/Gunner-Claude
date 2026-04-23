@@ -39,16 +39,125 @@ export interface MultiVendorEnrichOptions {
   skipCourtListener?: boolean  // for testing — disable CL search
   skipGoogle?: boolean     // for testing — disable Google Places
   skipPropertyRadar?: boolean  // for testing — disable PR
+  skipBatchData?: boolean  // bypass BD entirely (for testing or zero-spend runs)
+  forceBatchData?: boolean // fire BD even if PR gate would normally skip it
 }
 
 export interface MultiVendorEnrichResult {
-  batchdata: { ran: boolean; matched: boolean; error?: string }
+  batchdata: { ran: boolean; matched: boolean; skipped?: string; error?: string }
   propertyRadar: { ran: boolean; matched: boolean; error?: string }
   google: { ran: boolean; matched: boolean; error?: string }
   courtlistener: { ran: boolean; sellersSearched: number; totalCases: number; error?: string }
   skipTrace: { ran: boolean; sellersTraced: number; fieldsFilled: number; error?: string }
   columnsWritten: number
   durationMs: number
+}
+
+// ── BatchData qualification gate ─────────────────────────────────────────
+// BD costs ~$0.30/property. PropertyRadar is flat-rate (subscription), so we
+// always run it first and use its signals to decide whether a lead is worth
+// the BD spend. Leads that don't pass the gate only ever see PR + Google
+// data — still ~70 typed columns, just no motivation score, skip-trace
+// phones/emails, or deed/mortgage history.
+//
+// Gate philosophy: fire BD only when there's a genuine MOTIVATION signal.
+// High equity alone does NOT qualify — most wholesaling leads are already
+// pre-filtered for equity, so equity is a table-stakes signal that would
+// fire BD on nearly every lead. We need equity PLUS distress to justify
+// the spend.
+//
+// A lead qualifies if ANY of these fire:
+//   - DistressScore >= 40 (PR composite)
+//   - Foreclosure: inForeclosure / isPreforeclosure / isBankOwned / isAuction
+//   - Legal distress: inBankruptcy / inProbate / inDivorce / hasRecentEviction
+//   - Deceased owner (isDeceasedProperty === 1) — always worth tracing heirs
+//   - Tax delinquency (inTaxDelinquency === 1)
+//   - Expired listing (isExpiredListing === 1) — they already tried to sell
+//
+// Estimated spend drop: ~70-80% on typical wholesaling pipelines.
+interface PrQualifyInput {
+  distressScore?: number
+  isHighEquity?: boolean
+  isFreeAndClear?: boolean
+  preforeclosure?: boolean
+  bankOwned?: boolean
+  isAuction?: boolean
+  inForeclosureRaw?: number | boolean
+  inTaxDelinquency?: number | boolean
+  isDeceasedProperty?: number | boolean
+  inProbateProperty?: number | boolean
+  inBankruptcyProperty?: number | boolean
+  inDivorce?: number | boolean
+  hasRecentEviction?: number | boolean
+  isExpiredListing?: number | boolean
+}
+
+function qualifiesForBatchData(pr: Partial<BatchDataPropertyResult> | null): { qualifies: boolean; reason: string } {
+  if (!pr) return { qualifies: false, reason: 'no_pr_data' }
+  const raw = (pr.raw ?? {}) as Record<string, unknown>
+
+  const tr = (v: unknown): boolean => v === 1 || v === '1' || v === true
+
+  // Distress composite (PR's own 0-100 score — foreclosure/tax/legal weighted)
+  if (typeof pr.distressScore === 'number' && pr.distressScore >= 40) {
+    return { qualifies: true, reason: `distress=${pr.distressScore}` }
+  }
+
+  // Explicit motivation signals — NOT equity alone
+  if (pr.preforeclosure === true) return { qualifies: true, reason: 'preforeclosure' }
+  if (pr.bankOwned === true) return { qualifies: true, reason: 'bank_owned' }
+  if (pr.isAuction === true) return { qualifies: true, reason: 'auction' }
+  if (pr.inBankruptcy === true) return { qualifies: true, reason: 'bankruptcy' }
+  if (pr.inProbate === true) return { qualifies: true, reason: 'probate' }
+  if (pr.inDivorce === true) return { qualifies: true, reason: 'divorce' }
+  if (pr.hasRecentEviction === true) return { qualifies: true, reason: 'recent_eviction' }
+  if (pr.deceasedOwner === true) return { qualifies: true, reason: 'deceased_owner' }
+  if (pr.expiredListing === true) return { qualifies: true, reason: 'expired_listing' }
+  if (pr.taxDelinquent === true) return { qualifies: true, reason: 'tax_delinquent' }
+
+  // Secondary raw-payload checks (redundant safety net for PR flag naming drift)
+  if (tr(raw.inForeclosure)) return { qualifies: true, reason: 'raw_in_foreclosure' }
+  if (tr(raw.inTaxDelinquency)) return { qualifies: true, reason: 'raw_tax_delinquency' }
+  if (tr(raw.isDeceasedProperty)) return { qualifies: true, reason: 'raw_deceased' }
+  if (tr(raw.inProbateProperty)) return { qualifies: true, reason: 'raw_probate' }
+  if (tr(raw.inBankruptcyProperty)) return { qualifies: true, reason: 'raw_bankruptcy' }
+  if (tr(raw.hasRecentEviction)) return { qualifies: true, reason: 'raw_recent_eviction' }
+  if (tr(raw.isExpiredListing)) return { qualifies: true, reason: 'raw_expired_listing' }
+
+  return { qualifies: false, reason: 'no_motivation_signals' }
+}
+
+// ── Daily budget cap (hard safety) ───────────────────────────────────────
+// Even if leads qualify, block BD calls once daily spend exceeds the cap.
+// Uses an in-memory counter that resets per-process-day; for multi-pod
+// deployments consider persisting in Redis or a DB row instead. For now
+// this is a blast-radius limiter against a bad config or runaway loop.
+const BATCHDATA_COST_PER_CALL_USD = 0.30
+const BATCHDATA_DAILY_BUDGET_USD = Number(process.env.BATCHDATA_DAILY_BUDGET_USD ?? '15')
+
+const budgetState = {
+  date: new Date().toDateString(),
+  callsToday: 0,
+}
+
+function resetBudgetIfNewDay(): void {
+  const today = new Date().toDateString()
+  if (budgetState.date !== today) {
+    budgetState.date = today
+    budgetState.callsToday = 0
+  }
+}
+
+function batchDataWithinBudget(): { ok: boolean; spent: number; remaining: number } {
+  resetBudgetIfNewDay()
+  const spent = budgetState.callsToday * BATCHDATA_COST_PER_CALL_USD
+  const remaining = BATCHDATA_DAILY_BUDGET_USD - spent
+  return { ok: remaining >= BATCHDATA_COST_PER_CALL_USD, spent, remaining }
+}
+
+function trackBatchDataCall(): void {
+  resetBudgetIfNewDay()
+  budgetState.callsToday += 1
 }
 
 /**
@@ -184,9 +293,10 @@ export async function enrichProperty(
   const { address, city, state, zip } = property
   const fieldSources = { ...((property.fieldSources as Record<string, string>) ?? {}) }
 
-  // ── Step 1: parallel vendor lookups ─────────────────────────────────
-  const [bdRes, prRes, googleRes] = await Promise.all([
-    runWith('batchdata', result.batchdata, () => lookupBatchData(address, city, state, zip)),
+  // ── Step 1a: PropertyRadar + Google in parallel ──────────────────────
+  // PR is flat-rate (subscription), Google is ~$0.017/call. Both cheap.
+  // We need PR data FIRST so the gate can decide whether to fire BD.
+  const [prRes, googleRes] = await Promise.all([
     opts.skipPropertyRadar
       ? Promise.resolve(null)
       : runWith('propertyRadar', result.propertyRadar, () => lookupPropertyRadar(address, city, state, zip, { purchase: true })),
@@ -194,6 +304,33 @@ export async function enrichProperty(
       ? Promise.resolve(null)
       : runWith('google', result.google, () => lookupGoogle(address, city, state, zip)),
   ])
+
+  // ── Step 1b: gated BatchData call ────────────────────────────────────
+  let bdRes: Partial<BatchDataPropertyResult> | null = null
+  if (opts.skipBatchData) {
+    result.batchdata.skipped = 'flag_skip_batchdata'
+  } else {
+    const budget = batchDataWithinBudget()
+    if (!budget.ok) {
+      result.batchdata.skipped = `daily_budget_reached_$${budget.spent.toFixed(2)}/$${BATCHDATA_DAILY_BUDGET_USD}`
+      console.warn(`[enrichProperty] BD skipped — daily budget exhausted ($${budget.spent.toFixed(2)} of $${BATCHDATA_DAILY_BUDGET_USD})`)
+    } else {
+      // Gate: only call BD when PR says this lead is worth it — unless the
+      // caller forces it (re-enrich button, manual research trigger).
+      const gate = opts.forceBatchData
+        ? { qualifies: true, reason: 'forced' }
+        : qualifiesForBatchData(prRes as Partial<BatchDataPropertyResult> | null)
+
+      if (!gate.qualifies) {
+        result.batchdata.skipped = `gate_${gate.reason}`
+        console.log(`[enrichProperty] BD skipped — PR gate says ${gate.reason} (budget remaining $${budget.remaining.toFixed(2)})`)
+      } else {
+        trackBatchDataCall()
+        bdRes = await runWith('batchdata', result.batchdata, () => lookupBatchData(address, city, state, zip))
+        console.log(`[enrichProperty] BD fired — ${gate.reason} (budget remaining $${(budget.remaining - BATCHDATA_COST_PER_CALL_USD).toFixed(2)})`)
+      }
+    }
+  }
 
   // ── Step 2: merge vendor results + promote to typed columns ────────
   const merged = mergeResults(bdRes as Partial<BatchDataPropertyResult> | null, prRes)
@@ -285,9 +422,12 @@ export async function enrichProperty(
   }
 
   result.durationMs = Date.now() - startedAt
+  const bdStatus = result.batchdata.skipped
+    ? `skip(${result.batchdata.skipped})`
+    : result.batchdata.matched ? 'yes' : 'miss'
   console.log(
     `[enrichProperty] ${address} done in ${result.durationMs}ms: ` +
-    `BD=${result.batchdata.matched} PR=${result.propertyRadar.matched} ` +
+    `BD=${bdStatus} PR=${result.propertyRadar.matched} ` +
     `GG=${result.google.matched} CL=${result.courtlistener.sellersSearched}s/${result.courtlistener.totalCases}c, ` +
     `${result.columnsWritten} columns`,
   )
