@@ -25,9 +25,16 @@ export async function POST(
     return NextResponse.json({ status: 'already_pending' })
   }
 
-  // Fire and forget
+  // Fire both enrichment paths in parallel:
+  //   1. Multi-vendor orchestrator — BatchData/PR/Google/CourtListener
+  //   2. Claude AI estimates — ARV, repair, rental
+  import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
+    enrichProperty(property.id).catch(err =>
+      console.error('[Re-Enrich Vendor] Background error:', err)
+    )
+  )
   enrichPropertyWithAI(property.id).catch(err =>
-    console.error('[Re-Enrich] Background error:', err)
+    console.error('[Re-Enrich AI] Background error:', err)
   )
 
   return NextResponse.json({ status: 'started' })

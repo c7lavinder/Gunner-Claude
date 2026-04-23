@@ -120,9 +120,19 @@ export async function POST(request: NextRequest) {
     })
     const returnedId = splitResult.splitInto?.[0] ?? property.id
 
-    // AI auto-enrichment (fire-and-forget — non-blocking). If split, enrich both halves.
+    // Auto-enrichment (fire-and-forget — non-blocking). If split, enrich both halves.
+    // Runs BOTH paths in parallel:
+    //   1. Multi-vendor orchestrator (BatchData + PropertyRadar + Google + CourtListener)
+    //      — populates ~150 queryable columns + USPS / owner demographics / court cases
+    //   2. Claude AI estimates — ARV, repair/rental estimate, neighborhood summary
+    //      (computed from whatever the vendors just wrote)
     const enrichIds = splitResult.splitInto ?? [property.id]
     for (const id of enrichIds) {
+      import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
+        enrichProperty(id).catch(err =>
+          console.error('[Vendor Enrich] Background error:', err)
+        )
+      )
       enrichPropertyWithAI(id).catch(err =>
         console.error('[AI Enrich] Background error:', err)
       )
