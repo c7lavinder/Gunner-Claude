@@ -141,6 +141,50 @@ interface PropertyDetail {
   googleStreetViewUrl: string | null
   googlePhotoThumbnailUrl: string | null
   googleMapsUrl: string | null
+  // Comprehensive vendor capture (20260423060000)
+  addressValidity: string | null
+  zipPlus4: string | null
+  salePropensity: string | null
+  salePropensityCategory: string | null
+  listingStatus: string | null
+  listingFailedDate: string | null
+  listingOriginalDate: string | null
+  listingSoldPrice: string | null
+  listingSoldDate: string | null
+  listingAgentName: string | null
+  listingAgentPhone: string | null
+  listingBrokerName: string | null
+  foreclosureAuctionCity: string | null
+  foreclosureAuctionLocation: string | null
+  foreclosureAuctionTime: string | null
+  foreclosureBorrower: string | null
+  foreclosureDocumentType: string | null
+  foreclosureFilingDate: string | null
+  foreclosureRecordingDate: string | null
+  foreclosureTrusteeName: string | null
+  foreclosureTrusteePhone: string | null
+  foreclosureTrusteeAddress: string | null
+  foreclosureTrusteeSaleNum: string | null
+  ownerPortfolioCount: number | null
+  ownerPortfolioTotalEquity: string | null
+  ownerPortfolioTotalValue: string | null
+  ownerPortfolioAvgYearBuilt: number | null
+  absenteeOwnerInState: boolean | null
+  seniorOwner: boolean | null
+  samePropertyMailing: boolean | null
+  valuationAsOfDate: string | null
+  valuationConfidence: number | null
+  advancedPropertyType: string | null
+  lotDepthFootage: number | null
+  cashBuyerOwner: boolean | null
+  deceasedOwner: boolean | null
+  hasOpenLiens: boolean | null
+  hasOpenPersonLiens: boolean | null
+  underwater: boolean | null
+  expiredListing: boolean | null
+  deedHistoryJson: Array<Record<string, unknown>> | null
+  mortgageHistoryJson: Array<Record<string, unknown>> | null
+  liensJson: Array<Record<string, unknown>> | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
@@ -584,6 +628,10 @@ export function PropertyDetailClient({
               />
               {/* ── MLS history (from REAPI/PropertyRadar) ────── */}
               <MlsPanel property={property} />
+              {/* ── Vendor intel (BatchData motivation + PR flags + owner portfolio + foreclosure trustee) ── */}
+              <VendorIntelPanel property={property} />
+              {/* ── Deed / mortgage / lien history (vendor blobs) ── */}
+              <HistoryPanel property={property} />
               {/* ── Property Data (existing research content) ── */}
               <ResearchTab property={property} />
             </div>
@@ -3575,6 +3623,296 @@ function MlsStat({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1">{label}</p>
       <p className="text-ds-body text-txt-primary">{value}</p>
+    </div>
+  )
+}
+
+// ─── Vendor Intel Panel ──────────────────────────────────────────────────
+// Surfaces BatchData + PropertyRadar scalars captured by the comprehensive
+// vendor migration: seller motivation, owner portfolio, foreclosure trustee
+// contact, owner flags. Renders only sections that have data.
+
+function VendorIntelPanel({ property }: { property: PropertyDetail }) {
+  const hasMotivation = property.salePropensity != null || property.salePropensityCategory
+  const hasPortfolio = (property.ownerPortfolioCount ?? 0) > 1
+    || property.ownerPortfolioTotalValue != null
+  const hasFlags = property.seniorOwner === true
+    || property.deceasedOwner === true
+    || property.absenteeOwnerInState === true
+    || property.samePropertyMailing === true
+    || property.hasOpenLiens === true
+    || property.hasOpenPersonLiens === true
+    || property.underwater === true
+    || property.expiredListing === true
+    || property.cashBuyerOwner === true
+  const hasForeclosureDetail = property.foreclosureTrusteeName
+    || property.foreclosureAuctionCity
+    || property.foreclosureFilingDate
+  const hasListingHistory = property.listingFailedDate
+    || property.listingSoldDate
+    || property.listingAgentName
+  const hasAddressMeta = property.advancedPropertyType
+    || property.lotDepthFootage != null
+    || property.addressValidity
+
+  const hasAny = hasMotivation || hasPortfolio || hasFlags || hasForeclosureDetail || hasListingHistory || hasAddressMeta
+  if (!hasAny) return null
+
+  const fmtMoney = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : '—'
+  const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString() : '—'
+
+  const flagPills: Array<{ label: string; tone: 'red' | 'amber' | 'blue' | 'slate' }> = []
+  if (property.deceasedOwner === true) flagPills.push({ label: 'Deceased owner', tone: 'red' })
+  if (property.expiredListing === true) flagPills.push({ label: 'Expired listing', tone: 'amber' })
+  if (property.underwater === true) flagPills.push({ label: 'Underwater', tone: 'red' })
+  if (property.hasOpenLiens === true) flagPills.push({ label: 'Open liens', tone: 'amber' })
+  if (property.hasOpenPersonLiens === true) flagPills.push({ label: 'Personal liens', tone: 'amber' })
+  if (property.seniorOwner === true) flagPills.push({ label: 'Senior owner', tone: 'blue' })
+  if (property.cashBuyerOwner === true) flagPills.push({ label: 'Cash buyer owner', tone: 'blue' })
+  if (property.absenteeOwnerInState === true) flagPills.push({ label: 'Absentee (in-state)', tone: 'slate' })
+  if (property.samePropertyMailing === true) flagPills.push({ label: 'Mailing = property', tone: 'slate' })
+
+  const toneClass: Record<string, string> = {
+    red: 'bg-red-50 text-red-700 border-red-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    blue: 'bg-blue-50 text-blue-700 border-blue-200',
+    slate: 'bg-slate-50 text-slate-600 border-slate-200',
+  }
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)]">
+        <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Vendor Intel</p>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Flags row */}
+        {flagPills.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {flagPills.map((p, i) => (
+              <span key={i} className={`text-[10px] font-medium px-2 py-[2px] rounded-full border whitespace-nowrap ${toneClass[p.tone]}`}>
+                {p.label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Motivation score + property type + address meta */}
+        {(hasMotivation || hasAddressMeta) && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {hasMotivation && (
+              <MlsStat
+                label="Sale Propensity"
+                value={property.salePropensity != null
+                  ? `${Number(property.salePropensity).toFixed(1)}${property.salePropensityCategory ? ` (${property.salePropensityCategory})` : ''}`
+                  : (property.salePropensityCategory ?? '—')
+                }
+              />
+            )}
+            {property.advancedPropertyType && (
+              <MlsStat label="Property Type" value={property.advancedPropertyType} />
+            )}
+            {property.lotDepthFootage != null && (
+              <MlsStat label="Lot Depth" value={`${property.lotDepthFootage} ft`} />
+            )}
+            {property.addressValidity && (
+              <MlsStat
+                label="Address"
+                value={`${property.addressValidity}${property.zipPlus4 ? ` · ZIP+4 ${property.zipPlus4}` : ''}`}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Owner portfolio */}
+        {hasPortfolio && (
+          <div>
+            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Owner Portfolio</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MlsStat label="Properties" value={property.ownerPortfolioCount != null ? String(property.ownerPortfolioCount) : '—'} />
+              <MlsStat label="Total Equity" value={fmtMoney(property.ownerPortfolioTotalEquity)} />
+              <MlsStat label="Total Value" value={fmtMoney(property.ownerPortfolioTotalValue)} />
+              <MlsStat label="Avg Year Built" value={property.ownerPortfolioAvgYearBuilt != null ? String(property.ownerPortfolioAvgYearBuilt) : '—'} />
+            </div>
+          </div>
+        )}
+
+        {/* Listing history */}
+        {hasListingHistory && (
+          <div>
+            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Listing History</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MlsStat label="Listed" value={fmtDate(property.listingOriginalDate)} />
+              <MlsStat label="Failed" value={fmtDate(property.listingFailedDate)} />
+              <MlsStat label="Sold" value={fmtDate(property.listingSoldDate)} />
+              <MlsStat label="Sold Price" value={fmtMoney(property.listingSoldPrice)} />
+              {property.listingAgentName && (
+                <MlsStat label="Last Agent" value={property.listingAgentName} />
+              )}
+              {property.listingAgentPhone && (
+                <MlsStat label="Agent Phone" value={property.listingAgentPhone} />
+              )}
+              {property.listingBrokerName && (
+                <MlsStat label="Broker" value={property.listingBrokerName} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Foreclosure trustee (only when in foreclosure) */}
+        {hasForeclosureDetail && (
+          <div>
+            <p className="text-[10px] font-semibold text-red-600 uppercase tracking-wider mb-2">Foreclosure Detail</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MlsStat label="Filing Date" value={fmtDate(property.foreclosureFilingDate)} />
+              <MlsStat label="Auction City" value={property.foreclosureAuctionCity ?? '—'} />
+              <MlsStat label="Auction Time" value={property.foreclosureAuctionTime ?? '—'} />
+              <MlsStat label="Borrower" value={property.foreclosureBorrower ?? '—'} />
+              <MlsStat label="Trustee" value={property.foreclosureTrusteeName ?? '—'} />
+              <MlsStat label="Trustee Phone" value={property.foreclosureTrusteePhone ?? '—'} />
+              <MlsStat label="Sale Number" value={property.foreclosureTrusteeSaleNum ?? '—'} />
+              <MlsStat label="Auction Location" value={property.foreclosureAuctionLocation ?? '—'} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── History Panel ───────────────────────────────────────────────────────
+// Renders the deed / mortgage / lien history arrays that now land in
+// dedicated JSON columns. Collapsed by default; shows row counts as teasers.
+
+function HistoryPanel({ property }: { property: PropertyDetail }) {
+  const [open, setOpen] = useState<'deed' | 'mortgage' | 'lien' | null>(null)
+
+  const deedRows = property.deedHistoryJson ?? []
+  const mortgageRows = property.mortgageHistoryJson ?? []
+  const lienRows = property.liensJson ?? []
+  const hasAny = deedRows.length + mortgageRows.length + lienRows.length > 0
+  if (!hasAny) return null
+
+  const fmtMoney = (v: unknown) => v != null && v !== 0 ? `$${Number(v).toLocaleString()}` : '—'
+  const fmtDate = (v: unknown) => {
+    if (!v) return '—'
+    const d = new Date(String(v))
+    return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString()
+  }
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)]">
+        <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Title & Encumbrance History</p>
+      </div>
+      <div className="p-4 space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {deedRows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOpen(open === 'deed' ? null : 'deed')}
+              className={`text-[11px] px-3 py-1 rounded-full border transition ${open === 'deed' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-[rgba(0,0,0,0.1)] text-txt-primary hover:bg-gray-50'}`}
+            >
+              Deeds ({deedRows.length})
+            </button>
+          )}
+          {mortgageRows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOpen(open === 'mortgage' ? null : 'mortgage')}
+              className={`text-[11px] px-3 py-1 rounded-full border transition ${open === 'mortgage' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-[rgba(0,0,0,0.1)] text-txt-primary hover:bg-gray-50'}`}
+            >
+              Mortgages ({mortgageRows.length})
+            </button>
+          )}
+          {lienRows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOpen(open === 'lien' ? null : 'lien')}
+              className={`text-[11px] px-3 py-1 rounded-full border transition ${open === 'lien' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-[rgba(0,0,0,0.1)] text-txt-primary hover:bg-gray-50'}`}
+            >
+              Liens ({lienRows.length})
+            </button>
+          )}
+        </div>
+
+        {open === 'deed' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left text-txt-muted border-b border-[rgba(0,0,0,0.04)]">
+                  <th className="py-1 pr-3">Date</th>
+                  <th className="py-1 pr-3">Sale Price</th>
+                  <th className="py-1 pr-3">Document Type</th>
+                  <th className="py-1 pr-3">Buyers</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deedRows.map((r, i) => (
+                  <tr key={i} className="border-b border-[rgba(0,0,0,0.02)]">
+                    <td className="py-1 pr-3 whitespace-nowrap">{fmtDate(r.recordingDate ?? r.saleDate)}</td>
+                    <td className="py-1 pr-3 whitespace-nowrap">{fmtMoney(r.salePrice)}</td>
+                    <td className="py-1 pr-3">{String(r.documentType ?? r.deedType ?? '—')}</td>
+                    <td className="py-1 pr-3">{Array.isArray(r.buyers) ? r.buyers.join(', ') : String(r.buyers ?? '—')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {open === 'mortgage' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left text-txt-muted border-b border-[rgba(0,0,0,0.04)]">
+                  <th className="py-1 pr-3">Date</th>
+                  <th className="py-1 pr-3">Loan Amount</th>
+                  <th className="py-1 pr-3">Rate</th>
+                  <th className="py-1 pr-3">Term</th>
+                  <th className="py-1 pr-3">Lender</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mortgageRows.map((r, i) => (
+                  <tr key={i} className="border-b border-[rgba(0,0,0,0.02)]">
+                    <td className="py-1 pr-3 whitespace-nowrap">{fmtDate(r.recordingDate ?? r.documentDate)}</td>
+                    <td className="py-1 pr-3 whitespace-nowrap">{fmtMoney(r.loanAmount)}</td>
+                    <td className="py-1 pr-3">{r.interestRate != null ? `${r.interestRate}%` : '—'}</td>
+                    <td className="py-1 pr-3">{r.loanTermMonths ? `${r.loanTermMonths}mo` : '—'}</td>
+                    <td className="py-1 pr-3">{String(r.lenderName ?? '—')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {open === 'lien' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left text-txt-muted border-b border-[rgba(0,0,0,0.04)]">
+                  <th className="py-1 pr-3">Recorded</th>
+                  <th className="py-1 pr-3">Type</th>
+                  <th className="py-1 pr-3">Document</th>
+                  <th className="py-1 pr-3">Ref</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lienRows.map((r, i) => (
+                  <tr key={i} className="border-b border-[rgba(0,0,0,0.02)]">
+                    <td className="py-1 pr-3 whitespace-nowrap">{fmtDate(r.recordingDate)}</td>
+                    <td className="py-1 pr-3">{String(r.lienType ?? '—')}</td>
+                    <td className="py-1 pr-3">{String(r.documentType ?? '—')}</td>
+                    <td className="py-1 pr-3">{String(r.documentNumber ?? '—')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
