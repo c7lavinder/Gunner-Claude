@@ -40,6 +40,10 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         fieldSources: true, ghlContactId: true, ghlPipelineStage: true,
         leadSource: true, lastOfferDate: true, lastContactedDate: true,
         assignedToId: true,
+        // Vendor distress signals for the inventory row badge
+        distressScore: true, preForeclosure: true, bankOwned: true,
+        inBankruptcy: true, inProbate: true, inDivorce: true,
+        hasRecentEviction: true, taxDelinquent: true, foreclosureStatus: true,
         sellers: {
           include: { seller: { select: { id: true, name: true, phone: true, email: true, ghlContactId: true } } },
           orderBy: { isPrimary: 'desc' },
@@ -141,6 +145,15 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         market: p.market?.name ?? null,
         lastOfferDate: p.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: p.lastContactedDate?.toISOString() ?? null,
+        distressScore: p.distressScore,
+        preForeclosure: p.preForeclosure,
+        bankOwned: p.bankOwned,
+        inBankruptcy: p.inBankruptcy,
+        inProbate: p.inProbate,
+        inDivorce: p.inDivorce,
+        hasRecentEviction: p.hasRecentEviction,
+        taxDelinquent: p.taxDelinquent,
+        foreclosureStatus: p.foreclosureStatus,
       }))}
       statusCounts={statusCounts}
       tenantSlug={params.tenant}

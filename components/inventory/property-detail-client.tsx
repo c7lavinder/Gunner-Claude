@@ -111,6 +111,36 @@ interface PropertyDetail {
   yardGrade: string | null
   locationGrade: string | null
   marketRisk: string | null
+  // Vendor distress + MLS (PropertyRadar + BatchData)
+  distressScore: number | null
+  preForeclosure: boolean | null
+  bankOwned: boolean | null
+  inBankruptcy: boolean | null
+  inProbate: boolean | null
+  inDivorce: boolean | null
+  hasRecentEviction: boolean | null
+  taxDelinquent: boolean | null
+  foreclosureStatus: string | null
+  mlsActive: boolean | null
+  mlsPending: boolean | null
+  mlsSold: boolean | null
+  mlsStatus: string | null
+  mlsType: string | null
+  mlsListingDate: string | null
+  mlsListingPrice: string | null
+  mlsSoldPrice: string | null
+  mlsDaysOnMarket: number | null
+  mlsPricePerSqft: string | null
+  mlsKeywords: string[]
+  lastMlsStatus: string | null
+  lastMlsListPrice: string | null
+  lastMlsSoldPrice: string | null
+  // Google Places
+  googlePlaceId: string | null
+  googleVerifiedAddress: string | null
+  googleStreetViewUrl: string | null
+  googlePhotoThumbnailUrl: string | null
+  googleMapsUrl: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
@@ -552,6 +582,8 @@ export function PropertyDetailClient({
                 pendingCount={pendingSuggestionCount}
                 onReview={() => setShowSuggestionModal(true)}
               />
+              {/* ── MLS history (from REAPI/PropertyRadar) ────── */}
+              <MlsPanel property={property} />
               {/* ── Property Data (existing research content) ── */}
               <ResearchTab property={property} />
             </div>
@@ -3466,6 +3498,83 @@ function SuggestionReviewModal({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── MLS Panel ───────────────────────────────────────────────────────────────
+// Surfaces MLS activity (active/pending/sold flags, listing date, list/sold
+// prices, days on market, PPSF, keywords) that flow in from PropertyRadar's
+// subscription + any MLS data BatchData returns. Renders nothing when no
+// MLS data has been captured.
+
+function MlsPanel({ property }: { property: PropertyDetail }) {
+  const hasAnyMls =
+    property.mlsActive || property.mlsPending || property.mlsSold ||
+    property.mlsStatus || property.mlsListingPrice || property.mlsSoldPrice ||
+    property.mlsListingDate || property.mlsDaysOnMarket != null ||
+    property.lastMlsStatus || property.lastMlsListPrice ||
+    (property.mlsKeywords && property.mlsKeywords.length > 0)
+
+  if (!hasAnyMls) return null
+
+  // Resolve an effective status — current flag first, then text status
+  const effectiveStatus = property.mlsActive ? 'Active'
+    : property.mlsPending ? 'Pending'
+    : property.mlsSold ? 'Sold'
+    : property.mlsStatus
+    ?? property.lastMlsStatus
+    ?? null
+
+  const statusColor = effectiveStatus?.toLowerCase().includes('active') ? 'bg-green-100 text-green-700 border-green-300'
+    : effectiveStatus?.toLowerCase().includes('pending') ? 'bg-amber-100 text-amber-700 border-amber-300'
+    : effectiveStatus?.toLowerCase().includes('sold') ? 'bg-blue-100 text-blue-700 border-blue-300'
+    : effectiveStatus?.toLowerCase().includes('cancel') || effectiveStatus?.toLowerCase().includes('expired') || effectiveStatus?.toLowerCase().includes('fail')
+      ? 'bg-slate-100 text-slate-600 border-slate-200'
+    : 'bg-gray-100 text-gray-600 border-gray-200'
+
+  const fmt = (v: string | null) => v ? `$${Number(v).toLocaleString()}` : '—'
+  const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString() : '—'
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+        <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">MLS History</p>
+        {effectiveStatus && (
+          <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full border whitespace-nowrap ${statusColor}`}>
+            {effectiveStatus}
+          </span>
+        )}
+      </div>
+      <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MlsStat label="Listing Date"        value={fmtDate(property.mlsListingDate)} />
+        <MlsStat label="Listing Price"       value={fmt(property.mlsListingPrice ?? property.lastMlsListPrice)} />
+        <MlsStat label="Sold Price"          value={fmt(property.mlsSoldPrice ?? property.lastMlsSoldPrice)} />
+        <MlsStat label="Days on Market"      value={property.mlsDaysOnMarket != null ? String(property.mlsDaysOnMarket) : '—'} />
+        <MlsStat label="Price per Sqft"      value={fmt(property.mlsPricePerSqft)} />
+        <MlsStat label="Listing Type"        value={property.mlsType ?? '—'} />
+      </div>
+      {property.mlsKeywords && property.mlsKeywords.length > 0 && (
+        <div className="px-4 pb-4">
+          <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Keywords</p>
+          <div className="flex flex-wrap gap-1.5">
+            {property.mlsKeywords.map((kw, i) => (
+              <span key={i} className="text-[10px] px-2 py-[2px] rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                {kw}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MlsStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-ds-body text-txt-primary">{value}</p>
     </div>
   )
 }

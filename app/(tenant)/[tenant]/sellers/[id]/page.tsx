@@ -59,6 +59,19 @@ export default async function SellerDetailPage({
     enrichmentLastUpdated: seller.enrichmentLastUpdated?.toISOString() ?? null,
     appointmentSetDate: seller.appointmentSetDate?.toISOString() ?? null,
     appointmentCompletedDate: seller.appointmentCompletedDate?.toISOString() ?? null,
+    // CourtListener case-search dates
+    clCasesSearchedAt: seller.clCasesSearchedAt?.toISOString() ?? null,
+    clBankruptcyLatestFilingDate: seller.clBankruptcyLatestFilingDate?.toISOString() ?? null,
+    clDivorceLatestFilingDate: seller.clDivorceLatestFilingDate?.toISOString() ?? null,
+    clCivilJudgmentLatestDate: seller.clCivilJudgmentLatestDate?.toISOString() ?? null,
+    clForeclosureCourtCaseDate: seller.clForeclosureCourtCaseDate?.toISOString() ?? null,
+    clProbateLatestFilingDate: seller.clProbateLatestFilingDate?.toISOString() ?? null,
+    clCasesJson: seller.clCasesJson as Array<{
+      caseName: string | null; court: string | null; courtId: string | null
+      dateFiled: string | null; dateTerminated: string | null
+      docketNumber: string | null; natureOfSuit: string | null
+      absoluteUrl: string | null; caseType: string; caseStatus?: string
+    }>,
     // Decimals to strings
     mortgageBalance: seller.mortgageBalance?.toString() ?? null,
     monthlyMortgagePayment: seller.monthlyMortgagePayment?.toString() ?? null,

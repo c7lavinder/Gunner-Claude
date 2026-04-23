@@ -41,6 +41,71 @@ interface Property {
   market: string | null
   lastOfferDate: string | null
   lastContactedDate: string | null
+  // Vendor distress signals (from PropertyRadar + BatchData)
+  distressScore: number | null
+  preForeclosure: boolean | null
+  bankOwned: boolean | null
+  inBankruptcy: boolean | null
+  inProbate: boolean | null
+  inDivorce: boolean | null
+  hasRecentEviction: boolean | null
+  taxDelinquent: boolean | null
+  foreclosureStatus: string | null
+}
+
+// DistressBadge — renders the PropertyRadar composite score with a color
+// scale (red ≥ 70, orange 40-69, amber 20-39, slate < 20 or null), plus
+// a small stack of icons for active distress flags hovered in the tooltip.
+function DistressBadge({
+  score,
+  preForeclosure,
+  bankOwned,
+  inBankruptcy,
+  inProbate,
+  inDivorce,
+  taxDelinquent,
+  foreclosureStatus,
+}: {
+  score: number | null
+  preForeclosure: boolean | null
+  bankOwned: boolean | null
+  inBankruptcy: boolean | null
+  inProbate: boolean | null
+  inDivorce: boolean | null
+  taxDelinquent: boolean | null
+  foreclosureStatus: string | null
+}) {
+  const activeFlags: string[] = []
+  if (preForeclosure) activeFlags.push('Pre-foreclosure')
+  if (bankOwned) activeFlags.push('REO')
+  if (foreclosureStatus) activeFlags.push(`Foreclosure: ${foreclosureStatus}`)
+  if (inBankruptcy) activeFlags.push('Bankruptcy')
+  if (inProbate) activeFlags.push('Probate')
+  if (inDivorce) activeFlags.push('Divorce')
+  if (taxDelinquent) activeFlags.push('Tax delinquent')
+
+  const hasScore = typeof score === 'number'
+  if (!hasScore && activeFlags.length === 0) return null
+
+  const color = !hasScore ? 'bg-slate-100 text-slate-600 border-slate-200'
+    : score! >= 70 ? 'bg-red-100 text-red-700 border-red-300'
+    : score! >= 40 ? 'bg-orange-100 text-orange-700 border-orange-300'
+    : score! >= 20 ? 'bg-amber-100 text-amber-700 border-amber-300'
+    : 'bg-slate-100 text-slate-600 border-slate-200'
+
+  const tooltip = [
+    hasScore ? `Distress score: ${score}/100` : 'Distress flags present',
+    ...activeFlags.map(f => `• ${f}`),
+  ].join('\n')
+
+  return (
+    <span
+      className={`text-[10px] font-medium px-2 py-[2px] rounded-full border whitespace-nowrap ${color}`}
+      title={tooltip}
+    >
+      {hasScore ? `⚠ ${score}` : `⚠ ${activeFlags.length}`}
+    </span>
+  )
 }
 
 export function InventoryClient({ properties: initialProperties, statusCounts, tenantSlug, canManage, ghlLocationId }: {
@@ -540,6 +605,16 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedS
                   {p.market}
                 </span>
               )}
+              <DistressBadge
+                score={p.distressScore}
+                preForeclosure={p.preForeclosure}
+                bankOwned={p.bankOwned}
+                inBankruptcy={p.inBankruptcy}
+                inProbate={p.inProbate}
+                inDivorce={p.inDivorce}
+                taxDelinquent={p.taxDelinquent}
+                foreclosureStatus={p.foreclosureStatus}
+              />
             </div>
             {/* Link */}
             <Link

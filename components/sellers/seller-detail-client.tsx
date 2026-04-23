@@ -190,6 +190,26 @@ interface SellerData {
   priorityFlag: boolean
   customFields: Record<string, unknown>
   fieldSources: Record<string, string>
+  // CourtListener case-search (populated by lib/courtlistener)
+  clCasesSearchedAt: string | null
+  clBankruptcyCount: number
+  clBankruptcyLatestChapter: string | null
+  clBankruptcyLatestFilingDate: string | null
+  clBankruptcyLatestStatus: string | null
+  clBankruptcyLatestCourt: string | null
+  clDivorceCount: number
+  clDivorceLatestFilingDate: string | null
+  clCivilJudgmentCount: number
+  clCivilJudgmentLatestDate: string | null
+  clForeclosureCourtCaseDate: string | null
+  clProbateCount: number
+  clProbateLatestFilingDate: string | null
+  clCasesJson: Array<{
+    caseName: string | null; court: string | null; courtId: string | null
+    dateFiled: string | null; dateTerminated: string | null
+    docketNumber: string | null; natureOfSuit: string | null
+    absoluteUrl: string | null; caseType: string; caseStatus?: string
+  }>
   properties: LinkedProperty[]
 }
 
@@ -406,6 +426,142 @@ function SkipTraceButton({
         : <Search className="w-3 h-3" />}
       {label}
     </button>
+  )
+}
+
+// ── CourtCasesSection — renders CourtListener case-search results ────────
+//
+// Populated by lib/enrichment/sync-seller-courtlistener when a linked
+// property gets enriched. Shows:
+//   - Overall counts (bankruptcy / divorce / civil / probate / foreclosure)
+//   - Each case with caseName, court, date filed, and a link to the docket
+//     on courtlistener.com
+//   - "Not searched yet" state when clCasesSearchedAt is null
+//   - "No cases found" state when searchedAt present but all counts = 0
+
+const CASE_TYPE_BADGE: Record<string, string> = {
+  bankruptcy: 'bg-red-100 text-red-700 border-red-300',
+  divorce: 'bg-amber-100 text-amber-700 border-amber-300',
+  foreclosure: 'bg-orange-100 text-orange-700 border-orange-300',
+  civil: 'bg-blue-100 text-blue-700 border-blue-300',
+  probate: 'bg-purple-100 text-purple-700 border-purple-300',
+  other: 'bg-gray-100 text-gray-600 border-gray-300',
+}
+
+function CourtCasesSection({ data }: { data: SellerData }) {
+  const total =
+    data.clBankruptcyCount +
+    data.clDivorceCount +
+    data.clCivilJudgmentCount +
+    data.clProbateCount
+  const cases = data.clCasesJson ?? []
+
+  // Never searched yet — stay out of the way with a small muted row
+  if (!data.clCasesSearchedAt) {
+    return (
+      <SectionCard title="Court Cases (CourtListener)">
+        <p className="text-ds-fine text-txt-muted italic px-3 py-2">
+          Not yet searched. Automatically runs after property enrichment.
+        </p>
+      </SectionCard>
+    )
+  }
+
+  const searchedDate = new Date(data.clCasesSearchedAt).toLocaleDateString()
+
+  return (
+    <SectionCard title="Court Cases (CourtListener)">
+      {/* Summary row */}
+      <div className="flex items-center gap-3 px-3 py-2 text-[11px] text-txt-muted">
+        <span>Searched {searchedDate}</span>
+        <span className="text-txt-muted/60">·</span>
+        <span className="font-medium text-txt-primary">{total} case{total === 1 ? '' : 's'}</span>
+      </div>
+
+      {/* Per-type counts */}
+      {total > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+          {data.clBankruptcyCount > 0 && (
+            <CountPill type="bankruptcy" count={data.clBankruptcyCount} latestDate={data.clBankruptcyLatestFilingDate} />
+          )}
+          {data.clDivorceCount > 0 && (
+            <CountPill type="divorce" count={data.clDivorceCount} latestDate={data.clDivorceLatestFilingDate} />
+          )}
+          {data.clCivilJudgmentCount > 0 && (
+            <CountPill type="civil" count={data.clCivilJudgmentCount} latestDate={data.clCivilJudgmentLatestDate} />
+          )}
+          {data.clProbateCount > 0 && (
+            <CountPill type="probate" count={data.clProbateCount} latestDate={data.clProbateLatestFilingDate} />
+          )}
+          {data.clForeclosureCourtCaseDate && (
+            <CountPill type="foreclosure" count={1} latestDate={data.clForeclosureCourtCaseDate} />
+          )}
+        </div>
+      )}
+
+      {total === 0 && (
+        <p className="text-ds-fine text-txt-muted italic px-3 py-2">
+          No matching federal cases found.
+        </p>
+      )}
+
+      {/* Case list */}
+      {cases.length > 0 && (
+        <div className="border-t border-[rgba(0,0,0,0.06)] divide-y divide-[rgba(0,0,0,0.04)]">
+          {cases.map((c, i) => (
+            <div key={i} className="px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-ds-body font-medium text-txt-primary truncate">
+                    {c.caseName ?? 'Unnamed case'}
+                  </p>
+                  <p className="text-[10px] text-txt-muted">
+                    {c.court ?? 'Unknown court'}
+                    {c.docketNumber ? ` · ${c.docketNumber}` : ''}
+                    {c.dateFiled ? ` · filed ${c.dateFiled}` : ''}
+                    {c.caseStatus ? ` · ${c.caseStatus}` : ''}
+                  </p>
+                </div>
+                <span className={`shrink-0 text-[10px] font-medium px-2 py-[2px] rounded-full border whitespace-nowrap ${CASE_TYPE_BADGE[c.caseType] ?? CASE_TYPE_BADGE.other}`}>
+                  {c.caseType}
+                </span>
+                {c.absoluteUrl && (
+                  <a
+                    href={c.absoluteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-txt-muted hover:text-gunner-red transition-colors"
+                    title="Open on CourtListener"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+function CountPill({
+  type,
+  count,
+  latestDate,
+}: {
+  type: string
+  count: number
+  latestDate: string | null
+}) {
+  const dateLabel = latestDate ? ` (latest ${new Date(latestDate).toLocaleDateString()})` : ''
+  return (
+    <span
+      className={`text-[10px] font-medium px-2 py-[2px] rounded-full border whitespace-nowrap ${CASE_TYPE_BADGE[type] ?? CASE_TYPE_BADGE.other}`}
+      title={`${count} ${type} case${count === 1 ? '' : 's'}${dateLabel}`}
+    >
+      {count} {type}
+    </span>
   )
 }
 
@@ -641,6 +797,8 @@ export function SellerDetailClient({ seller, tenantSlug }: SellerDetailClientPro
               <FieldRow label="Subject To" fieldKey="willingToDoSubjectTo" value={fmtBool(data.willingToDoSubjectTo)} sources={sources} onSave={saveField} />
               <FieldRow label="Move-out Timeline" fieldKey="moveOutTimeline" value={f('moveOutTimeline')} sources={sources} onSave={saveField} />
             </SectionCard>
+
+            <CourtCasesSection data={data} />
           </>
         )}
 
