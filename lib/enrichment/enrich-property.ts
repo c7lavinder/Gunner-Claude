@@ -91,7 +91,11 @@ export async function enrichProperty(
     select: {
       id: true, address: true, city: true, state: true, zip: true,
       fieldSources: true, zillowData: true,
-      // Full PropertySlice fields for buildDenormUpdate
+      // Fundamental property detail — buildDenormUpdate now backfills these too
+      beds: true, baths: true, sqft: true, yearBuilt: true,
+      propertyType: true, occupancy: true, lotSize: true, description: true,
+      taxAssessment: true, annualTax: true, deedDate: true,
+      // Tier 1+
       county: true, latitude: true, longitude: true, apn: true,
       fips: true, subdivision: true,
       absenteeOwner: true, ownerPhone: true, ownerEmail: true,

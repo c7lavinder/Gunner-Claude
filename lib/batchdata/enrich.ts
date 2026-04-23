@@ -12,6 +12,19 @@ import {
 } from '@/lib/enrichment/sync-seller'
 
 type PropertySlice = {
+  // Core building/property details (fundamental fields, not tiered)
+  beds: number | null
+  baths: number | null
+  sqft: number | null
+  yearBuilt: number | null
+  propertyType: string | null
+  occupancy: string | null
+  lotSize: string | null
+  description: string | null
+  taxAssessment: unknown
+  annualTax: unknown
+  deedDate: Date | null
+  // Tier 1+
   county: string | null
   latitude: unknown
   longitude: unknown
@@ -182,6 +195,47 @@ export function buildDenormUpdate(
     const d = new Date(v)
     return isNaN(d.getTime()) ? null : d
   }
+
+  // Core building/property fundamentals (beds/baths/sqft/yearBuilt/propertyType)
+  setIfEmpty('beds', result.bedrooms)
+  setIfEmpty('baths', result.bathrooms)
+  setIfEmpty('sqft', result.squareFootage)
+  setIfEmpty('yearBuilt', result.yearBuilt)
+
+  // Lot size — BatchData ships lotSquareFootage; render as acres when ≥1.
+  if (result.lotSquareFootage && (property.lotSize == null || property.lotSize === '')) {
+    const sf = result.lotSquareFootage
+    const acres = sf / 43560
+    out.lotSize = acres >= 1 ? `${acres.toFixed(2)} ac` : `${sf.toLocaleString()} sqft`
+    if (fieldSources.lotSize !== 'user') fieldSources.lotSize = 'api'
+  }
+
+  // Property type normalization (BatchData returns raw vendor strings like
+  // "single family residential"; map to the UI's short labels).
+  if (result.propertyType && (property.propertyType == null || property.propertyType === '')) {
+    const typeMap: Record<string, string> = {
+      'single family residential': 'House', 'sfr': 'House', 'single family': 'House',
+      'multi-family': 'Multi-Family', 'multifamily': 'Multi-Family',
+      'condo': 'Condo', 'condominium': 'Condo',
+      'townhouse': 'Townhome', 'townhome': 'Townhome',
+      'mobile home': 'Mobile Home', 'manufactured': 'Mobile Home',
+      'land': 'Land', 'vacant land': 'Land',
+      'commercial': 'Commercial',
+    }
+    out.propertyType = typeMap[result.propertyType.toLowerCase()] ?? result.propertyType
+    if (fieldSources.propertyType !== 'user') fieldSources.propertyType = 'api'
+  }
+
+  // Occupancy derived from ownerOccupied flag
+  if (result.ownerOccupied != null && (property.occupancy == null || property.occupancy === '')) {
+    out.occupancy = result.ownerOccupied ? 'Owner' : 'Renter'
+    if (fieldSources.occupancy !== 'user') fieldSources.occupancy = 'api'
+  }
+
+  // Tax / deed basics (not tiered)
+  setIfEmpty('taxAssessment', result.taxAssessedValue)
+  setIfEmpty('annualTax', result.annualTaxAmount)
+  setIfEmpty('deedDate', toDate(result.lastSaleDate))
 
   // Identity & location
   setIfEmpty('county', result.county)
