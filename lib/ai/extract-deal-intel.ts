@@ -75,15 +75,32 @@ export async function extractDealIntel(callId: string): Promise<void> {
       logFailure(call.tenant.id, 'extract_deal_intel.ai_log_failed', `call:${callId}`, err)
     })
 
-    const proposedChanges = parseExtractionResponse(responseText, callId)
+    const { proposedChanges, perCallExtractions, propertySellerExtractions } =
+      parseExtractionResponse(responseText, callId)
 
-    // Store proposed changes on the call record
+    // Store proposed changes on the call record + the per-call promoted fields.
+    // Per-call promoted fields write directly (no approval flow) — they're
+    // observational reads of the transcript, not deal state the user negotiates.
     await db.call.update({
       where: { id: callId },
-      data: { dealIntelHistory: proposedChanges as unknown as import('@prisma/client').Prisma.InputJsonValue },
+      data: {
+        dealIntelHistory: proposedChanges as unknown as import('@prisma/client').Prisma.InputJsonValue,
+        ...(perCallExtractions ?? {}),
+      },
     })
 
-    console.log(`[Deal Intel] Extracted ${proposedChanges.length} proposed changes for call ${callId}`)
+    // Upsert PropertySeller deal-state for THIS (propertyId, sellerId) pair.
+    // Requires a linked seller on the call; otherwise skip silently.
+    if (propertySellerExtractions && call.propertyId && call.sellerId) {
+      await db.propertySeller.update({
+        where: { propertyId_sellerId: { propertyId: call.propertyId, sellerId: call.sellerId } },
+        data: propertySellerExtractions,
+      }).catch((err) => {
+        console.error(`[Deal Intel] PropertySeller upsert failed for call ${callId}:`, err instanceof Error ? err.message : err)
+      })
+    }
+
+    console.log(`[Deal Intel] Extracted ${proposedChanges.length} proposed changes + per-call promoted fields for call ${callId}`)
   } catch (err) {
     console.error(`[Deal Intel] Extraction failed for call ${callId}:`, err instanceof Error ? err.message : err)
   }
@@ -154,8 +171,29 @@ RESPONSE FORMAT — valid JSON only, no markdown:
   "topicsNotYetDiscussed": ["<topics relevant to wholesaling that haven't come up yet>"],
   "dealHealthScore": <1-10 composite score based on all available data>,
   "dealRedFlags": ["<specific red flags>"],
-  "dealGreenFlags": ["<specific green flags>"]
+  "dealGreenFlags": ["<specific green flags>"],
+  "perCallExtractions": {
+    "callPrimaryEmotion": "<anxious|hopeful|resigned|angry|grief|defensive|neutral>",
+    "callVoiceEnergyLevel": "<high|medium|low|distressed>",
+    "callTrustStep": "<distrustful|neutral|warming|trusting>",
+    "callFollowupCommitment": "<the verbatim next step they agreed to, or null>",
+    "callBestOfferMentioned": <highest dollar offer mentioned by any party on this call, or null>,
+    "callDealkillersSurfaced": ["<structural|title|family_dispute|emotional|legal|tenant|pricing>"],
+    "callCompetitorsMentioned": ["<names of other wholesalers/investors the seller mentioned>"]
+  },
+  "propertySellerExtractions": {
+    "sellerResistanceLevel": "<eager|neutral|reluctant|hostile>",
+    "lastConversationSummary": "<1-2 sentence summary of THIS call from the deal's perspective>",
+    "nextFollowupDate": "<YYYY-MM-DD, or null>",
+    "competingOffersCount": <number of competing offers seller is aware of, or null>,
+    "sellerTimelineConstraint": "<asap|30_days|flexible|no_rush>",
+    "estimatedDaysToDecision": <integer days estimated until seller decides, or null>,
+    "currentObjections": ["<still-live objections on this deal, not historical>"],
+    "negotiationStage": "<initial|anchored|compromising|accepted|declined>"
+  }
 }
+
+The perCallExtractions and propertySellerExtractions blocks are ALWAYS required — these are observational reads of the call, not proposed changes. Use null for any value you cannot determine. Numbers must be numbers, not strings. Dates must be "YYYY-MM-DD". Do NOT propose these through proposedChanges — they write directly to typed columns for filtering.
 
 CRITICAL EXTRACTION PRIORITIES (these are the most valuable for deal decisions):
 1. costOfInaction — "What happens if they don't sell?" This is the #1 negotiating lever
@@ -328,7 +366,34 @@ function stripJsonFences(text: string): string {
 
 // ─── Response parser ────────────────────────────────────────────────────────
 
-function parseExtractionResponse(text: string, callId: string): ProposedDealIntelChange[] {
+interface PerCallExtractionFields {
+  callPrimaryEmotion?: string | null
+  callVoiceEnergyLevel?: string | null
+  callTrustStep?: string | null
+  callFollowupCommitment?: string | null
+  callBestOfferMentioned?: number | string | null
+  callDealkillersSurfaced?: string[]
+  callCompetitorsMentioned?: string[]
+}
+
+interface PropertySellerExtractionFields {
+  sellerResistanceLevel?: string | null
+  lastConversationSummary?: string | null
+  nextFollowupDate?: Date | null
+  competingOffersCount?: number
+  sellerTimelineConstraint?: string | null
+  estimatedDaysToDecision?: number | null
+  currentObjections?: string[]
+  negotiationStage?: string | null
+}
+
+interface ParsedExtraction {
+  proposedChanges: ProposedDealIntelChange[]
+  perCallExtractions: PerCallExtractionFields | null
+  propertySellerExtractions: PropertySellerExtractionFields | null
+}
+
+function parseExtractionResponse(text: string, callId: string): ParsedExtraction {
   let clean = stripJsonFences(text)
   const firstBrace = clean.indexOf('{')
   const lastBrace = clean.lastIndexOf('}')
@@ -345,7 +410,7 @@ function parseExtractionResponse(text: string, callId: string): ProposedDealInte
       raw = JSON.parse(fixed) as Record<string, unknown>
     } catch {
       console.error(`[Deal Intel] Failed to parse response: ${text.slice(0, 200)}`)
-      return []
+      return { proposedChanges: [], perCallExtractions: null, propertySellerExtractions: null }
     }
   }
 
@@ -420,7 +485,49 @@ function parseExtractionResponse(text: string, callId: string): ProposedDealInte
     }
   }
 
-  return proposedChanges
+  // Parse the per-call promoted fields. Guard every cast so a malformed block
+  // never takes down the whole extraction — missing fields become null/omitted.
+  const pce = raw.perCallExtractions as Record<string, unknown> | undefined
+  const perCallExtractions: PerCallExtractionFields | null = pce && typeof pce === 'object' ? {
+    callPrimaryEmotion: typeof pce.callPrimaryEmotion === 'string' ? pce.callPrimaryEmotion : null,
+    callVoiceEnergyLevel: typeof pce.callVoiceEnergyLevel === 'string' ? pce.callVoiceEnergyLevel : null,
+    callTrustStep: typeof pce.callTrustStep === 'string' ? pce.callTrustStep : null,
+    callFollowupCommitment: typeof pce.callFollowupCommitment === 'string' ? pce.callFollowupCommitment : null,
+    callBestOfferMentioned: typeof pce.callBestOfferMentioned === 'number'
+      ? pce.callBestOfferMentioned
+      : (typeof pce.callBestOfferMentioned === 'string' && pce.callBestOfferMentioned.trim()
+          ? pce.callBestOfferMentioned
+          : null),
+    callDealkillersSurfaced: Array.isArray(pce.callDealkillersSurfaced)
+      ? (pce.callDealkillersSurfaced as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [],
+    callCompetitorsMentioned: Array.isArray(pce.callCompetitorsMentioned)
+      ? (pce.callCompetitorsMentioned as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [],
+  } : null
+
+  // Parse the PropertySeller deal-state block. nextFollowupDate comes in as
+  // YYYY-MM-DD; parse to a Date if valid, else null.
+  const pse = raw.propertySellerExtractions as Record<string, unknown> | undefined
+  let parsedFollowup: Date | null = null
+  if (pse && typeof pse.nextFollowupDate === 'string') {
+    const t = Date.parse(pse.nextFollowupDate)
+    if (!Number.isNaN(t)) parsedFollowup = new Date(t)
+  }
+  const propertySellerExtractions: PropertySellerExtractionFields | null = pse && typeof pse === 'object' ? {
+    sellerResistanceLevel: typeof pse.sellerResistanceLevel === 'string' ? pse.sellerResistanceLevel : null,
+    lastConversationSummary: typeof pse.lastConversationSummary === 'string' ? pse.lastConversationSummary : null,
+    nextFollowupDate: parsedFollowup,
+    competingOffersCount: typeof pse.competingOffersCount === 'number' ? pse.competingOffersCount : 0,
+    sellerTimelineConstraint: typeof pse.sellerTimelineConstraint === 'string' ? pse.sellerTimelineConstraint : null,
+    estimatedDaysToDecision: typeof pse.estimatedDaysToDecision === 'number' ? pse.estimatedDaysToDecision : null,
+    currentObjections: Array.isArray(pse.currentObjections)
+      ? (pse.currentObjections as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [],
+    negotiationStage: typeof pse.negotiationStage === 'string' ? pse.negotiationStage : null,
+  } : null
+
+  return { proposedChanges, perCallExtractions, propertySellerExtractions }
 }
 
 // ─── Learning context builder ───────────────────────────────────────────────
