@@ -51,6 +51,69 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 39-40 — API field inventory + schema wave 1 + inventory redesign (2026-04-22 to 2026-04-23)
+
+**Summary:** Two-session push on data enrichment and UI polish. Created comprehensive
+API field inventory document (PropertyRadar, RealEstateAPI, RentCast, BatchData comparison).
+Shipped Wave 1 schema expansion (80+ new columns across sellers, buyers, property details,
+call metadata), redesigned inventory UI with property-story generator, and deployed nightly
+aggregate computation cron for seller portfolio and buyer funnel tracking.
+
+**Session 39 deliverables:**
+1. **API_FIELD_INVENTORY.md** (created) — 2,400+ word field-by-field comparison across
+   4 real estate data vendors. Four parts:
+   - Part 1: Field universe by vendor (PropertyRadar 65+ fields, RealEstateAPI 100+,
+     RentCast 20+ per endpoint, BatchData 150+ all-attributes)
+   - Part 2: Unified field catalog master matrix (150+ rows, vendor availability)
+   - Part 3: Tier-prioritized recommendations for Gunner Property schema expansion
+     (Tier 1: 24 critical fields; Tier 2: 24 soon; Tier 3: 24 to skip)
+   - Part 4: Vendor overlap and redundancy analysis + cost-benefit. Recommendation:
+     BatchData ($0.30/property for all attributes) as primary + PropertyRadar
+     subscription as secondary source.
+
+**Session 40 deliverables (ongoing):**
+1. **Schema Wave 1** (commit `eebf78d` — `dba75b6`) — 80+ new columns added to Property,
+   PropertySeller, PropertyBuyer, and Call tables. Covers condition grades, location
+   scores, market grades, intangible factors (character, prestige), and per-call
+   promoted-field extraction. **Status: deployed to production.**
+
+2. **Inventory UI redesign** (commits `8a244fc` — `07c55ea`):
+   - Property-story generator (`425c0cf`) — auto-generates narrative summary of property,
+     reusable across deal contexts. Triggers on property create/enrich.
+   - Cash-hero matrix card + 3-col Numbers panel with tabbed view (price/structure/condition)
+   - Est. Spread matrix visualization + risk-factor computation
+   - Persistent cross-tab side panel for property details
+   - Activity tab layout refactor matching overview UI patterns
+   - **Status: live in production.**
+
+3. **Nightly aggregates cron** (commit `e6f2b3a` — `ff24ea4`):
+   - `scripts/compute-aggregates.ts` runs at 4am UTC
+   - Seller aggregates: portfolio rollup (properties owned/sold, markets, deal stats,
+     close rate, last deal date), voice analytics (emotions, trust trajectory, energy
+     trends, competitor/dealkiller mentions from recent 20 calls)
+   - Buyer aggregates: funnel metrics from PropertyBuyerStage (offers sent/accepted,
+     conversion rates, dropout analysis)
+   - Idempotent per-row error isolation + audit logging
+   - **Status: live in production.**
+
+**Build fixes alongside (commits `af5d836` — `6c68e12`):
+- Moved @types/* + eslint to dependencies (Next.js build-time need)
+- Set NPM_CONFIG_PRODUCTION=false for esbuild during Railway build
+- Excluded scripts/visual-audit.ts from tsc (kept in devDeps for local testing)
+
+**Verification status:**
+- Zero TypeScript errors (full sweep completed)
+- All 11 AI touchpoints wired + AI logging live
+- Playbook knowledge integrated into 5 AI paths
+- Grading pipeline status: awaiting Task 1 heartbeat check from next session
+- Blocker #2 production verification: still deferred (needs 3-path validation on Railway)
+
+**Known technical debt carried over:**
+- Bug #17 (#20, #21, #22, #23) — grading pipeline edge cases, parser regressions, cron heartbeat gaps
+- ~64 API routes still need withTenant migration
+- 79 silent catches remaining in broader codebase
+- Day Hub vs Calls page count source-of-truth misalignment
+
 ### Session 38 — Blocker #2 cleared + grading pipeline rebuilt as a service (2026-04-20)
 
 **The heavy day.** Two major threads back-to-back: AI Assistant propose→edit→confirm
@@ -472,7 +535,25 @@ All other bugs from sessions 1-32 are resolved.
 
 ## Next Session — Start Exactly Here
 
-**Task 1 (critical — verify the grading pipeline is actually working post-deploy):**
+**Status as of 2026-04-23 05:20 UTC:** Production is live with Wave 1 schema,
+inventory redesign, and nightly aggregates. Last commit is `e6f2b3a`. All recent
+deliverables verified at TypeScript + deployment level. Session 40 work is complete.
+
+**Priority 1 — Blocker #2 production verification (deferred 2 sessions):**
+The AI Assistant propose→edit→confirm flow was coded (Session 38, commits
+`15fe184` — `5203539`) but never validated end-to-end on live Railway with
+real GHL data. Three validation paths in order of safety:
+1. **Cancel-path only** for high-stakes types (send_sms, send_email,
+   change_pipeline_stage, create_contact, update_contact, create_opportunity) —
+   proves UI + preview + merge + modal without GHL writes
+2. **GUNNER TEST contact** in GHL for a single end-to-end SMS proof
+3. **Real contact** for medium/low-stakes types (add_note, create_task,
+   update_task, complete_task, opp status/value) — no outbound seller visibility
+
+Start with path 1 on the live URL. If that works, escalate to path 2.
+
+**Priority 2 — Health verification (Task 1 from Session 38, still pending):**
+Verify the grading-worker service is actually running. Run this query:
 ```sql
 SELECT action, COUNT(*)::int AS count, MAX(created_at) AS last_seen,
   EXTRACT(EPOCH FROM (NOW() - MAX(created_at)))::int AS seconds_since
@@ -481,60 +562,30 @@ WHERE action LIKE 'cron.process_recording_jobs.%'
   AND created_at > NOW() - INTERVAL '1 hour'
 GROUP BY action;
 ```
+Expected: one `started` + one `finished` per minute. If `last_seen` > 120s,
+service is down — escalate per the steps in Session 38 notes.
 
-Expected steady state: one `cron.process_recording_jobs.started` + one
-`cron.process_recording_jobs.finished` row per minute. If `last_seen` is > 120
-seconds old, the grading-worker service didn't start on Railway and you're back to
-manual drains. Escalation path in order of least→most invasive:
-1. Check Railway dashboard for `grading-worker` service. If missing, the
-   `[[services]]` block didn't take — likely requires Railway CLI intervention.
-2. If worker is up but only `.started` rows appear (no `.finished`), processJobs()
-   is crashing mid-run — read `audit_logs WHERE severity='ERROR'` for root cause.
-3. Last-resort fallback: run `npx tsx scripts/process-recording-jobs.ts` from local
-   env every ~30 min to keep backlog drained. Session 38 did this 5× successfully.
+**Priority 3 — Known bugs (in order of severity):**
+1. Bug #20 — deal-intel parser doesn't strip markdown fences. Extract
+   `stripJsonFences()` into `lib/ai/stripJsonFences.ts`, use in
+   `lib/ai/extract-deal-intel.ts`
+2. Bug #21 — sentiment/sellerMotivation type coercion incomplete. Normalize
+   in `parseGradingResponse()` before db.call.update.
+3. Bug #17 — `no_answer` never rewritten to `short_call` in cron processor.
+   Either fix the rewrite or update spec to accept both for <45s calls.
+4. Bug #23 — add heartbeat audit rows to the other 4 crons (poll-calls,
+   daily-audit, daily-kpi-snapshot, weekly-profiles).
+5. Bug #18 — one-time backfill: `UPDATE calls SET source='recovery' WHERE source IS NULL`
+6. Bug #22 — one-time cleanup: 24 empty-shell FAILED rows (gradingStatus='FAILED'
+   AND recording_url IS NULL AND tenantId=…) → set to SKIPPED
 
-**Task 2 (verify Fix 2 + Fix 3 from `a77911c` are working):** after any completed
-worker iterations, check for rescued rows:
-```sql
--- Should be 0 after the first full cycle (PROCESSING rescue)
-SELECT COUNT(*) FROM calls
-WHERE grading_status='PROCESSING' AND updated_at < NOW() - INTERVAL '5 minutes';
+**Priority 4 — Technical debt (post-verification):**
+1. Migrate ~64 remaining API routes to withTenant helper
+2. Sweep remaining silent catches in broader codebase (79 total)
+3. Align Day Hub vs Calls page call count source-of-truth
+4. Fix LM tab "227" dial count aggregation across LM role
+5. Confirm all other crons have heartbeat audit rows to prevent silent outages
 
--- Evidence Fix 3 worked: FAILED calls from April 13 Anthropic-credit outage that
--- have recordings should start appearing in COMPLETED over the next hour as the
--- worker retries them one batch at a time.
-SELECT grading_status, COUNT(*) FROM calls
-WHERE created_at < '2026-04-20'
-  AND recording_url IS NOT NULL
-GROUP BY grading_status;
-```
-
-**Task 3 (Blocker #2 production verification — deferred from Session 38):** the user
-still needs to validate the AI Assistant propose→edit→confirm flow end-to-end on the
-live Railway URL. Three paths documented at end of Session 38:
-- **Cancel-path only** for the 6 high-stakes types (send_sms, send_email,
-  change_pipeline_stage, create_contact, update_contact, create_opportunity) —
-  proves UI + preview + merge + modal without GHL writes
-- **GUNNER TEST contact** in GHL for a single end-to-end SMS proof
-- **Real contact** for the 6 medium/low-stakes types (add_note, create_task,
-  update_task, complete_task, opp status/value) — no outbound seller visibility
-
-Parked items (lower priority):
-1. Bug #17 — fix `no_answer → short_call` rewrite in cron processor
-2. Bug #18 — one-time backfill: `UPDATE calls SET source='recovery' WHERE source IS NULL`
-3. Bug #20 — extract stripJsonFences into shared util (lib/ai/stripJsonFences.ts),
-   use in extract-deal-intel.ts (Session 38 saw this parser failing 6×)
-4. Bug #21 — normalize sentiment/sellerMotivation in parseGradingResponse
-5. Bug #22 — one-time clean up of the 24 empty-shell FAILED rows
-6. Bug #23 — add heartbeat audit rows to the other 4 crons (poll-calls,
-   daily-audit, daily-kpi-snapshot, weekly-profiles) so a similar silent outage
-   is immediately visible
-7. LM tab "227" dial count not aggregating across LM role
-8. Day Hub vs Calls page count source-of-truth alignment
-9. Migrate ~64 remaining API routes to withTenant
-10. Sweep remaining silent catches in broader codebase
-
-**Railway access:** Still need a fresh Railway API token from Corey to see server
-logs. Current token is invalid. Largest diagnostic gap remaining — specifically
-critical now since the grading-worker service status can only be definitively
-verified via the dashboard or logs.
+**Railway + Logging:** If Task 1 shows service is down, will need to check
+Railway dashboard or logs. Session 38 noted that the Railway API token is invalid —
+request a fresh one from Corey if needed for deep diagnostics.
