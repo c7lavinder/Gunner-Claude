@@ -63,6 +63,16 @@ name = "regenerate-stories"
 schedule = "0 7 * * *"
 command = "npx tsx scripts/regenerate-stories.ts"
 
+# Cron job: nightly aggregate computation across Sellers + Buyers.
+# Seller portfolio (deals owned / closed / walked, close rate, last close),
+# call voice aggregates (trust arc, primary emotion, energy trend,
+# competitors + dealkillers), plus Buyer conversion funnel. Runs at 4am UTC
+# so it's after KPI snapshot (midnight) but before the property-story cron.
+[[cron]]
+name = "compute-aggregates"
+schedule = "0 4 * * *"
+command = "npx tsx scripts/compute-aggregates.ts"
+
 # Long-running service: grading worker. Replaces the broken
 # process-recording-jobs [[cron]]. Runs processJobs() forever with a 60s
 # sleep between iterations. Railway keeps the process alive and SIGTERMs
