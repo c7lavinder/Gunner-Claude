@@ -109,14 +109,18 @@ function chapterFromDocket(docket: string | null | undefined): string | null {
  */
 export async function searchCourtListenerForSeller(
   sellerId: string,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; state?: string } = {},
 ): Promise<{ searched: boolean; caseCount: number } | null> {
   const seller = await db.seller.findUnique({
     where: { id: sellerId },
     select: {
-      id: true, name: true,
+      id: true, name: true, mailingState: true,
       clCasesSearchedAt: true,
       fieldSources: true,
+      properties: {
+        select: { property: { select: { state: true } } },
+        take: 1,
+      },
     },
   })
   if (!seller) return null
@@ -131,7 +135,14 @@ export async function searchCourtListenerForSeller(
     }
   }
 
-  const cl = await searchCases(seller.name)
+  // Prefer linked property's state (most reliable signal — we just confirmed
+  // the owner lives there); fall back to seller's mailing state; fall back
+  // to passed-in state; finally null (unscoped).
+  const state = seller.properties[0]?.property?.state
+    ?? seller.mailingState
+    ?? opts.state
+
+  const cl = await searchCases(seller.name, { state: state ?? undefined })
   if (!cl) return { searched: true, caseCount: 0 }
 
   const fieldSources = { ...((seller.fieldSources as Record<string, string>) ?? {}) }

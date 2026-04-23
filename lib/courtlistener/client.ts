@@ -55,27 +55,37 @@ export interface CourtListenerSearchResult {
  * Search CourtListener for cases matching a party name. Returns a normalized
  * bundle with case classification, counts, and latest-per-type.
  *
- * `state` helps narrow — we pass `court=<stateCode>*` when possible, but
- * CourtListener's court filter is by specific court IDs, not state prefix,
- * so we don't currently narrow. Future improvement.
+ * IMPORTANT: CourtListener's `q=` and `party_name=` parameters both do
+ * tokenized / full-text matching, which causes massive false-positive
+ * counts for common names (e.g. "Kimberly Dutcher" returned 13k+ hits from
+ * multi-district litigation cases that merely mentioned the name). To
+ * compensate we:
+ *   1. Scope to courts within the seller's state (`state` option), using
+ *      the hardcoded COURT_IDS_BY_STATE map below — keeps federal bankruptcy
+ *      + civil noise from other states out of the result set.
+ *   2. Client-side filter: only count a case when its `caseName` contains
+ *      the *full quoted name* as a substring (catches "First Last" but not
+ *      "First ... Last" scattered across unrelated parties).
+ *   3. Hard cap at 20 cases post-filter.
  */
 export async function searchCases(
   partyName: string,
   opts: { state?: string; limit?: number } = {},
 ): Promise<CourtListenerSearchResult | null> {
-  const limit = opts.limit ?? 50
+  const limit = opts.limit ?? 20
   const party = partyName.trim()
   if (!party) return null
 
-  // Wrap name in quotes so CourtListener treats it as a phrase match; use
-  // `type=r` for RECAP docket search (federal dockets) which is where
-  // bankruptcy/civil/foreclosure federal cases live.
   const url = new URL(`${BASE_URL}/search/`)
   url.searchParams.set('type', 'r')
   url.searchParams.set('q', `"${party}"`)
   url.searchParams.set('order_by', 'dateFiled desc')
-  // Note: the free REST v3 search endpoint paginates at 20/page by default.
-  // We fetch one page — enough for count + latest classification.
+
+  // Scope by state — CourtListener accepts multiple `court=` params.
+  if (opts.state) {
+    const courts = COURT_IDS_BY_STATE[opts.state.toUpperCase()] ?? []
+    for (const c of courts) url.searchParams.append('court', c)
+  }
 
   try {
     const res = await fetch(url.toString(), {
@@ -92,9 +102,18 @@ export async function searchCases(
     }
 
     const body = await res.json() as { count?: number; results?: Array<Record<string, unknown>> }
-    const results = body.results ?? []
+    const allResults = body.results ?? []
 
-    const cases: CourtListenerCase[] = results.slice(0, limit).map(r => {
+    // Client-side filter: exact full-name substring match on caseName
+    const needle = party.toLowerCase()
+    const filteredResults = allResults.filter(r => {
+      const caseName = String(r.caseName ?? r.case_name ?? '').toLowerCase()
+      return caseName.includes(needle)
+    })
+    const results = filteredResults.slice(0, limit)
+
+    // The slice happened above to cap post-filter. Build normalized shape:
+    const normalized: CourtListenerCase[] = results.map(r => {
       const court = str(r.court_citation_string) ?? str(r.court_id_full) ?? str(r.court)
       const courtId = str(r.court) ?? str(r.court_id)
       const caseName = str(r.caseName ?? r.case_name)
@@ -118,6 +137,7 @@ export async function searchCases(
       }
     })
 
+    const cases = normalized
     const byType = (t: CaseType) => cases.filter(c => c.caseType === t)
     const bankruptcy = byType('bankruptcy')
     const divorce = byType('divorce')
@@ -210,4 +230,63 @@ function normalizeDate(v: unknown): string | null {
 function str(v: unknown): string | undefined {
   if (v == null || v === '') return undefined
   return String(v)
+}
+
+// Federal district + bankruptcy court IDs by state (two-letter code).
+// Covers the courts where a wholesaler's sellers most commonly have cases
+// filed. Not exhaustive — specialty courts (Tax Court, Fed. Cir.) omitted.
+// Pattern: `<state><district><b for bankruptcy>` — e.g. "tnmdb" = Tennessee
+// Middle District Bankruptcy, "cacd" = California Central District.
+const COURT_IDS_BY_STATE: Record<string, string[]> = {
+  AL: ['alnd', 'almd', 'alsd', 'alnb', 'almb', 'alsb'],
+  AK: ['akd', 'akb'],
+  AZ: ['azd', 'azb'],
+  AR: ['ared', 'arwd', 'areb', 'arwb'],
+  CA: ['cacd', 'caed', 'cand', 'casd', 'cacb', 'caeb', 'canb', 'casb'],
+  CO: ['cod', 'cob'],
+  CT: ['ctd', 'ctb'],
+  DE: ['ded', 'deb'],
+  DC: ['dcd', 'dcb'],
+  FL: ['flnd', 'flmd', 'flsd', 'flnb', 'flmb', 'flsb'],
+  GA: ['gand', 'gamd', 'gasd', 'ganb', 'gamb', 'gasb'],
+  HI: ['hid', 'hib'],
+  ID: ['idd', 'idb'],
+  IL: ['ilnd', 'ilcd', 'ilsd', 'ilnb', 'ilcb', 'ilsb'],
+  IN: ['innd', 'insd', 'innb', 'insb'],
+  IA: ['iand', 'iasd', 'ianb', 'iasb'],
+  KS: ['ksd', 'ksb'],
+  KY: ['kyed', 'kywd', 'kyeb', 'kywb'],
+  LA: ['laed', 'lamd', 'lawd', 'laeb', 'lamb', 'lawb'],
+  ME: ['med', 'meb'],
+  MD: ['mdd', 'mdb'],
+  MA: ['mad', 'mab'],
+  MI: ['mied', 'miwd', 'mieb', 'miwb'],
+  MN: ['mnd', 'mnb'],
+  MS: ['msnd', 'mssd', 'msnb', 'mssb'],
+  MO: ['moed', 'mowd', 'moeb', 'mowb'],
+  MT: ['mtd', 'mtb'],
+  NE: ['ned', 'neb'],
+  NV: ['nvd', 'nvb'],
+  NH: ['nhd', 'nhb'],
+  NJ: ['njd', 'njb'],
+  NM: ['nmd', 'nmb'],
+  NY: ['nynd', 'nyed', 'nysd', 'nywd', 'nynb', 'nyeb', 'nysb', 'nywb'],
+  NC: ['nced', 'ncmd', 'ncwd', 'nceb', 'ncmb', 'ncwb'],
+  ND: ['ndd', 'ndb'],
+  OH: ['ohnd', 'ohsd', 'ohnb', 'ohsb'],
+  OK: ['oked', 'oknd', 'okwd', 'okeb', 'oknb', 'okwb'],
+  OR: ['ord', 'orb'],
+  PA: ['paed', 'pamd', 'pawd', 'paeb', 'pamb', 'pawb'],
+  RI: ['rid', 'rib'],
+  SC: ['scd', 'scb'],
+  SD: ['sdd', 'sdb'],
+  TN: ['tned', 'tnmd', 'tnwd', 'tneb', 'tnmdb', 'tnwb'],
+  TX: ['txnd', 'txed', 'txsd', 'txwd', 'txnb', 'txeb', 'txsb', 'txwb'],
+  UT: ['utd', 'utb'],
+  VT: ['vtd', 'vtb'],
+  VA: ['vaed', 'vawd', 'vaeb', 'vawb'],
+  WA: ['waed', 'wawd', 'waeb', 'wawb'],
+  WV: ['wvnd', 'wvsd', 'wvnb', 'wvsb'],
+  WI: ['wied', 'wiwd', 'wieb', 'wiwb'],
+  WY: ['wyd', 'wyb'],
 }
