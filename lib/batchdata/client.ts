@@ -238,6 +238,88 @@ export interface BatchDataPropertyResult {
   ownerOccupation?: string
   ownerPersonType?: string             // "Person" | "Company"
 
+  // ── Comprehensive capture (migration 20260423060000) ─────
+  // Address metadata (BatchData USPS validation)
+  addressValidity?: string
+  zipPlus4?: string
+
+  // BatchData intel (seller motivation)
+  salePropensity?: number
+  salePropensityCategory?: string
+  salePropensityStatus?: string
+
+  // BatchData listing activity
+  listingStatus?: string
+  listingStatusCategory?: string
+  listingFailedDate?: string
+  listingOriginalDate?: string
+  listingSoldPrice?: number
+  listingSoldDate?: string
+  listingAgentName?: string
+  listingAgentPhone?: string
+  listingBrokerName?: string
+
+  // Foreclosure extended detail
+  foreclosureAuctionCity?: string
+  foreclosureAuctionLocation?: string
+  foreclosureAuctionTime?: string
+  foreclosureBorrower?: string
+  foreclosureDocumentType?: string
+  foreclosureFilingDate?: string
+  foreclosureRecordingDate?: string
+  foreclosureTrusteeName?: string
+  foreclosureTrusteePhone?: string
+  foreclosureTrusteeAddress?: string
+  foreclosureTrusteeSaleNum?: string
+
+  // Owner portfolio
+  ownerPortfolioCount?: number
+  ownerPortfolioTotalEquity?: number
+  ownerPortfolioTotalValue?: number
+  ownerPortfolioTotalPurchase?: number
+  ownerPortfolioAvgAssessed?: number
+  ownerPortfolioAvgPurchase?: number
+  ownerPortfolioAvgYearBuilt?: number
+
+  // QuickLists extended
+  absenteeOwnerInState?: boolean
+  seniorOwner?: boolean
+  samePropertyMailing?: boolean
+
+  // Valuation detail
+  valuationAsOfDate?: string
+  valuationConfidence?: number
+  valuationStdDeviation?: number
+
+  // PropertyRadar flags (new)
+  advancedPropertyType?: string
+  lotDepthFootage?: number
+  cashBuyerOwner?: boolean
+  deceasedOwner?: boolean
+  hasOpenLiens?: boolean
+  hasOpenPersonLiens?: boolean
+  sameMailingOrExempt?: boolean
+  sameMailing?: boolean
+  underwater?: boolean
+  expiredListing?: boolean
+
+  // Multi-row JSON arrays
+  deedHistoryJson?: Array<Record<string, unknown>>
+  mortgageHistoryJson?: Array<Record<string, unknown>>
+  liensJson?: Array<Record<string, unknown>>
+  foreclosureDetailJson?: Record<string, unknown>
+  ownerPortfolioJson?: Record<string, unknown>
+  valuationJson?: Record<string, unknown>
+  quickListsJson?: Record<string, unknown>
+
+  // Seller mailing-address components
+  mailingValidity?: string
+  mailingZipPlus4?: string
+  mailingDeliveryPoint?: string
+  mailingDpvFootnotes?: string
+  mailingDpvMatchCode?: string
+  mailingCounty?: string
+
   // Raw
   raw?: Record<string, unknown>
 }
@@ -274,13 +356,17 @@ export async function lookupProperty(
     const address = (p.address ?? {}) as Record<string, unknown>
     const valuation = (p.valuation ?? {}) as Record<string, unknown>
     const owner = (p.owner ?? {}) as Record<string, unknown>
+    const ownerMailing = (owner.mailingAddress ?? {}) as Record<string, unknown>
     const listing = (p.listing ?? {}) as Record<string, unknown>
     const building = (p.building ?? {}) as Record<string, unknown>
     const quickLists = (p.quickLists ?? {}) as Record<string, unknown>
     const openLien = (p.openLien ?? {}) as Record<string, unknown>
+    const involuntaryLien = (p.involuntaryLien ?? {}) as Record<string, unknown>
     const permit = (p.permit ?? {}) as Record<string, unknown>
     const deedHistory = (p.deedHistory ?? []) as Array<Record<string, unknown>>
+    const mortgageHistory = Array.isArray(p.mortgageHistory) ? p.mortgageHistory as Array<Record<string, unknown>> : []
     const ownerProfile = (p.propertyOwnerProfile ?? {}) as Record<string, unknown>
+    const intel = (p.intel ?? {}) as Record<string, unknown>
     const ids = (p.ids ?? {}) as Record<string, unknown>
     const tax = (p.tax ?? p.assessor ?? {}) as Record<string, unknown>
     const mortgage = (p.mortgage ?? {}) as Record<string, unknown>
@@ -293,6 +379,11 @@ export async function lookupProperty(
     const legal = (p.legal ?? p.legalDescription ?? {}) as Record<string, unknown>
     const environmental = (p.environmental ?? {}) as Record<string, unknown>
     const vacancy = (p.vacancy ?? {}) as Record<string, unknown>
+    const listingAgents = Array.isArray(listing.agents) ? listing.agents as Array<Record<string, unknown>> : []
+    const listingAgentOffices = Array.isArray(listing.agentOffices) ? listing.agentOffices as Array<Record<string, unknown>> : []
+    const firstListingAgent = listingAgents[0] ?? {}
+    const firstListingBroker = listingAgentOffices[0] ?? {}
+    const involuntaryLienRows = Array.isArray(involuntaryLien.liens) ? involuntaryLien.liens as Array<Record<string, unknown>> : []
     const phones = Array.isArray(p.phoneNumbers) ? p.phoneNumbers as Array<Record<string, unknown>> : []
     const emails = Array.isArray(p.emails) ? p.emails as Array<Record<string, unknown>> : []
     const openLiens = Array.isArray(p.openLiens)
@@ -305,8 +396,7 @@ export async function lookupProperty(
     // Get most recent deed with a sale price > 0
     const lastSale = deedHistory.find(d => (d.salePrice as number) > 0)
 
-    // Owner mailing address
-    const ownerMailing = (owner.mailingAddress ?? {}) as Record<string, unknown>
+    // Owner mailing address string (object already destructured above)
     const mailingStr = ownerMailing.street
       ? `${ownerMailing.street}, ${ownerMailing.city ?? ''} ${ownerMailing.state ?? ''} ${ownerMailing.zip ?? ''}`.trim()
       : undefined
@@ -487,6 +577,76 @@ export async function lookupProperty(
       secondMortgageAmount: num(secondMortgage.amount ?? secondMortgage.loanAmount),
       secondMortgageLender: str(secondMortgage.lender ?? secondMortgage.lenderName),
       secondMortgageDate: str(secondMortgage.date ?? secondMortgage.recordingDate),
+
+      // ── Comprehensive capture ────────────────────────────────────
+      // Address metadata
+      addressValidity: str(address.addressValidity),
+      zipPlus4: str(address.zipPlus4),
+
+      // Intel block (seller motivation score)
+      salePropensity: num(intel.salePropensity),
+      salePropensityCategory: str(intel.salePropensityCategory),
+      salePropensityStatus: str(intel.salePropensityStatus),
+
+      // Listing activity
+      listingStatus: str(listing.status),
+      listingStatusCategory: str(listing.statusCategory),
+      listingFailedDate: str(listing.failedListingDate),
+      listingOriginalDate: str(listing.originalListingDate),
+      listingSoldPrice: num(listing.soldPrice),
+      listingSoldDate: str(listing.soldDate),
+      listingAgentName: str(firstListingAgent.name),
+      listingAgentPhone: str(firstListingAgent.primaryPhoneNumber ?? firstListingAgent.phone),
+      listingBrokerName: str(firstListingBroker.officeCorporateName ?? firstListingBroker.officeName),
+
+      // Foreclosure detail
+      foreclosureAuctionCity: str(foreclosure.auctionCity),
+      foreclosureAuctionLocation: str(foreclosure.auctionLocation),
+      foreclosureAuctionTime: str(foreclosure.auctionTime),
+      foreclosureBorrower: str(foreclosure.borrowerName),
+      foreclosureDocumentType: str(foreclosure.documentType),
+      foreclosureFilingDate: str(foreclosure.filingDate),
+      foreclosureRecordingDate: str(foreclosure.recordingDate),
+      foreclosureTrusteeName: str(foreclosure.trusteeName),
+      foreclosureTrusteePhone: str(foreclosure.trusteePhone),
+      foreclosureTrusteeAddress: str(foreclosure.trusteeAddress),
+      foreclosureTrusteeSaleNum: str(foreclosure.trusteeSaleNumber),
+
+      // Owner portfolio
+      ownerPortfolioCount: num(ownerProfile.propertiesCount),
+      ownerPortfolioTotalEquity: num(ownerProfile.propertiesTotalEquity),
+      ownerPortfolioTotalValue: num(ownerProfile.propertiesTotalEstimatedValue),
+      ownerPortfolioTotalPurchase: num(ownerProfile.totalPurchasePrice),
+      ownerPortfolioAvgAssessed: num(ownerProfile.averageAssessedValue),
+      ownerPortfolioAvgPurchase: num(ownerProfile.averagePurchasePrice),
+      ownerPortfolioAvgYearBuilt: num(ownerProfile.averageYearBuilt),
+
+      // QuickLists extras
+      absenteeOwnerInState: quickLists.absenteeOwnerInState === true ? true : undefined,
+      seniorOwner: quickLists.seniorOwner === true ? true : undefined,
+      samePropertyMailing: quickLists.samePropertyAndMailingAddress === true ? true : undefined,
+
+      // Valuation detail
+      valuationAsOfDate: str(valuation.asOfDate),
+      valuationConfidence: num(valuation.confidenceScore),
+      valuationStdDeviation: num(valuation.standardDeviation),
+
+      // Multi-row arrays → JSON
+      deedHistoryJson: deedHistory.length > 0 ? deedHistory : undefined,
+      mortgageHistoryJson: mortgageHistory.length > 0 ? mortgageHistory : undefined,
+      liensJson: involuntaryLienRows.length > 0 ? involuntaryLienRows : undefined,
+      foreclosureDetailJson: Object.keys(foreclosure).length > 0 ? foreclosure : undefined,
+      ownerPortfolioJson: Object.keys(ownerProfile).length > 0 ? ownerProfile : undefined,
+      valuationJson: Object.keys(valuation).length > 0 ? valuation : undefined,
+      quickListsJson: Object.keys(quickLists).length > 0 ? quickLists : undefined,
+
+      // Seller mailing components (for Seller sync)
+      mailingValidity: str(ownerMailing.addressValidity),
+      mailingZipPlus4: str(ownerMailing.zipPlus4),
+      mailingDeliveryPoint: str(ownerMailing.deliveryPointCode),
+      mailingDpvFootnotes: str(ownerMailing.dpvFootnotes),
+      mailingDpvMatchCode: str(ownerMailing.dpvMatchCode),
+      mailingCounty: str(ownerMailing.county),
 
       raw: p,
     }

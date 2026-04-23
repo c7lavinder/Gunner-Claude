@@ -170,6 +170,62 @@ type PropertySlice = {
   censusBlock: string | null
   carrierRoute: string | null
   legalDescription: string | null
+  // Comprehensive capture (migration 20260423060000)
+  addressValidity: string | null
+  zipPlus4: string | null
+  salePropensity: unknown
+  salePropensityCategory: string | null
+  salePropensityStatus: string | null
+  listingStatus: string | null
+  listingStatusCategory: string | null
+  listingFailedDate: Date | null
+  listingOriginalDate: Date | null
+  listingSoldPrice: unknown
+  listingSoldDate: Date | null
+  listingAgentName: string | null
+  listingAgentPhone: string | null
+  listingBrokerName: string | null
+  foreclosureAuctionCity: string | null
+  foreclosureAuctionLocation: string | null
+  foreclosureAuctionTime: string | null
+  foreclosureBorrower: string | null
+  foreclosureDocumentType: string | null
+  foreclosureFilingDate: Date | null
+  foreclosureRecordingDate: Date | null
+  foreclosureTrusteeName: string | null
+  foreclosureTrusteePhone: string | null
+  foreclosureTrusteeAddress: string | null
+  foreclosureTrusteeSaleNum: string | null
+  ownerPortfolioCount: number | null
+  ownerPortfolioTotalEquity: unknown
+  ownerPortfolioTotalValue: unknown
+  ownerPortfolioTotalPurchase: unknown
+  ownerPortfolioAvgAssessed: unknown
+  ownerPortfolioAvgPurchase: unknown
+  ownerPortfolioAvgYearBuilt: number | null
+  absenteeOwnerInState: boolean | null
+  seniorOwner: boolean | null
+  samePropertyMailing: boolean | null
+  valuationAsOfDate: Date | null
+  valuationConfidence: number | null
+  valuationStdDeviation: unknown
+  advancedPropertyType: string | null
+  lotDepthFootage: number | null
+  cashBuyerOwner: boolean | null
+  deceasedOwner: boolean | null
+  hasOpenLiens: boolean | null
+  hasOpenPersonLiens: boolean | null
+  sameMailingOrExempt: boolean | null
+  sameMailing: boolean | null
+  underwater: boolean | null
+  expiredListing: boolean | null
+  deedHistoryJson: unknown
+  mortgageHistoryJson: unknown
+  liensJson: unknown
+  foreclosureDetailJson: unknown
+  ownerPortfolioJson: unknown
+  valuationJson: unknown
+  quickListsJson: unknown
 }
 
 /**
@@ -440,6 +496,81 @@ export function buildDenormUpdate(
   setIfEmpty('carrierRoute', result.carrierRoute)
   setIfEmpty('legalDescription', result.legalDescription)
 
+  // ── Comprehensive capture (migration 20260423060000) ─────
+  // Address metadata
+  setIfEmpty('addressValidity', result.addressValidity)
+  setIfEmpty('zipPlus4', result.zipPlus4)
+
+  // BatchData intel
+  setIfEmpty('salePropensity', result.salePropensity)
+  setIfEmpty('salePropensityCategory', result.salePropensityCategory)
+  setIfEmpty('salePropensityStatus', result.salePropensityStatus)
+
+  // Listing activity
+  setIfEmpty('listingStatus', result.listingStatus)
+  setIfEmpty('listingStatusCategory', result.listingStatusCategory)
+  setIfEmpty('listingFailedDate', toDate(result.listingFailedDate))
+  setIfEmpty('listingOriginalDate', toDate(result.listingOriginalDate))
+  setIfEmpty('listingSoldPrice', result.listingSoldPrice)
+  setIfEmpty('listingSoldDate', toDate(result.listingSoldDate))
+  setIfEmpty('listingAgentName', result.listingAgentName)
+  setIfEmpty('listingAgentPhone', result.listingAgentPhone)
+  setIfEmpty('listingBrokerName', result.listingBrokerName)
+
+  // Foreclosure detail
+  setIfEmpty('foreclosureAuctionCity', result.foreclosureAuctionCity)
+  setIfEmpty('foreclosureAuctionLocation', result.foreclosureAuctionLocation)
+  setIfEmpty('foreclosureAuctionTime', result.foreclosureAuctionTime)
+  setIfEmpty('foreclosureBorrower', result.foreclosureBorrower)
+  setIfEmpty('foreclosureDocumentType', result.foreclosureDocumentType)
+  setIfEmpty('foreclosureFilingDate', toDate(result.foreclosureFilingDate))
+  setIfEmpty('foreclosureRecordingDate', toDate(result.foreclosureRecordingDate))
+  setIfEmpty('foreclosureTrusteeName', result.foreclosureTrusteeName)
+  setIfEmpty('foreclosureTrusteePhone', result.foreclosureTrusteePhone)
+  setIfEmpty('foreclosureTrusteeAddress', result.foreclosureTrusteeAddress)
+  setIfEmpty('foreclosureTrusteeSaleNum', result.foreclosureTrusteeSaleNum)
+
+  // Owner portfolio
+  setIfEmpty('ownerPortfolioCount', result.ownerPortfolioCount)
+  setIfEmpty('ownerPortfolioTotalEquity', result.ownerPortfolioTotalEquity)
+  setIfEmpty('ownerPortfolioTotalValue', result.ownerPortfolioTotalValue)
+  setIfEmpty('ownerPortfolioTotalPurchase', result.ownerPortfolioTotalPurchase)
+  setIfEmpty('ownerPortfolioAvgAssessed', result.ownerPortfolioAvgAssessed)
+  setIfEmpty('ownerPortfolioAvgPurchase', result.ownerPortfolioAvgPurchase)
+  setIfEmpty('ownerPortfolioAvgYearBuilt', result.ownerPortfolioAvgYearBuilt)
+
+  // QuickLists extras
+  setIfEmpty('absenteeOwnerInState', result.absenteeOwnerInState)
+  setIfEmpty('seniorOwner', result.seniorOwner)
+  setIfEmpty('samePropertyMailing', result.samePropertyMailing)
+
+  // Valuation detail
+  setIfEmpty('valuationAsOfDate', toDate(result.valuationAsOfDate))
+  setIfEmpty('valuationConfidence', result.valuationConfidence)
+  setIfEmpty('valuationStdDeviation', result.valuationStdDeviation)
+
+  // PropertyRadar flags (new)
+  setIfEmpty('advancedPropertyType', result.advancedPropertyType)
+  setIfEmpty('lotDepthFootage', result.lotDepthFootage)
+  setIfEmpty('cashBuyerOwner', result.cashBuyerOwner)
+  setIfEmpty('deceasedOwner', result.deceasedOwner)
+  setIfEmpty('hasOpenLiens', result.hasOpenLiens)
+  setIfEmpty('hasOpenPersonLiens', result.hasOpenPersonLiens)
+  setIfEmpty('sameMailingOrExempt', result.sameMailingOrExempt)
+  setIfEmpty('sameMailing', result.sameMailing)
+  setIfEmpty('underwater', result.underwater)
+  setIfEmpty('expiredListing', result.expiredListing)
+
+  // Multi-row JSON arrays — always set when present (no empty-check, the blob
+  // IS the data and we want the latest timeline on every re-enrich).
+  if (result.deedHistoryJson) out.deedHistoryJson = result.deedHistoryJson
+  if (result.mortgageHistoryJson) out.mortgageHistoryJson = result.mortgageHistoryJson
+  if (result.liensJson) out.liensJson = result.liensJson
+  if (result.foreclosureDetailJson) out.foreclosureDetailJson = result.foreclosureDetailJson
+  if (result.ownerPortfolioJson) out.ownerPortfolioJson = result.ownerPortfolioJson
+  if (result.valuationJson) out.valuationJson = result.valuationJson
+  if (result.quickListsJson) out.quickListsJson = result.quickListsJson
+
   return out
 }
 
@@ -575,6 +706,32 @@ export async function enrichPropertyFromBatchData(
       improvementCondition: true, buildingQuality: true, estimatedTaxRate: true,
       censusTract: true, censusBlock: true, carrierRoute: true,
       legalDescription: true,
+      // Comprehensive capture (20260423060000)
+      addressValidity: true, zipPlus4: true,
+      salePropensity: true, salePropensityCategory: true, salePropensityStatus: true,
+      listingStatus: true, listingStatusCategory: true,
+      listingFailedDate: true, listingOriginalDate: true,
+      listingSoldPrice: true, listingSoldDate: true,
+      listingAgentName: true, listingAgentPhone: true, listingBrokerName: true,
+      foreclosureAuctionCity: true, foreclosureAuctionLocation: true, foreclosureAuctionTime: true,
+      foreclosureBorrower: true, foreclosureDocumentType: true,
+      foreclosureFilingDate: true, foreclosureRecordingDate: true,
+      foreclosureTrusteeName: true, foreclosureTrusteePhone: true,
+      foreclosureTrusteeAddress: true, foreclosureTrusteeSaleNum: true,
+      ownerPortfolioCount: true, ownerPortfolioTotalEquity: true,
+      ownerPortfolioTotalValue: true, ownerPortfolioTotalPurchase: true,
+      ownerPortfolioAvgAssessed: true, ownerPortfolioAvgPurchase: true,
+      ownerPortfolioAvgYearBuilt: true,
+      absenteeOwnerInState: true, seniorOwner: true, samePropertyMailing: true,
+      valuationAsOfDate: true, valuationConfidence: true, valuationStdDeviation: true,
+      advancedPropertyType: true, lotDepthFootage: true,
+      cashBuyerOwner: true, deceasedOwner: true,
+      hasOpenLiens: true, hasOpenPersonLiens: true,
+      sameMailingOrExempt: true, sameMailing: true,
+      underwater: true, expiredListing: true,
+      deedHistoryJson: true, mortgageHistoryJson: true, liensJson: true,
+      foreclosureDetailJson: true, ownerPortfolioJson: true,
+      valuationJson: true, quickListsJson: true,
       // Google
       googlePlaceId: true, googleVerifiedAddress: true,
       googleLatitude: true, googleLongitude: true,

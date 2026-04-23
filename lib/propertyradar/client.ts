@@ -303,9 +303,21 @@ function normalize(
     // Liens — PropertyRadar returns `PropertyHasOpenLiens` as a boolean-ish
     // summary; we surface the flag but don't invent a count.
     totalOpenLienCount: truthy(p.PropertyHasOpenLiens) ? 1 : undefined,
+    hasOpenLiens: truthy(p.PropertyHasOpenLiens),
+    hasOpenPersonLiens: truthy(p.PropertyHasOpenPersonLiens),
 
     // Environmental
     floodZone: str(p.FloodZone),
+
+    // ── Comprehensive capture (PropertyRadar flags not yet surfaced) ──
+    advancedPropertyType: str(p.AdvancedPropertyType),
+    lotDepthFootage: num(p.LotDepthFootage),
+    cashBuyerOwner: truthy(p.isCashBuyer),
+    deceasedOwner: truthy(p.isDeceasedProperty),
+    sameMailingOrExempt: truthy(p.isSameMailingOrExempt),
+    sameMailing: truthy(p.isSameMailing),
+    underwater: truthy(p.isUnderwater),
+    expiredListing: truthy(p.isExpiredListing),
 
     raw: p,
   }

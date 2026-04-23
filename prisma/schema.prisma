@@ -536,6 +536,80 @@ model Property {
   carrierRoute            String?  @map("carrier_route")
   legalDescription        String?  @map("legal_description")
 
+  // ── Comprehensive vendor capture (migration 20260423060000) ─────
+  // Address metadata (BatchData USPS validation)
+  addressValidity         String?  @map("address_validity")
+  zipPlus4                String?  @map("zip_plus4")
+
+  // BatchData intel (seller motivation)
+  salePropensity          Decimal? @db.Decimal(5,2)  @map("sale_propensity")
+  salePropensityCategory  String?  @map("sale_propensity_category")
+  salePropensityStatus    String?  @map("sale_propensity_status")
+
+  // BatchData listing activity
+  listingStatus           String?  @map("listing_status")
+  listingStatusCategory   String?  @map("listing_status_category")
+  listingFailedDate       DateTime? @map("listing_failed_date")
+  listingOriginalDate     DateTime? @map("listing_original_date")
+  listingSoldPrice        Decimal? @db.Decimal(12,2) @map("listing_sold_price")
+  listingSoldDate         DateTime? @map("listing_sold_date")
+  listingAgentName        String?  @map("listing_agent_name")
+  listingAgentPhone       String?  @map("listing_agent_phone")
+  listingBrokerName       String?  @map("listing_broker_name")
+
+  // Foreclosure extended detail (BatchData foreclosure block)
+  foreclosureAuctionCity    String?  @map("foreclosure_auction_city")
+  foreclosureAuctionLocation String? @map("foreclosure_auction_location")
+  foreclosureAuctionTime    String?  @map("foreclosure_auction_time")
+  foreclosureBorrower       String?  @map("foreclosure_borrower")
+  foreclosureDocumentType   String?  @map("foreclosure_document_type")
+  foreclosureFilingDate     DateTime? @map("foreclosure_filing_date")
+  foreclosureRecordingDate  DateTime? @map("foreclosure_recording_date")
+  foreclosureTrusteeName    String?  @map("foreclosure_trustee_name")
+  foreclosureTrusteePhone   String?  @map("foreclosure_trustee_phone")
+  foreclosureTrusteeAddress String?  @map("foreclosure_trustee_address")
+  foreclosureTrusteeSaleNum String?  @map("foreclosure_trustee_sale_num")
+
+  // Owner portfolio (BatchData propertyOwnerProfile)
+  ownerPortfolioCount          Int?     @map("owner_portfolio_count")
+  ownerPortfolioTotalEquity    Decimal? @db.Decimal(14,2) @map("owner_portfolio_total_equity")
+  ownerPortfolioTotalValue     Decimal? @db.Decimal(14,2) @map("owner_portfolio_total_value")
+  ownerPortfolioTotalPurchase  Decimal? @db.Decimal(14,2) @map("owner_portfolio_total_purchase")
+  ownerPortfolioAvgAssessed    Decimal? @db.Decimal(14,2) @map("owner_portfolio_avg_assessed")
+  ownerPortfolioAvgPurchase    Decimal? @db.Decimal(14,2) @map("owner_portfolio_avg_purchase")
+  ownerPortfolioAvgYearBuilt   Int?     @map("owner_portfolio_avg_year_built")
+
+  // QuickLists flags (BatchData)
+  absenteeOwnerInState     Boolean? @map("absentee_owner_in_state")
+  seniorOwner              Boolean? @map("senior_owner")
+  samePropertyMailing      Boolean? @map("same_property_mailing")
+
+  // Valuation detail (BatchData valuation block)
+  valuationAsOfDate        DateTime? @map("valuation_as_of_date")
+  valuationConfidence      Int?     @map("valuation_confidence")
+  valuationStdDeviation    Decimal? @db.Decimal(10,2) @map("valuation_std_deviation")
+
+  // PropertyRadar scalar flags + detail
+  advancedPropertyType     String?  @map("advanced_property_type")
+  lotDepthFootage          Int?     @map("lot_depth_footage")
+  cashBuyerOwner           Boolean? @map("cash_buyer_owner")
+  deceasedOwner            Boolean? @map("deceased_owner")
+  hasOpenLiens             Boolean? @map("has_open_liens")
+  hasOpenPersonLiens       Boolean? @map("has_open_person_liens")
+  sameMailingOrExempt      Boolean? @map("same_mailing_or_exempt")
+  sameMailing              Boolean? @map("same_mailing")
+  underwater               Boolean? @map("underwater")
+  expiredListing           Boolean? @map("expired_listing")
+
+  // Multi-row arrays stored as dedicated JSON columns
+  deedHistoryJson          Json? @map("deed_history_json")
+  mortgageHistoryJson      Json? @map("mortgage_history_json")
+  liensJson                Json? @map("liens_json")
+  foreclosureDetailJson    Json? @map("foreclosure_detail_json")
+  ownerPortfolioJson       Json? @map("owner_portfolio_json")
+  valuationJson            Json? @map("valuation_json")
+  quickListsJson           Json? @map("quicklists_json")
+
   // ── Google Places fields ──
   googlePlaceId           String?  @map("google_place_id")
   googleVerifiedAddress   String?  @map("google_verified_address")
@@ -576,6 +650,11 @@ model Property {
   @@index([investorType])
   @@index([improvementCondition])
   @@index([buildingQuality])
+  @@index([advancedPropertyType])
+  @@index([seniorOwner])
+  @@index([deceasedOwner])
+  @@index([hasOpenLiens])
+  @@index([salePropensity])
   @@map("properties")
 }
 
@@ -665,6 +744,12 @@ model Seller {
   mailingCity      String?  @map("mailing_city")
   mailingState     String?  @map("mailing_state")
   mailingZip       String?  @map("mailing_zip")
+  mailingZipPlus4  String?  @map("mailing_zip_plus4")
+  mailingCounty    String?  @map("mailing_county")
+  mailingValidity  String?  @map("mailing_validity")
+  mailingDeliveryPoint String? @map("mailing_delivery_point")
+  mailingDpvFootnotes  String? @map("mailing_dpv_footnotes")
+  mailingDpvMatchCode  String? @map("mailing_dpv_match_code")
   dateOfBirth      DateTime? @map("date_of_birth")
   maritalStatus    String?  @map("marital_status")   // single | married | divorced | widowed
   spouseName       String?  @map("spouse_name")

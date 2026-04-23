@@ -33,6 +33,12 @@ interface SellerSlice {
   mailingCity: string | null
   mailingState: string | null
   mailingZip: string | null
+  mailingZipPlus4: string | null
+  mailingCounty: string | null
+  mailingValidity: string | null
+  mailingDeliveryPoint: string | null
+  mailingDpvFootnotes: string | null
+  mailingDpvMatchCode: string | null
   spouseName: string | null
   spousePhone: string | null
   spouseEmail: string | null
@@ -126,6 +132,14 @@ export function buildSellerSyncUpdate(
   setIfEmpty('mailingState', mailState)
   setIfEmpty('mailingZip', mailZip)
 
+  // USPS deliverability components surfaced by BatchData normalize()
+  setIfEmpty('mailingZipPlus4', result.mailingZipPlus4)
+  setIfEmpty('mailingCounty', result.mailingCounty)
+  setIfEmpty('mailingValidity', result.mailingValidity)
+  setIfEmpty('mailingDeliveryPoint', result.mailingDeliveryPoint)
+  setIfEmpty('mailingDpvFootnotes', result.mailingDpvFootnotes)
+  setIfEmpty('mailingDpvMatchCode', result.mailingDpvMatchCode)
+
   // ── Ownership ────────────────────────────
   setIfEmpty('yearsOwned', result.ownershipLength)
   setIfEmpty('ownershipType', normalizeOwnerType(result.ownerType, result.secondOwnerName))
@@ -199,6 +213,8 @@ export async function syncSellersFromVendorResult(
           id: true, name: true, phone: true, secondaryPhone: true, mobilePhone: true,
           email: true, secondaryEmail: true,
           mailingAddress: true, mailingCity: true, mailingState: true, mailingZip: true,
+          mailingZipPlus4: true, mailingCounty: true, mailingValidity: true,
+          mailingDeliveryPoint: true, mailingDpvFootnotes: true, mailingDpvMatchCode: true,
           spouseName: true, spousePhone: true, spouseEmail: true, isDeceased: true,
           age: true, gender: true, personType: true, occupation: true,
           yearsOwned: true, howAcquired: true, ownershipType: true, entityName: true,
