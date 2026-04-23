@@ -143,6 +143,10 @@ export async function enrichProperty(
       googleLatitude: true, googleLongitude: true,
       googleStreetViewUrl: true, googleMapsUrl: true,
       googlePlaceTypes: true, googlePhotoThumbnailUrl: true, googleSearchedAt: true,
+      // PR detail endpoint fields
+      improvementCondition: true, buildingQuality: true, estimatedTaxRate: true,
+      censusTract: true, censusBlock: true, carrierRoute: true,
+      legalDescription: true,
     },
   })
 

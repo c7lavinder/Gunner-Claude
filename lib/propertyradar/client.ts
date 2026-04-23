@@ -30,13 +30,42 @@ function getApiKey(): string {
 // include ~9999 free credits — verified via `quantityFreeRemaining` in the
 // response envelope. We default to 1 because the whole point of calling this
 // is to get data; callers that just want a cost estimate can pass purchase=false.
+// Fields we request from the /properties/{RadarID} detail endpoint. Every
+// name here has been verified against the PR API on 2026-04-23. Names the
+// API doesn't recognize cause the whole request to 400, so keep this list
+// tight — only add after confirming with a single-field probe.
+const DETAIL_FIELDS = [
+  // Structure
+  'Beds', 'Baths', 'Stories',
+  'Pool', 'Fireplace', 'Heating',
+  'ImprovementCondition', 'BuildingQuality',
+  // Lot
+  'LotDepthFootage',
+  // Identity + admin
+  'APN', 'CensusTract', 'CensusBlock', 'CarrierRoute', 'SchoolDistrict',
+  'FloodZone',
+  // Valuation + loans
+  'AVM', 'TotalLoanBalance',
+  // Tax
+  'AnnualTaxes', 'EstimatedTaxRate', 'AssessedYear', 'Taxpayer',
+  // Rent
+  'HUDRent',
+  // Owner name parts (structured, matches /persons)
+  'OwnerFirstName', 'OwnerLastName',
+  // MLS
+  'DaysOnMarket',
+  // Loan detail
+  'FirstLoanType',
+].join(',')
+
 export async function lookupProperty(
   street: string, city: string, state: string, zip: string,
   opts: { purchase?: boolean } = {},
 ): Promise<Partial<BatchDataPropertyResult> | null> {
   const purchase = opts.purchase === false ? 0 : 1
   try {
-    const res = await fetch(`${BASE_URL}/properties?Purchase=${purchase}&Limit=1`, {
+    // Phase 1 — search by address to get RadarID + summary flags
+    const searchRes = await fetch(`${BASE_URL}/properties?Purchase=${purchase}&Limit=1`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${getApiKey()}`,
@@ -52,29 +81,76 @@ export async function lookupProperty(
       }),
     })
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      console.error(`[PropertyRadar] API error: ${res.status} ${text}`)
+    if (!searchRes.ok) {
+      const text = await searchRes.text().catch(() => '')
+      console.error(`[PropertyRadar] search API error: ${searchRes.status} ${text}`)
       return null
     }
 
-    const body = await res.json() as { results?: Array<Record<string, unknown>> }
-    const prop = body.results?.[0]
-    if (!prop) {
+    const searchBody = await searchRes.json() as { results?: Array<Record<string, unknown>> }
+    const summary = searchBody.results?.[0]
+    if (!summary) {
       console.warn(`[PropertyRadar] no match for ${street}, ${city}, ${state} ${zip}`)
       return null
     }
 
-    return normalize(prop)
+    const radarId = str(summary.RadarID)
+    if (!radarId) return normalize(summary, null, null)
+
+    // Phase 2 — fetch rich detail + owner demographics in parallel.
+    // Each call burns 1 credit (free under subscription, per-property on trial).
+    const [detailRes, personsRes] = await Promise.all([
+      fetch(`${BASE_URL}/properties/${radarId}?Purchase=${purchase}&Fields=${DETAIL_FIELDS}`, {
+        headers: { 'Authorization': `Bearer ${getApiKey()}` },
+      }),
+      fetch(`${BASE_URL}/properties/${radarId}/persons?Purchase=${purchase}`, {
+        headers: { 'Authorization': `Bearer ${getApiKey()}` },
+      }),
+    ])
+
+    const detailData = detailRes.ok
+      ? (await detailRes.json() as { results?: Array<Record<string, unknown>> })
+      : null
+    const detail = detailData?.results?.[0] ?? null
+    if (!detailRes.ok) {
+      const text = await detailRes.text().catch(() => '')
+      console.warn(`[PropertyRadar] detail API error for ${radarId}: ${detailRes.status} ${text}`)
+    }
+
+    const personsData = personsRes.ok
+      ? (await personsRes.json() as { results?: Array<Record<string, unknown>> })
+      : null
+    const persons = personsData?.results ?? []
+    if (!personsRes.ok) {
+      const text = await personsRes.text().catch(() => '')
+      console.warn(`[PropertyRadar] persons API error for ${radarId}: ${personsRes.status} ${text}`)
+    }
+
+    return normalize(summary, detail, persons)
   } catch (err) {
     console.error('[PropertyRadar] lookup failed:', err instanceof Error ? err.message : err)
     return null
   }
 }
 
-function normalize(p: Record<string, unknown>): Partial<BatchDataPropertyResult> {
+function normalize(
+  summary: Record<string, unknown>,
+  detail: Record<string, unknown> | null,
+  persons: Array<Record<string, unknown>> | null,
+): Partial<BatchDataPropertyResult> {
+  // Merge summary + detail — detail overrides since it's richer. The
+  // remaining normalize logic reads from `p`, which is the merged view.
+  const p: Record<string, unknown> = { ...summary, ...(detail ?? {}) }
+
   const phones = asArray(p.Phones)
   const emails = asArray(p.Emails)
+
+  // /persons result: owner1 = first entry (usually the primary contact).
+  // Provides structured first/last name, age, gender, occupation,
+  // personType ("Person" vs "Company").
+  const primaryPerson = (persons ?? []).find(pp => pp.isPrimaryContact === 1 || pp.isPrimaryContact === true)
+    ?? (persons ?? [])[0]
+  const secondPerson = (persons ?? []).find(pp => pp !== primaryPerson)
 
   // PropertyRadar ships distress signals as 0/1 integers; true/false also
   // accepted to be defensive.
@@ -83,6 +159,11 @@ function normalize(p: Record<string, unknown>): Partial<BatchDataPropertyResult>
     if (v === 0 || v === '0' || v === false) return false
     return undefined
   }
+
+  // Heating/Pool/Fireplace are 0/1 ints on PR detail — convert for shared shape.
+  const hasHeating = truthy(p.Heating)
+  const hasPool = truthy(p.Pool)
+  const hasFireplace = truthy(p.Fireplace)
 
   return {
     // Identity — RadarID is the vendor-specific key; APN is the public one
@@ -93,7 +174,7 @@ function normalize(p: Record<string, unknown>): Partial<BatchDataPropertyResult>
     latitude: num(p.Latitude),
     longitude: num(p.Longitude),
 
-    // Building (Beds requires Purchase — may be undefined)
+    // Building (Beds/Baths come from the detail endpoint's Fields param)
     bedrooms: num(p.Beds),
     bathrooms: num(p.Baths),
     squareFootage: num(p.SqFt),
@@ -102,18 +183,25 @@ function normalize(p: Record<string, unknown>): Partial<BatchDataPropertyResult>
     propertyType: str(p.AdvancedPropertyType ?? p.PType),
     stories: num(p.Stories),
     units: num(p.Units),
+    pool: hasPool,
+    hasFireplace: hasFireplace,
 
-    // Owner (Purchase-gated)
-    ownerName: str(p.Owner),
+    // Owner — prefer structured parts from /persons when available
+    ownerName: str(p.Owner ?? (primaryPerson && `${primaryPerson.FirstName ?? ''} ${primaryPerson.LastName ?? ''}`.trim())),
     ownerType: str(p.OwnershipType),
     ownershipLength: num(p.YearsOwned),
     ownerOccupied: truthy(p.OwnerOccupied),
     absenteeOwner: truthy(p.OwnerOccupied) === false ? true : undefined,
     ownerPhone: str(phones[0]?.Number ?? phones[0]?.Phone),
     ownerEmail: str(emails[0]?.Email),
-    secondOwnerName: str(p.Owner2),
+    secondOwnerName: str(p.Owner2 ?? (secondPerson && `${secondPerson.FirstName ?? ''} ${secondPerson.LastName ?? ''}`.trim())),
     secondOwnerPhone: str(phones[1]?.Number ?? phones[1]?.Phone),
     secondOwnerEmail: str(emails[1]?.Email),
+    // Structured name parts (from detail Fields + /persons)
+    ownerFirstName1: str(p.OwnerFirstName ?? primaryPerson?.FirstName),
+    ownerLastName1: str(p.OwnerLastName ?? primaryPerson?.LastName),
+    ownerFirstName2: str(secondPerson?.FirstName),
+    ownerLastName2: str(secondPerson?.LastName),
 
     // Quick flags (all 0/1 ints — normalize to boolean)
     cashBuyer: truthy(p.isCashBuyer),
@@ -147,14 +235,9 @@ function normalize(p: Record<string, unknown>): Partial<BatchDataPropertyResult>
     estimatedEquity: num(p.EstimatedEquity),
     openMortgageBalance: num(p.EstimatedMortgageBalance),
 
-    // Subscription extras — structured owner name parts (CourtListener
-    // + skip-trace both want these), MLS history, HOA, change-in-value.
-    // These fields populate when the PR account tier unlocks them; we
-    // read them defensively so trial keys still work.
-    ownerFirstName1: str(p.OwnerFirstName1 ?? p.Owner1FirstName),
-    ownerLastName1: str(p.OwnerLastName1 ?? p.Owner1LastName),
-    ownerFirstName2: str(p.OwnerFirstName2 ?? p.Owner2FirstName),
-    ownerLastName2: str(p.OwnerLastName2 ?? p.Owner2LastName),
+    // Subscription extras — MLS history, HOA, appreciation, etc. Name parts
+    // are already emitted above from the /persons endpoint; keep just the
+    // non-name subscription fields here.
     pctChangeInValue: num(p.PctChangeInValue ?? p.PercentChangeInValue),
     cashSale: truthy(p.CashSale ?? p.isCashSale),
     investorType: str(p.InvestorTypeFirst ?? p.InvestorType),
@@ -199,6 +282,23 @@ function normalize(p: Record<string, unknown>): Partial<BatchDataPropertyResult>
     lastSaleDate: str(p.LastSaleDate ?? p.LastTransferRecDate),
     lastSalePrice: num(p.LastSalePrice ?? p.LastTransferValue),
     deedType: str(p.LastDeedType),
+
+    // PR detail-endpoint extras
+    improvementCondition: str(p.ImprovementCondition),
+    buildingQuality: str(p.BuildingQuality),
+    estimatedTaxRate: num(p.EstimatedTaxRate),
+    censusTract: str(p.CensusTract),
+    censusBlock: str(p.CensusBlock),
+    carrierRoute: str(p.CarrierRoute),
+    schoolDistrict: str(p.SchoolDistrict),
+    taxpayerRaw: str(p.Taxpayer),
+    suggestedRent: num(p.HUDRent),
+
+    // Owner demographics from /persons
+    ownerAge: num(primaryPerson?.Age),
+    ownerGender: str(primaryPerson?.Gender),
+    ownerOccupation: str(primaryPerson?.Occupation),
+    ownerPersonType: str(primaryPerson?.PersonType),
 
     // Liens — PropertyRadar returns `PropertyHasOpenLiens` as a boolean-ish
     // summary; we surface the flag but don't invent a count.

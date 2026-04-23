@@ -37,6 +37,10 @@ interface SellerSlice {
   spousePhone: string | null
   spouseEmail: string | null
   isDeceased: boolean
+  age: number | null
+  gender: string | null
+  personType: string | null
+  occupation: string | null
   yearsOwned: number | null
   howAcquired: string | null
   ownershipType: string | null
@@ -99,6 +103,12 @@ export function buildSellerSyncUpdate(
     setIfEmpty('spousePhone', result.secondOwnerPhone)
     setIfEmpty('spouseEmail', result.secondOwnerEmail)
   }
+
+  // Owner demographics from PropertyRadar's /persons endpoint
+  setIfEmpty('age', result.ownerAge)
+  setIfEmpty('gender', result.ownerGender)
+  setIfEmpty('occupation', result.ownerOccupation)
+  setIfEmpty('personType', result.ownerPersonType)
 
   // ── Mailing address ──────────────────────
   // Vendors vary: BatchData nests owner.mailingAddress under `raw.owner.mailingAddress`,
@@ -190,6 +200,7 @@ export async function syncSellersFromVendorResult(
           email: true, secondaryEmail: true,
           mailingAddress: true, mailingCity: true, mailingState: true, mailingZip: true,
           spouseName: true, spousePhone: true, spouseEmail: true, isDeceased: true,
+          age: true, gender: true, personType: true, occupation: true,
           yearsOwned: true, howAcquired: true, ownershipType: true, entityName: true,
           mortgageBalance: true, monthlyMortgagePayment: true, lenderName: true,
           interestRate: true, loanType: true, hasSecondMortgage: true,

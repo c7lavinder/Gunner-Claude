@@ -162,6 +162,14 @@ type PropertySlice = {
   googlePlaceTypes: unknown
   googlePhotoThumbnailUrl: string | null
   googleSearchedAt: Date | null
+  // PR detail fields
+  improvementCondition: string | null
+  buildingQuality: string | null
+  estimatedTaxRate: unknown
+  censusTract: string | null
+  censusBlock: string | null
+  carrierRoute: string | null
+  legalDescription: string | null
 }
 
 /**
@@ -423,6 +431,15 @@ export function buildDenormUpdate(
   setIfEmpty('lastMlsSoldPrice', result.lastMlsSoldPrice)
   setIfEmpty('ownerMailingVacant', result.ownerMailingVacant)
 
+  // PR detail-endpoint fields (condition/census/tax rate/legal)
+  setIfEmpty('improvementCondition', result.improvementCondition)
+  setIfEmpty('buildingQuality', result.buildingQuality)
+  setIfEmpty('estimatedTaxRate', result.estimatedTaxRate)
+  setIfEmpty('censusTract', result.censusTract)
+  setIfEmpty('censusBlock', result.censusBlock)
+  setIfEmpty('carrierRoute', result.carrierRoute)
+  setIfEmpty('legalDescription', result.legalDescription)
+
   return out
 }
 
@@ -554,6 +571,10 @@ export async function enrichPropertyFromBatchData(
       hoaDues: true, hoaPastDue: true, hoaName: true,
       lastMlsStatus: true, lastMlsListPrice: true, lastMlsSoldPrice: true,
       ownerMailingVacant: true,
+      // PR detail-endpoint fields
+      improvementCondition: true, buildingQuality: true, estimatedTaxRate: true,
+      censusTract: true, censusBlock: true, carrierRoute: true,
+      legalDescription: true,
       // Google
       googlePlaceId: true, googleVerifiedAddress: true,
       googleLatitude: true, googleLongitude: true,

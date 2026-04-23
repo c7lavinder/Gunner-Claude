@@ -222,6 +222,22 @@ export interface BatchDataPropertyResult {
   lastMlsSoldPrice?: number
   ownerMailingVacant?: boolean
 
+  // PR detail-endpoint extras (condition grades, census, tax rate, legal)
+  improvementCondition?: string
+  buildingQuality?: string
+  estimatedTaxRate?: number
+  censusTract?: string
+  censusBlock?: string
+  carrierRoute?: string
+  taxpayerRaw?: string                 // unparsed "NAME\nADDRESS\nCITY,ST ZIP" block
+  legalDescription?: string
+
+  // PR /persons — owner demographics for Seller sync
+  ownerAge?: number
+  ownerGender?: string
+  ownerOccupation?: string
+  ownerPersonType?: string             // "Person" | "Company"
+
   // Raw
   raw?: Record<string, unknown>
 }
