@@ -1,6 +1,6 @@
 // lib/courtlistener/client.ts
 //
-// CourtListener API client. Base: https://www.courtlistener.com/api/rest/v3
+// CourtListener API client. Base: https://www.courtlistener.com/api/rest/v4
 // Auth: `Authorization: Token <key>` header.
 //
 // What we use this for: search by owner name → bankruptcy, divorce, civil
@@ -8,9 +8,13 @@
 // courts (PACER/RECAP archive); state court coverage varies. Free tier
 // allows 5,000 requests/hour — way more than we need.
 //
+// V4 notes: CourtListener deprecated V3 for new API tokens in late 2025.
+// V4 is backwards-compatible for the /search/ endpoint shape we use; the
+// only wire-level change is `cursor` pagination instead of `page=`.
+//
 // Docs: https://www.courtlistener.com/help/api/rest/
 
-const BASE_URL = 'https://www.courtlistener.com/api/rest/v3'
+const BASE_URL = 'https://www.courtlistener.com/api/rest/v4'
 
 function getApiKey(): string {
   const key = process.env.COURTLISTENER_API_KEY
