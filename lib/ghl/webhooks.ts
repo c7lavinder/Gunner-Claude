@@ -870,10 +870,10 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
           }
         }
 
-        // Re-trigger BatchData enrichment if address changed and we have the key
-        if (updates.address && process.env.BATCHDATA_API_KEY) {
-          import('@/lib/batchdata/enrich').then(({ enrichPropertyFromBatchData }) =>
-            enrichPropertyFromBatchData(property.id).catch(() => {})
+        // Re-trigger full multi-vendor enrichment when address changes.
+        if (updates.address) {
+          import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
+            enrichProperty(property.id).catch(() => {})
           )
         }
       }

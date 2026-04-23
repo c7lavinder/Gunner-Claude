@@ -347,6 +347,197 @@ model Property {
   locationGrade      String? @map("location_grade")
   marketRisk         String? @map("market_risk")
 
+  // ── Vendor enrichment (Tier 1+2) ──
+  // Promoted from zillowData.batchData JSON blob so we can query/filter
+  // without JSON introspection and accept the same shape from PropertyRadar,
+  // RealEstateAPI, RentCast as they wire up. All optional — enrichment is
+  // opportunistic, vendors overlap.
+
+  // Identity & location
+  county                  String?
+  latitude                Decimal? @db.Decimal(10, 8)
+  longitude               Decimal? @db.Decimal(11, 8)
+  apn                     String?
+  fips                    String?
+  subdivision             String?
+
+  // Owner
+  absenteeOwner           Boolean? @map("absentee_owner")
+  ownerPhone              String?  @map("owner_phone")
+  ownerEmail              String?  @map("owner_email")
+  ownerType               String?  @map("owner_type")
+  ownershipLengthYears    Int?     @map("ownership_length_years")
+  secondOwnerName         String?  @map("second_owner_name")
+  secondOwnerPhone        String?  @map("second_owner_phone")
+  secondOwnerEmail        String?  @map("second_owner_email")
+
+  // Primary mortgage
+  mortgageAmount          Decimal? @db.Decimal(12, 2) @map("mortgage_amount")
+  mortgageDate            DateTime? @map("mortgage_date")
+  mortgageLender          String?  @map("mortgage_lender")
+  mortgageType            String?  @map("mortgage_type")
+  mortgageRate            Decimal? @db.Decimal(5, 3) @map("mortgage_rate")
+
+  // Second mortgage / HELOC
+  secondMortgageAmount    Decimal? @db.Decimal(12, 2) @map("second_mortgage_amount")
+  secondMortgageDate      DateTime? @map("second_mortgage_date")
+  secondMortgageLender    String?  @map("second_mortgage_lender")
+
+  // Liens & legal
+  lienCount               Int?     @map("lien_count")
+  propertyLienAmount      Decimal? @db.Decimal(12, 2) @map("property_lien_amount")
+  lienTypes               Json     @default("[]") @map("lien_types")
+  judgmentCount           Int?     @map("judgment_count")
+
+  // Distress & foreclosure
+  taxDelinquent           Boolean? @map("tax_delinquent")
+  taxDelinquentAmount     Decimal? @db.Decimal(12, 2) @map("tax_delinquent_amount")
+  foreclosureStatus       String?  @map("foreclosure_status")
+  bankOwned               Boolean? @map("bank_owned")
+  preForeclosure          Boolean? @map("pre_foreclosure")
+  nodDate                 DateTime? @map("nod_date")
+  lisPendensDate          DateTime? @map("lis_pendens_date")
+  lisPendensAmount        Decimal? @db.Decimal(12, 2) @map("lis_pendens_amount")
+  lisPendensPlaintiff     String?  @map("lis_pendens_plaintiff")
+  foreclosureAuctionDate  DateTime? @map("foreclosure_auction_date")
+  foreclosureOpeningBid   Decimal? @db.Decimal(12, 2) @map("foreclosure_opening_bid")
+
+  // Structure
+  stories                 Int?
+  units                   Int?
+  basementFinishedPercent Int?     @map("basement_finished_percent")
+
+  // Transfer / deed history
+  lastSalePrice           Decimal? @db.Decimal(12, 2) @map("last_sale_price")
+  transferCount           Int?     @map("transfer_count")
+  deedType                String?  @map("deed_type")
+  dataLastUpdated         DateTime? @map("data_last_updated")
+
+  // Construction detail (Tier 2)
+  roofType                String?  @map("roof_type")
+  foundationType          String?  @map("foundation_type")
+  garageType              String?  @map("garage_type")
+  garageCapacity          Int?     @map("garage_capacity")
+  heatingSystem           String?  @map("heating_system")
+  coolingSystem           String?  @map("cooling_system")
+  exteriorWalls           String?  @map("exterior_walls")
+
+  // Amenity flags (Tier 2)
+  hasPool                 Boolean? @map("has_pool")
+  hasDeck                 Boolean? @map("has_deck")
+  hasPorch                Boolean? @map("has_porch")
+  hasSolar                Boolean? @map("has_solar")
+  hasFireplace            Boolean? @map("has_fireplace")
+  hasSpa                  Boolean? @map("has_spa")
+
+  // Zoning / neighborhood
+  zoningCode              String?  @map("zoning_code")
+  landUseCode             String?  @map("land_use_code")
+  propertySchoolDistrict  String?  @map("property_school_district")
+
+  // Environmental risk (floodZone already exists above)
+  earthquakeZone          String?  @map("earthquake_zone")
+  wildfireRisk            String?  @map("wildfire_risk")
+
+  // Vacancy signals (BatchData ships 4 orthogonal flags)
+  vacantStatus            String?  @map("vacant_status")
+  vacantStatusYear        Int?     @map("vacant_status_year")
+  siteVacant              Boolean? @map("site_vacant")
+  mailVacant              Boolean? @map("mail_vacant")
+
+  // ── Vendor enrichment (Tier 3) ──
+  // Vendor-exclusive signals confirmed 2026-04-23: PropertyRadar's distress
+  // composite + legal flags, REAPI's MLS activity + HUD demographics +
+  // school detail. All returned on calls we already pay for — promoted to
+  // typed columns so the inventory UI can filter on them directly.
+
+  // PropertyRadar distress composite + legal distress flags
+  distressScore           Int?     @map("distress_score")
+  inBankruptcy            Boolean? @map("in_bankruptcy")
+  inProbate               Boolean? @map("in_probate")
+  inDivorce               Boolean? @map("in_divorce")
+  hasRecentEviction       Boolean? @map("has_recent_eviction")
+  isRecentFlip            Boolean? @map("is_recent_flip")
+  isRecentSale            Boolean? @map("is_recent_sale")
+  isListedForSale         Boolean? @map("is_listed_for_sale")
+  isAuction               Boolean? @map("is_auction")
+
+  // Equity detail (beyond the equity_percent kept in fieldSources)
+  availableEquity         Decimal? @db.Decimal(12, 2) @map("available_equity")
+  estimatedEquity         Decimal? @db.Decimal(12, 2) @map("estimated_equity")
+  equityPercent           Decimal? @db.Decimal(5, 2)  @map("equity_percent")
+  openMortgageBalance     Decimal? @db.Decimal(12, 2) @map("open_mortgage_balance")
+  estimatedMortgagePayment Decimal? @db.Decimal(12, 2) @map("estimated_mortgage_payment")
+
+  // Inheritance / death transfer + mortgage assumability (REAPI)
+  inherited               Boolean?
+  deathTransfer           Boolean? @map("death_transfer")
+  mortgageAssumable       Boolean? @map("mortgage_assumable")
+
+  // MLS activity (REAPI)
+  mlsActive               Boolean? @map("mls_active")
+  mlsPending              Boolean? @map("mls_pending")
+  mlsSold                 Boolean? @map("mls_sold")
+  mlsCancelled            Boolean? @map("mls_cancelled")
+  mlsFailed               Boolean? @map("mls_failed")
+  mlsStatus               String?  @map("mls_status")
+  mlsType                 String?  @map("mls_type")
+  mlsListingDate          DateTime? @map("mls_listing_date")
+  mlsListingPrice         Decimal? @db.Decimal(12, 2) @map("mls_listing_price")
+  mlsSoldPrice            Decimal? @db.Decimal(12, 2) @map("mls_sold_price")
+  mlsDaysOnMarket         Int?     @map("mls_days_on_market")
+  mlsPricePerSqft         Decimal? @db.Decimal(10, 2) @map("mls_price_per_sqft")
+  mlsKeywords             Json     @default("[]") @map("mls_keywords")
+  mlsLastStatusDate       DateTime? @map("mls_last_status_date")
+
+  // Flood detail
+  floodZoneType           String?  @map("flood_zone_type")
+
+  // REAPI demographics / HUD area data
+  suggestedRent           Decimal? @db.Decimal(10, 2) @map("suggested_rent")
+  medianIncome            Decimal? @db.Decimal(12, 2) @map("median_income")
+  hudAreaCode             String?  @map("hud_area_code")
+  hudAreaName             String?  @map("hud_area_name")
+  fmrYear                 Int?     @map("fmr_year")
+  fmrEfficiency           Decimal? @db.Decimal(10, 2) @map("fmr_efficiency")
+  fmrOneBedroom           Decimal? @db.Decimal(10, 2) @map("fmr_one_bedroom")
+  fmrTwoBedroom           Decimal? @db.Decimal(10, 2) @map("fmr_two_bedroom")
+  fmrThreeBedroom         Decimal? @db.Decimal(10, 2) @map("fmr_three_bedroom")
+  fmrFourBedroom          Decimal? @db.Decimal(10, 2) @map("fmr_four_bedroom")
+
+  // Schools (REAPI returns an array; promote primary + keep full list in JSON)
+  schoolPrimaryName       String?  @map("school_primary_name")
+  schoolPrimaryRating     Int?     @map("school_primary_rating")
+  schoolsJson             Json     @default("[]") @map("schools_json")
+
+  // ── PropertyRadar subscription extras ──
+  // Structured name parts (CourtListener + skip-trace both want these)
+  ownerFirstName1         String?  @map("owner_first_name_1")
+  ownerLastName1          String?  @map("owner_last_name_1")
+  ownerFirstName2         String?  @map("owner_first_name_2")
+  ownerLastName2          String?  @map("owner_last_name_2")
+  pctChangeInValue        Decimal? @db.Decimal(6, 2)  @map("pct_change_in_value")
+  cashSale                Boolean? @map("cash_sale")
+  investorType            String?  @map("investor_type")
+  hoaDues                 Decimal? @db.Decimal(10, 2) @map("hoa_dues")
+  hoaPastDue              Boolean? @map("hoa_past_due")
+  hoaName                 String?  @map("hoa_name")
+  lastMlsStatus           String?  @map("last_mls_status")
+  lastMlsListPrice        Decimal? @db.Decimal(12, 2) @map("last_mls_list_price")
+  lastMlsSoldPrice        Decimal? @db.Decimal(12, 2) @map("last_mls_sold_price")
+  ownerMailingVacant      Boolean? @map("owner_mailing_vacant")
+
+  // ── Google Places fields ──
+  googlePlaceId           String?  @map("google_place_id")
+  googleVerifiedAddress   String?  @map("google_verified_address")
+  googleLatitude          Decimal? @db.Decimal(10, 8) @map("google_latitude")
+  googleLongitude         Decimal? @db.Decimal(11, 8) @map("google_longitude")
+  googleStreetViewUrl     String?  @map("google_street_view_url")
+  googleMapsUrl           String?  @map("google_maps_url")
+  googlePlaceTypes        Json     @default("[]") @map("google_place_types")
+  googlePhotoThumbnailUrl String?  @map("google_photo_thumbnail_url")
+  googleSearchedAt        DateTime? @map("google_searched_at")
+
   // Flexible custom fields per tenant config
   customFields Json @default("{}") @map("custom_fields")
 
@@ -360,6 +551,20 @@ model Property {
   outreachLogs OutreachLog[]
   buyerStages PropertyBuyerStage[]
 
+  @@index([county])
+  @@index([apn])
+  @@index([absenteeOwner])
+  @@index([taxDelinquent])
+  @@index([foreclosureStatus])
+  @@index([preForeclosure])
+  @@index([vacantStatus])
+  @@index([distressScore])
+  @@index([inBankruptcy])
+  @@index([inProbate])
+  @@index([isListedForSale])
+  @@index([mlsActive])
+  @@index([googlePlaceId])
+  @@index([investorType])
   @@map("properties")
 }
 
@@ -665,6 +870,25 @@ model Seller {
   evictionFilingCountAsPlaintiff Int   @default(0) @map("eviction_filing_count_as_plaintiff")
   evictionFilingCountAsDefendant Int   @default(0) @map("eviction_filing_count_as_defendant")
   publicRecordsLastScan        DateTime? @map("public_records_last_scan")
+
+  // ── CourtListener automated case search ──────────────────────────────
+  // Populated by lib/courtlistener/client.ts on each property enrichment
+  // that has a linked Seller. Replaces the older manual public-records
+  // fields above for new sellers — existing rows keep both.
+  clCasesSearchedAt            DateTime? @map("cl_cases_searched_at")
+  clCasesJson                  Json      @default("[]") @map("cl_cases_json")
+  clBankruptcyCount            Int       @default(0) @map("cl_bankruptcy_count")
+  clBankruptcyLatestChapter    String?   @map("cl_bankruptcy_latest_chapter")
+  clBankruptcyLatestFilingDate DateTime? @map("cl_bankruptcy_latest_filing_date")
+  clBankruptcyLatestStatus     String?   @map("cl_bankruptcy_latest_status")
+  clBankruptcyLatestCourt      String?   @map("cl_bankruptcy_latest_court")
+  clDivorceCount               Int       @default(0) @map("cl_divorce_count")
+  clDivorceLatestFilingDate    DateTime? @map("cl_divorce_latest_filing_date")
+  clCivilJudgmentCount         Int       @default(0) @map("cl_civil_judgment_count")
+  clCivilJudgmentLatestDate    DateTime? @map("cl_civil_judgment_latest_date")
+  clForeclosureCourtCaseDate   DateTime? @map("cl_foreclosure_court_case_date")
+  clProbateCount               Int       @default(0) @map("cl_probate_count")
+  clProbateLatestFilingDate    DateTime? @map("cl_probate_latest_filing_date")
 
   // ── General ──────────────────────────────
   tags          Json    @default("[]")

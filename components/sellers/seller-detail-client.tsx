@@ -6,6 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Phone, Mail, MapPin, ExternalLink, User, Clock,
   Heart, DollarSign, BarChart3, Sparkles, Check, Building2,
+  Search, Loader2,
 } from 'lucide-react'
 import { formatPhone, titleCase } from '@/lib/format'
 
@@ -316,14 +317,95 @@ function FieldRow({
 
 // ── Section Card ───────────────────────────────────────────
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)]">
+      <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
         <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
+        {action}
       </div>
       <div className="p-3">{children}</div>
     </div>
+  )
+}
+
+// Button that triggers BatchData skip-trace for a seller and refreshes the
+// page on success. Disabled by default once both phone AND email are present —
+// click while holding Shift to force (re-fetch at $0.07 cost).
+function SkipTraceButton({
+  sellerId,
+  hasPhone,
+  hasEmail,
+}: {
+  sellerId: string
+  hasPhone: boolean
+  hasEmail: boolean
+}) {
+  const router = useRouter()
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no-match'>('idle')
+  const [touched, setTouched] = useState<number>(0)
+
+  const alreadyComplete = hasPhone && hasEmail
+  const disabled = status === 'loading'
+
+  const run = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
+    const force = e.shiftKey || alreadyComplete
+    setStatus('loading')
+    try {
+      const res = await fetch(
+        `/api/sellers/${sellerId}/skip-trace${force ? '?force=1' : ''}`,
+        { method: 'POST' },
+      )
+      const body = await res.json() as { traced?: boolean; fieldsTouched?: string[]; error?: string }
+      if (!res.ok) {
+        setStatus(body.error === 'skip-trace unavailable' ? 'no-match' : 'error')
+        return
+      }
+      setTouched(body.fieldsTouched?.length ?? 0)
+      setStatus('done')
+      if ((body.fieldsTouched?.length ?? 0) > 0) router.refresh()
+    } catch {
+      setStatus('error')
+    }
+  }, [sellerId, alreadyComplete, router])
+
+  const label = status === 'loading' ? 'Searching…'
+    : status === 'done' ? (touched > 0 ? `Filled ${touched} field${touched === 1 ? '' : 's'}` : 'Nothing new')
+    : status === 'no-match' ? 'No match'
+    : status === 'error' ? 'Error — retry'
+    : alreadyComplete ? 'Re-trace (Shift+click)'
+    : 'Find contact info'
+
+  return (
+    <button
+      onClick={run}
+      disabled={disabled}
+      title="Search BatchData skip-trace for phone + email ($0.07)"
+      className={`
+        flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[10px] font-medium
+        transition-colors border
+        ${status === 'done' && touched > 0 ? 'bg-green-50 text-green-700 border-green-200'
+          : status === 'error' ? 'bg-red-50 text-red-700 border-red-200'
+          : status === 'no-match' ? 'bg-gray-50 text-gray-500 border-gray-200'
+          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}
+        ${disabled ? 'opacity-60 cursor-wait' : 'cursor-pointer'}
+      `}
+    >
+      {status === 'loading'
+        ? <Loader2 className="w-3 h-3 animate-spin" />
+        : status === 'done' && touched > 0
+        ? <Check className="w-3 h-3" />
+        : <Search className="w-3 h-3" />}
+      {label}
+    </button>
   )
 }
 
@@ -459,7 +541,10 @@ export function SellerDetailClient({ seller, tenantSlug }: SellerDetailClientPro
       <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
         {activeTab === 'Identity' && (
           <>
-            <SectionCard title="Contact Information">
+            <SectionCard
+              title="Contact Information"
+              action={<SkipTraceButton sellerId={data.id} hasPhone={!!data.phone} hasEmail={!!data.email} />}
+            >
               <FieldRow label="Phone" fieldKey="phone" value={formatPhone(data.phone)} sources={sources} onSave={saveField} />
               <FieldRow label="Secondary Phone" fieldKey="secondaryPhone" value={formatPhone(data.secondaryPhone)} sources={sources} onSave={saveField} />
               <FieldRow label="Mobile" fieldKey="mobilePhone" value={formatPhone(data.mobilePhone)} sources={sources} onSave={saveField} />

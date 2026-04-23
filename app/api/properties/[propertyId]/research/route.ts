@@ -115,14 +115,12 @@ export async function POST(
       },
     })
 
-    // Also trigger BatchData enrichment (non-blocking)
-    if (process.env.BATCHDATA_API_KEY) {
-      import('@/lib/batchdata/enrich').then(({ enrichPropertyFromBatchData }) =>
-        enrichPropertyFromBatchData(params.propertyId).catch(err =>
-          console.warn('[Research] BatchData enrich failed:', err)
-        )
+    // Also trigger full multi-vendor enrichment (non-blocking).
+    import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
+      enrichProperty(params.propertyId).catch(err =>
+        console.warn('[Research] Multi-vendor enrich failed:', err)
       )
-    }
+    )
 
     return NextResponse.json({
       status: 'success',

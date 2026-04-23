@@ -242,18 +242,14 @@ export async function createPropertyFromContact(
       propertyId: property.id,
     }).catch(err => console.warn('[Property] Workflow trigger failed:', err))
 
-    // Auto-trigger research (non-blocking, server-side)
-    if (address && process.env.GOOGLE_PLACES_API_KEY) {
-      researchProperty(property.id, address, city, state, zip).catch(err =>
-        console.warn('[Property] Auto-research failed:', err instanceof Error ? err.message : err)
-      )
-    }
-
-    // Auto-enrich from BatchData (non-blocking — backfills beds, baths, sqft, etc.)
-    if (address && process.env.BATCHDATA_API_KEY) {
-      import('@/lib/batchdata/enrich').then(({ enrichPropertyFromBatchData }) =>
-        enrichPropertyFromBatchData(property.id).catch(err =>
-          console.warn('[Property] BatchData enrich failed:', err instanceof Error ? err.message : err)
+    // Multi-vendor enrichment (non-blocking). Single orchestrator call fires
+    // BatchData + PropertyRadar + Google Places in parallel, then runs
+    // CourtListener per-seller after owner names are resolved. See
+    // lib/enrichment/enrich-property.ts for the full sequence + costs.
+    if (address) {
+      import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
+        enrichProperty(property.id).catch(err =>
+          console.warn('[Property] Multi-vendor enrich failed:', err instanceof Error ? err.message : err)
         )
       )
     }

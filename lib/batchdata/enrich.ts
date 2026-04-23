@@ -4,8 +4,373 @@
 // Stores full results in zillowData.batchData for Research tab
 
 import { db } from '@/lib/db/client'
-import { lookupProperty } from './client'
+import { lookupProperty, type BatchDataPropertyResult } from './client'
 import { formatReadableDate } from '@/lib/format'
+import {
+  syncSellersFromVendorResult,
+  skipTraceSellersForProperty,
+} from '@/lib/enrichment/sync-seller'
+
+type PropertySlice = {
+  county: string | null
+  latitude: unknown
+  longitude: unknown
+  apn: string | null
+  fips: string | null
+  subdivision: string | null
+  absenteeOwner: boolean | null
+  ownerPhone: string | null
+  ownerEmail: string | null
+  ownerType: string | null
+  ownershipLengthYears: number | null
+  secondOwnerName: string | null
+  secondOwnerPhone: string | null
+  secondOwnerEmail: string | null
+  mortgageAmount: unknown
+  mortgageDate: Date | null
+  mortgageLender: string | null
+  mortgageType: string | null
+  mortgageRate: unknown
+  secondMortgageAmount: unknown
+  secondMortgageDate: Date | null
+  secondMortgageLender: string | null
+  lienCount: number | null
+  propertyLienAmount: unknown
+  lienTypes: unknown
+  judgmentCount: number | null
+  taxDelinquent: boolean | null
+  taxDelinquentAmount: unknown
+  foreclosureStatus: string | null
+  bankOwned: boolean | null
+  preForeclosure: boolean | null
+  nodDate: Date | null
+  lisPendensDate: Date | null
+  lisPendensAmount: unknown
+  lisPendensPlaintiff: string | null
+  foreclosureAuctionDate: Date | null
+  foreclosureOpeningBid: unknown
+  stories: number | null
+  units: number | null
+  basementFinishedPercent: number | null
+  lastSalePrice: unknown
+  transferCount: number | null
+  deedType: string | null
+  dataLastUpdated: Date | null
+  roofType: string | null
+  foundationType: string | null
+  garageType: string | null
+  garageCapacity: number | null
+  heatingSystem: string | null
+  coolingSystem: string | null
+  exteriorWalls: string | null
+  hasPool: boolean | null
+  hasDeck: boolean | null
+  hasPorch: boolean | null
+  hasSolar: boolean | null
+  hasFireplace: boolean | null
+  hasSpa: boolean | null
+  zoningCode: string | null
+  landUseCode: string | null
+  propertySchoolDistrict: string | null
+  earthquakeZone: string | null
+  wildfireRisk: string | null
+  vacantStatus: string | null
+  vacantStatusYear: number | null
+  siteVacant: boolean | null
+  mailVacant: boolean | null
+  // Tier 3 — distress composite + legal flags
+  distressScore: number | null
+  inBankruptcy: boolean | null
+  inProbate: boolean | null
+  inDivorce: boolean | null
+  hasRecentEviction: boolean | null
+  isRecentFlip: boolean | null
+  isRecentSale: boolean | null
+  isListedForSale: boolean | null
+  isAuction: boolean | null
+  availableEquity: unknown
+  estimatedEquity: unknown
+  equityPercent: unknown
+  openMortgageBalance: unknown
+  estimatedMortgagePayment: unknown
+  inherited: boolean | null
+  deathTransfer: boolean | null
+  mortgageAssumable: boolean | null
+  mlsActive: boolean | null
+  mlsPending: boolean | null
+  mlsSold: boolean | null
+  mlsCancelled: boolean | null
+  mlsFailed: boolean | null
+  mlsStatus: string | null
+  mlsType: string | null
+  mlsListingDate: Date | null
+  mlsListingPrice: unknown
+  mlsSoldPrice: unknown
+  mlsDaysOnMarket: number | null
+  mlsPricePerSqft: unknown
+  mlsKeywords: unknown
+  mlsLastStatusDate: Date | null
+  floodZoneType: string | null
+  suggestedRent: unknown
+  medianIncome: unknown
+  hudAreaCode: string | null
+  hudAreaName: string | null
+  fmrYear: number | null
+  fmrEfficiency: unknown
+  fmrOneBedroom: unknown
+  fmrTwoBedroom: unknown
+  fmrThreeBedroom: unknown
+  fmrFourBedroom: unknown
+  schoolPrimaryName: string | null
+  schoolPrimaryRating: number | null
+  schoolsJson: unknown
+  // PropertyRadar subscription extras
+  ownerFirstName1: string | null
+  ownerLastName1: string | null
+  ownerFirstName2: string | null
+  ownerLastName2: string | null
+  pctChangeInValue: unknown
+  cashSale: boolean | null
+  investorType: string | null
+  hoaDues: unknown
+  hoaPastDue: boolean | null
+  hoaName: string | null
+  lastMlsStatus: string | null
+  lastMlsListPrice: unknown
+  lastMlsSoldPrice: unknown
+  ownerMailingVacant: boolean | null
+  // Google
+  googlePlaceId: string | null
+  googleVerifiedAddress: string | null
+  googleLatitude: unknown
+  googleLongitude: unknown
+  googleStreetViewUrl: string | null
+  googleMapsUrl: string | null
+  googlePlaceTypes: unknown
+  googlePhotoThumbnailUrl: string | null
+  googleSearchedAt: Date | null
+}
+
+/**
+ * Build a column-update object that only writes fields the Property row is
+ * currently missing. Each write is mirrored into fieldSources as `api` so
+ * the UI renders the purple-pill source badge consistently.
+ *
+ * Kept pure + side-effect-free so it can be reused by the zero-cost backfill
+ * script (reads existing zillowData.batchData blob instead of calling the API).
+ */
+export function buildDenormUpdate(
+  property: PropertySlice,
+  result: Partial<BatchDataPropertyResult>,
+  fieldSources: Record<string, string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+
+  const setIfEmpty = <K extends keyof PropertySlice>(
+    col: K,
+    value: unknown,
+    sourceKey: string = String(col),
+  ): void => {
+    if (value == null || value === '' || value === undefined) return
+    if (property[col] != null && property[col] !== '') return
+    out[col as string] = value
+    if (fieldSources[sourceKey] !== 'user') fieldSources[sourceKey] = 'api'
+  }
+
+  const toDate = (v: string | undefined): Date | null => {
+    if (!v) return null
+    const d = new Date(v)
+    return isNaN(d.getTime()) ? null : d
+  }
+
+  // Identity & location
+  setIfEmpty('county', result.county)
+  setIfEmpty('latitude', result.latitude)
+  setIfEmpty('longitude', result.longitude)
+  setIfEmpty('apn', result.apn)
+  setIfEmpty('fips', result.fips)
+  setIfEmpty('subdivision', result.subdivision)
+
+  // Owner
+  setIfEmpty('absenteeOwner', result.absenteeOwner)
+  setIfEmpty('ownerPhone', result.ownerPhone)
+  setIfEmpty('ownerEmail', result.ownerEmail)
+  setIfEmpty('ownerType', result.ownerType)
+  setIfEmpty('ownershipLengthYears', result.ownershipLength)
+  setIfEmpty('secondOwnerName', result.secondOwnerName)
+  setIfEmpty('secondOwnerPhone', result.secondOwnerPhone)
+  setIfEmpty('secondOwnerEmail', result.secondOwnerEmail)
+
+  // Primary mortgage
+  setIfEmpty('mortgageAmount', result.mortgageAmount)
+  setIfEmpty('mortgageDate', toDate(result.mortgageDate))
+  setIfEmpty('mortgageLender', result.mortgageLender)
+  setIfEmpty('mortgageType', result.mortgageType)
+  setIfEmpty('mortgageRate', result.mortgageRate)
+
+  // Second mortgage
+  setIfEmpty('secondMortgageAmount', result.secondMortgageAmount)
+  setIfEmpty('secondMortgageDate', toDate(result.secondMortgageDate))
+  setIfEmpty('secondMortgageLender', result.secondMortgageLender)
+
+  // Liens & legal
+  setIfEmpty('lienCount', result.totalOpenLienCount)
+  setIfEmpty('propertyLienAmount', result.totalOpenLienAmount)
+  if (Array.isArray(result.lienTypes) && result.lienTypes.length > 0) {
+    // lienTypes is a JSON column with default `[]` — only overwrite when ours is empty
+    const existing = Array.isArray(property.lienTypes) ? property.lienTypes : []
+    if (existing.length === 0) {
+      out.lienTypes = result.lienTypes
+      if (fieldSources.lienTypes !== 'user') fieldSources.lienTypes = 'api'
+    }
+  }
+  setIfEmpty('judgmentCount', result.judgmentCount)
+
+  // Distress & foreclosure
+  setIfEmpty('taxDelinquent', result.taxDelinquent)
+  setIfEmpty('taxDelinquentAmount', result.taxDelinquentAmount)
+  setIfEmpty('foreclosureStatus', result.foreclosureStatus)
+  setIfEmpty('bankOwned', result.bankOwned)
+  setIfEmpty('preForeclosure', result.preforeclosure)
+  setIfEmpty('nodDate', toDate(result.nodDate))
+  setIfEmpty('lisPendensDate', toDate(result.lisPendensDate))
+  setIfEmpty('lisPendensAmount', result.lisPendensAmount)
+  setIfEmpty('lisPendensPlaintiff', result.lisPendensPlaintiff)
+  setIfEmpty('foreclosureAuctionDate', toDate(result.foreclosureAuctionDate))
+  setIfEmpty('foreclosureOpeningBid', result.foreclosureOpeningBid)
+
+  // Structure
+  setIfEmpty('stories', result.stories)
+  setIfEmpty('units', result.units)
+  setIfEmpty('basementFinishedPercent', result.basementFinishedPercent)
+
+  // Transfer / deed
+  setIfEmpty('lastSalePrice', result.lastSalePrice)
+  setIfEmpty('transferCount', result.transferCount)
+  setIfEmpty('deedType', result.deedType)
+  setIfEmpty('dataLastUpdated', new Date()) // always stamp on successful enrich
+
+  // Construction detail (Tier 2)
+  setIfEmpty('roofType', result.roofType)
+  setIfEmpty('foundationType', result.foundation)
+  setIfEmpty('garageType', result.garageType)
+  setIfEmpty('garageCapacity', result.garageSpaces)
+  setIfEmpty('heatingSystem', result.heatingType)
+  setIfEmpty('coolingSystem', result.coolingType)
+  setIfEmpty('exteriorWalls', result.exteriorWalls)
+
+  // Amenities
+  setIfEmpty('hasPool', result.pool)
+  setIfEmpty('hasDeck', result.hasDeck)
+  setIfEmpty('hasPorch', result.hasPorch)
+  setIfEmpty('hasSolar', result.hasSolar)
+  setIfEmpty('hasFireplace', result.hasFireplace)
+  setIfEmpty('hasSpa', result.hasSpa)
+
+  // Zoning / neighborhood
+  setIfEmpty('zoningCode', result.zoning)
+  setIfEmpty('landUseCode', result.landUseCode)
+  setIfEmpty('propertySchoolDistrict', result.schoolDistrict)
+
+  // Environmental (existing `floodZone` column already used by AI enrichment)
+  setIfEmpty('earthquakeZone', result.earthquakeZone)
+  setIfEmpty('wildfireRisk', result.wildfireRisk)
+
+  // Vacancy
+  setIfEmpty('vacantStatus', result.vacantStatus)
+  setIfEmpty('vacantStatusYear', result.vacantStatusYear)
+  setIfEmpty('siteVacant', result.siteVacant)
+  setIfEmpty('mailVacant', result.mailVacant)
+
+  // Tier 3 — PropertyRadar distress composite + legal flags
+  setIfEmpty('distressScore', result.distressScore)
+  setIfEmpty('inBankruptcy', result.inBankruptcy)
+  setIfEmpty('inProbate', result.inProbate)
+  setIfEmpty('inDivorce', result.inDivorce)
+  setIfEmpty('hasRecentEviction', result.hasRecentEviction)
+  setIfEmpty('isRecentFlip', result.isRecentFlip)
+  setIfEmpty('isRecentSale', result.isRecentSale)
+  setIfEmpty('isListedForSale', result.isListedForSale)
+  setIfEmpty('isAuction', result.isAuction)
+
+  // Tier 3 — equity detail
+  setIfEmpty('availableEquity', result.availableEquity)
+  setIfEmpty('estimatedEquity', result.estimatedEquity)
+  setIfEmpty('equityPercent', result.equityPercentTier3 ?? result.equityPercent)
+  setIfEmpty('openMortgageBalance', result.openMortgageBalance)
+  setIfEmpty('estimatedMortgagePayment', result.estimatedMortgagePayment)
+
+  // Tier 3 — inheritance / transfers
+  setIfEmpty('inherited', result.inherited)
+  setIfEmpty('deathTransfer', result.deathTransfer)
+  setIfEmpty('mortgageAssumable', result.mortgageAssumable)
+
+  // Tier 3 — MLS activity
+  setIfEmpty('mlsActive', result.mlsActive)
+  setIfEmpty('mlsPending', result.mlsPending)
+  setIfEmpty('mlsSold', result.mlsSold)
+  setIfEmpty('mlsCancelled', result.mlsCancelled)
+  setIfEmpty('mlsFailed', result.mlsFailed)
+  setIfEmpty('mlsStatus', result.mlsStatus)
+  setIfEmpty('mlsType', result.mlsType)
+  setIfEmpty('mlsListingDate', toDate(result.mlsListingDate))
+  setIfEmpty('mlsListingPrice', result.mlsListingPrice)
+  setIfEmpty('mlsSoldPrice', result.mlsSoldPrice)
+  setIfEmpty('mlsDaysOnMarket', result.mlsDaysOnMarket)
+  setIfEmpty('mlsPricePerSqft', result.mlsPricePerSqft)
+  setIfEmpty('mlsLastStatusDate', toDate(result.mlsLastStatusDate))
+  if (Array.isArray(result.mlsKeywords) && result.mlsKeywords.length > 0) {
+    const existing = Array.isArray(property.mlsKeywords) ? property.mlsKeywords : []
+    if (existing.length === 0) {
+      out.mlsKeywords = result.mlsKeywords
+      if (fieldSources.mlsKeywords !== 'user') fieldSources.mlsKeywords = 'api'
+    }
+  }
+
+  // Tier 3 — flood detail
+  setIfEmpty('floodZoneType', result.floodZoneType)
+
+  // Tier 3 — demographics
+  setIfEmpty('suggestedRent', result.suggestedRent)
+  setIfEmpty('medianIncome', result.medianIncome)
+  setIfEmpty('hudAreaCode', result.hudAreaCode)
+  setIfEmpty('hudAreaName', result.hudAreaName)
+  setIfEmpty('fmrYear', result.fmrYear)
+  setIfEmpty('fmrEfficiency', result.fmrEfficiency)
+  setIfEmpty('fmrOneBedroom', result.fmrOneBedroom)
+  setIfEmpty('fmrTwoBedroom', result.fmrTwoBedroom)
+  setIfEmpty('fmrThreeBedroom', result.fmrThreeBedroom)
+  setIfEmpty('fmrFourBedroom', result.fmrFourBedroom)
+
+  // Tier 3 — schools
+  setIfEmpty('schoolPrimaryName', result.schoolPrimaryName)
+  setIfEmpty('schoolPrimaryRating', result.schoolPrimaryRating)
+  if (Array.isArray(result.schools) && result.schools.length > 0) {
+    const existing = Array.isArray(property.schoolsJson) ? property.schoolsJson : []
+    if (existing.length === 0) {
+      out.schoolsJson = result.schools
+      if (fieldSources.schoolsJson !== 'user') fieldSources.schoolsJson = 'api'
+    }
+  }
+
+  // PropertyRadar subscription extras
+  setIfEmpty('ownerFirstName1', result.ownerFirstName1)
+  setIfEmpty('ownerLastName1', result.ownerLastName1)
+  setIfEmpty('ownerFirstName2', result.ownerFirstName2)
+  setIfEmpty('ownerLastName2', result.ownerLastName2)
+  setIfEmpty('pctChangeInValue', result.pctChangeInValue)
+  setIfEmpty('cashSale', result.cashSale)
+  setIfEmpty('investorType', result.investorType)
+  setIfEmpty('hoaDues', result.hoaDues)
+  setIfEmpty('hoaPastDue', result.hoaPastDue)
+  setIfEmpty('hoaName', result.hoaName)
+  setIfEmpty('lastMlsStatus', result.lastMlsStatus)
+  setIfEmpty('lastMlsListPrice', result.lastMlsListPrice)
+  setIfEmpty('lastMlsSoldPrice', result.lastMlsSoldPrice)
+  setIfEmpty('ownerMailingVacant', result.ownerMailingVacant)
+
+  return out
+}
 
 /** Build a wholesaler-ready description from property details + research data */
 function generateDescription(
@@ -69,7 +434,16 @@ function generateDescription(
   return parts.join(' ')
 }
 
-export async function enrichPropertyFromBatchData(propertyId: string): Promise<boolean> {
+/**
+ * Enrich a Property with BatchData. Opt-in flags:
+ *   skipTrace: boolean (default false) — after the base lookup, if any linked
+ *              Seller is still missing phone/email, fire BatchData's
+ *              /property/skip-trace endpoint (~$0.07/seller) to backfill.
+ */
+export async function enrichPropertyFromBatchData(
+  propertyId: string,
+  opts: { skipTrace?: boolean } = {},
+): Promise<boolean> {
   const property = await db.property.findUnique({
     where: { id: propertyId },
     select: {
@@ -79,6 +453,59 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
       description: true,
       taxAssessment: true, annualTax: true, deedDate: true,
       fieldSources: true, zillowData: true,
+      // Tier 1+2 promoted columns — only backfill when empty
+      county: true, latitude: true, longitude: true, apn: true,
+      fips: true, subdivision: true,
+      absenteeOwner: true, ownerPhone: true, ownerEmail: true,
+      ownerType: true, ownershipLengthYears: true,
+      secondOwnerName: true, secondOwnerPhone: true, secondOwnerEmail: true,
+      mortgageAmount: true, mortgageDate: true, mortgageLender: true,
+      mortgageType: true, mortgageRate: true,
+      secondMortgageAmount: true, secondMortgageDate: true, secondMortgageLender: true,
+      lienCount: true, propertyLienAmount: true, lienTypes: true, judgmentCount: true,
+      taxDelinquent: true, taxDelinquentAmount: true,
+      foreclosureStatus: true, bankOwned: true, preForeclosure: true,
+      nodDate: true, lisPendensDate: true, lisPendensAmount: true, lisPendensPlaintiff: true,
+      foreclosureAuctionDate: true, foreclosureOpeningBid: true,
+      stories: true, units: true, basementFinishedPercent: true,
+      lastSalePrice: true, transferCount: true, deedType: true, dataLastUpdated: true,
+      roofType: true, foundationType: true, garageType: true, garageCapacity: true,
+      heatingSystem: true, coolingSystem: true, exteriorWalls: true,
+      hasPool: true, hasDeck: true, hasPorch: true, hasSolar: true,
+      hasFireplace: true, hasSpa: true,
+      zoningCode: true, landUseCode: true, propertySchoolDistrict: true,
+      earthquakeZone: true, wildfireRisk: true,
+      vacantStatus: true, vacantStatusYear: true, siteVacant: true, mailVacant: true,
+      // Tier 3
+      distressScore: true, inBankruptcy: true, inProbate: true, inDivorce: true,
+      hasRecentEviction: true, isRecentFlip: true, isRecentSale: true,
+      isListedForSale: true, isAuction: true,
+      availableEquity: true, estimatedEquity: true, equityPercent: true,
+      openMortgageBalance: true, estimatedMortgagePayment: true,
+      inherited: true, deathTransfer: true, mortgageAssumable: true,
+      mlsActive: true, mlsPending: true, mlsSold: true, mlsCancelled: true,
+      mlsFailed: true, mlsStatus: true, mlsType: true,
+      mlsListingDate: true, mlsListingPrice: true, mlsSoldPrice: true,
+      mlsDaysOnMarket: true, mlsPricePerSqft: true, mlsKeywords: true,
+      mlsLastStatusDate: true,
+      floodZoneType: true,
+      suggestedRent: true, medianIncome: true, hudAreaCode: true, hudAreaName: true,
+      fmrYear: true, fmrEfficiency: true, fmrOneBedroom: true, fmrTwoBedroom: true,
+      fmrThreeBedroom: true, fmrFourBedroom: true,
+      schoolPrimaryName: true, schoolPrimaryRating: true, schoolsJson: true,
+      // PropertyRadar subscription extras
+      ownerFirstName1: true, ownerLastName1: true,
+      ownerFirstName2: true, ownerLastName2: true,
+      pctChangeInValue: true, cashSale: true, investorType: true,
+      hoaDues: true, hoaPastDue: true, hoaName: true,
+      lastMlsStatus: true, lastMlsListPrice: true, lastMlsSoldPrice: true,
+      ownerMailingVacant: true,
+      // Google
+      googlePlaceId: true, googleVerifiedAddress: true,
+      googleLatitude: true, googleLongitude: true,
+      googleStreetViewUrl: true, googleMapsUrl: true,
+      googlePlaceTypes: true, googlePhotoThumbnailUrl: true,
+      googleSearchedAt: true,
     },
   })
   if (!property || !property.address) return false
@@ -257,11 +684,42 @@ export async function enrichPropertyFromBatchData(propertyId: string): Promise<b
     }
   }
 
+  // Denormalize Tier 1+2 fields from the BatchData response into typed
+  // Property columns. Only backfills empty fields, marks each as `api`.
+  const denorm = buildDenormUpdate(property as PropertySlice, result, fieldSources)
+  Object.assign(updateData, denorm)
+
   updateData.fieldSources = fieldSources
 
   await db.property.update({ where: { id: propertyId }, data: updateData })
 
   const backfilled = Object.keys(updateData).filter(k => k !== 'zillowData' && k !== 'fieldSources')
   console.log(`[BatchData] Done: ${property.address}${backfilled.length > 0 ? ` — backfilled ${backfilled.join(', ')}` : ''}`)
+
+  // Push owner + ownership data to any linked Sellers. Fire-and-don't-block;
+  // we've already written the Property row and log any sync failure below.
+  try {
+    const sync = await syncSellersFromVendorResult(propertyId, result)
+    if (sync.updatedCount > 0) {
+      console.log(`[BatchData] Seller sync: ${sync.updatedCount} seller(s) → ${sync.fieldsTouched.length} fields (${sync.fieldsTouched.slice(0, 6).join(', ')}${sync.fieldsTouched.length > 6 ? '…' : ''})`)
+    }
+  } catch (err) {
+    console.error('[BatchData] Seller sync failed:', err instanceof Error ? err.message : err)
+  }
+
+  // Optional second pass — skip-trace each Seller that's still missing contact
+  // info. Costs ~$0.07 per seller; only fires when explicitly requested by
+  // the caller (e.g., manual re-enrich button, not the cron backfill).
+  if (opts.skipTrace) {
+    try {
+      const trace = await skipTraceSellersForProperty(propertyId)
+      if (trace.totalTraced > 0) {
+        console.log(`[BatchData] Skip-trace: ${trace.totalTraced} seller(s) traced, ${trace.totalFieldsTouched} fields filled, ${trace.skipped} skipped (already complete)`)
+      }
+    } catch (err) {
+      console.error('[BatchData] Skip-trace failed:', err instanceof Error ? err.message : err)
+    }
+  }
+
   return true
 }
