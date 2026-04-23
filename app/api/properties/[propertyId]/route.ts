@@ -74,6 +74,20 @@ const updateSchema = z.object({
   propertyCondition: z.string().nullable().optional(),
   // Risk factor — free-form string, editable per offer type (Cash column + altPrices[type].riskFactor)
   riskFactor: z.string().nullable().optional(),
+  // Condition grades + intangibles + location/market — free-form strings so
+  // users can pick any grading scheme (A-F, 1-10, "Good", "Needs replacement").
+  roofCondition: z.string().nullable().optional(),
+  windowsCondition: z.string().nullable().optional(),
+  sidingCondition: z.string().nullable().optional(),
+  exteriorCondition: z.string().nullable().optional(),
+  comparableRisk: z.string().nullable().optional(),
+  basementStatus: z.string().nullable().optional(),
+  curbAppeal: z.string().nullable().optional(),
+  neighborsGrade: z.string().nullable().optional(),
+  parkingType: z.string().nullable().optional(),
+  yardGrade: z.string().nullable().optional(),
+  locationGrade: z.string().nullable().optional(),
+  marketRisk: z.string().nullable().optional(),
   // Deal Blast overrides
   dealBlastAskingOverride: z.string().nullable().optional(),
   dealBlastArvOverride: z.string().nullable().optional(),

@@ -98,6 +98,19 @@ interface PropertyDetail {
   storyVersion: number
   // Risk factor — Cash-tab value; alt values live in altPrices[type].riskFactor
   riskFactor: string | null
+  // Condition + intangibles + location/market — free-form strings
+  roofCondition: string | null
+  windowsCondition: string | null
+  sidingCondition: string | null
+  exteriorCondition: string | null
+  comparableRisk: string | null
+  basementStatus: string | null
+  curbAppeal: string | null
+  neighborsGrade: string | null
+  parkingType: string | null
+  yardGrade: string | null
+  locationGrade: string | null
+  marketRisk: string | null
   sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
@@ -186,6 +199,18 @@ export function PropertyDetailClient({
     arv: property.arv,
     constructionEstimate: property.constructionEstimate,
     riskFactor: property.riskFactor,
+    roofCondition: property.roofCondition,
+    windowsCondition: property.windowsCondition,
+    sidingCondition: property.sidingCondition,
+    exteriorCondition: property.exteriorCondition,
+    comparableRisk: property.comparableRisk,
+    basementStatus: property.basementStatus,
+    curbAppeal: property.curbAppeal,
+    neighborsGrade: property.neighborsGrade,
+    parkingType: property.parkingType,
+    yardGrade: property.yardGrade,
+    locationGrade: property.locationGrade,
+    marketRisk: property.marketRisk,
   })
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
   const [offerTypes, setOfferTypes] = useState<string[]>(property.offerTypes ?? [])
@@ -2882,6 +2907,19 @@ interface SharedVals {
   arv: string | null
   constructionEstimate: string | null
   riskFactor: string | null
+  // Condition + intangibles + location/market grades
+  roofCondition: string | null
+  windowsCondition: string | null
+  sidingCondition: string | null
+  exteriorCondition: string | null
+  comparableRisk: string | null
+  basementStatus: string | null
+  curbAppeal: string | null
+  neighborsGrade: string | null
+  parkingType: string | null
+  yardGrade: string | null
+  locationGrade: string | null
+  marketRisk: string | null
 }
 
 // ─── Property Details Panel ─────────────────────────────────────────────────
@@ -2953,6 +2991,39 @@ function PropertyDetailsPanel({
             onCashSaved={onSaved}
             onAltSaved={onAltSaved}
           />
+        </div>
+      </div>
+
+      {/* Second tier — qualitative grades that require eyes-on or
+          neighborhood feel. Same 3-col layout as the top tier so visuals
+          line up; each field is a free-form string (A-F, 1-10, "Good",
+          "Needs replacement", etc.). */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)]">
+        {/* Column 1 — Condition */}
+        <div className="px-4 py-2">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Condition</p>
+          <CompactDetailCell label="Roof" value={vals.roofCondition} field="roofCondition" propertyId={propertyId} source={sources.roofCondition} onSaved={onSaved} />
+          <CompactDetailCell label="Windows" value={vals.windowsCondition} field="windowsCondition" propertyId={propertyId} source={sources.windowsCondition} onSaved={onSaved} />
+          <CompactDetailCell label="Siding" value={vals.sidingCondition} field="sidingCondition" propertyId={propertyId} source={sources.sidingCondition} onSaved={onSaved} />
+          <CompactDetailCell label="Exterior" value={vals.exteriorCondition} field="exteriorCondition" propertyId={propertyId} source={sources.exteriorCondition} onSaved={onSaved} />
+        </div>
+
+        {/* Column 2 — Intangibles */}
+        <div className="px-4 py-2">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Intangibles</p>
+          <CompactDetailCell label="Comp Risk" value={vals.comparableRisk} field="comparableRisk" propertyId={propertyId} source={sources.comparableRisk} onSaved={onSaved} />
+          <CompactDetailCell label="Basement" value={vals.basementStatus} field="basementStatus" propertyId={propertyId} source={sources.basementStatus} onSaved={onSaved} />
+          <CompactDetailCell label="Curb Appeal" value={vals.curbAppeal} field="curbAppeal" propertyId={propertyId} source={sources.curbAppeal} onSaved={onSaved} />
+          <CompactDetailCell label="Neighbors" value={vals.neighborsGrade} field="neighborsGrade" propertyId={propertyId} source={sources.neighborsGrade} onSaved={onSaved} />
+          <CompactDetailCell label="Parking" value={vals.parkingType} field="parkingType" propertyId={propertyId} source={sources.parkingType} onSaved={onSaved} />
+          <CompactDetailCell label="Yard" value={vals.yardGrade} field="yardGrade" propertyId={propertyId} source={sources.yardGrade} onSaved={onSaved} />
+        </div>
+
+        {/* Column 3 — Location & Market */}
+        <div className="px-4 py-2">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Location & Market</p>
+          <CompactDetailCell label="Location Grade" value={vals.locationGrade} field="locationGrade" propertyId={propertyId} source={sources.locationGrade} onSaved={onSaved} />
+          <CompactDetailCell label="Market Risk" value={vals.marketRisk} field="marketRisk" propertyId={propertyId} source={sources.marketRisk} onSaved={onSaved} />
         </div>
       </div>
     </div>

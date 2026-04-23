@@ -53,6 +53,10 @@ export default async function PropertyDetailPage({
         offerTypes: true, altPrices: true,
         story: true, storyUpdatedAt: true, storyVersion: true,
         riskFactor: true,
+        roofCondition: true, windowsCondition: true, sidingCondition: true, exteriorCondition: true,
+        comparableRisk: true, basementStatus: true, curbAppeal: true, neighborsGrade: true,
+        parkingType: true, yardGrade: true,
+        locationGrade: true, marketRisk: true,
         sellers: {
           include: {
             seller: {
@@ -241,6 +245,19 @@ export default async function PropertyDetailPage({
         storyVersion: property.storyVersion,
         // Risk factor — Cash-tab value lives here; alt values live in altPrices[type].riskFactor
         riskFactor: property.riskFactor,
+        // Condition + intangibles + location/market — all free-form strings
+        roofCondition: property.roofCondition,
+        windowsCondition: property.windowsCondition,
+        sidingCondition: property.sidingCondition,
+        exteriorCondition: property.exteriorCondition,
+        comparableRisk: property.comparableRisk,
+        basementStatus: property.basementStatus,
+        curbAppeal: property.curbAppeal,
+        neighborsGrade: property.neighborsGrade,
+        parkingType: property.parkingType,
+        yardGrade: property.yardGrade,
+        locationGrade: property.locationGrade,
+        marketRisk: property.marketRisk,
         constructionEstimate: property.constructionEstimate?.toString() ?? null,
         sellers: property.sellers.map((ps) => ({
           id: ps.seller.id,

@@ -325,6 +325,28 @@ model Property {
   // Per-offer-type values live in altPrices[type].riskFactor; this column is the Cash value.
   riskFactor      String?   @map("risk_factor")
 
+  // Exterior / structural condition grades. Free-form strings so users can
+  // pick any scheme (A-F, 1-10, "Good", "Needs replacement"); kept intentionally
+  // loose until a grading standard emerges.
+  roofCondition      String? @map("roof_condition")
+  windowsCondition   String? @map("windows_condition")
+  sidingCondition    String? @map("siding_condition")
+  exteriorCondition  String? @map("exterior_condition")
+
+  // Intangibles — qualitative, subjective grades that require eyes-on or
+  // neighborhood feel and don't come from any data API.
+  comparableRisk     String? @map("comparable_risk")
+  basementStatus     String? @map("basement_status")
+  curbAppeal         String? @map("curb_appeal")
+  neighborsGrade     String? @map("neighbors_grade")
+  parkingType        String? @map("parking_type")
+  yardGrade          String? @map("yard_grade")
+
+  // Location + market-level grades — typically applied once per deal after
+  // driving the area / pulling comps, not per-offer-type.
+  locationGrade      String? @map("location_grade")
+  marketRisk         String? @map("market_risk")
+
   // Flexible custom fields per tenant config
   customFields Json @default("{}") @map("custom_fields")
 
