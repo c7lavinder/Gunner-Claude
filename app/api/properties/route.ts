@@ -7,6 +7,7 @@ import { PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
 import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
 import { splitCombinedAddressIfNeeded } from '@/lib/properties'
+import { enrichProperty } from '@/lib/enrichment/enrich-property'
 
 const propertySchema = z.object({
   address: z.string().min(1),
@@ -128,13 +129,11 @@ export async function POST(request: NextRequest) {
     //      (computed from whatever the vendors just wrote)
     const enrichIds = splitResult.splitInto ?? [property.id]
     for (const id of enrichIds) {
-      import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
-        enrichProperty(id).catch(err =>
-          console.error('[Vendor Enrich] Background error:', err)
-        )
+      enrichProperty(id).catch(err =>
+        console.error('[Vendor Enrich] Background error:', err instanceof Error ? err.message : err)
       )
       enrichPropertyWithAI(id).catch(err =>
-        console.error('[AI Enrich] Background error:', err)
+        console.error('[AI Enrich] Background error:', err instanceof Error ? err.message : err)
       )
     }
 

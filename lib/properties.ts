@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
+import { enrichProperty } from '@/lib/enrichment/enrich-property'
 
 interface PropertyTriggerContext {
   ghlPipelineId?: string
@@ -244,14 +245,61 @@ export async function createPropertyFromContact(
 
     // Multi-vendor enrichment (non-blocking). Single orchestrator call fires
     // BatchData + PropertyRadar + Google Places in parallel, then runs
-    // CourtListener per-seller after owner names are resolved. See
-    // lib/enrichment/enrich-property.ts for the full sequence + costs.
+    // CourtListener per-seller after owner names are resolved.
+    //
+    // Static import + explicit audit-log entry on every invocation so we
+    // can tell (after the fact) whether enrichment ran for a given lead.
+    // Earlier fire-and-forget with dynamic import() was silently dropping
+    // invocations — 77% of last-week's leads had zero vendor data.
     if (address) {
-      import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
-        enrichProperty(property.id).catch(err =>
-          console.warn('[Property] Multi-vendor enrich failed:', err instanceof Error ? err.message : err)
-        )
-      )
+      const enrichStart = Date.now()
+      db.auditLog.create({
+        data: {
+          tenantId,
+          action: 'enrich.property.started',
+          resource: 'property',
+          resourceId: property.id,
+          source: 'GHL_WEBHOOK',
+          severity: 'INFO',
+          payload: { address, city, state, zip },
+        },
+      }).catch(() => { /* audit failure shouldn't block enrichment */ })
+
+      enrichProperty(property.id)
+        .then(result => {
+          db.auditLog.create({
+            data: {
+              tenantId,
+              action: 'enrich.property.completed',
+              resource: 'property',
+              resourceId: property.id,
+              source: 'SYSTEM',
+              severity: 'INFO',
+              payload: {
+                durationMs: Date.now() - enrichStart,
+                bd: result.batchdata,
+                pr: result.propertyRadar,
+                google: result.google,
+                columnsWritten: result.columnsWritten,
+              },
+            },
+          }).catch(() => { /* audit failure shouldn't propagate */ })
+        })
+        .catch(err => {
+          const message = err instanceof Error ? err.message : String(err)
+          console.warn('[Property] Multi-vendor enrich failed:', message)
+          db.auditLog.create({
+            data: {
+              tenantId,
+              action: 'enrich.property.failed',
+              resource: 'property',
+              resourceId: property.id,
+              source: 'SYSTEM',
+              severity: 'ERROR',
+              payload: { durationMs: Date.now() - enrichStart, error: message },
+            },
+          }).catch(() => {})
+        })
     }
 
     // AI auto-enrichment (fire-and-forget — estimates ARV, repair, rental, neighborhood)

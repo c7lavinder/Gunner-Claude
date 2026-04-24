@@ -9,6 +9,7 @@ import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { createPropertyFromContact, splitCombinedAddressIfNeeded } from '@/lib/properties'
+import { enrichProperty } from '@/lib/enrichment/enrich-property'
 import { awardTaskXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { logFailure } from '@/lib/audit'
@@ -872,8 +873,8 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
 
         // Re-trigger full multi-vendor enrichment when address changes.
         if (updates.address) {
-          import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
-            enrichProperty(property.id).catch(() => {})
+          enrichProperty(property.id).catch(err =>
+            console.warn('[GHL webhook] address-change enrichment failed:', err instanceof Error ? err.message : err)
           )
         }
       }

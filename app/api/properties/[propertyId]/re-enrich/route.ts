@@ -5,6 +5,7 @@ import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/
 import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
 import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
+import { enrichProperty } from '@/lib/enrichment/enrich-property'
 
 export async function POST(
   _request: NextRequest,
@@ -28,15 +29,13 @@ export async function POST(
   // Fire both enrichment paths in parallel:
   //   1. Multi-vendor orchestrator — BatchData/PR/Google/CourtListener.
   //      User explicitly clicked "re-enrich" so force BD regardless of
-  //      the PR qualification gate — they want the full dataset.
+  //      cache / PR-no-match skip — they want the full dataset.
   //   2. Claude AI estimates — ARV, repair, rental.
-  import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
-    enrichProperty(property.id, { forceBatchData: true }).catch(err =>
-      console.error('[Re-Enrich Vendor] Background error:', err)
-    )
+  enrichProperty(property.id, { forceBatchData: true }).catch(err =>
+    console.error('[Re-Enrich Vendor] Background error:', err instanceof Error ? err.message : err)
   )
   enrichPropertyWithAI(property.id).catch(err =>
-    console.error('[Re-Enrich AI] Background error:', err)
+    console.error('[Re-Enrich AI] Background error:', err instanceof Error ? err.message : err)
   )
 
   return NextResponse.json({ status: 'started' })

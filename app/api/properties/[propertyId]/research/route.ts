@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
+import { enrichProperty } from '@/lib/enrichment/enrich-property'
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY
 
@@ -116,11 +117,10 @@ export async function POST(
     })
 
     // Also trigger full multi-vendor enrichment (non-blocking). User hit
-    // the research button → force BD even if the PR gate would normally skip.
-    import('@/lib/enrichment/enrich-property').then(({ enrichProperty }) =>
-      enrichProperty(params.propertyId, { forceBatchData: true }).catch(err =>
-        console.warn('[Research] Multi-vendor enrich failed:', err)
-      )
+    // the research button → force BD even if the cache/no-match gate
+    // would normally skip.
+    enrichProperty(params.propertyId, { forceBatchData: true }).catch(err =>
+      console.warn('[Research] Multi-vendor enrich failed:', err instanceof Error ? err.message : err)
     )
 
     return NextResponse.json({

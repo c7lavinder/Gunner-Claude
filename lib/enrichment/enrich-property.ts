@@ -294,58 +294,92 @@ export async function enrichProperty(
   }
 
   // ── Step 2: merge vendor results + promote to typed columns ────────
+  // Every sub-step below is wrapped in its own try/catch so a single
+  // vendor's bad data (or a denormalizer bug) can't wipe out the others.
+  // The final db.property.update is wrapped too, with a retry-on-typed-cols
+  // fallback if the full update fails.
+  //
   // PR is the primary source — listed FIRST so it wins conflicts in the
-  // first-wins merge. BD fills gaps + contributes BD-only fields (salePropensity,
-  // deed/mortgage history, skip-trace phones, etc.) that PR doesn't return.
-  const merged = mergeResults(prRes, bdRes as Partial<BatchDataPropertyResult> | null)
+  // first-wins merge. BD fills gaps + contributes BD-only fields.
+  let merged: Partial<BatchDataPropertyResult> = {}
+  try {
+    merged = mergeResults(prRes, bdRes as Partial<BatchDataPropertyResult> | null)
+  } catch (err) {
+    console.error('[enrichProperty] mergeResults failed:', err instanceof Error ? err.message : err)
+  }
 
   const update: Record<string, unknown> = {}
 
   // BatchData raw blob stays separate — keep the full object for research tab
-  if (bdRes && (bdRes as BatchDataPropertyResult).raw) {
-    const existingResearch = (property.zillowData ?? {}) as Record<string, unknown>
-    update.zillowData = {
-      ...existingResearch,
-      batchData: { ...(bdRes as BatchDataPropertyResult), enrichedAt: new Date().toISOString() },
+  try {
+    if (bdRes && (bdRes as BatchDataPropertyResult).raw) {
+      const existingResearch = (property.zillowData ?? {}) as Record<string, unknown>
+      update.zillowData = {
+        ...existingResearch,
+        batchData: { ...(bdRes as BatchDataPropertyResult), enrichedAt: new Date().toISOString() },
+      }
     }
+  } catch (err) {
+    console.error('[enrichProperty] BD blob persistence failed:', err instanceof Error ? err.message : err)
   }
 
   // Run the shared denormalizer on the merged result (same helper used by
   // the BatchData-only flow). Writes typed columns for every Tier 1/2/3 +
-  // PR subscription field.
-  Object.assign(update, buildDenormUpdate(property as never, merged, fieldSources))
+  // PR subscription field. Isolated: a denormalizer throw doesn't abort
+  // the Google writes or the final update.
+  try {
+    Object.assign(update, buildDenormUpdate(property as never, merged, fieldSources))
+  } catch (err) {
+    console.error('[enrichProperty] buildDenormUpdate failed:', err instanceof Error ? err.message : err)
+  }
 
-  // Google-specific writes (these aren't in the shared shape)
-  if (googleRes) {
-    const setIfEmpty = (col: string, value: unknown) => {
-      if (value == null || value === '') return
-      const current = (property as unknown as Record<string, unknown>)[col]
-      if (current != null && current !== '') return
-      update[col] = value
-      if (fieldSources[col] !== 'user') fieldSources[col] = 'api'
-    }
-    setIfEmpty('googlePlaceId', googleRes.placeId)
-    setIfEmpty('googleVerifiedAddress', googleRes.formattedAddress)
-    setIfEmpty('googleLatitude', googleRes.latitude)
-    setIfEmpty('googleLongitude', googleRes.longitude)
-    setIfEmpty('googleStreetViewUrl', googleRes.streetViewUrl)
-    setIfEmpty('googleMapsUrl', googleRes.mapsUrl)
-    setIfEmpty('googlePhotoThumbnailUrl', googleRes.photoThumbnailUrl)
-    if (Array.isArray(googleRes.placeTypes) && googleRes.placeTypes.length > 0) {
-      const existingTypes = Array.isArray(property.googlePlaceTypes) ? property.googlePlaceTypes : []
-      if (existingTypes.length === 0) {
-        update.googlePlaceTypes = googleRes.placeTypes as Prisma.InputJsonValue
-        fieldSources.googlePlaceTypes = 'api'
+  // Google-specific writes (these aren't in the shared shape). Isolated
+  // from PR/BD denormalization so a bad Google payload can't wipe PR data.
+  try {
+    if (googleRes) {
+      const setIfEmpty = (col: string, value: unknown) => {
+        if (value == null || value === '') return
+        const current = (property as unknown as Record<string, unknown>)[col]
+        if (current != null && current !== '') return
+        update[col] = value
+        if (fieldSources[col] !== 'user') fieldSources[col] = 'api'
       }
+      setIfEmpty('googlePlaceId', googleRes.placeId)
+      setIfEmpty('googleVerifiedAddress', googleRes.formattedAddress)
+      setIfEmpty('googleLatitude', googleRes.latitude)
+      setIfEmpty('googleLongitude', googleRes.longitude)
+      setIfEmpty('googleStreetViewUrl', googleRes.streetViewUrl)
+      setIfEmpty('googleMapsUrl', googleRes.mapsUrl)
+      setIfEmpty('googlePhotoThumbnailUrl', googleRes.photoThumbnailUrl)
+      if (Array.isArray(googleRes.placeTypes) && googleRes.placeTypes.length > 0) {
+        const existingTypes = Array.isArray(property.googlePlaceTypes) ? property.googlePlaceTypes : []
+        if (existingTypes.length === 0) {
+          update.googlePlaceTypes = googleRes.placeTypes as Prisma.InputJsonValue
+          fieldSources.googlePlaceTypes = 'api'
+        }
+      }
+      update.googleSearchedAt = new Date()
     }
-    update.googleSearchedAt = new Date()
+  } catch (err) {
+    console.error('[enrichProperty] Google writes failed:', err instanceof Error ? err.message : err)
   }
 
   update.fieldSources = fieldSources
 
-  if (Object.keys(update).length > 1) {  // > 1 because fieldSources always included
-    await db.property.update({ where: { id: propertyId }, data: update })
-    result.columnsWritten = Object.keys(update).length - 1  // exclude fieldSources from count
+  // Persist — with a fallback retry that strips unknown columns if the
+  // full update fails (e.g. schema drift, bad value types).
+  if (Object.keys(update).length > 1) {
+    try {
+      await db.property.update({ where: { id: propertyId }, data: update })
+      result.columnsWritten = Object.keys(update).length - 1
+    } catch (err) {
+      console.error('[enrichProperty] Full update failed, retrying with fieldSources only:', err instanceof Error ? err.message : err)
+      try {
+        await db.property.update({ where: { id: propertyId }, data: { fieldSources } })
+      } catch (retryErr) {
+        console.error('[enrichProperty] Retry also failed:', retryErr instanceof Error ? retryErr.message : retryErr)
+      }
+    }
   }
 
   // ── Step 3: seller sync (owner/ownership/legal from merged payload) ─
