@@ -53,80 +53,6 @@ export interface MultiVendorEnrichResult {
   durationMs: number
 }
 
-// ── BatchData qualification gate ─────────────────────────────────────────
-// BD costs ~$0.30/property. PropertyRadar is flat-rate (subscription), so we
-// always run it first and use its signals to decide whether a lead is worth
-// the BD spend. Leads that don't pass the gate only ever see PR + Google
-// data — still ~70 typed columns, just no motivation score, skip-trace
-// phones/emails, or deed/mortgage history.
-//
-// Gate philosophy: fire BD only when there's a genuine MOTIVATION signal.
-// High equity alone does NOT qualify — most wholesaling leads are already
-// pre-filtered for equity, so equity is a table-stakes signal that would
-// fire BD on nearly every lead. We need equity PLUS distress to justify
-// the spend.
-//
-// A lead qualifies if ANY of these fire:
-//   - DistressScore >= 40 (PR composite)
-//   - Foreclosure: inForeclosure / isPreforeclosure / isBankOwned / isAuction
-//   - Legal distress: inBankruptcy / inProbate / inDivorce / hasRecentEviction
-//   - Deceased owner (isDeceasedProperty === 1) — always worth tracing heirs
-//   - Tax delinquency (inTaxDelinquency === 1)
-//   - Expired listing (isExpiredListing === 1) — they already tried to sell
-//
-// Estimated spend drop: ~70-80% on typical wholesaling pipelines.
-interface PrQualifyInput {
-  distressScore?: number
-  isHighEquity?: boolean
-  isFreeAndClear?: boolean
-  preforeclosure?: boolean
-  bankOwned?: boolean
-  isAuction?: boolean
-  inForeclosureRaw?: number | boolean
-  inTaxDelinquency?: number | boolean
-  isDeceasedProperty?: number | boolean
-  inProbateProperty?: number | boolean
-  inBankruptcyProperty?: number | boolean
-  inDivorce?: number | boolean
-  hasRecentEviction?: number | boolean
-  isExpiredListing?: number | boolean
-}
-
-function qualifiesForBatchData(pr: Partial<BatchDataPropertyResult> | null): { qualifies: boolean; reason: string } {
-  if (!pr) return { qualifies: false, reason: 'no_pr_data' }
-  const raw = (pr.raw ?? {}) as Record<string, unknown>
-
-  const tr = (v: unknown): boolean => v === 1 || v === '1' || v === true
-
-  // Distress composite (PR's own 0-100 score — foreclosure/tax/legal weighted)
-  if (typeof pr.distressScore === 'number' && pr.distressScore >= 40) {
-    return { qualifies: true, reason: `distress=${pr.distressScore}` }
-  }
-
-  // Explicit motivation signals — NOT equity alone
-  if (pr.preforeclosure === true) return { qualifies: true, reason: 'preforeclosure' }
-  if (pr.bankOwned === true) return { qualifies: true, reason: 'bank_owned' }
-  if (pr.isAuction === true) return { qualifies: true, reason: 'auction' }
-  if (pr.inBankruptcy === true) return { qualifies: true, reason: 'bankruptcy' }
-  if (pr.inProbate === true) return { qualifies: true, reason: 'probate' }
-  if (pr.inDivorce === true) return { qualifies: true, reason: 'divorce' }
-  if (pr.hasRecentEviction === true) return { qualifies: true, reason: 'recent_eviction' }
-  if (pr.deceasedOwner === true) return { qualifies: true, reason: 'deceased_owner' }
-  if (pr.expiredListing === true) return { qualifies: true, reason: 'expired_listing' }
-  if (pr.taxDelinquent === true) return { qualifies: true, reason: 'tax_delinquent' }
-
-  // Secondary raw-payload checks (redundant safety net for PR flag naming drift)
-  if (tr(raw.inForeclosure)) return { qualifies: true, reason: 'raw_in_foreclosure' }
-  if (tr(raw.inTaxDelinquency)) return { qualifies: true, reason: 'raw_tax_delinquency' }
-  if (tr(raw.isDeceasedProperty)) return { qualifies: true, reason: 'raw_deceased' }
-  if (tr(raw.inProbateProperty)) return { qualifies: true, reason: 'raw_probate' }
-  if (tr(raw.inBankruptcyProperty)) return { qualifies: true, reason: 'raw_bankruptcy' }
-  if (tr(raw.hasRecentEviction)) return { qualifies: true, reason: 'raw_recent_eviction' }
-  if (tr(raw.isExpiredListing)) return { qualifies: true, reason: 'raw_expired_listing' }
-
-  return { qualifies: false, reason: 'no_motivation_signals' }
-}
-
 // ── Daily budget cap (hard safety) ───────────────────────────────────────
 // Even if leads qualify, block BD calls once daily spend exceeds the cap.
 // Uses an in-memory counter that resets per-process-day; for multi-pod
@@ -158,6 +84,21 @@ function batchDataWithinBudget(): { ok: boolean; spent: number; remaining: numbe
 function trackBatchDataCall(): void {
   resetBudgetIfNewDay()
   budgetState.callsToday += 1
+}
+
+// ── BatchData cache window ───────────────────────────────────────────────
+// Once a property has been BD-enriched, don't re-fetch for this many days.
+// Configurable via env — default 30. Re-enrich button bypasses this.
+const BATCHDATA_CACHE_DAYS = Number(process.env.BATCHDATA_CACHE_DAYS ?? '30')
+
+function hasRecentBatchDataEnrichment(zillowData: unknown): { cached: boolean; daysOld: number } {
+  const zillow = (zillowData ?? {}) as Record<string, unknown>
+  const bd = (zillow.batchData ?? {}) as Record<string, unknown>
+  if (!bd.enrichedAt) return { cached: false, daysOld: Infinity }
+  const enrichedAt = new Date(bd.enrichedAt as string)
+  if (isNaN(enrichedAt.getTime())) return { cached: false, daysOld: Infinity }
+  const daysOld = (Date.now() - enrichedAt.getTime()) / (1000 * 60 * 60 * 24)
+  return { cached: daysOld < BATCHDATA_CACHE_DAYS, daysOld }
 }
 
 /**
@@ -293,9 +234,9 @@ export async function enrichProperty(
   const { address, city, state, zip } = property
   const fieldSources = { ...((property.fieldSources as Record<string, string>) ?? {}) }
 
-  // ── Step 1a: PropertyRadar + Google in parallel ──────────────────────
+  // ── Step 1a: PropertyRadar + Google in parallel (primary source) ────
   // PR is flat-rate (subscription), Google is ~$0.017/call. Both cheap.
-  // We need PR data FIRST so the gate can decide whether to fire BD.
+  // PR is the primary data source — wins conflicts in the merge below.
   const [prRes, googleRes] = await Promise.all([
     opts.skipPropertyRadar
       ? Promise.resolve(null)
@@ -305,35 +246,58 @@ export async function enrichProperty(
       : runWith('google', result.google, () => lookupGoogle(address, city, state, zip)),
   ])
 
-  // ── Step 1b: gated BatchData call ────────────────────────────────────
+  // ── Step 1b: BatchData — fills gaps + adds BD-only fields ───────────
+  // BD costs ~$0.30/property but provides fields PR can't: salePropensity
+  // motivation score, owner phones/emails (skip-trace), full deed history,
+  // full mortgage history, rich foreclosure trustee data, owner portfolio
+  // aggregates, USPS deliverability codes.
+  //
+  // Fires on every lead, gated only by:
+  //   1. opts.skipBatchData flag (testing / zero-spend runs)
+  //   2. Recent BD cache (BATCHDATA_CACHE_DAYS window) — don't re-bill if
+  //      we enriched the same property recently
+  //   3. Daily budget cap (BATCHDATA_DAILY_BUDGET_USD env var)
+  //   4. PR no-match + address quality — if PR couldn't match, most likely
+  //      BD won't either, and this address is junk. Skip to save the call.
+  //      (Override via forceBatchData=true.)
   let bdRes: Partial<BatchDataPropertyResult> | null = null
   if (opts.skipBatchData) {
     result.batchdata.skipped = 'flag_skip_batchdata'
   } else {
-    const budget = batchDataWithinBudget()
-    if (!budget.ok) {
-      result.batchdata.skipped = `daily_budget_reached_$${budget.spent.toFixed(2)}/$${BATCHDATA_DAILY_BUDGET_USD}`
-      console.warn(`[enrichProperty] BD skipped — daily budget exhausted ($${budget.spent.toFixed(2)} of $${BATCHDATA_DAILY_BUDGET_USD})`)
+    const cache = hasRecentBatchDataEnrichment(property.zillowData)
+    if (cache.cached && !opts.forceBatchData) {
+      result.batchdata.skipped = `cached_${Math.round(cache.daysOld)}d_ago`
+      // Pull the cached result back into memory so the merge still gets BD data
+      const zillow = (property.zillowData ?? {}) as Record<string, unknown>
+      const cached = zillow.batchData as BatchDataPropertyResult | undefined
+      if (cached) {
+        bdRes = cached
+        result.batchdata.matched = true
+      }
+      console.log(`[enrichProperty] BD cached — enriched ${Math.round(cache.daysOld)}d ago (< ${BATCHDATA_CACHE_DAYS}d window), reusing blob`)
     } else {
-      // Gate: only call BD when PR says this lead is worth it — unless the
-      // caller forces it (re-enrich button, manual research trigger).
-      const gate = opts.forceBatchData
-        ? { qualifies: true, reason: 'forced' }
-        : qualifiesForBatchData(prRes as Partial<BatchDataPropertyResult> | null)
-
-      if (!gate.qualifies) {
-        result.batchdata.skipped = `gate_${gate.reason}`
-        console.log(`[enrichProperty] BD skipped — PR gate says ${gate.reason} (budget remaining $${budget.remaining.toFixed(2)})`)
+      const budget = batchDataWithinBudget()
+      if (!budget.ok) {
+        result.batchdata.skipped = `daily_budget_reached_$${budget.spent.toFixed(2)}/$${BATCHDATA_DAILY_BUDGET_USD}`
+        console.warn(`[enrichProperty] BD skipped — daily budget exhausted ($${budget.spent.toFixed(2)} of $${BATCHDATA_DAILY_BUDGET_USD})`)
+      } else if (!opts.forceBatchData && !prRes && !opts.skipPropertyRadar) {
+        // PR couldn't match this address AND we actually tried — don't burn a
+        // BD credit on an address that's likely garbage (typo, non-US, etc.)
+        result.batchdata.skipped = 'pr_no_match'
+        console.log(`[enrichProperty] BD skipped — PR had no match, address is likely low-quality`)
       } else {
         trackBatchDataCall()
         bdRes = await runWith('batchdata', result.batchdata, () => lookupBatchData(address, city, state, zip))
-        console.log(`[enrichProperty] BD fired — ${gate.reason} (budget remaining $${(budget.remaining - BATCHDATA_COST_PER_CALL_USD).toFixed(2)})`)
+        console.log(`[enrichProperty] BD fired (budget remaining $${(budget.remaining - BATCHDATA_COST_PER_CALL_USD).toFixed(2)})`)
       }
     }
   }
 
   // ── Step 2: merge vendor results + promote to typed columns ────────
-  const merged = mergeResults(bdRes as Partial<BatchDataPropertyResult> | null, prRes)
+  // PR is the primary source — listed FIRST so it wins conflicts in the
+  // first-wins merge. BD fills gaps + contributes BD-only fields (salePropensity,
+  // deed/mortgage history, skip-trace phones, etc.) that PR doesn't return.
+  const merged = mergeResults(prRes, bdRes as Partial<BatchDataPropertyResult> | null)
 
   const update: Record<string, unknown> = {}
 
