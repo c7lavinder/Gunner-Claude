@@ -103,6 +103,7 @@ model Tenant {
   recordingFetchJobs  RecordingFetchJob[]
   webhookLogs         WebhookLog[]
   contactSuggestions  ContactSuggestion[]
+  bugReports          BugReport[]
 
   @@map("tenants")
 }
@@ -2153,4 +2154,41 @@ model ContactSuggestion {
   @@index([tenantId, sellerId, status])
   @@index([tenantId, buyerId, status])
   @@map("contact_suggestions")
+}
+
+// ─────────────────────────────────────────
+// BUG REPORTS
+// User-submitted bug reports via floating button on every page
+// Admins review + update status on /{tenant}/bugs
+// ─────────────────────────────────────────
+
+model BugReport {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Reporter
+  reporterId   String? @map("reporter_id")
+  reporterName String? @map("reporter_name")
+
+  // Report content
+  description String  @db.Text
+  severity    String  @default("medium") // low | medium | high | critical
+
+  // Auto-captured context
+  pageUrl   String? @map("page_url")
+  userAgent String? @map("user_agent") @db.Text
+
+  // Admin workflow
+  status       String    @default("open") // open | in_progress | resolved | wont_fix
+  adminNotes   String?   @map("admin_notes") @db.Text
+  resolvedAt   DateTime? @map("resolved_at")
+  resolvedById String?   @map("resolved_by_id")
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("bug_reports")
 }

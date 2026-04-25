@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { TopNav } from '@/components/ui/top-nav'
 import { CoachSidebar } from '@/components/ui/coach-sidebar'
 import { ViewAsBanner } from '@/components/ui/view-as-banner'
+import { FloatingBugButton } from '@/components/ui/floating-bug-button'
 
 interface TenantLayoutProps {
   children: React.ReactNode
@@ -27,6 +28,7 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
         {children}
       </main>
       <CoachSidebar />
+      <FloatingBugButton />
     </div>
   )
 }
