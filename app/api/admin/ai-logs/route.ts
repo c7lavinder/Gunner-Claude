@@ -16,10 +16,22 @@ export async function GET(req: Request) {
   const type = url.searchParams.get('type')
   const status = url.searchParams.get('status')
   const search = url.searchParams.get('search')
+  const scope = url.searchParams.get('scope') // 'chat' | 'background' | 'errors'
   const limit = parseInt(url.searchParams.get('limit') ?? '50')
   const offset = parseInt(url.searchParams.get('offset') ?? '0')
 
   const where: Record<string, unknown> = { tenantId: session.tenantId }
+
+  // scope takes precedence and maps to the three tabs
+  if (scope === 'chat') {
+    where.type = 'assistant_chat'
+  } else if (scope === 'background') {
+    where.type = { not: 'assistant_chat' }
+  } else if (scope === 'errors') {
+    where.status = 'error'
+  }
+
+  // explicit type/status filters still apply on top
   if (type) where.type = type
   if (status) where.status = status
   if (search) {
@@ -36,7 +48,10 @@ export async function GET(req: Request) {
   })
   const userNames = new Map(users.map(u => [u.id, u.name]))
 
-  const [logs, total, stats] = await Promise.all([
+  const startOfToday = new Date(new Date().setHours(0, 0, 0, 0))
+  const weekAgo = new Date(Date.now() - 7 * 86400000)
+
+  const [logs, total, statsResults] = await Promise.all([
     db.aiLog.findMany({
       where: where as Parameters<typeof db.aiLog.findMany>[0] extends { where?: infer W } ? W : never,
       orderBy: { createdAt: 'desc' },
@@ -51,22 +66,37 @@ export async function GET(req: Request) {
     }),
     db.aiLog.count({ where: where as Parameters<typeof db.aiLog.count>[0] extends { where?: infer W } ? W : never }),
     Promise.all([
-      db.aiLog.count({ where: { tenantId: session.tenantId, createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
-      db.aiLog.count({ where: { tenantId: session.tenantId, status: 'error', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } } }),
-      db.aiLog.count({ where: { tenantId: session.tenantId, createdAt: { gte: new Date(Date.now() - 7 * 86400000) } } }),
+      // chats today
+      db.aiLog.count({ where: { tenantId: session.tenantId, type: 'assistant_chat', createdAt: { gte: startOfToday } } }),
+      // background work today (everything except assistant_chat)
+      db.aiLog.count({ where: { tenantId: session.tenantId, type: { not: 'assistant_chat' }, createdAt: { gte: startOfToday } } }),
+      // problems today (any type, status=error)
+      db.aiLog.count({ where: { tenantId: session.tenantId, status: 'error', createdAt: { gte: startOfToday } } }),
+      // week error rate (unchanged)
+      db.aiLog.count({ where: { tenantId: session.tenantId, status: 'error', createdAt: { gte: weekAgo } } }),
+      db.aiLog.count({ where: { tenantId: session.tenantId, createdAt: { gte: weekAgo } } }),
+      // today cost sum (server-side so it's accurate across pagination)
+      db.aiLog.aggregate({
+        where: { tenantId: session.tenantId, createdAt: { gte: startOfToday } },
+        _sum: { estimatedCost: true },
+      }),
     ]),
   ])
 
-  const [todayCount, weekErrors, weekTotal] = stats
+  const [chatsToday, backgroundToday, errorsToday, weekErrors, weekTotal, costAgg] = statsResults
+  const todayCost = costAgg._sum.estimatedCost ?? 0
 
   return NextResponse.json({
     logs: logs.map(l => ({ ...l, userName: l.userId ? userNames.get(l.userId) ?? null : 'System' })),
     total,
     stats: {
-      todayCount,
+      chatsToday,
+      backgroundToday,
+      errorsToday,
       weekErrorRate: weekTotal > 0 ? Math.round((weekErrors / weekTotal) * 100) : 0,
       weekTotal,
       weekErrors,
+      todayCost,
     },
   })
 }
