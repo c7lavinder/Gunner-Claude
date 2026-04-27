@@ -48,6 +48,26 @@ export async function gradeCall(callId: string): Promise<void> {
 
     const duration = call.durationSeconds ?? 0
 
+    // Defense-in-depth: if a caller invokes gradeCall() before a recording
+    // exists AND there's no transcript, route to SKIPPED instead of falling
+    // through to the FAILED branch below. The cron processors are supposed
+    // to gate this, but historical callsites (poll-calls HTTP endpoint,
+    // sync scripts) sometimes called gradeCall() on freshly-created rows
+    // and produced thousands of FAILED "No recording or transcript available"
+    // shells. Routing here means even a misuse stops being destructive.
+    if (!call.recordingUrl && !call.transcript) {
+      await db.call.update({
+        where: { id: callId },
+        data: {
+          gradingStatus: 'SKIPPED',
+          callResult: 'no_answer',
+          aiSummary: 'No answer — no recording produced.',
+        },
+      })
+      console.log(`[Call Grading] No recording for call ${callId} (${duration}s) — marked SKIPPED`)
+      return
+    }
+
     // Duration routing is handled by the cron processor (SKIPPED for <45s).
     // gradeCall() focuses on transcription + AI grading.
     // 45-90s: summary only (no rubric score)

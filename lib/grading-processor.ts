@@ -85,10 +85,16 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
           continue
         }
 
-        if (duration === 0) {
+        // NULL duration is treated identically to 0. GHL fires call-completed
+        // webhooks with `callDuration: null` for no-answer / busy / canceled
+        // legs; without this guard those rows reach the recording fetch path
+        // (which finds nothing) and stay PENDING forever, or — when called
+        // through gradeCall() — get stamped FAILED with "No recording or
+        // transcript available." Both states accumulate empty shells.
+        if (duration === null || duration === 0) {
           await db.call.update({
             where: { id: call.id },
-            data: { gradingStatus: 'SKIPPED', aiSummary: 'No answer — zero duration.', callResult: 'no_answer' },
+            data: { gradingStatus: 'SKIPPED', aiSummary: 'No answer — zero or unknown duration.', callResult: 'no_answer' },
           })
           stats.skipped++
           continue

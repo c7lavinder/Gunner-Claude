@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
-import { gradeCall } from '@/lib/ai/grading'
 
 export async function GET(request: NextRequest) {
   // Verify cron secret to prevent unauthorized access
@@ -54,7 +53,7 @@ export async function GET(request: NextRequest) {
 
           const direction = conv.lastMessageDirection === 'inbound' ? 'INBOUND' : 'OUTBOUND'
 
-          const newCall = await db.call.create({
+          await db.call.create({
             data: {
               tenantId: tenant.id,
               ghlCallId: conv.id,
@@ -62,14 +61,19 @@ export async function GET(request: NextRequest) {
               direction: direction as 'INBOUND' | 'OUTBOUND',
               calledAt: new Date(conv.lastMessageDate || conv.dateUpdated || Date.now()),
               gradingStatus: 'PENDING',
+              source: 'poll_http',
             },
           })
 
           totalNewCalls++
 
-          gradeCall(newCall.id).catch((err) => {
-            console.error(`[poll-calls] Grading failed for ${newCall.id}:`, err instanceof Error ? err.message : err)
-          })
+          // Grading is handled by the long-running worker (scripts/grading-worker.ts)
+          // and the in-process loop started by instrumentation.ts. Calling gradeCall()
+          // inline here was guaranteed to FAIL — the row is brand new and has no
+          // recordingUrl yet, so gradeCall() would hit its no-transcript branch and
+          // mark it FAILED with "No recording or transcript available." That single
+          // line is the historical source of every empty-shell FAILED row on the
+          // calls page.
         }
       } catch (err) {
         console.error(`[poll-calls] Error for tenant ${tenant.id}:`, err instanceof Error ? err.message : err)
