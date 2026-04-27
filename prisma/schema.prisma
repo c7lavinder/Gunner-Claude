@@ -2182,6 +2182,11 @@ model BugReport {
   pageUrl   String? @map("page_url")
   userAgent String? @map("user_agent") @db.Text
 
+  // Optional screenshot — stored inline as a base64 data URL.
+  // Capped client-side at ~5MB raw / ~7MB encoded. Lazy-loaded by the admin
+  // page on row expand so the list endpoint stays small.
+  screenshot String? @db.Text
+
   // Admin workflow
   status       String    @default("open") // open | in_progress | resolved | wont_fix
   adminNotes   String?   @map("admin_notes") @db.Text

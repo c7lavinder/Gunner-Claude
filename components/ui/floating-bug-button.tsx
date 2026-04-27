@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { Bug, X, Loader2, Check, AlertTriangle } from 'lucide-react'
+import { Bug, X, Loader2, Check, AlertTriangle, ImagePlus } from 'lucide-react'
 
 type Severity = 'low' | 'medium' | 'high' | 'critical'
 
@@ -13,14 +13,83 @@ const SEVERITY_OPTIONS: { value: Severity; label: string; hint: string; color: s
   { value: 'critical', label: 'Emergency', hint: 'The app is broken', color: 'bg-red-100 text-red-700 border-red-200' },
 ]
 
+// 5MB raw image cap. Server independently validates the encoded data URL
+// length (~7.5MB ceiling). Anything larger is a likely raw-camera misuse;
+// rejecting client-side gives the user a friendlier error than a 400 from
+// the API. Common UI screenshots are well under 1MB.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Could not read file'))
+    reader.readAsDataURL(file)
+  })
+}
+
 export function FloatingBugButton() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
   const [severity, setSeverity] = useState<Severity>('medium')
+  const [screenshot, setScreenshot] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  async function attachFile(file: File) {
+    setError(null)
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setError('Only PNG, JPG, GIF, or WEBP images.')
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError(`Image is too big (${(file.size / 1024 / 1024).toFixed(1)}MB). Max is 5MB.`)
+      return
+    }
+    try {
+      const dataUrl = await readFileAsDataURL(file)
+      setScreenshot(dataUrl)
+    } catch {
+      setError('Could not read that file.')
+    }
+  }
+
+  function onFilePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) void attachFile(file)
+    // Reset so the same filename can be picked twice in a row
+    e.target.value = ''
+  }
+
+  // Paste support: when the modal is open and the user hits Cmd/Ctrl+V with
+  // an image on the clipboard (the most common screenshot workflow on macOS
+  // and Windows), grab it and use it as the attachment. Falls back silently
+  // if the paste contains text or no image.
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) {
+            e.preventDefault()
+            void attachFile(file)
+            return
+          }
+        }
+      }
+    }
+    window.addEventListener('paste', handler)
+    return () => window.removeEventListener('paste', handler)
+  }, [open])
 
   async function submit() {
     if (description.trim().length < 3) {
@@ -38,6 +107,7 @@ export function FloatingBugButton() {
           severity,
           pageUrl: typeof window !== 'undefined' ? window.location.href : null,
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+          screenshot,
         }),
       })
       if (!res.ok) {
@@ -50,6 +120,7 @@ export function FloatingBugButton() {
         setDone(false)
         setDescription('')
         setSeverity('medium')
+        setScreenshot(null)
       }, 1400)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -90,6 +161,7 @@ export function FloatingBugButton() {
 
           {/* Panel */}
           <div
+            ref={panelRef}
             className="fixed bottom-6 left-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] bg-white border-[0.5px] rounded-[16px] shadow-2xl flex flex-col"
             style={{ borderColor: 'var(--border-medium)', maxHeight: 'calc(100vh - 3rem)' }}
           >
@@ -139,6 +211,55 @@ export function FloatingBugButton() {
                   />
                   <p className="text-[9px] text-txt-muted mt-1">
                     Be specific — what did you click, what did you expect, what happened instead?
+                  </p>
+                </div>
+
+                {/* Screenshot */}
+                <div>
+                  <label className="text-[11px] font-semibold text-txt-secondary block mb-1">
+                    Screenshot (optional)
+                  </label>
+                  {screenshot ? (
+                    <div className="relative inline-block w-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={screenshot}
+                        alt="Screenshot preview"
+                        className="w-full max-h-[180px] object-contain bg-surface-secondary rounded-[10px] border-[0.5px]"
+                        style={{ borderColor: 'var(--border-medium)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setScreenshot(null)}
+                        disabled={submitting}
+                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-white/95 border-[0.5px] flex items-center justify-center text-txt-secondary hover:text-semantic-red hover:bg-white transition-colors disabled:opacity-40"
+                        style={{ borderColor: 'var(--border-medium)' }}
+                        title="Remove screenshot"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={submitting}
+                      className="w-full flex items-center justify-center gap-1.5 text-[12px] font-medium px-3 py-2 rounded-[10px] bg-surface-secondary text-txt-secondary hover:bg-surface-tertiary transition-colors disabled:opacity-40 border-[0.5px] border-dashed"
+                      style={{ borderColor: 'var(--border-medium)' }}
+                    >
+                      <ImagePlus size={12} />
+                      Attach image or paste from clipboard
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_TYPES.join(',')}
+                    onChange={onFilePick}
+                    className="hidden"
+                  />
+                  <p className="text-[9px] text-txt-muted mt-1">
+                    Tip: take a screenshot, then press Cmd+V (or Ctrl+V) here to attach it. Max 5MB.
                   </p>
                 </div>
 

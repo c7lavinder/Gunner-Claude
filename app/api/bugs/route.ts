@@ -5,11 +5,21 @@ import { z } from 'zod'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 
+// Screenshot cap: ~5MB raw image → ~6.7MB base64 → 7.5MB data URL with
+// the `data:image/png;base64,` prefix and slack. Anything larger is almost
+// certainly an unintended paste of multi-megapixel raw camera output.
+const MAX_SCREENSHOT_BYTES = 7_500_000
+
 const createSchema = z.object({
   description: z.string().min(3).max(5000),
   severity: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
   pageUrl: z.string().max(2000).optional().nullable(),
   userAgent: z.string().max(1000).optional().nullable(),
+  screenshot: z.string()
+    .max(MAX_SCREENSHOT_BYTES, 'Screenshot too large (max ~5MB).')
+    .regex(/^data:image\/(png|jpeg|jpg|gif|webp);base64,/, 'Screenshot must be a base64 image data URL.')
+    .optional()
+    .nullable(),
 })
 
 export async function POST(req: Request) {
@@ -40,6 +50,7 @@ export async function POST(req: Request) {
       severity: parsed.data.severity,
       pageUrl: parsed.data.pageUrl ?? null,
       userAgent: parsed.data.userAgent ?? null,
+      screenshot: parsed.data.screenshot ?? null,
     },
     select: { id: true, createdAt: true },
   })
@@ -68,10 +79,36 @@ export async function GET(req: Request) {
   if (status) where.status = status
   if (severity) where.severity = severity
 
-  const [bugs, counts] = await Promise.all([
+  // Explicit select — DO NOT return `screenshot` in the list response.
+  // Each screenshot can be up to ~7MB; including them inline turns a 100-row
+  // admin view into a >700MB payload. The admin client lazy-loads a single
+  // screenshot via GET /api/bugs/[id] when a row is expanded.
+  const [rawBugs, screenshotIds, counts] = await Promise.all([
     db.bugReport.findMany({
       where: where as Parameters<typeof db.bugReport.findMany>[0] extends { where?: infer W } ? W : never,
+      select: {
+        id: true,
+        createdAt: true,
+        updatedAt: true,
+        reporterId: true,
+        reporterName: true,
+        description: true,
+        severity: true,
+        pageUrl: true,
+        userAgent: true,
+        status: true,
+        adminNotes: true,
+        resolvedAt: true,
+        resolvedById: true,
+      },
       orderBy: { createdAt: 'desc' },
+      take: limit,
+    }),
+    // Lightweight existence probe: just return ids that have a non-null
+    // screenshot. Postgres can answer this without reading the TEXT column.
+    db.bugReport.findMany({
+      where: { ...(where as Record<string, unknown>), screenshot: { not: null } } as Parameters<typeof db.bugReport.findMany>[0] extends { where?: infer W } ? W : never,
+      select: { id: true },
       take: limit,
     }),
     db.bugReport.groupBy({
@@ -80,6 +117,9 @@ export async function GET(req: Request) {
       _count: { _all: true },
     }),
   ])
+
+  const withScreenshot = new Set(screenshotIds.map(b => b.id))
+  const bugs = rawBugs.map(b => ({ ...b, hasScreenshot: withScreenshot.has(b.id) }))
 
   const statusCounts = counts.reduce<Record<string, number>>((acc, row) => {
     acc[row.status] = row._count._all

@@ -1,4 +1,5 @@
-// PATCH /api/bugs/[id] — admin updates status / notes / severity
+// GET    /api/bugs/[id] — admin fetches one full report (incl. screenshot)
+// PATCH  /api/bugs/[id] — admin updates status / notes / severity
 // DELETE /api/bugs/[id] — admin removes a bug report
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -19,6 +20,19 @@ async function requireAdmin(session: Awaited<ReturnType<typeof getSession>>) {
   })
   if (!user || !['OWNER', 'ADMIN'].includes(user.role)) return null
   return session
+}
+
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const session = await getSession()
+  const admin = await requireAdmin(session)
+  if (!admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+  const bug = await db.bugReport.findUnique({ where: { id: params.id } })
+  if (!bug || bug.tenantId !== admin.tenantId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  return NextResponse.json({ bug })
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {

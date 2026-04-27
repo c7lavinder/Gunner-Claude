@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Bug, Loader2, ChevronDown, ChevronRight, Copy, Check, Trash2 } from 'lucide-react'
+import { Bug, Loader2, ChevronDown, ChevronRight, Copy, Check, Trash2, Image as ImageIcon, X } from 'lucide-react'
 
 interface BugRow {
   id: string
@@ -17,6 +17,7 @@ interface BugRow {
   adminNotes: string | null
   resolvedAt: string | null
   resolvedById: string | null
+  hasScreenshot: boolean
 }
 
 type StatusFilter = 'all' | 'open' | 'in_progress' | 'resolved' | 'wont_fix'
@@ -66,6 +67,11 @@ export function BugsClient() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({})
+  // Screenshots are not part of the list response — fetched on-demand the
+  // first time a row with hasScreenshot=true is expanded. 'loading' is the
+  // sentinel while the fetch is in flight; null = errored or no screenshot.
+  const [screenshots, setScreenshots] = useState<Record<string, string | 'loading' | null>>({})
+  const [lightbox, setLightbox] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,6 +92,27 @@ export function BugsClient() {
   }, [statusFilter, severityFilter])
 
   useEffect(() => { load() }, [load])
+
+  async function fetchScreenshot(bugId: string) {
+    if (screenshots[bugId] !== undefined) return
+    setScreenshots(s => ({ ...s, [bugId]: 'loading' }))
+    try {
+      const res = await fetch(`/api/bugs/${bugId}`)
+      if (!res.ok) throw new Error('fetch failed')
+      const data = await res.json()
+      setScreenshots(s => ({ ...s, [bugId]: data.bug?.screenshot ?? null }))
+    } catch {
+      setScreenshots(s => ({ ...s, [bugId]: null }))
+    }
+  }
+
+  // Close lightbox on Escape
+  useEffect(() => {
+    if (!lightbox) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [lightbox])
 
   async function updateBug(id: string, patch: Record<string, unknown>) {
     setSavingId(id)
@@ -231,8 +258,12 @@ export function BugsClient() {
               >
                 <button
                   onClick={() => {
-                    setExpandedId(isExpanded ? null : bug.id)
-                    if (!isExpanded) setNotesDraft(d => ({ ...d, [bug.id]: bug.adminNotes ?? '' }))
+                    const willExpand = !isExpanded
+                    setExpandedId(willExpand ? bug.id : null)
+                    if (willExpand) {
+                      setNotesDraft(d => ({ ...d, [bug.id]: bug.adminNotes ?? '' }))
+                      if (bug.hasScreenshot) void fetchScreenshot(bug.id)
+                    }
                   }}
                   className="w-full text-left px-4 py-3 hover:bg-surface-secondary/50 transition-colors"
                 >
@@ -246,6 +277,11 @@ export function BugsClient() {
                         <span className="text-[12px] font-semibold text-txt-primary">{bug.reporterName ?? 'Unknown'}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${sev.color}`}>{sev.label}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                        {bug.hasScreenshot && (
+                          <span title="Includes screenshot" className="text-txt-muted">
+                            <ImageIcon size={10} />
+                          </span>
+                        )}
                         {pageShort && <span className="text-[9px] text-txt-muted">on {pageShort}</span>}
                       </div>
                       <p className="text-[12px] text-txt-primary leading-relaxed line-clamp-2">{bug.description}</p>
@@ -273,6 +309,36 @@ export function BugsClient() {
                         <p className="text-[12px] text-txt-primary leading-relaxed whitespace-pre-wrap">{bug.description}</p>
                       </div>
                     </div>
+
+                    {/* Screenshot — lazy-loaded so the list payload stays small */}
+                    {bug.hasScreenshot && (
+                      <div>
+                        <p className="text-[9px] font-semibold text-txt-muted uppercase mb-1">Screenshot</p>
+                        {screenshots[bug.id] === 'loading' || screenshots[bug.id] === undefined ? (
+                          <div className="flex items-center gap-2 bg-surface-secondary rounded-[10px] px-3 py-3">
+                            <Loader2 size={12} className="animate-spin text-txt-muted" />
+                            <p className="text-[11px] text-txt-muted">Loading screenshot…</p>
+                          </div>
+                        ) : screenshots[bug.id] ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightbox(screenshots[bug.id] as string)}
+                            className="block w-full bg-surface-secondary rounded-[10px] overflow-hidden border-[0.5px] hover:opacity-90 transition-opacity"
+                            style={{ borderColor: 'var(--border-light)' }}
+                            title="Click to enlarge"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={screenshots[bug.id] as string}
+                              alt="Bug screenshot"
+                              className="w-full max-h-[320px] object-contain mx-auto"
+                            />
+                          </button>
+                        ) : (
+                          <p className="text-[11px] text-txt-muted">Could not load screenshot.</p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Admin controls: status + severity */}
                     <div className="grid grid-cols-2 gap-3">
@@ -366,6 +432,30 @@ export function BugsClient() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Screenshot lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/95 flex items-center justify-center text-txt-primary hover:bg-white transition-colors"
+            title="Close (Esc)"
+          >
+            <X size={16} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="Screenshot"
+            className="max-w-[95vw] max-h-[90vh] object-contain rounded-[12px] shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
