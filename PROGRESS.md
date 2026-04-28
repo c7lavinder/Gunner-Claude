@@ -127,14 +127,50 @@ legacy surface protects against future drift while it sticks around.
 **Commits:**
 
 - `98e5e7d` — Wave 2 (Day Hub canonical + legacy backend, helper extracted).
-- (follow-up) — dashboard fix + AUDIT_PLAN status corrections + D-045 +
+- `525e8b8` — dashboard fix + AUDIT_PLAN status corrections + D-045 +
   PROGRESS verification checklist. Stacked rather than amended so the
   cadence stays honest (Wave 2 closed the user-listed items; the dashboard
   fix is genuine follow-up work).
+- `f0c4de9` — Wave-2 verification infrastructure: token-gated
+  `/api/diagnostics/dial-counts` endpoint + fix for a host-TZ bug in
+  `lib/dates.ts:getCentralDayBounds`. The TZ bug used
+  `new Date(noon.toLocaleString(...))` which silently produced wrong
+  bounds on any host not running in UTC — production was lucky (Railway
+  is UTC) but local dev / scripts / future Railway region changes were
+  one config flip from silent KPI drift. Now uses
+  `Intl.DateTimeFormat.formatToParts` and is host-TZ-independent
+  (verified across UTC, America/Los_Angeles, America/New_York,
+  Europe/London, Asia/Tokyo). No tests added — the project has no test
+  framework configured (no jest/vitest/etc.); flagging as a separate
+  decision the project owes itself.
+- `f8e58bb` — middleware fix: `/api/diagnostics` was being intercepted
+  by NextAuth middleware and 307-redirected to `/login` before the
+  route handler's bearer-token check could fire. Caught at the post-push
+  probe of `f0c4de9`. Fix is a one-line addition to `PUBLIC_PATHS`;
+  same pattern as `/api/cron`, `/api/webhooks`, `/api/vieira` (all
+  self-gating).
 
-**Verification Owed (post-Railway redeploy)**
+**Verification Owed (gated on Railway env)**
 
-Run this SQL after deploy completes:
+The verification infrastructure is shipped (commits `f0c4de9` + `f8e58bb`),
+but `DIAGNOSTIC_TOKEN` must be set on Railway dashboard env before the
+endpoint is callable. Until then it returns 401 to all callers (fail-closed
+by design — a missing env var is a no-op, not an open door).
+
+Once `DIAGNOSTIC_TOKEN` is set:
+
+```bash
+curl -H "Authorization: Bearer $DIAGNOSTIC_TOKEN" \
+  "https://gunner-claude-production.up.railway.app/api/diagnostics/dial-counts?tenant=new-again-houses&date=2026-04-27"
+```
+
+Expected match against the prior REST-API SQL probe (Session 46 first
+verification attempt): `tenantDials=317`, `lmDials=215`. If endpoint
+matches → flip P1+P2 to CLOSED and check the boxes below. If it
+doesn't → the helper has drift from raw SQL and Wave 2 fix is incomplete.
+
+Original SQL still runnable from Supabase dashboard or any environment
+with DB credentials (kept here as redundant verification):
 
 ```sql
 SELECT
