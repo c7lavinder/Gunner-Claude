@@ -104,14 +104,14 @@ loop) has heartbeats today.
 
 ## API surface
 
-109 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-27:
+110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-28:
 
 | Pattern | Count | Tenant isolation |
 |---|---|---|
-| Total `route.ts` files | 109 | — |
+| Total `route.ts` files | 110 | — |
 | Uses `withTenant` | 19 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
 | Uses `getSession` directly | 75 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
-| Other (auth / webhooks / cron / health / service-token) | 15 | N/A — see breakdown below |
+| Other (auth / webhooks / cron / health / service-token / diagnostics) | 16 | N/A — see breakdown below |
 
 ### The 15 non-tenant-session routes
 
@@ -121,6 +121,7 @@ loop) has heartbeats today.
 | `app/api/auth/reset-password/route.ts` | Token in URL (forgotten-password flow) |
 | `app/api/cron/poll-calls/route.ts` | Public — Railway cron + manual debug |
 | `app/api/cron/process-recording-jobs/route.ts` | Public — Railway cron + manual debug |
+| `app/api/diagnostics/dial-counts/route.ts` | `Authorization: Bearer ${DIAGNOSTIC_TOKEN}` — see "Diagnostic endpoints" below |
 | `app/api/health/route.ts` | Public — Railway healthcheck |
 | `app/api/tenants/register/route.ts` | Public — creates tenant + owner before session exists |
 | `app/api/vieira/calls/recent/route.ts` | `lib/vieira-auth.ts` — `X-Vieira-Token` header against `VIEIRA_SERVICE_TOKEN` env |
@@ -167,6 +168,8 @@ app/api/
 ├── calls/           Call CRUD outside tenant scope (sync, manual etc.)
 ├── cron/            HTTP wrappers — poll-calls, process-recording-jobs
 ├── debug/           Debug endpoints (gated)
+├── diagnostics/     Token-gated verification endpoints (see Diagnostic
+│                    endpoints section below)
 ├── ghl/             GHL OAuth callback + pipelines + calendars + actions +
 │                    phone-numbers
 ├── health/          Railway healthcheck (`{ status: ok }`)
@@ -186,6 +189,36 @@ app/api/
 ├── webhooks/        GHL inbound webhook
 └── workflows/       Workflow engine triggers
 ```
+
+### Diagnostic endpoints
+
+Token-gated read-only endpoints for verification waves and drift
+investigations. Pattern: call the same helpers the UI uses, return JSON
+that a verifier in any environment can compare to SQL ground truth — no
+session cookies, no rendered-page scraping.
+
+Auth: `Authorization: Bearer ${DIAGNOSTIC_TOKEN}`. Endpoints fail closed
+(401) when `DIAGNOSTIC_TOKEN` is unset on the server, so a missing env
+var is a no-op rather than an open door. Set on Railway dashboard.
+
+| Endpoint | Helper exercised | Use when |
+|---|---|---|
+| `GET /api/diagnostics/dial-counts?tenant=<slug>[&date=YYYY-MM-DD]` | `lib/kpis/dial-counts.ts countDialsInRange` | Reconciling Day Hub / Calls page dial counts vs SQL (Wave 2 verification) |
+
+Example:
+
+```bash
+curl -H "Authorization: Bearer $DIAGNOSTIC_TOKEN" \
+  "https://gunner-claude-production.up.railway.app/api/diagnostics/dial-counts?tenant=new-again-houses&date=2026-04-27"
+```
+
+Response includes `centralDayBounds` (so callers can spot TZ issues),
+`lmUserIds` (so the LM count is reproducible against `users.role` SQL),
+and `sources` (which helper produced each number).
+
+When adding a new diagnostic, follow the same conventions: token-gated,
+GET-only, references the canonical helper in the response so the
+verification path is honest.
 
 ---
 
