@@ -155,9 +155,45 @@ End of session checklist:
 3. PROGRESS.md → Next Session: exact first task, exact first prompt
 4. AGENTS.md → updated if any new convention was established
 5. docs/DECISIONS.md → updated if any architectural choice was made
+6. docs/SYSTEM_MAP.md or docs/OPERATIONS.md → updated if any module, page, cron, AI tool, API surface, or schema field was added or materially changed (Rule 8)
 
 Test: could a brand new Claude Code session pick up exactly where this left off
-using only PROGRESS.md + AGENTS.md? If no → handoff is incomplete.
+using only PROGRESS.md + AGENTS.md + docs/SYSTEM_MAP.md? If no → handoff is incomplete.
+
+---
+
+### Rule 8 — Living Map Discipline
+
+**SYSTEM_MAP.md and OPERATIONS.md are part of the code, not afterthoughts.**
+
+The repo previously rotted three orientation docs (`docs/ARCHITECTURE.md`,
+`docs/MODULES.md`, `docs/TECH_STACK.md`) by letting them describe future state
+and never updating them as the system shipped. Two new docs replace them, and
+this rule keeps them honest.
+
+Any session that adds, removes, or materially changes any of the following MUST
+update `docs/SYSTEM_MAP.md` (slow-changing) or `docs/OPERATIONS.md`
+(fast-changing) in the SAME commit:
+
+- A module under `lib/`
+- A page under `app/(tenant)/[tenant]/` or `app/(auth)/`
+- A cron or `[[services]]` entry in `railway.toml`
+- An AI tool, agent, or `lib/ai/` capability
+- An API surface (`app/api/**/route.ts`)
+- A Prisma schema field that other code reads
+
+Which file:
+- **SYSTEM_MAP.md** — anything you'd describe in a job interview about the
+  system: philosophy, stack, modules, pipelines, AI layer, GHL boundary,
+  data contract.
+- **OPERATIONS.md** — anything that could be obsolete next month: cron list,
+  active blockers, withTenant migration count, hygiene scripts, page roster,
+  incident notes, schema-change log.
+
+If you can't tell which, default to **OPERATIONS.md**. A fast-changing file
+with a slow-changing entry rots more gracefully than the reverse.
+
+The end-of-session checklist in Rule 7 now has 6 items reflecting this.
 
 ---
 
