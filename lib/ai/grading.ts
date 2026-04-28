@@ -201,8 +201,11 @@ export async function gradeCall(callId: string): Promise<void> {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const timer = startTimer()
 
-    // Opus 4.7 with extended thinking — the deepest-reasoning option.
-    // Per-call cost is ~5x Sonnet, but each call origination costs hundreds;
+    // Opus 4.6 with extended thinking. Originally wired to Opus 4.7 (commit
+    // c58b695), reverted 8 minutes later to 4.6 (598f852) — see PENDING D-0XX
+    // in docs/AUDIT_PLAN.md. The 4.7-era prompt expansion (32k tokens, 16k
+    // thinking budget, 50 prior calls of context) is intentionally retained.
+    // Per-call cost is meaningful, but each call origination costs hundreds;
     // pulling maximum signal out of every graded call is the right trade.
     const GRADING_MODEL = 'claude-opus-4-6'
     // SDK v0.90 refuses non-streaming requests whose worst-case runtime could

@@ -215,45 +215,62 @@ Critical files to re-inject at start of any new context window:
 
 ---
 
-## Background Worker Conventions (added 2026-04-20 — Session 38)
+## Background Worker Conventions (revised 2026-04-27 — Session 44; supersedes Session 38)
 
-**Long-running Railway `[[services]]`, NOT `[[cron]]`, for anything that MUST run reliably.**
+**In-process via Next.js `instrumentation.ts` is the default for reliability-critical work.**
 
-Session 38 root-caused a pipeline outage where Railway silently dropped the
-`process-recording-jobs` `[[cron]]` registration and would not re-provision it via
-redeploy. The workaround — a `[[services]] grading-worker` that imports the same
-`processJobs()` function and calls it in a 60s infinite loop — is now the repo standard.
+Session 38 originally established a long-running Railway `[[services]]` pattern after the
+`process-recording-jobs` `[[cron]]` silently dropped from the Railway scheduler. Sessions
+41-42 superseded that with the Next.js 14.2 `instrumentation.ts` boot hook: the worker
+runs in-process inside every `gunner-ai-web` Node process, no separate Railway service
+required. Reference implementation: `instrumentation.ts` → `lib/grading-worker.ts` →
+`lib/grading-processor.ts`.
+
+The legacy `[[services]] grading-worker` block in `railway.toml` is residue from an
+incomplete migration — see Blocker #3 in `docs/AUDIT_PLAN.md` for the removal plan.
+Until removed, two workers run simultaneously; the atomic
+`updateMany({ gradingStatus: PENDING } → PROCESSING)` claim in
+`lib/grading-processor.ts:69-72` prevents double-grading at the cost of wasted compute.
 
 ### Pattern for new reliability-critical work
 
-1. Put the core logic in a function that returns on success and throws on failure.
-   Do NOT call `process.exit()` inside it — callers decide.
-2. Put a thin CLI entry point at the bottom of the script, guarded by an
-   `import.meta.url` check so the file is side-effect-free when imported:
+1. Put the per-iteration logic in a `runX()` function in `lib/<name>-processor.ts`
+   that returns a `Stats` object on success and throws on failure. No `process.exit()`
+   inside. Heartbeat + rescue-sweep responsibilities live in this function. Reference:
+   `lib/grading-processor.ts`.
+2. Create `lib/<name>-worker.ts` exporting `start<Name>Worker()`:
+   - Single-flight: `running` flag prevents overlap when a tick takes longer than the
+     interval.
+   - Hot-reload safe: `Symbol.for('gunner.<name>Worker.started')` global guard prevents
+     duplicate timers on Next.js dev-server reloads.
+   - First tick on `setTimeout(5_000)` so the heartbeat lands quickly; `setInterval(60_000)`
+     thereafter.
+   - Per-iteration error swallowing inside the tick — never crash the loop.
+
+   Reference: `lib/grading-worker.ts`.
+3. In `instrumentation.ts`, add a guarded boot:
    ```typescript
-   import { fileURLToPath } from 'url'
-   const isMainModule = process.argv[1] ? process.argv[1] === fileURLToPath(import.meta.url) : false
-   if (isMainModule) {
-     processJobs().then(() => process.exit(0)).catch(() => process.exit(1))
-   }
+   if (process.env.NEXT_RUNTIME !== 'nodejs') return
+   if (process.env.DISABLE_<NAME>_WORKER === '1') return
+   const { start<Name>Worker } = await import('@/lib/<name>-worker')
+   start<Name>Worker()
    ```
-3. Create a `scripts/<name>-worker.ts` that imports and loops the function with
-   a 60s sleep + per-iteration error-swallowing. Reference: `scripts/grading-worker.ts`.
-4. Add to railway.toml:
-   ```toml
-   [[services]]
-   name = "<name>-worker"
-   [services.deploy]
-   startCommand = "npx tsx scripts/<name>-worker.ts"
-   ```
+4. Add an HTTP wrapper at `app/api/cron/<name>/route.ts` (GET + POST → calls `runX()`)
+   so external cron, uptime monitors, and manual debug curls have a trigger surface.
+   Reference: `app/api/cron/process-recording-jobs/route.ts`.
+5. **Do NOT** add a `[[services]]` block in `railway.toml`. Instrumentation handles boot.
+   `[[cron]]` is fine for genuinely periodic non-reliability-critical work
+   (`daily-audit`, `daily-kpi-snapshot`, `weekly-profiles`, `regenerate-stories`,
+   `compute-aggregates`, `poll-calls`).
 
 ### Mandatory observability for workers
 
 **Every worker iteration MUST write heartbeat audit rows** so silent outages are
-visible within one cycle. Established pattern:
+visible within one cycle. Established pattern (lives inside `runX()` in
+`lib/<name>-processor.ts`):
 
 ```typescript
-// At the top of the per-iteration function, BEFORE the main try block:
+// At the top of runX(), BEFORE the main try block:
 await db.auditLog.create({
   data: {
     tenantId: null,
@@ -267,7 +284,7 @@ await db.auditLog.create({
   },
 }).catch(err => console.error('[heartbeat] audit write failed:', err))
 
-// At the END of the function, AFTER the main try block (skipped on throw/exit):
+// At the END of runX(), AFTER the main try block (skipped on throw/exit):
 await db.auditLog.create({
   data: {
     tenantId: null,
@@ -296,7 +313,8 @@ main body but died mid-run. Distinguishes "worker not running" from "worker cras
 
 Workers that claim rows via a transient intermediate state (e.g. PROCESSING) MUST
 rescue stuck rows at the top of every iteration. Established pattern from
-`scripts/process-recording-jobs.ts` (Fix 2):
+`lib/grading-processor.ts` (Session 38 Fix 2 — pattern carried into the in-process
+processor):
 
 ```typescript
 await db.call.updateMany({

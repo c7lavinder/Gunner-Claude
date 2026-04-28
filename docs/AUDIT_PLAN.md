@@ -59,6 +59,40 @@ writes skip `audit_logs` entirely).
 
 Items 1-3 clear the hard blockers. Item 4 is ongoing hygiene.
 
+### Blocker #3 — Dual grading worker (production waste, race risk)
+
+Both `instrumentation.ts` (in-process via `lib/grading-worker.ts`) AND
+`scripts/grading-worker.ts` (standalone via `[[services]] grading-worker` in
+`railway.toml`) are running the same `runGradingProcessor()` loop simultaneously.
+
+**Why it's not catastrophic:** atomic `updateMany({ gradingStatus: PENDING } →
+PROCESSING)` claim in `lib/grading-processor.ts:69-72` prevents double-grading.
+
+**Why it still matters:**
+- Wasted compute (Opus calls cost real money; both workers tick every 60s)
+- Double heartbeat audit rows
+- Race risk if either claim implementation drifts
+- Two places to monitor for "is the worker alive" instead of one
+
+**Canonical answer:** `instrumentation.ts` is primary (Sessions 41-42 in-process
+move). The `[[services]] grading-worker` entry in `railway.toml` is residue from
+an incomplete migration.
+
+**Removal plan:**
+1. Remove the `[[services]] grading-worker` block from `railway.toml`. Delete
+   `scripts/grading-worker.ts`. Keep `lib/grading-worker.ts` and
+   `lib/grading-processor.ts`.
+2. Verify `instrumentation.ts` handles full load alone — heartbeat audit rows
+   should appear every ~60s in `audit_logs WHERE action =
+   'cron.process_recording_jobs.started'`.
+3. Watch for missed ticks for 24h. If any gap > 120s, the in-process loop has a
+   reliability issue and needs investigation BEFORE permanent removal.
+4. Keep `app/api/cron/process-recording-jobs/route.ts` HTTP wrapper as the
+   manual debug surface.
+
+Out of scope for the current docs-cleanup sprint — code change with production
+risk should not be bundled with documentation work.
+
 ## Audits completed
 
 | Audit | Date | Location |
@@ -79,3 +113,26 @@ Items 1-3 clear the hard blockers. Item 4 is ongoing hygiene.
 The verifier is rollout-ready as a recurring health check — good candidate for a daily cron or pre-deploy gate. When bugs #17-19 are resolved, the one ❌ on Pass A goes away and the bucket-mismatch ❌s on Pass B disappear. A clean Pass A + Pass B (both hitting targets) is the acceptance test for pipeline-level work.
 
 Blocker #2 work should target the 4-step fix sequence above, in order. Each step is independently reviewable; no big-bang refactor.
+
+## Priority items (non-blocking)
+
+**P3 — AI model fragmentation.** `lib/ai/enrich-property.ts:57` uses date-pinned
+`claude-sonnet-4-20250514` (a 2025 snapshot) while every other Sonnet caller in
+`lib/ai/` uses `claude-sonnet-4-6`. Standardize to `claude-sonnet-4-6`. Trivial
+fix, trivial risk, but "fix when convenient" = "never."
+
+**P4 — `app/(tenant)/[tenant]/tasks/` deletion candidate.** Day Hub
+(`app/(tenant)/[tenant]/day-hub/`) is the canonical Tasks/Day Hub surface per
+CLAUDE.md Rule 3 (Single Settings Hub — section 7 Day Hub). The `/tasks/` page
+is older and kept around because at least one user (Chris) still has it
+bookmarked. Deleting `/tasks/` enforces "one canonical surface" and reduces
+split-brain risk on KPI source-of-truth bugs (currently in PROGRESS as a
+parked tech-debt item). Coordinate with Chris before removal.
+
+## Pending decisions
+
+- **D-0XX — AI model churn (Opus 4.7 → Opus 4.6 with 4.7-era prompt config).**
+  Writeup blocked on user-supplied reasoning for the `598f852` revert (cost?
+  stability? latency?). Until provided, the model state stands as documented
+  in PROGRESS Sessions 41-42 / `lib/ai/grading.ts:204-210` comment but is not
+  formally adopted as a decision.
