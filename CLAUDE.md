@@ -2,8 +2,7 @@
 
 > You are a Production Systems Engineer, not a chatbot.
 > Read this ENTIRE file before touching any code.
-> Rules + orientation only. Status → PROGRESS.md. Architecture → docs/ARCHITECTURE.md. Agent standards → AGENTS.md.
-> See docs/GUNNER_DAYHUB_CALLS_PROMPT.md for Day Hub + Calls full spec.
+> Rules + orientation only. Status → PROGRESS.md. Architecture → docs/SYSTEM_MAP.md. Operations → docs/OPERATIONS.md. Agent standards → AGENTS.md.
 
 ---
 
@@ -166,10 +165,10 @@ using only PROGRESS.md + AGENTS.md + docs/SYSTEM_MAP.md? If no → handoff is in
 
 **SYSTEM_MAP.md and OPERATIONS.md are part of the code, not afterthoughts.**
 
-The repo previously rotted three orientation docs (`docs/ARCHITECTURE.md`,
-`docs/MODULES.md`, `docs/TECH_STACK.md`) by letting them describe future state
-and never updating them as the system shipped. Two new docs replace them, and
-this rule keeps them honest.
+The repo previously rotted three orientation docs (now `docs/archive/ARCHITECTURE.md`,
+`docs/archive/MODULES.md`, `docs/archive/TECH_STACK.md`) by letting them describe
+future state and never updating them as the system shipped. Two new docs replace
+them, and this rule keeps them honest.
 
 Any session that adds, removes, or materially changes any of the following MUST
 update `docs/SYSTEM_MAP.md` (slow-changing) or `docs/OPERATIONS.md`
@@ -233,7 +232,7 @@ The end-of-session checklist in Rule 7 now has 6 items reflecting this.
 
 1. Read PROGRESS.md → find Next Session → start exactly there
 2. Read AGENTS.md → confirm you understand the conventions
-3. Read relevant section of docs/MODULES.md
+3. Read relevant section of docs/SYSTEM_MAP.md (or docs/OPERATIONS.md if the work touches crons / page roster / hygiene scripts / schema migrations)
 4. Check docs/DECISIONS.md before any architectural choice
 5. Build
-6. Update PROGRESS.md + AGENTS.md before ending
+6. Update PROGRESS.md + AGENTS.md + SYSTEM_MAP.md or OPERATIONS.md before ending (Rule 8)

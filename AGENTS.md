@@ -68,7 +68,7 @@ This allows agents to auto-recover from errors without human intervention.
 When spawning a sub-agent for any task:
 
 1. Pass full context explicitly — never assume inherited context
-   - Include: CLAUDE.md contents, AGENTS.md contents, relevant MODULES.md section
+   - Include: CLAUDE.md contents, AGENTS.md contents, relevant SYSTEM_MAP.md / OPERATIONS.md section
    - Include: current task description and acceptance criteria
    - Include: any relevant DB schema excerpts
 
@@ -211,7 +211,7 @@ Critical files to re-inject at start of any new context window:
 1. CLAUDE.md
 2. AGENTS.md
 3. PROGRESS.md (Next Session section only)
-4. Relevant MODULES.md section
+4. Relevant SYSTEM_MAP.md / OPERATIONS.md section
 
 ---
 

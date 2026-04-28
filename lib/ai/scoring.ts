@@ -27,7 +27,7 @@ interface TCPResult {
   buySignal: boolean
 }
 
-// Phase 2 weights from TECH_STACK.md
+// Phase 2 weights — see docs/SYSTEM_MAP.md "TCP" section (originally docs/archive/TECH_STACK.md)
 const WEIGHTS = {
   callDurationOver45s: 0.15,
   callSentiment: 0.20,
