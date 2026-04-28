@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 43 — Bug-report v2 + grading empty-shell fix (2026-04-26)
-**Phase**: Multi-vendor enrichment live, in-process grading worker live, bug-report system live
+**Current session**: 44 — Docs reorganization sprint (2026-04-27)
+**Phase**: Docs reorg sprint COMPLETE. Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
@@ -17,7 +17,7 @@
 **Grading worker**: in-process via `instrumentation.ts` → `lib/grading-worker.ts` → `lib/grading-processor.ts` (60s tick). Legacy `[[services]] grading-worker` still in `railway.toml` pending Blocker #3 cleanup.
 **Pipeline verifier**: `scripts/verify-calls-pipeline.ts` — bidirectional A/B with sanity gate + canary
 **Active blockers**: #2 (Action execution discipline — production verification pending), #3 (dual grading worker — see `docs/AUDIT_PLAN.md`)
-**Docs reorg sprint**: IN PROGRESS (started 2026-04-27). Commit #0 (CLAUDE.md Rule 8) shipped. This commit (Commit #1) refreshes AGENTS + PROGRESS + AUDIT_PLAN. Commits #2-#7 will follow per the sprint plan.
+**Orientation docs**: `docs/SYSTEM_MAP.md` (slow-changing) + `docs/OPERATIONS.md` (fast-changing) replaced ARCHITECTURE / MODULES / TECH_STACK / AI-ARCHITECTURE-PLAN / GUNNER_DAYHUB_CALLS_PROMPT / START_HERE — those now in `docs/archive/`. CLAUDE.md Rule 8 (Living Map Discipline) requires updating SYSTEM_MAP or OPERATIONS in the same commit as any module / page / cron / AI tool / API surface / readable schema field change.
 
 ---
 
@@ -56,6 +56,69 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 44 — Docs reorganization sprint (2026-04-27)
+
+The sprint that was the session. 8 commits, `ea02beb..f1284f3`, replacing
+the rotted ARCHITECTURE / MODULES / TECH_STACK / AI-ARCHITECTURE-PLAN /
+GUNNER_DAYHUB_CALLS_PROMPT / START_HERE orientation surface with two
+living docs (`docs/SYSTEM_MAP.md` slow-changing + `docs/OPERATIONS.md`
+fast-changing) plus the Rule 8 discipline that keeps them honest.
+
+**Reconnaissance findings caught during the sprint** (the part that
+exceeded the cleanup value):
+
+- 70-commit drift between local PROGRESS (Session 38) and remote (Session 43)
+  — sprint started with a rebase to absorb Sessions 39-43.
+- **Dual grading worker contradiction** — `instrumentation.ts` in-process
+  AND legacy `[[services]] grading-worker` both running. Atomic claim
+  prevents double-grading. Logged as **Blocker #3** in AUDIT_PLAN.
+- AGENTS.md "Background Worker Conventions" stale post-Session-42 in-process
+  move. Rewritten in Commit #1.
+- AI model state hybrid — Opus 4.7-era prompt config (32k tokens, extended
+  thinking, 50 prior calls) intentionally retained even though model strings
+  reverted to Opus 4.6 in `598f852`. Logged as **PENDING D-0XX** in AUDIT_PLAN.
+- `assign_contact_to_user` bypasses propose-edit-confirm UI flow that gates
+  the other 12 action types. Logged as **P5** in AUDIT_PLAN.
+- `claude-sonnet-4-20250514` date-pinned snapshot in `lib/ai/enrich-property.ts`
+  drifted from the `claude-sonnet-4-6` baseline. Logged as **P3** in AUDIT_PLAN.
+- `/{tenant}/tasks/` legacy page kept around because Chris bookmarked it.
+  Logged as **P4** in AUDIT_PLAN.
+- 6 of 7 crons missing `cron.<name>.started/finished` heartbeat audit row
+  pattern (only `process_recording_jobs` has it). Captured in OPERATIONS
+  heartbeat coverage table; tracked as Bug #23.
+- `poll-calls` "heartbeat" claim was a per-tenant timestamp lock (Session 35
+  pgbouncer fix), not an audit-row heartbeat — doc-review catch in OPERATIONS §1.
+- 3 stale doc references (CLAUDE.md Rule 8 body, AGENTS.md x2, lib/ai/scoring.ts:30)
+  preemptively repointed in Commit #4 so Commit #5 archive could be a clean
+  `git mv` with a zero-hit gate grep.
+- Local env was stale post-rebase — false tsc errors until `npx prisma generate
+  && npm install`. Codified as a hygiene ritual in OPERATIONS.
+
+**Commits (chronological):**
+
+- `077ef41` **#0** — CLAUDE.md Rule 8 (Living Map Discipline) + 6th end-of-session checklist item.
+- `6f37ce8` **#1** — AGENTS Background Worker Conventions rewrite (instrumentation.ts as primary) + PROGRESS catch-up to Session 43 + AUDIT_PLAN Blocker #3 + grading.ts:204 stale Opus 4.7 comment fix. 5 files.
+- `94f526b` **#2** — `docs/SYSTEM_MAP.md` (506 lines, slow-changing canonical) + AUDIT_PLAN P5.
+- `dc53112` **#3** — `docs/OPERATIONS.md` (421 lines, fast-changing operational state — crons, pages, API surface 109/19/75/15, scripts, blockers, schema log, worker observability with admin tenant-spanning queries, hygiene rituals, incident notes).
+- `39c528e` **#4** — README rewrite (164 → 29 lines, agent-focused) + CLAUDE/AGENTS pointer updates + lib/ai/scoring.ts comment update.
+- `089ed61` **#5** — `git mv` 6 superseded docs into `docs/archive/`. Pre-archive gate grep returned zero hits.
+- `a46bd46` **#6** — delete orphan `functions/poll-calls.js`.
+- `f1284f3` **#7** — `git mv API_FIELD_INVENTORY.md docs/` + strip stale "(after sprint Commit #7)" pointers.
+- (this commit) **#8** — sprint wrap-up: PROGRESS header → COMPLETE, Session 44 entry, Next Session rewrite, OPERATIONS baseline anchor bump.
+
+**Conventions added by the sprint** (worth highlighting because future sessions
+should follow them):
+
+- Pre-flight `git log --oneline <baseline>..HEAD` before each push — surfaced
+  the 70-commit drift on Commit #0 push attempt; would have caught silent
+  drift any time after.
+- Pre-archive gate grep — strict zero-hit requirement for active surfaces
+  before `git mv`-ing a doc.
+- Doc-only commits paste back diff before pushing; code-touching commits
+  must pass `npx tsc --noEmit` (enforced by pre-push hook).
+- Trailer dropped: `Co-Authored-By: Claude Opus 4.7 (1M context)` → no trailer,
+  starting Commit #2.
 
 ### Session 43 — Bug-report v2 + grading empty-shell fix (2026-04-26)
 
@@ -152,28 +215,11 @@ All other bugs from sessions 1-32 are resolved.
 
 ## Next Session — Start Exactly Here
 
-**Status as of 2026-04-27:** Docs reorg sprint underway. Commit #0 (CLAUDE.md
-Rule 8) shipped. Commit #1 in flight (this commit refreshes AGENTS Background
-Worker Conventions, archives Sessions 30-40, catches PROGRESS up to Session 43,
-adds Blocker #3 + P3/P4 + PENDING D-0XX to AUDIT_PLAN). Production code state
-unchanged from Session 43 (`8e13fb3`).
-
-**Priority 0 — Finish the docs reorg sprint.** Remaining commits in order:
-1. **Commit #2** — `docs/SYSTEM_MAP.md` (slow-changing: stack, modules, AI layer,
-   call pipeline, philosophy, GHL boundary).
-2. **Commit #3** — `docs/OPERATIONS.md` (fast-changing: crons, page roster,
-   ops scripts, blocker state, hygiene tools, schema-change log).
-3. **Commit #4** — `README.md` rewrite (~30 lines, agent-focused) + CLAUDE.md
-   pointer updates (line 5 header → SYSTEM_MAP.md, line 200 Session Start
-   Protocol step 3 → SYSTEM_MAP.md instead of MODULES.md).
-4. **Commit #5** — `git mv` superseded docs into `docs/archive/`: ARCHITECTURE,
-   MODULES, TECH_STACK, AI-ARCHITECTURE-PLAN, GUNNER_DAYHUB_CALLS_PROMPT,
-   START_HERE. Pre-commit grep must return zero hits for those filenames in
-   `*.md`/`*.ts`/`*.tsx`.
-5. **Commit #6** — delete `functions/poll-calls.js` (orphan).
-6. **Commit #7** — `git mv API_FIELD_INVENTORY.md docs/`.
-
-**After the sprint completes, the carryover priority list:**
+**Status as of 2026-04-27 (post-sprint):** Docs reorg complete (Session 44 above,
+8 commits `ea02beb..f1284f3`). Production code state unchanged from Session 43
+(`8e13fb3`) — the sprint was doc-only except for the 3-line stale comment fix
+in `lib/ai/grading.ts:204` and the comment fix in `lib/ai/scoring.ts:30`.
+Pre-push tsc gate stayed clean throughout.
 
 **P1 — Blocker #2 production verification (deferred 5 sessions):**
 The AI Assistant propose→edit→confirm flow was coded in Session 38 (commits

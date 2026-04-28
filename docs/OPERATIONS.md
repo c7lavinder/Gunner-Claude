@@ -391,8 +391,8 @@ sanity check. Replace these with proper heartbeat queries once Bug #23 closes.
 
 ### Standing pre-commit ritual (Session 44 sprint convention)
 
-- `git log --oneline ea02beb..HEAD` before each push to confirm no surprise drift.
-- (`ea02beb` = pre-sprint baseline. Update this anchor when sprint completes.)
+- `git log --oneline f1284f3..HEAD` before each push to confirm no surprise drift.
+- (`f1284f3` = post-sprint baseline, set 2026-04-27 at end of Session 44 docs reorg. Bump this anchor whenever a new sprint starts from a fresh known-clean reference. Pre-sprint baseline was `ea02beb`.)
 
 ---
 
