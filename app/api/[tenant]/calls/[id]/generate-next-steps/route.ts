@@ -1,25 +1,19 @@
 // app/api/[tenant]/calls/[id]/generate-next-steps/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const POST = withTenant<{ tenant: string; id: string }>(async (request, ctx, params) => {
   const body = await request.json().catch(() => ({}))
   const requestedType = (body as { actionType?: string }).actionType ?? null
   const userSummary = (body as { summary?: string }).summary ?? ''
 
   const call = await db.call.findFirst({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     select: {
       id: true, aiSummary: true, callOutcome: true, callType: true,
       transcript: true, contactName: true, aiNextSteps: true, calledAt: true,
@@ -39,7 +33,7 @@ export async function POST(
 
   // Tenant-configured appointment types + live pipelines for explicit-ID routing
   const tenant = await db.tenant.findUnique({
-    where: { id: session.tenantId },
+    where: { id: ctx.tenantId },
     select: { config: true },
   })
   const appointmentTypes = (((tenant?.config ?? {}) as { appointmentTypes?: Array<{ id: string; label: string; calendarId: string; defaultDurationMin?: number; titleTemplate?: string }> }).appointmentTypes) ?? []
@@ -47,7 +41,7 @@ export async function POST(
   let pipelinesBlock = ''
   try {
     const { getGHLClient } = await import('@/lib/ghl/client')
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     const pipelinesResp = await ghl.getPipelines()
     const lines: string[] = []
     for (const p of pipelinesResp.pipelines ?? []) {
@@ -70,8 +64,8 @@ export async function POST(
   // Load playbook knowledge for better next step suggestions
   const { buildKnowledgeContext, formatKnowledgeForPrompt } = await import('@/lib/ai/context-builder')
   const knowledge = await buildKnowledgeContext({
-    tenantId: session.tenantId,
-    userId: session.userId,
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
     userRole: call.assignedTo?.role ?? null,
     callType: call.callType,
   })
@@ -81,7 +75,7 @@ export async function POST(
     // AI Learning: fetch recent corrections from this tenant (last 30 days)
     const recentCorrections = await db.auditLog.findMany({
       where: {
-        tenantId: session.tenantId,
+        tenantId: ctx.tenantId,
         action: 'call.feedback',
         createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       },
@@ -197,7 +191,7 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
     if (text.type !== 'text') throw new Error('Unexpected response')
 
     logAiCall({
-      tenantId: session.tenantId, userId: session.userId,
+      tenantId: ctx.tenantId, userId: ctx.userId,
       type: 'next_steps', pageContext: `call:${params.id}`,
       input: userContent.slice(0, 5000), output: text.text.slice(0, 5000),
       tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
@@ -253,17 +247,22 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
       return true
     })
 
-    // Persist generated steps to DB (merge with existing if adding single action)
+    // Persist generated steps to DB (merge with existing if adding single action).
+    // FIX (cross-tenant defense): prior code did `where: { id: params.id }` —
+    // unscoped. Same pattern as deal-intel/route.ts:75: a mass-assignment via
+    // params.id that happened to collide with a different-tenant call would
+    // overwrite that tenant's aiNextSteps. tenantId scope makes the leak
+    // structurally impossible.
     if (requestedType) {
       const merged = [...existingSteps.map(s => ({ ...s, status: (s as { status?: string }).status ?? 'pending', pushedAt: (s as { pushedAt?: string | null }).pushedAt ?? null })), ...steps.map(s => ({ ...s, status: 'pending', pushedAt: null }))]
       await db.call.update({
-        where: { id: params.id },
+        where: { id: params.id, tenantId: ctx.tenantId },
         data: { aiNextSteps: merged },
       })
     } else {
       const stepsWithStatus = steps.map(s => ({ ...s, status: 'pending', pushedAt: null }))
       await db.call.update({
-        where: { id: params.id },
+        where: { id: params.id, tenantId: ctx.tenantId },
         data: { aiNextSteps: stepsWithStatus },
       })
     }
@@ -273,4 +272,4 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
     console.error('[Generate Next Steps] Error:', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Failed to generate next steps' }, { status: 500 })
   }
-}
+})

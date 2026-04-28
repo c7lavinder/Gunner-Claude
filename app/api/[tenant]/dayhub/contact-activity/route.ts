@@ -2,7 +2,7 @@
 // Returns today's activity (calls, texts, emails from GHL) + graded calls + notes
 // GHL conversations are the source of truth — uses GHL client for auto token refresh
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 
@@ -37,15 +37,9 @@ function getCentralHour(dateStr: string): number {
   return parseInt(central, 10)
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const url = new URL(req.url)
     const contactId = url.searchParams.get('contactId')
     if (!contactId) return NextResponse.json({ error: 'contactId required' }, { status: 400 })
@@ -257,4 +251,4 @@ export async function GET(
     console.error('[contact-activity] top-level error:', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})

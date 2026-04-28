@@ -2,24 +2,22 @@
 // Returns today's KPI counts. Admins see tenant-wide, others see their own.
 // Supports ?asUserId= for admin View As impersonation.
 import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getCentralDayBounds } from '@/lib/dates'
 import { resolveEffectiveUser } from '@/lib/auth/view-as'
 import { getDialKpisToday, type DialScope } from '@/lib/kpis/dial-counts'
 
-export async function GET(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const url = new URL(req.url)
     const asUserId = url.searchParams.get('asUserId')
     const userIdsParam = url.searchParams.get('userIds') // comma-separated, for role tab filtering
+    // resolveEffectiveUser still expects the legacy session shape, so re-fetch
+    // here. ctx already guarantees tenantId/userId, so getSession() can't null.
+    const session = (await getSession())!
     const effective = await resolveEffectiveUser(session, asUserId)
     const { dayStart, dayEnd } = getCentralDayBounds()
 
@@ -132,4 +130,4 @@ export async function GET(
     const message = err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})

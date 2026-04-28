@@ -2,36 +2,24 @@
 // GET: Returns proposed deal intel changes for this call
 // PATCH: Approve, edit, or skip a proposed change
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import type { ProposedDealIntelChange, DealIntel, FieldValue, AccumulatedField } from '@/lib/types/deal-intel'
+import type { ProposedDealIntelChange, FieldValue, AccumulatedField } from '@/lib/types/deal-intel'
 import { Prisma } from '@prisma/client'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant<{ tenant: string; id: string }>(async (_req, ctx, params) => {
   const call = await db.call.findFirst({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     select: { dealIntelHistory: true },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
   const changes = (call.dealIntelHistory ?? []) as unknown as ProposedDealIntelChange[]
   return NextResponse.json({ changes })
-}
+})
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const PATCH = withTenant<{ tenant: string; id: string }>(async (request, ctx, params) => {
   const body = await request.json()
   const { field, decision, editedValue } = body as {
     field: string
@@ -44,7 +32,7 @@ export async function PATCH(
   }
 
   const call = await db.call.findFirst({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     select: { id: true, dealIntelHistory: true, propertyId: true },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
@@ -61,22 +49,32 @@ export async function PATCH(
     decision,
     editedValue: decision === 'edited' ? editedValue : undefined,
     decidedAt: new Date().toISOString(),
-    decidedBy: session.userId,
+    decidedBy: ctx.userId,
   }
 
-  // Save updated history to call
+  // Save updated history to call (re-scope by tenant on update too — was scoped via the
+  // findFirst above, but defense-in-depth in case call.id ever gets mass-assigned)
   await db.call.update({
-    where: { id: call.id },
+    where: { id: call.id, tenantId: ctx.tenantId },
     data: { dealIntelHistory: changes as unknown as Prisma.InputJsonValue },
   })
 
   // If approved or edited, write to property dealIntel
   if ((decision === 'approved' || decision === 'edited') && call.propertyId) {
-    const property = await db.property.findUnique({
-      where: { id: call.propertyId },
+    // FIX (cross-tenant defense): prior code did
+    //   db.property.findUnique({ where: { id: call.propertyId } })
+    //   db.property.update({ where: { id: call.propertyId } })
+    // both unscoped. call.propertyId is a foreign key; if a corrupted/wrong-tenant
+    // value ever made it onto a call row, this could leak or overwrite another
+    // tenant's property dealIntel. findFirst+tenantId enforces the boundary.
+    const property = await db.property.findFirst({
+      where: { id: call.propertyId, tenantId: ctx.tenantId },
       select: { dealIntel: true },
     })
-    const currentIntel = (property?.dealIntel ?? {}) as Record<string, unknown>
+    if (!property) {
+      return NextResponse.json({ error: 'Property not found in tenant' }, { status: 404 })
+    }
+    const currentIntel = (property.dealIntel ?? {}) as Record<string, unknown>
     const valueToWrite = decision === 'edited' ? editedValue : change.proposedValue
     const now = new Date().toISOString()
 
@@ -117,7 +115,7 @@ export async function PATCH(
     }
 
     await db.property.update({
-      where: { id: call.propertyId },
+      where: { id: call.propertyId, tenantId: ctx.tenantId },
       data: updateData,
     })
   }
@@ -125,8 +123,8 @@ export async function PATCH(
   // Log for AI learning
   await db.auditLog.create({
     data: {
-      tenantId: session.tenantId,
-      userId: session.userId,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'deal_intel.decision',
       resource: 'call',
       resourceId: call.id,
@@ -144,4 +142,4 @@ export async function PATCH(
   })
 
   return NextResponse.json({ success: true })
-}
+})

@@ -1,9 +1,9 @@
 // app/api/[tenant]/calls/upload/route.ts
 // Manual call upload — audio file (MP3/MP4/M4A/WAV) or pasted transcript.
 // Linked to a GHL contact, grading fires after creation.
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { gradeCall } from '@/lib/ai/grading'
 import { transcribeBuffer } from '@/lib/ai/transcribe'
@@ -45,14 +45,8 @@ const metadataSchema = z.object({
   assignedToId: z.string().optional(),
 })
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { tenant: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const rate = checkRateLimit(session.userId)
+export const POST = withTenant<{ tenant: string }>(async (request, ctx) => {
+  const rate = checkRateLimit(ctx.userId)
   if (!rate.ok) {
     return NextResponse.json(
       { success: false, error: `Too many uploads. Try again in ${Math.ceil(rate.retryAfterMs / 1000)}s.` },
@@ -63,7 +57,7 @@ export async function POST(
   let form: FormData
   try {
     form = await request.formData()
-  } catch (err) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Invalid form data' }, { status: 400 })
   }
 
@@ -116,14 +110,14 @@ export async function POST(
     }
   }
 
-  const assignedToId = meta.assignedToId ?? session.userId
+  const assignedToId = meta.assignedToId ?? ctx.userId
 
   // Create the Call row first so we have an ID for the storage path
   let callId: string
   try {
     const created = await db.call.create({
       data: {
-        tenantId: session.tenantId,
+        tenantId: ctx.tenantId,
         ghlContactId: meta.ghlContactId,
         contactName: meta.contactName ?? null,
         callType: meta.callType,
@@ -141,23 +135,28 @@ export async function POST(
     })
     callId = created.id
   } catch (err) {
-    await logFailure(session.tenantId, 'call.manual_upload.create', 'calls', err, {
+    await logFailure(ctx.tenantId, 'call.manual_upload.create', 'calls', err, {
       ghlContactId: meta.ghlContactId,
     })
     return NextResponse.json({ success: false, error: 'Failed to create call' }, { status: 500 })
   }
 
-  // Audio path: upload to Supabase, transcribe, update row
+  // Audio path: upload to Supabase, transcribe, update row.
+  // FIX (cross-tenant defense): the three call.update sites below previously
+  // scoped only by id (callId is the just-created row, so no active leak —
+  // but a future refactor that derives callId from somewhere other than
+  // this handler's create() would break the boundary silently). Tenant
+  // scope on each update makes the safety structural.
   if (hasFile) {
     const f = file as File
     const arrayBuffer = await f.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const uploaded = await uploadCallAudio(session.tenantId, callId, buffer, f.type)
+    const uploaded = await uploadCallAudio(ctx.tenantId, callId, buffer, f.type)
     if (uploaded.status === 'error') {
-      await logFailure(session.tenantId, 'call.manual_upload.storage', 'calls', uploaded.error, { callId })
+      await logFailure(ctx.tenantId, 'call.manual_upload.storage', 'calls', uploaded.error, { callId })
       await db.call.update({
-        where: { id: callId },
+        where: { id: callId, tenantId: ctx.tenantId },
         data: { gradingStatus: 'FAILED', aiSummary: `Upload failed: ${uploaded.error}` },
       })
       return NextResponse.json({ success: false, error: `Upload failed: ${uploaded.error}` }, { status: 500 })
@@ -165,9 +164,9 @@ export async function POST(
 
     const transcription = await transcribeBuffer(arrayBuffer, f.type)
     if (transcription.status === 'error' || !transcription.transcript) {
-      await logFailure(session.tenantId, 'call.manual_upload.transcribe', 'calls', transcription.error, { callId })
+      await logFailure(ctx.tenantId, 'call.manual_upload.transcribe', 'calls', transcription.error, { callId })
       await db.call.update({
-        where: { id: callId },
+        where: { id: callId, tenantId: ctx.tenantId },
         data: {
           gradingStatus: 'FAILED',
           audioStoragePath: uploaded.path,
@@ -181,7 +180,7 @@ export async function POST(
     }
 
     await db.call.update({
-      where: { id: callId },
+      where: { id: callId, tenantId: ctx.tenantId },
       data: {
         audioStoragePath: uploaded.path,
         transcript: transcription.transcript,
@@ -192,8 +191,8 @@ export async function POST(
 
   // Fire-and-forget grading
   gradeCall(callId).catch(err => {
-    logFailure(session.tenantId, 'call.manual_upload.grade', 'calls', err, { callId }).catch(() => {})
+    logFailure(ctx.tenantId, 'call.manual_upload.grade', 'calls', err, { callId }).catch(() => {})
   })
 
   return NextResponse.json({ success: true, data: { callId } })
-}
+})

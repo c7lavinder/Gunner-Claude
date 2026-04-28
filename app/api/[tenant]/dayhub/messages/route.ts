@@ -3,7 +3,7 @@
 // Paginates through call/email noise to find actual SMS messages
 // Includes sender name for outbound messages (which team member sent it)
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 
 interface GHLMessage {
@@ -40,19 +40,13 @@ function isSMS(m: GHLMessage): boolean {
   return !!m.body && (type === 'TYPE_SMS' || type === 'SMS' || type === '')
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const url = new URL(req.url)
     const conversationId = url.searchParams.get('conversationId')
     if (!conversationId) return NextResponse.json({ error: 'conversationId required' }, { status: 400 })
 
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const { db } = await import('@/lib/db/client')
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
@@ -145,4 +139,4 @@ export async function GET(
     const message = err instanceof Error ? err.message : 'Failed to fetch messages'
     return NextResponse.json({ messages: [], error: message })
   }
-}
+})

@@ -7,6 +7,7 @@
 // using it would land conversations on the wrong person whenever a different
 // team member actually texted last.
 import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
@@ -55,19 +56,16 @@ async function fetchActiveSenderPhone(
   return null
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const url = new URL(req.url)
 
     const asUserId = url.searchParams.get('asUserId')
     const ghlUserIdsParam = url.searchParams.get('ghlUserIds') // comma-separated, for role tab
+    // resolveEffectiveUser still expects the legacy session shape, so re-fetch
+    // here. ctx already guarantees tenantId/userId, so getSession() can't null.
+    const session = (await getSession())!
     const effective = await resolveEffectiveUser(session, asUserId)
     const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
 
@@ -242,17 +240,11 @@ export async function GET(
     const message = err instanceof Error ? err.message : 'Failed to fetch inbox'
     return NextResponse.json({ items: [], total: 0, error: message })
   }
-}
+})
 
-export async function POST(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const POST = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const { contactId, message, fromNumber } = await req.json()
 
     if (!contactId || !message) {
@@ -265,7 +257,7 @@ export async function POST(
     await db.auditLog.create({
       data: {
         tenantId,
-        userId: session.userId,
+        userId: ctx.userId,
         action: 'sms.sent',
         source: 'USER',
         severity: 'INFO',
@@ -278,4 +270,4 @@ export async function POST(
     const message = err instanceof Error ? err.message : 'Failed to send SMS'
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})

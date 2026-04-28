@@ -362,6 +362,35 @@ caught during Fix #6 Phase 2 all came from manual tenantId tracking. withTenant 
 
 Reference: lib/api/withTenant.ts, commit c63cb03 (helper) + f484820 (3-route refactor template)
 
+#### Every db.* WHERE needs tenant scope — including chained updates
+
+A common subtle leak class caught during Wave 3 batch 1 (2026-04-28): a
+handler does `db.X.findFirst({ where: { id, tenantId } })` (correctly scoped),
+then later does `db.X.update({ where: { id } })` or
+`db.X.updateMany({ where: { id: { in: ... } } })` — id-only WHERE on the
+write. The find is a guard, but the write is the source of truth for what
+gets mutated. If `id` ever turns out to refer to a different tenant's row
+(corrupted FK, mass-assignment via params, future refactor that derives id
+from elsewhere), the write will silently cross the boundary. Always include
+`tenantId: ctx.tenantId` on EVERY write WHERE — find AND update AND delete AND
+updateMany — even when the upstream find was already scoped. Defense-in-depth.
+
+Same rule applies to foreign-key-driven lookups: if `call.propertyId` is used
+as the next WHERE, scope by `tenantId` again. The foreign key is data; the
+tenant boundary is policy. They should both gate the query.
+
+Concrete examples from Wave 3 batch 1:
+- `deal-intel/route.ts` — `Property.findUnique({ where: { id: call.propertyId } })`
+  was id-only; now scoped.
+- `generate-next-steps/route.ts` — two trailing `Call.update({ where: { id: params.id } })`
+  calls were id-only; now scoped.
+- `reprocess/route.ts` — `Call.update({ where: { id: params.id } })` was id-only.
+- `bulk-regrade/route.ts` — `Call.updateMany({ where: { id: { in: ids } } })`
+  pulled ids from a tenant-scoped findMany but the updateMany itself didn't
+  re-enforce; now scoped.
+
+Reference: Wave 3 batch 1 commit (this batch).
+
 ### Public/self-gating routes need TWO entries (added 2026-04-28 — Wave 2)
 
 When adding a new public/self-gating API endpoint (token-gated cron, webhook,

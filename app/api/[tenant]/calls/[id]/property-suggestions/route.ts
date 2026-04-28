@@ -1,23 +1,17 @@
 // app/api/[tenant]/calls/[id]/property-suggestions/route.ts
 // POST — AI analyzes call transcript and suggests property data updates
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-export async function POST(
-  _request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const POST = withTenant<{ tenant: string; id: string }>(async (_request, ctx, params) => {
   try {
     const call = await db.call.findFirst({
-      where: { id: params.id, tenantId: session.tenantId },
+      where: { id: params.id, tenantId: ctx.tenantId },
       select: {
         transcript: true,
         aiSummary: true,
@@ -82,7 +76,7 @@ Return ONLY the JSON array, no other text.`,
     const text = res.content[0].type === 'text' ? res.content[0].text : '[]'
 
     logAiCall({
-      tenantId: session.tenantId, userId: session.userId,
+      tenantId: ctx.tenantId, userId: ctx.userId,
       type: 'property_enrich', pageContext: `call:${params.id}`,
       input: `Property suggestions for ${prop.address}`, output: text.slice(0, 5000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
@@ -99,4 +93,4 @@ Return ONLY the JSON array, no other text.`,
     console.error('[Property Suggestions] Error:', err)
     return NextResponse.json({ error: 'Failed to analyze call' }, { status: 500 })
   }
-}
+})

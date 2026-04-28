@@ -4,20 +4,15 @@
 // NOTE: date param is a LOCAL date (Central time). We convert to UTC boundaries
 // so appointments are correctly matched to the user's actual day.
 import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { getSession } from '@/lib/auth/session'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 import { resolveEffectiveUser } from '@/lib/auth/view-as'
 
-export async function GET(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
       select: { ghlAccessToken: true, ghlLocationId: true },
@@ -93,7 +88,11 @@ export async function GET(
       if (attempt === 0) await new Promise(r => setTimeout(r, 500))
     }
 
-    // Resolve effective user (supports admin View As via ?asUserId=)
+    // Resolve effective user (supports admin View As via ?asUserId=).
+    // resolveEffectiveUser still expects the legacy session shape, so re-fetch
+    // here rather than threading a synthetic shape through. ctx already
+    // guarantees tenantId/userId so this getSession() call cannot null out.
+    const session = (await getSession())!
     const asUserId = url.searchParams.get('asUserId')
     const ghlUserIdsParam = url.searchParams.get('ghlUserIds') // comma-separated, for role tab
     const effective = await resolveEffectiveUser(session, asUserId)
@@ -236,18 +235,12 @@ export async function GET(
     const message = err instanceof Error ? err.message : 'Failed to fetch appointments'
     return NextResponse.json({ appointments: [], error: message })
   }
-}
+})
 
 // POST — update appointment status
-export async function POST(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const POST = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const { appointmentId, status } = await req.json()
     if (!appointmentId || !status) {
       return NextResponse.json({ error: 'appointmentId and status required' }, { status: 400 })
@@ -281,7 +274,7 @@ export async function POST(
     await db.auditLog.create({
       data: {
         tenantId,
-        userId: session.userId,
+        userId: ctx.userId,
         action: 'appointment.status_updated',
         resource: 'appointment',
         resourceId: appointmentId,
@@ -296,4 +289,4 @@ export async function POST(
     const message = err instanceof Error ? err.message : 'Failed to update appointment'
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})

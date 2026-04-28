@@ -1,24 +1,20 @@
 // app/api/[tenant]/calls/[id]/reprocess/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { gradeCall } from '@/lib/ai/grading'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { tenant: string; id: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const POST = withTenant<{ tenant: string; id: string }>(async (_req, ctx, params) => {
   const call = await db.call.findFirst({
-    where: { id: params.id, tenantId: session.tenantId },
+    where: { id: params.id, tenantId: ctx.tenantId },
     select: { id: true },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
+  // FIX (cross-tenant defense): prior code did `where: { id: params.id }` on
+  // the update — unscoped. Same id-collision risk as deal-intel + generate-next-steps.
   await db.call.update({
-    where: { id: params.id },
+    where: { id: params.id, tenantId: ctx.tenantId },
     data: { gradingStatus: 'PENDING' },
   })
 
@@ -27,4 +23,4 @@ export async function POST(
   })
 
   return NextResponse.json({ success: true })
-}
+})

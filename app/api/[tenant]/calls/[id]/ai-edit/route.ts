@@ -1,17 +1,11 @@
 // POST /api/[tenant]/calls/[id]/ai-edit
 // Uses Claude to edit a next step based on user instruction
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
-export async function POST(
-  req: Request,
-  { params }: { params: { tenant: string; id: string } }
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant<{ tenant: string; id: string }>(async (req, ctx, params) => {
   const { instruction, currentLabel } = await req.json()
   if (!instruction || !currentLabel) {
     return NextResponse.json({ error: 'instruction and currentLabel required' }, { status: 400 })
@@ -37,7 +31,7 @@ Updated action:`,
     const newLabel = res.content[0].type === 'text' ? res.content[0].text.trim().replace(/^["']|["']$/g, '') : currentLabel
 
     logAiCall({
-      tenantId: session.tenantId, userId: session.userId,
+      tenantId: ctx.tenantId, userId: ctx.userId,
       type: 'action_execution', pageContext: `call:${params.id}`,
       input: `Edit: "${currentLabel}" → "${instruction}"`, output: newLabel,
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
@@ -48,4 +42,4 @@ Updated action:`,
   } catch {
     return NextResponse.json({ error: 'AI edit failed' }, { status: 500 })
   }
-}
+})

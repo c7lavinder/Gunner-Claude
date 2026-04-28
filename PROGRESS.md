@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 46 — Wave 2 of v1-finish sprint (2026-04-28)
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 (dual grading worker) + AUDIT_PLAN P3 (date-pin sweep). Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift + LM aggregation) via shared helper `lib/kpis/dial-counts.ts`. Multi-vendor enrichment live, in-process grading worker live (now sole driver), bug-report system live.
+**Current session**: 47 — Wave 3 Session A of v1-finish sprint (2026-04-28)
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). Wave 3 Session A migrated 12 routes to `withTenant` helper (batch 1 of 6) and caught 5 latent cross-tenant defense gaps in the existing code. Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
@@ -56,6 +56,75 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 47 — Wave 3 Session A of v1-finish sprint (2026-04-28)
+
+`withTenant` migration, batch 1 of 6. Twelve routes flipped from
+`getSession()` direct + manual `tenantId` tracking to the `withTenant`
+wrapper that makes "forget to scope by tenant" structurally impossible.
+
+**Routes migrated (alphabetical, all under `app/api/[tenant]/*`):**
+
+1. `calls/[id]/ai-edit/route.ts`
+2. `calls/[id]/deal-intel/route.ts` — **leak caught**
+3. `calls/[id]/generate-next-steps/route.ts` — **leak caught (×2)**
+4. `calls/[id]/property-suggestions/route.ts`
+5. `calls/[id]/reprocess/route.ts` — **leak caught**
+6. `calls/bulk-regrade/route.ts` — **leak caught**
+7. `calls/upload/route.ts` — **leak caught (×3 structural)**
+8. `dayhub/appointments/route.ts`
+9. `dayhub/contact-activity/route.ts`
+10. `dayhub/inbox/route.ts`
+11. `dayhub/kpis/route.ts`
+12. `dayhub/messages/route.ts`
+
+**Latent cross-tenant defense gaps caught + fixed (8 sites across 5 routes):**
+
+- **deal-intel**: `Property.findUnique({ where: { id: call.propertyId } })`
+  + `Property.update({ where: { id: call.propertyId } })` — both id-only.
+  `call.propertyId` is a foreign key; if it ever pointed at a different-tenant
+  property (data corruption upstream), this would leak/overwrite. Both now
+  scoped by `tenantId: ctx.tenantId`.
+- **generate-next-steps**: two trailing `Call.update({ where: { id: params.id } })`
+  calls — id-only after a tenant-scoped findFirst. Now both scoped on update.
+- **reprocess**: same id-only `Call.update` pattern. Scoped.
+- **bulk-regrade**: `Call.updateMany({ where: { id: { in: callIds } } })` — the
+  id list came from a tenant-scoped findMany (so the IDs were all this-tenant),
+  but the updateMany didn't re-enforce. Future refactor that broke the upstream
+  filter would silently leak. Now scoped.
+- **upload**: three `Call.update({ where: { id: callId } })` calls on the
+  just-created row. callId came from same-handler `create` so no active leak,
+  but defense-in-depth — id-only writes are the wrong pattern regardless.
+  All three now scoped.
+
+None of these are known active leaks. They are **structural defense gaps**:
+the kind of code that is correct today but one upstream-refactor away from
+silently crossing the boundary. Wave 1's lesson + this batch reinforces the
+AGENTS.md convention: every db write WHERE needs `tenantId`, even when the
+upstream find was already scoped.
+
+**Coverage delta:**
+- `withTenant` routes: 19 → **31** (+12)
+- `getSession`-direct routes: 75 → **63** (−12)
+- Documented exceptions (auth/cron/webhooks/health/diagnostics/vieira/stripe): 16 (unchanged)
+- Total `route.ts` files: 110 (unchanged)
+
+**Remaining migration backlog: ~63 routes across batches 2-6.**
+
+**Files changed:**
+
+- 12 route files (in `app/api/[tenant]/calls/...` and `app/api/[tenant]/dayhub/...`).
+- `AGENTS.md` Route Conventions — new sub-section "Every db.* WHERE needs
+  tenant scope — including chained updates" codifies the leak-class found
+  in this batch (find-scoped + update-unscoped pattern). Lists the five
+  routes as concrete examples for future agents.
+- `PROGRESS.md` — header bumped to Session 47, this entry, coverage stats.
+
+**No tsc errors. No production behavior changes** — every leak fix is
+defensive against scenarios that don't currently occur. Pre-push tsc gate
+clean. Verification path: spot-check a route via `/api/diagnostics/dial-counts`
+or by sending a request with mismatched tenantId param — should now hit a
+401 from `withTenant` rather than potentially executing.
 
 ### Session 46 — Wave 2 of v1-finish sprint (2026-04-28)
 

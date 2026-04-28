@@ -1,28 +1,21 @@
 // app/api/[tenant]/calls/bulk-regrade/route.ts
 // Re-grades all completed calls (optionally filtered by callType)
 // Used when rubrics are updated and team wants fresh scores
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { gradeCall } from '@/lib/ai/grading'
 import { hasPermission, type UserRole } from '@/types/roles'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { tenant: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const role = session.role as UserRole
-  if (!hasPermission(role, 'calls.view.all')) {
+export const POST = withTenant<{ tenant: string }>(async (request, ctx) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'calls.view.all')) {
     return NextResponse.json({ error: 'Only admins can bulk re-grade' }, { status: 403 })
   }
 
   const body = await request.json().catch(() => ({})) as { callType?: string }
 
   const where: Record<string, unknown> = {
-    tenantId: session.tenantId,
+    tenantId: ctx.tenantId,
     gradingStatus: 'COMPLETED',
     transcript: { not: null },
   }
@@ -39,9 +32,15 @@ export async function POST(
     return NextResponse.json({ queued: 0, message: 'No calls to re-grade' })
   }
 
-  // Mark all as PENDING
+  // Mark all as PENDING.
+  // FIX (cross-tenant defense): prior code did
+  //   db.call.updateMany({ where: { id: { in: calls.map(c => c.id) } } })
+  // The id list comes from a tenant-scoped findMany above, so the IDs are
+  // already this-tenant-only — but the updateMany didn't enforce it. Adding
+  // tenantId to the updateMany WHERE makes the boundary structural rather
+  // than dependent on the upstream filter staying intact.
   await db.call.updateMany({
-    where: { id: { in: calls.map(c => c.id) } },
+    where: { id: { in: calls.map(c => c.id) }, tenantId: ctx.tenantId },
     data: { gradingStatus: 'PENDING' },
   })
 
@@ -65,8 +64,8 @@ export async function POST(
 
   await db.auditLog.create({
     data: {
-      tenantId: session.tenantId,
-      userId: session.userId,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'calls.bulk_regrade',
       resource: 'call',
       source: 'USER',
@@ -76,4 +75,4 @@ export async function POST(
   })
 
   return NextResponse.json({ queued: calls.length, message: `${calls.length} calls queued for re-grading` })
-}
+})
