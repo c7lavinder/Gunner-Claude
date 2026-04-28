@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   '/reset-password',
   '/api/auth',
   '/api/cron',
+  '/api/diagnostics',
   '/api/health',
   '/api/stripe',
   '/api/tenants/register',
