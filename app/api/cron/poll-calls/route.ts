@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
 
           totalNewCalls++
 
-          // Grading is handled by the long-running worker (scripts/grading-worker.ts)
-          // and the in-process loop started by instrumentation.ts. Calling gradeCall()
+          // Grading is handled by the in-process loop started by instrumentation.ts
+          // (lib/grading-worker.ts → lib/grading-processor.ts). Calling gradeCall()
           // inline here was guaranteed to FAIL — the row is brand new and has no
           // recordingUrl yet, so gradeCall() would hit its no-transcript branch and
           // mark it FAILED with "No recording or transcript available." That single

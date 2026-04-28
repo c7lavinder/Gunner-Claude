@@ -1,7 +1,10 @@
 // scripts/process-recording-jobs.ts
 // Unified call processor — the SINGLE place where grading decisions happen.
-// Runs every 1 minute via Railway cron, AND as one iteration of the
-// grading-worker long-running service (see scripts/grading-worker.ts).
+// In production, runs as one iteration of the in-process loop started by
+// instrumentation.ts (via lib/grading-worker.ts → lib/grading-processor.ts).
+// This file remains for manual `npx tsx` invocation during debug; the HTTP
+// wrapper at app/api/cron/process-recording-jobs/route.ts is the preferred
+// manual trigger surface.
 //
 // Pipeline:
 //   1. Webhook/poll creates call → PENDING (no grading, no classification)

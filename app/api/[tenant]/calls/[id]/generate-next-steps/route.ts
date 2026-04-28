@@ -120,7 +120,7 @@ export async function POST(
     const timer = startTimer()
     const userContent = `You are a real estate wholesaling CRM assistant. Based on this call, ${typeInstruction}`
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       // Bumped from 1500 → 8000: the prompt now carries pipelines+stages +
       // appointmentTypes, and each action can include smsBody + reasoning.
       // 1500 was enough for 3-5 short labels but truncates mid-JSON now.
@@ -201,7 +201,7 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
       type: 'next_steps', pageContext: `call:${params.id}`,
       input: userContent.slice(0, 5000), output: text.text.slice(0, 5000),
       tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
-      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+      durationMs: timer(), model: 'claude-sonnet-4-6',
     }).catch(() => {})
 
     // Walk brackets with a string-aware counter so trailing prose after the

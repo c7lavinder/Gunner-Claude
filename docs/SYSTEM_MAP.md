@@ -219,10 +219,12 @@ Per-vendor isolation: vendor failures do not take down the orchestrator.
 - `lib/grading-processor.ts` — `runGradingProcessor()` with the actual logic.
   See "Call pipeline" section below.
 
-> **Note (Blocker #3):** `scripts/grading-worker.ts` + `[[services]] grading-worker`
-> in `railway.toml` are residue from the Session-38 standalone-service pattern,
-> still running in parallel with the in-process worker. Atomic claim prevents
-> double-grading. Removal plan in `docs/AUDIT_PLAN.md`.
+> **Historical note (Blocker #3 closed Wave 1, 2026-04-27):** Sessions 38-44
+> ran a parallel standalone worker (`scripts/grading-worker.ts` + `[[services]]
+> grading-worker` in `railway.toml`). The atomic-claim was the safety net
+> against double-grading. Removed Wave 1 of the v1-finish sprint;
+> `instrumentation.ts` is now the sole driver. Manual debug trigger at
+> `app/api/cron/process-recording-jobs/route.ts`.
 
 ### Safety gates
 
@@ -281,22 +283,26 @@ calls. Everything is AI-assisted — propose, edit, approve.
 | Coach (`lib/ai/coach.ts:258`) | `claude-sonnet-4-6` | Conversational coaching, AI-coach chat. |
 | User profile generator (`lib/ai/generate-user-profiles.ts:168`) | `claude-sonnet-4-6` | Weekly cron, auto-generated coaching profiles per rep. |
 | Property story (`lib/ai/generate-property-story.ts:23`) | `claude-sonnet-4-6` | Auto-narrative summary. Triggered on deal-intel landing + daily catch-up cron. |
-| Legacy property enricher (`lib/ai/enrich-property.ts:57`) | `claude-sonnet-4-20250514` | Date-pinned snapshot — **P3 in AUDIT_PLAN** (standardize to `claude-sonnet-4-6`). Largely superseded by `lib/enrichment/` orchestrator. |
+| Legacy property enricher (`lib/ai/enrich-property.ts:57`) | `claude-sonnet-4-6` | Largely superseded by `lib/enrichment/` orchestrator. (Pre-Wave-1 was date-pinned `claude-sonnet-4-20250514` — swept 2026-04-27 along with 8 other occurrences across 4 API routes.) |
+| Other Sonnet 4.6 callers (API routes) | `claude-sonnet-4-6` | `app/api/[tenant]/calls/[id]/property-suggestions/route.ts`, `app/api/[tenant]/calls/[id]/generate-next-steps/route.ts` (API-side variant — separate from the in-grading-pipeline next-steps at `lib/ai/grading.ts:1095`), `app/api/properties/[propertyId]/blast/route.ts` (deal blast SMS + email body generation). All previously date-pinned, swept in Wave 1. |
+| Self-audit agent (`scripts/audit.ts:73`) | `claude-opus-4-6` | Daily 2am UTC cron — code review of recent changes. Opus chosen for reasoning quality. |
 
-The Sonnet/Opus split is deliberate: **Sonnet for conversational outputs**
-(coach, profiles, story — many calls, lower per-inference value, latency
-matters) and **Opus for high-signal extraction** (grading, deal-intel,
-next-steps — fewer calls, high per-inference value, depth matters). This
-inverts the original TECH_STACK Decision #8 ("Sonnet for grading, Opus for
-coaching"); the inversion is intentional and a full DECISIONS.md writeup is
-pending alongside D-0XX.
+The Sonnet/Opus split is deliberate (D-044, stability-first, pending Wave 4
+DECISIONS.md writeup): **Sonnet for conversational outputs** (coach,
+profiles, story — many calls, lower per-inference value, latency matters)
+and **Opus for high-signal extraction** (grading, deal-intel, next-steps,
+audit — fewer calls, high per-inference value, depth matters). Driver: lead
+acquisition cost dwarfs inference cost; best model for grading the lead,
+fast model for the conversation about the lead. This inverts the original
+TECH_STACK Decision #8 ("Sonnet for grading, Opus for coaching") — the
+inversion is intentional.
 
-> **Pending decision D-0XX (AUDIT_PLAN):** Per-call AI was upgraded to Opus
+> **Pending decision D-044 (AUDIT_PLAN):** Per-call AI was upgraded to Opus
 > 4.7 + extended thinking + widened context in commit `c58b695`, then
 > reverted to Opus 4.6 (model strings only) 8 minutes later in `598f852`.
 > The 4.7-era prompt expansion (32k tokens, 16k thinking budget, 50 prior
-> calls of context) is intentionally retained. Driver for the revert
-> (cost / stability / latency) blocked on user input.
+> calls of context) is intentionally retained. Driver = stability-first
+> (Wave 1 lock-in, 2026-04-27); full DECISIONS.md writeup pending Wave 4.
 
 ### Embeddings + semantic search
 

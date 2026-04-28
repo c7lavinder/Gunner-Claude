@@ -8,15 +8,15 @@
 
 ## Current Status
 
-**Current session**: 44 — Docs reorganization sprint (2026-04-27)
-**Phase**: Docs reorg sprint COMPLETE. Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
+**Current session**: 45 — Wave 1 of v1-finish sprint (2026-04-27)
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 (dual grading worker) + AUDIT_PLAN P3 (date-pin sweep). Multi-vendor enrichment live, in-process grading worker live (now sole driver), bug-report system live.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
 **GHL OAuth**: CONNECTED — tenant "New Again Houses" (location: hmD7eWGQJE7EVFpJxj4q)
-**Grading worker**: in-process via `instrumentation.ts` → `lib/grading-worker.ts` → `lib/grading-processor.ts` (60s tick). Legacy `[[services]] grading-worker` still in `railway.toml` pending Blocker #3 cleanup.
+**Grading worker**: in-process via `instrumentation.ts` → `lib/grading-worker.ts` → `lib/grading-processor.ts` (60s tick). Sole driver as of Wave 1 — legacy `[[services]] grading-worker` removed (Blocker #3 closed). Manual debug surface remains at `app/api/cron/process-recording-jobs/route.ts`.
 **Pipeline verifier**: `scripts/verify-calls-pipeline.ts` — bidirectional A/B with sanity gate + canary
-**Active blockers**: #2 (Action execution discipline — production verification pending), #3 (dual grading worker — see `docs/AUDIT_PLAN.md`)
+**Active blockers**: #2 (Action execution discipline — production verification pending). #3 closed Wave 1.
 **Orientation docs**: `docs/SYSTEM_MAP.md` (slow-changing) + `docs/OPERATIONS.md` (fast-changing) replaced ARCHITECTURE / MODULES / TECH_STACK / AI-ARCHITECTURE-PLAN / GUNNER_DAYHUB_CALLS_PROMPT / START_HERE — those now in `docs/archive/`. CLAUDE.md Rule 8 (Living Map Discipline) requires updating SYSTEM_MAP or OPERATIONS in the same commit as any module / page / cron / AI tool / API surface / readable schema field change.
 
 ---
@@ -56,6 +56,61 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 45 — Wave 1 of v1-finish sprint (2026-04-27)
+
+Two-item bundle on the AI/worker layer. Both items closed in a single commit
+because both touch `lib/ai/` + worker infra and both were narrow code surgery
+with low risk.
+
+**Part A — Blocker #3: dual grading worker · CLOSED.**
+
+- Removed `[[services]] grading-worker` block (8 lines) from `railway.toml`.
+- Deleted `scripts/grading-worker.ts` (now-orphaned standalone entry).
+- Kept `scripts/process-recording-jobs.ts` as manual debug surface (also
+  reachable via `app/api/cron/process-recording-jobs/route.ts` HTTP wrapper).
+- `instrumentation.ts` → `lib/grading-worker.ts` → `lib/grading-processor.ts`
+  is now the sole grading path. Atomic claim no longer protecting against a
+  second worker — protecting against future re-introduction.
+- Post-deploy verification owed within 30 min: confirm Railway `grading-worker`
+  service goes away + heartbeat audit rows continue at ~1/min single source.
+
+**Part B — AUDIT_PLAN P3: AI model date-pin standardization · CLOSED.**
+
+- Swept all `claude-sonnet-4-20250514` → `claude-sonnet-4-6` across **9
+  occurrences in 5 files** (5× larger than the AUDIT_PLAN P3 entry suggested):
+  `lib/ai/enrich-property.ts`, `app/api/[tenant]/calls/[id]/property-suggestions/route.ts`,
+  `app/api/[tenant]/calls/[id]/generate-next-steps/route.ts`,
+  `app/api/properties/[propertyId]/blast/route.ts`.
+- Post-sweep grep returns ZERO hits for the date-pinned identifier.
+- Final inventory: 13 Sonnet 4.6 callers + 4 Opus 4.6 callers, no drift.
+- Did NOT touch the Sonnet/Opus role assignment — Wave 1 was strictly a
+  date-pin sweep. The current Sonnet (conversation) / Opus (high-stakes
+  extraction) split is the stability-first split per D-044 (DECISIONS
+  writeup deferred to Wave 4).
+
+**Lessons captured for future audits:**
+
+- The AUDIT_PLAN P3 entry was authored from a single-file finding
+  (`lib/ai/enrich-property.ts:57`) — the actual contagion was 5× wider.
+  **AUDIT_PLAN entries must be authored from a fresh codebase grep**, not
+  from an isolated observation. Updated AUDIT_PLAN P3 closure note codifies
+  this.
+- The original prompt for Wave 1 stated the rule as "grading → Sonnet,
+  coaching → Opus" — exactly inverted from the code's current Opus / Sonnet
+  split. Stop-and-report caught the contradiction before any code flipped.
+  Future model-policy work should grep before stating the rule.
+
+**Companion doc updates in this commit:**
+
+- `AUDIT_PLAN.md` — Blocker #3 → CLOSED with post-deploy verification queries;
+  P3 → CLOSED with corrected scope + lesson note.
+- `SYSTEM_MAP.md` §6 — enrich-property table row updated to post-sweep state;
+  added rows for the 4 API routes that also call Sonnet 4.6 + audit script
+  (Opus 4.6); D-0XX renamed D-044 (driver provided = stability-first), full
+  writeup still pending Wave 4.
+- `PROGRESS.md` — header bumped Session 44 → 45; Active Blockers updated;
+  this entry added.
 
 ### Session 44 — Docs reorganization sprint (2026-04-27)
 
@@ -215,13 +270,25 @@ All other bugs from sessions 1-32 are resolved.
 
 ## Next Session — Start Exactly Here
 
-**Status as of 2026-04-27 (post-sprint):** Docs reorg complete (Session 44 above,
-8 commits `ea02beb..f1284f3`). Production code state unchanged from Session 43
-(`8e13fb3`) — the sprint was doc-only except for the 3-line stale comment fix
-in `lib/ai/grading.ts:204` and the comment fix in `lib/ai/scoring.ts:30`.
-Pre-push tsc gate stayed clean throughout.
+**Status as of 2026-04-27 (post-Wave-1):** v1-finish sprint Wave 1 closed
+Blocker #3 (dual grading worker) and AUDIT_PLAN P3 (date-pin sweep). Docs
+reorg sprint is also closed (Session 44 above). Production code state has
+2 small touches from Wave 1: `railway.toml` block removal + 9 model-string
+replacements across 5 files. Pre-push tsc gate stayed clean.
 
-**P1 — Blocker #2 production verification (deferred 5 sessions):**
+**Post-Wave-1 verification owed (within 30 min of deploy):**
+- Railway dashboard: confirm `grading-worker` standalone service goes away.
+- Heartbeat audit rows continue at ~1/min from a single source (was ~2/min
+  pre-Wave-1 from two sources):
+  ```sql
+  SELECT COUNT(*) AS ticks, MAX(created_at) AS last_seen
+  FROM audit_logs
+  WHERE action = 'cron.process_recording_jobs.started'
+    AND created_at > NOW() - INTERVAL '5 minutes';
+  ```
+- Grading queue does not back up over 24h (in-process loop carries the load).
+
+**P1 — Blocker #2 production verification (deferred 6 sessions):**
 The AI Assistant propose→edit→confirm flow was coded in Session 38 (commits
 `15fe184` — `5203539`) but never validated end-to-end on live Railway with
 real GHL data. Three validation paths in order of safety:
@@ -234,13 +301,7 @@ real GHL data. Three validation paths in order of safety:
 
 Start with path 1 on the live URL. If that works, escalate to path 2.
 
-**P2 — Blocker #3: dual grading worker.** See `docs/AUDIT_PLAN.md`. Plan:
-remove `[[services]] grading-worker` block from `railway.toml`, delete
-`scripts/grading-worker.ts`, watch heartbeat audit rows for 24h to confirm
-in-process loop alone handles full load. Code change with production risk —
-do this as its own session, not bundled.
-
-**P3 — Worker health verification (still owed from Session 38):**
+**P2 — Worker health verification (still owed from Session 38, now also the Wave-1 post-deploy gate):**
 ```sql
 SELECT action, COUNT(*)::int AS count, MAX(created_at) AS last_seen,
   EXTRACT(EPOCH FROM (NOW() - MAX(created_at)))::int AS seconds_since
@@ -249,10 +310,11 @@ WHERE action LIKE 'cron.process_recording_jobs.%'
   AND created_at > NOW() - INTERVAL '1 hour'
 GROUP BY action;
 ```
-Expected: one `started` + one `finished` per minute. If `last_seen` > 120s,
-the in-process worker is down — escalate per Session 38 + Blocker #3 notes.
+Expected: one `started` + one `finished` per minute (single source post-Wave-1,
+was double-source pre-Wave-1). If `last_seen` > 120s, the in-process worker is
+down — escalate per Session 38 notes.
 
-**P4 — Known bugs (in severity order):**
+**P3 — Known bugs (in severity order):**
 1. Bug #20 — deal-intel parser doesn't strip markdown fences. Extract
    `stripJsonFences()` into `lib/ai/stripJsonFences.ts`, use in
    `lib/ai/extract-deal-intel.ts`.
@@ -263,17 +325,17 @@ the in-process worker is down — escalate per Session 38 + Blocker #3 notes.
    daily-audit, daily-kpi-snapshot, weekly-profiles, regenerate-stories,
    compute-aggregates).
 5. Bug #18 — one-time backfill: `UPDATE calls SET source='recovery' WHERE source IS NULL`.
-6. Bug #22 — one-time cleanup: 24 empty-shell FAILED rows. Note: Session 43
+6. Bug #22 — one-time cleanup: 24 empty-shell FAILED rows. Session 43
    commit `4840c52` closes the create-site root cause; the 24 existing rows
    still need the `UPDATE … SET gradingStatus='SKIPPED'` cleanup.
 
-**P5 — Technical debt:**
+**P4 — Technical debt:**
 1. Migrate ~64 remaining API routes to `withTenant` helper.
 2. Sweep remaining silent catches in broader codebase (79 total).
 3. Align Day Hub vs Calls page call count source-of-truth.
 4. Fix LM tab "227" dial count aggregation across LM role.
-5. P3 from AUDIT_PLAN — standardize `lib/ai/enrich-property.ts` model string.
-6. P4 from AUDIT_PLAN — delete legacy `/{tenant}/tasks/` page (coordinate with Chris).
+5. P4 from AUDIT_PLAN — delete legacy `/{tenant}/tasks/` page (coordinate with Chris).
+6. P5 from AUDIT_PLAN — `assign_contact_to_user` UI flow vs route discrepancy.
 
 **Railway + Logging:** Railway API token noted invalid in Session 38 — request
-a fresh one if Blocker #3 verification (P2) needs Railway dashboard access.
+a fresh one if the post-Wave-1 verification (P2) needs Railway dashboard access.

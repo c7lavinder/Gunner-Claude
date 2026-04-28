@@ -226,11 +226,11 @@ runs in-process inside every `gunner-ai-web` Node process, no separate Railway s
 required. Reference implementation: `instrumentation.ts` → `lib/grading-worker.ts` →
 `lib/grading-processor.ts`.
 
-The legacy `[[services]] grading-worker` block in `railway.toml` is residue from an
-incomplete migration — see Blocker #3 in `docs/AUDIT_PLAN.md` for the removal plan.
-Until removed, two workers run simultaneously; the atomic
+The legacy `[[services]] grading-worker` block in `railway.toml` was removed in
+Wave 1 of the v1-finish sprint (2026-04-27, Blocker #3 closed). The atomic
 `updateMany({ gradingStatus: PENDING } → PROCESSING)` claim in
-`lib/grading-processor.ts:69-72` prevents double-grading at the cost of wasted compute.
+`lib/grading-processor.ts:69-72` is now defense-in-depth against future
+re-introduction of a second worker, not active double-grading prevention.
 
 ### Pattern for new reliability-critical work
 

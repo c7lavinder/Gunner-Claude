@@ -33,8 +33,9 @@ command = "npx tsx scripts/poll-calls.ts"
 
 # process-recording-jobs was previously a [[cron]] here. Removed 2026-04-20
 # because Railway's cron scheduler stopped firing it reliably and redeploys
-# did not re-register it. Replaced by the grading-worker [[services]] block
-# below, which runs the same processJobs() in an infinite 60s loop.
+# did not re-register it. Briefly replaced by a [[services]] grading-worker
+# (Sessions 38-44), then superseded by the in-process worker via
+# instrumentation.ts (Sessions 41-42 build, Wave 1 cleanup 2026-04-27).
 
 # Cron job: daily self-audit at 2am UTC
 [[cron]]
@@ -73,12 +74,8 @@ name = "compute-aggregates"
 schedule = "0 4 * * *"
 command = "npx tsx scripts/compute-aggregates.ts"
 
-# Long-running service: grading worker. Replaces the broken
-# process-recording-jobs [[cron]]. Runs processJobs() forever with a 60s
-# sleep between iterations. Railway keeps the process alive and SIGTERMs
-# it on redeploy for a clean restart.
-[[services]]
-name = "grading-worker"
-
-[services.deploy]
-startCommand = "npx tsx scripts/grading-worker.ts"
+# Grading worker now runs in-process via instrumentation.ts (Sessions 41-42)
+# inside the gunner-ai-web service — no separate [[services]] block needed.
+# The previous standalone [[services]] grading-worker block was removed
+# 2026-04-27 (Wave 1 of v1-finish sprint, Blocker #3 closed). Manual debug
+# trigger remains available via app/api/cron/process-recording-jobs/route.ts.

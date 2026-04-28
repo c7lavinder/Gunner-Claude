@@ -52,7 +52,7 @@ export async function POST(
     const timer = startTimer()
 
     const res = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       messages: [{
         role: 'user',
@@ -86,7 +86,7 @@ Return ONLY the JSON array, no other text.`,
       type: 'property_enrich', pageContext: `call:${params.id}`,
       input: `Property suggestions for ${prop.address}`, output: text.slice(0, 5000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
-      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+      durationMs: timer(), model: 'claude-sonnet-4-6',
     }).catch(() => {})
 
     const match = text.match(/\[[\s\S]*\]/)

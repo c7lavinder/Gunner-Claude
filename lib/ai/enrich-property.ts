@@ -54,7 +54,7 @@ Return ONLY JSON:
 Base estimates on the location, size, and year. If insufficient data, use null.`
 
     const res = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       messages: [{ role: 'user', content: prompt }],
     })
@@ -66,7 +66,7 @@ Base estimates on the location, size, and year. If insufficient data, use null.`
       type: 'property_enrich', pageContext: `property:${propertyId}`,
       input: `Enrich ${property.address}`, output: text.slice(0, 5000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
-      durationMs: timer(), model: 'claude-sonnet-4-20250514',
+      durationMs: timer(), model: 'claude-sonnet-4-6',
     }).catch((err) => {
       logFailure(tenantId, 'enrich_property.ai_log_failed', `property:${propertyId}`, err)
     })

@@ -17,8 +17,7 @@ Live in `railway.toml`. Healthcheck at `https://gunner-claude-production.up.rail
 
 | Service | Start command | Notes |
 |---|---|---|
-| `gunner-ai-web` | `npm start` (Next.js production server) | Hosts the web app. **Boots in-process grading worker via `instrumentation.ts`** — see SYSTEM_MAP "Workers" section. |
-| `grading-worker` (LEGACY) | `npx tsx scripts/grading-worker.ts` | Residue from Session-38 standalone-service pattern. Runs `runGradingProcessor()` in parallel with the in-process loop. **Pending removal — Blocker #3 in AUDIT_PLAN.md.** |
+| `gunner-ai-web` | `npm start` (Next.js production server) | Hosts the web app. **Boots in-process grading worker via `instrumentation.ts`** — see SYSTEM_MAP "Workers" section. Sole driver of grading as of Wave 1 (2026-04-27). |
 
 ### Crons
 
@@ -197,9 +196,10 @@ app/api/
 ### Recurring crons (referenced by `railway.toml`)
 - `poll-calls.ts`, `audit.ts`, `kpi-snapshot.ts`, `generate-profiles.ts`, `regenerate-stories.ts`, `compute-aggregates.ts`
 
-### Background worker entry point (LEGACY, pending Blocker #3)
-- `grading-worker.ts` — wraps `runGradingProcessor()` in 60s loop. Standalone Railway service.
-- `process-recording-jobs.ts` — older standalone driver, still importable for manual tick.
+### Background worker entry point (manual debug only)
+- `process-recording-jobs.ts` — older standalone driver, importable for manual `npx tsx` invocation. Same logic as `lib/grading-processor.ts` (the in-process driver). HTTP wrapper at `app/api/cron/process-recording-jobs/route.ts` is the preferred manual trigger surface.
+
+(`scripts/grading-worker.ts` was deleted Wave 1, 2026-04-27 — Blocker #3 closed. In-process worker via `instrumentation.ts` is sole driver.)
 
 ### Health checks + verifiers
 - `verify-calls-pipeline.ts` — bidirectional A/B + sanity gate + canary. Closed Blocker #1. Daily-cron candidate.

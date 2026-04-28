@@ -59,39 +59,26 @@ writes skip `audit_logs` entirely).
 
 Items 1-3 clear the hard blockers. Item 4 is ongoing hygiene.
 
-### Blocker #3 — Dual grading worker (production waste, race risk)
+### Blocker #3 — Dual grading worker · ✅ CLOSED (2026-04-27, Wave 1 of v1-finish sprint)
 
-Both `instrumentation.ts` (in-process via `lib/grading-worker.ts`) AND
-`scripts/grading-worker.ts` (standalone via `[[services]] grading-worker` in
-`railway.toml`) are running the same `runGradingProcessor()` loop simultaneously.
+`[[services]] grading-worker` block removed from `railway.toml` and
+`scripts/grading-worker.ts` deleted. `instrumentation.ts` now sole driver of
+`runGradingProcessor()` (in-process, every 60s, single-flight + hot-reload guard).
+Manual debug trigger remains at `app/api/cron/process-recording-jobs/route.ts`.
 
-**Why it's not catastrophic:** atomic `updateMany({ gradingStatus: PENDING } →
-PROCESSING)` claim in `lib/grading-processor.ts:69-72` prevents double-grading.
-
-**Why it still matters:**
-- Wasted compute (Opus calls cost real money; both workers tick every 60s)
-- Double heartbeat audit rows
-- Race risk if either claim implementation drifts
-- Two places to monitor for "is the worker alive" instead of one
-
-**Canonical answer:** `instrumentation.ts` is primary (Sessions 41-42 in-process
-move). The `[[services]] grading-worker` entry in `railway.toml` is residue from
-an incomplete migration.
-
-**Removal plan:**
-1. Remove the `[[services]] grading-worker` block from `railway.toml`. Delete
-   `scripts/grading-worker.ts`. Keep `lib/grading-worker.ts` and
-   `lib/grading-processor.ts`.
-2. Verify `instrumentation.ts` handles full load alone — heartbeat audit rows
-   should appear every ~60s in `audit_logs WHERE action =
-   'cron.process_recording_jobs.started'`.
-3. Watch for missed ticks for 24h. If any gap > 120s, the in-process loop has a
-   reliability issue and needs investigation BEFORE permanent removal.
-4. Keep `app/api/cron/process-recording-jobs/route.ts` HTTP wrapper as the
-   manual debug surface.
-
-Out of scope for the current docs-cleanup sprint — code change with production
-risk should not be bundled with documentation work.
+**Post-deploy verification owed (within 30 min of Wave 1 push):**
+1. Railway dashboard: confirm `grading-worker` service goes away on next deploy.
+2. Heartbeat query — should still tick every ~60s, but now from a single source:
+   ```sql
+   SELECT COUNT(*) AS ticks, MAX(created_at) AS last_seen
+   FROM audit_logs
+   WHERE action = 'cron.process_recording_jobs.started'
+     AND created_at > NOW() - INTERVAL '5 minutes';
+   ```
+   Expected: ~5 rows (one per minute, single source) instead of ~10 (two sources).
+3. Watch grading queue for 24h. If `gradingStatus='PENDING'` count grows without
+   bound, the in-process loop has a reliability issue — re-add the standalone
+   service as fallback while investigating.
 
 ## Audits completed
 
@@ -116,10 +103,20 @@ Blocker #2 work should target the 4-step fix sequence above, in order. Each step
 
 ## Priority items (non-blocking)
 
-**P3 — AI model fragmentation.** `lib/ai/enrich-property.ts:57` uses date-pinned
-`claude-sonnet-4-20250514` (a 2025 snapshot) while every other Sonnet caller in
-`lib/ai/` uses `claude-sonnet-4-6`. Standardize to `claude-sonnet-4-6`. Trivial
-fix, trivial risk, but "fix when convenient" = "never."
+**P3 — AI model date-pin standardization · ✅ CLOSED (2026-04-27, Wave 1 of v1-finish sprint).**
+Original entry scoped only `lib/ai/enrich-property.ts:57` — the actual scope
+discovered during Wave 1 was **9 occurrences of `claude-sonnet-4-20250514`
+across 5 files** (5× larger than the AUDIT_PLAN entry suggested):
+- `lib/ai/enrich-property.ts` (×2)
+- `app/api/[tenant]/calls/[id]/property-suggestions/route.ts` (×2)
+- `app/api/[tenant]/calls/[id]/generate-next-steps/route.ts` (×2)
+- `app/api/properties/[propertyId]/blast/route.ts` (×3)
+
+All swept to `claude-sonnet-4-6`. Post-sweep grep returns zero hits for the
+date-pinned identifier. Final inventory: 13 Sonnet 4.6 callers + 4 Opus 4.6
+callers, no drift. **Lesson:** AUDIT_PLAN P-entries should be authored from
+a fresh codebase grep, not from a single-file finding. Future P-entries
+require explicit scope verification via grep before being written.
 
 **P4 — `app/(tenant)/[tenant]/tasks/` deletion candidate.** Day Hub
 (`app/(tenant)/[tenant]/day-hub/`) is the canonical Tasks/Day Hub surface per

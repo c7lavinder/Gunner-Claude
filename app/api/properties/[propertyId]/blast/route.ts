@@ -144,12 +144,12 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
         try {
           const [emailRes, smsRes] = await Promise.all([
             anthropic.messages.create({
-              model: 'claude-sonnet-4-20250514',
+              model: 'claude-sonnet-4-6',
               max_tokens: 500,
               messages: [{ role: 'user', content: emailPrompt }],
             }),
             anthropic.messages.create({
-              model: 'claude-sonnet-4-20250514',
+              model: 'claude-sonnet-4-6',
               max_tokens: 200,
               messages: [{ role: 'user', content: smsPrompt }],
             }),
@@ -178,7 +178,7 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
             output: `Email: ${emailSubject} | SMS: ${smsText.trim().slice(0, 100)}`,
             tokensIn: (emailRes.usage?.input_tokens ?? 0) + (smsRes.usage?.input_tokens ?? 0),
             tokensOut: (emailRes.usage?.output_tokens ?? 0) + (smsRes.usage?.output_tokens ?? 0),
-            durationMs: blastTimer(), model: 'claude-sonnet-4-20250514',
+            durationMs: blastTimer(), model: 'claude-sonnet-4-6',
           }).catch(() => {})
         } catch {
           results[t] = {
