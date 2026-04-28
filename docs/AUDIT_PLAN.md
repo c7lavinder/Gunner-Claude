@@ -129,6 +129,17 @@ bookmarked. Deleting `/tasks/` enforces "one canonical surface" and reduces
 split-brain risk on KPI source-of-truth bugs (currently in PROGRESS as a
 parked tech-debt item). Coordinate with Chris before removal.
 
+**P5 — `assign_contact_to_user` bypasses propose-edit-confirm UI flow.**
+`/api/ai/assistant/execute/route.ts` handles `assign_contact_to_user` via
+server-side name-contains fuzzy matching, not through the propose → edit →
+confirm flow that gates the other 12 action types (per
+`components/ui/coach-sidebar.tsx`). Architectural inconsistency: it's the
+13th action that exists at the route layer but has no UI surface for
+preview / edit / confirm. Investigate whether to add it to the UI flow
+(treat it as a high-stakes action — assignment changes who owns the lead)
+or formalize the bypass with explicit documentation + a server-side
+acceptance test. Surfaced during SYSTEM_MAP §6 review (Commit #2 sprint).
+
 ## Pending decisions
 
 - **D-0XX — AI model churn (Opus 4.7 → Opus 4.6 with 4.7-era prompt config).**
