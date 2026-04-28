@@ -417,5 +417,5 @@ Recent (last ~6 weeks). Older incidents in `docs/SESSION_ARCHIVE.md`.
 - **Audit deliverables** — `docs/audits/`
 - **Historical session log** — `docs/SESSION_ARCHIVE.md`
 - **UI design system** — `docs/DESIGN.md`
-- **Vendor field comparison** — `docs/API_FIELD_INVENTORY.md` (after sprint Commit #7)
+- **Vendor field comparison** — `docs/API_FIELD_INVENTORY.md`
 - **Embedded playbook** (loaded into pgvector via `scripts/load-playbook.ts`) — `docs/NAH-Wholesale-Playbook/`

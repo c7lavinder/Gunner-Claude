@@ -520,6 +520,6 @@ await requireApproval({
 - **Historical session log** — `docs/SESSION_ARCHIVE.md`
 - **UI design system** — `docs/DESIGN.md`
 - **Vendor field comparison** (informed Wave 1 schema) —
-  `docs/API_FIELD_INVENTORY.md` (after sprint Commit #7)
+  `docs/API_FIELD_INVENTORY.md`
 - **Embedded playbook content** — `docs/NAH-Wholesale-Playbook/` (data,
   loaded into pgvector by `scripts/load-playbook.ts`)
