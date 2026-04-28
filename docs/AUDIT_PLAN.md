@@ -103,7 +103,11 @@ Blocker #2 work should target the 4-step fix sequence above, in order. Each step
 
 ## Priority items (non-blocking)
 
-**P1 — Day Hub LM dial-count aggregation · ✅ CLOSED (2026-04-28, Wave 2 of v1-finish sprint).**
+**P1 — Day Hub LM dial-count aggregation · ⏳ PATCH SHIPPED — VERIFICATION PENDING (post-deploy SQL owed).**
+Three-number reconciliation (DB / Day Hub / Calls page) owed after Railway redeploy.
+Patch landed 2026-04-28 in Wave 2 of v1-finish sprint; flips to CLOSED only
+once the production SQL in PROGRESS.md Session 46 reconciles.
+
 Authored retroactively from a fresh codebase grep — the original Wave-2 prompt
 referenced "AUDIT_PLAN P1" but no such entry existed; the item lived as a
 one-line tech-debt mention in PROGRESS.md ("Fix LM tab '227' dial count
@@ -135,7 +139,11 @@ the canonical /day-hub/ doesn't have an LM tab at all, but does have the
 admin-aggregation bug that produced the symptom. Fresh grep before fixing
 caught this; same Wave-1 discipline.
 
-**P2 — Day Hub vs Calls page call-count source-of-truth · ✅ CLOSED (2026-04-28, Wave 2 of v1-finish sprint).**
+**P2 — Day Hub vs Calls page call-count source-of-truth · ⏳ PATCH SHIPPED — VERIFICATION PENDING (post-deploy SQL owed).**
+Three-number reconciliation (DB / Day Hub / Calls page) owed after Railway redeploy.
+Patch landed 2026-04-28 in Wave 2 of v1-finish sprint; flips to CLOSED only
+once the production SQL in PROGRESS.md Session 46 reconciles.
+
 Same retroactive-authoring caveat as P1. The fresh grep found three surfaces
 with three different queries:
 
@@ -152,13 +160,14 @@ became the canonical contract that the helper enforces.
 Fix: same shared helper as P1. Both Day Hub surfaces now use `calledAt`,
 matching `/calls` and `app/(tenant)/[tenant]/health/page.tsx`.
 
-**Out of scope for Wave 2 but surfaced in the grep:**
-- `app/(tenant)/[tenant]/dashboard/page.tsx:127-135` still uses `createdAt`
-  for `callsToday/Week/Month`. Same drift family. Logged as PROGRESS P4 #7
-  for a future wave; kept out of Wave 2 to keep the change set surgical.
+**Wave-2 follow-up (2026-04-28):**
+- `app/(tenant)/[tenant]/dashboard/page.tsx:127-135` (callsToday/Week/Month)
+  was the same drift family. Routed through `lib/kpis/dial-counts.ts` via
+  the new `countDialsInRange(scope, range)` primitive — tenant-wide scope,
+  `calledAt`-pinned. Same patch-shipped/verification-pending status as P1+P2.
 - `scripts/kpi-snapshot.ts:40-42, 84` uses `createdAt` for nightly snapshots.
   Whether to switch to `calledAt` is debatable (snapshot semantics vs call
-  semantics); not touching without an explicit decision.
+  semantics) — logged as **D-045 (proposed)** below; needs Corey decision.
 
 **P3 — AI model date-pin standardization · ✅ CLOSED (2026-04-27, Wave 1 of v1-finish sprint).**
 Original entry scoped only `lib/ai/enrich-property.ts:57` — the actual scope
@@ -201,3 +210,13 @@ acceptance test. Surfaced during SYSTEM_MAP §6 review (Commit #2 sprint).
   stability? latency?). Until provided, the model state stands as documented
   in PROGRESS Sessions 41-42 / `lib/ai/grading.ts:204-210` comment but is not
   formally adopted as a decision.
+
+- **D-045 (proposed) — KPI snapshot timestamp semantics.**
+  Status: Pending — needs driver.
+  Question: Should `scripts/kpi-snapshot.ts` aggregate by `createdAt` (when
+  the call row was inserted, captures pipeline backfill behavior) or
+  `calledAt` (when the call actually happened, matches user-facing surfaces)?
+  Currently uses `createdAt` at lines 40-42, 84.
+  Driver needed: Do nightly snapshots represent "what was in the system on
+  day X" or "what calls happened on day X"?
+  Blocked on: Corey decision.

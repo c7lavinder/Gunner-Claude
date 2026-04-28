@@ -9,6 +9,7 @@ import { getCentralDayBounds } from '@/lib/dates'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
 import { getLeaderboard, getUserBadges } from '@/lib/gamification/xp'
+import { countDialsInRange } from '@/lib/kpis/dial-counts'
 
 interface PageProps {
   params: { tenant: string }
@@ -122,17 +123,15 @@ export default async function DashboardPage({ params }: PageProps) {
     take: 50,
   })
 
-  // KPI counts — extended with week/month for context
+  // KPI counts — extended with week/month for context.
+  // Tenant-wide dials via shared helper (lib/kpis/dial-counts.ts) so this
+  // surface can't drift from /day-hub/ or /api/[tenant]/dayhub/kpis on the
+  // date field (calledAt is canonical) or aggregation rule.
+  const dialScope = { kind: 'all' as const, tenantId }
   const [callsToday, callsWeek, callsMonth, avgScore, tasksCompleted, propertiesActive] = await Promise.all([
-    db.call.count({
-      where: { tenantId, createdAt: { gte: dayStart } },
-    }),
-    db.call.count({
-      where: { tenantId, createdAt: { gte: weekStart } },
-    }),
-    db.call.count({
-      where: { tenantId, createdAt: { gte: monthStart } },
-    }),
+    countDialsInRange(dialScope, { gte: dayStart, lte: dayEnd }),
+    countDialsInRange(dialScope, { gte: weekStart }),
+    countDialsInRange(dialScope, { gte: monthStart }),
     db.call.aggregate({
       where: { tenantId, gradingStatus: 'COMPLETED', score: { not: null } },
       _avg: { score: true },

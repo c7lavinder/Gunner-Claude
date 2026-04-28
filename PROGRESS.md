@@ -109,34 +109,60 @@ legacy surface protects against future drift while it sticks around.
 
 **Files changed:**
 
-- `lib/kpis/dial-counts.ts` — new, 80 lines.
-- `app/(tenant)/[tenant]/day-hub/page.tsx` — calls/convos count now via helper.
-- `app/api/[tenant]/dayhub/kpis/route.ts` — calls/convos count now via helper.
+- `lib/kpis/dial-counts.ts` — new. Wave 2: 80 lines (today + convo helpers).
+  Wave 2 follow-up: added `countDialsInRange(scope, range)` primitive so
+  multi-day dashboard windows could route through the same module.
+- `app/(tenant)/[tenant]/day-hub/page.tsx` — calls/convos count via helper.
+- `app/api/[tenant]/dayhub/kpis/route.ts` — calls/convos count via helper.
+- `app/(tenant)/[tenant]/dashboard/page.tsx` — callsToday/Week/Month via
+  helper (added in Wave 2 follow-up commit; closes the third dial-count
+  surface that surfaced during the Wave 2 grep).
 - `docs/SYSTEM_MAP.md` §Computed metrics — new entry for `lib/kpis/dial-counts.ts`.
-- `docs/AUDIT_PLAN.md` — P1 + P2 added retroactively as CLOSED.
-- `PROGRESS.md` — header bumped to Session 46; P4 #3 + #4 dropped.
+- `docs/AUDIT_PLAN.md` — P1 + P2 added retroactively (status: PATCH SHIPPED,
+  verification pending). D-045 (proposed) added for kpi-snapshot.ts
+  timestamp-semantics decision.
+- `PROGRESS.md` — header bumped to Session 46; P4 #3 + #4 + #7 dropped
+  (dashboard fix landed before #7 needed its own wave).
 
-**Verification owed (post-deploy):**
+**Commits:**
 
-- Pick today's CT date. Run reconciliation:
-  ```sql
-  SELECT
-    COUNT(*) FILTER (WHERE assigned_to_id IN
-      (SELECT id FROM users WHERE tenant_id=$1 AND role='LEAD_MANAGER'))
-      AS lm_dials,
-    COUNT(*) AS tenant_dials
-  FROM calls
-  WHERE tenant_id = $1
-    AND called_at >= (NOW() AT TIME ZONE 'America/Chicago')::date
-                       AT TIME ZONE 'America/Chicago'
-    AND called_at <  (NOW() AT TIME ZONE 'America/Chicago')::date + INTERVAL '1 day'
-                       AT TIME ZONE 'America/Chicago';
-  ```
-- Compare `lm_dials` to legacy /tasks/ Day Hub LM tab "Calls Made".
-- Compare `tenant_dials` to canonical /day-hub/ "Calls Made" when viewed
-  as admin/owner (no view-as).
-- Compare both to count rendered on /calls when filtered to today.
-- All three should reconcile to the same SQL number for the same scope.
+- `98e5e7d` — Wave 2 (Day Hub canonical + legacy backend, helper extracted).
+- (follow-up) — dashboard fix + AUDIT_PLAN status corrections + D-045 +
+  PROGRESS verification checklist. Stacked rather than amended so the
+  cadence stays honest (Wave 2 closed the user-listed items; the dashboard
+  fix is genuine follow-up work).
+
+**Verification Owed (post-Railway redeploy)**
+
+Run this SQL after deploy completes:
+
+```sql
+SELECT
+  COUNT(*) FILTER (WHERE assigned_to_id IN
+    (SELECT id FROM users WHERE tenant_id=$1 AND role='LEAD_MANAGER'))
+    AS lm_dials,
+  COUNT(*) AS tenant_dials
+FROM calls
+WHERE tenant_id = $1
+  AND called_at >= (NOW() AT TIME ZONE 'America/Chicago')::date
+                     AT TIME ZONE 'America/Chicago'
+  AND called_at <  (NOW() AT TIME ZONE 'America/Chicago')::date + INTERVAL '1 day'
+                     AT TIME ZONE 'America/Chicago';
+```
+
+Three numbers must match (for the same role scope + today CT):
+
+- [ ] DB count: ___
+- [ ] Day Hub render: ___
+- [ ] Calls page render: ___
+
+Comparison map:
+- `lm_dials` ↔ legacy /tasks/ Day Hub LM tab "Calls Made"
+- `tenant_dials` ↔ canonical /day-hub/ "Calls Made" when viewed as admin/owner (no view-as)
+- `tenant_dials` ↔ /calls page count when filtered to today (no team filter)
+
+If all three match → flip P1+P2 to CLOSED in AUDIT_PLAN.md.
+If they don't match → stop and report drift before Wave 3.
 
 ### Session 45 — Wave 1 of v1-finish sprint (2026-04-27)
 
@@ -417,7 +443,7 @@ down — escalate per Session 38 notes.
 4. ~~Fix LM tab "227" dial count aggregation across LM role.~~ ✅ Closed Wave 2 (Session 46).
 5. P4 from AUDIT_PLAN — delete legacy `/{tenant}/tasks/` page (coordinate with Chris).
 6. P5 from AUDIT_PLAN — `assign_contact_to_user` UI flow vs route discrepancy.
-7. Dashboard `/{tenant}/dashboard/page.tsx:127-135` still uses `createdAt` for callsToday/Week/Month + tenant-wide. Same drift family as the Day Hub bug Wave 2 just fixed; surfaced during Wave 2 grep but left for a future wave to keep the change set surgical.
+7. ~~Dashboard `/{tenant}/dashboard/page.tsx:127-135` still uses `createdAt` for callsToday/Week/Month + tenant-wide.~~ ✅ Closed in Wave 2 follow-up (Session 46) — same helper, new `countDialsInRange` primitive. Verification pending alongside P1+P2.
 
 **Railway + Logging:** Railway API token noted invalid in Session 38 — request
 a fresh one if the post-Wave-1 verification (P2) needs Railway dashboard access.

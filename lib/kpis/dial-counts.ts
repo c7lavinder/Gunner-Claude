@@ -30,19 +30,38 @@ interface DialCountWindow {
   date?: string
 }
 
-function buildCallWhere(scope: DialScope, window?: DialCountWindow) {
-  const { dayStart, dayEnd } = getCentralDayBounds(window?.date)
+/** Inclusive `gte`, optional inclusive `lte` (open-ended if omitted). */
+export interface DialDateRange {
+  gte: Date
+  lte?: Date
+}
+
+function buildCallWhere(scope: DialScope, range: DialDateRange) {
+  const calledAt: { gte: Date; lte?: Date } = { gte: range.gte }
+  if (range.lte) calledAt.lte = range.lte
   const base: {
     tenantId: string
-    calledAt: { gte: Date; lte: Date }
+    calledAt: { gte: Date; lte?: Date }
     assignedToId?: string | { in: string[] }
   } = {
     tenantId: scope.tenantId,
-    calledAt: { gte: dayStart, lte: dayEnd },
+    calledAt,
   }
   if (scope.kind === 'user') base.assignedToId = scope.userId
   else if (scope.kind === 'users') base.assignedToId = { in: scope.userIds }
   return base
+}
+
+/**
+ * Primitive: count of all dial attempts (any gradingStatus) in the given range.
+ * Use for week/month/custom-range KPIs (e.g. dashboard callsWeek/callsMonth).
+ */
+export async function countDialsInRange(
+  scope: DialScope,
+  range: DialDateRange,
+): Promise<number> {
+  if (scope.kind === 'users' && scope.userIds.length === 0) return 0
+  return db.call.count({ where: buildCallWhere(scope, range) })
 }
 
 /** Count of all dial attempts (any gradingStatus) for the day in scope. */
@@ -50,9 +69,8 @@ export async function countDialsToday(
   scope: DialScope,
   window?: DialCountWindow,
 ): Promise<number> {
-  // Empty user list = no possible matches; skip the query.
-  if (scope.kind === 'users' && scope.userIds.length === 0) return 0
-  return db.call.count({ where: buildCallWhere(scope, window) })
+  const { dayStart, dayEnd } = getCentralDayBounds(window?.date)
+  return countDialsInRange(scope, { gte: dayStart, lte: dayEnd })
 }
 
 /**
@@ -64,9 +82,10 @@ export async function countConvosToday(
   window?: DialCountWindow,
 ): Promise<number> {
   if (scope.kind === 'users' && scope.userIds.length === 0) return 0
+  const { dayStart, dayEnd } = getCentralDayBounds(window?.date)
   return db.call.count({
     where: {
-      ...buildCallWhere(scope, window),
+      ...buildCallWhere(scope, { gte: dayStart, lte: dayEnd }),
       gradingStatus: 'COMPLETED',
       durationSeconds: { gte: 45 },
     },
