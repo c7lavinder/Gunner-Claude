@@ -254,6 +254,11 @@ Per-vendor isolation: vendor failures do not take down the orchestrator.
 
 - `lib/computed-metrics.ts` — derived KPI calculations.
 - `lib/inventory-access.ts`, `lib/inventory-kpis.ts` — inventory-side KPIs.
+- `lib/kpis/dial-counts.ts` — single source of truth for "today's dials"
+  aggregation. Used by canonical Day Hub page and the legacy /tasks/ Day
+  Hub backend (`/api/[tenant]/dayhub/kpis`). Locks date field to `calledAt`
+  and supports `all` / `user` / `users` scopes so admin aggregation matches
+  across surfaces.
 - `lib/properties.ts` — property-level helpers.
 
 ### Other

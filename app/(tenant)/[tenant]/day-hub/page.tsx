@@ -7,6 +7,7 @@ import { DayHubClient } from './day-hub-client'
 import type { UserRole } from '@/types/roles'
 import { endOfDay, addDays } from 'date-fns'
 import { getCentralDayBounds } from '@/lib/dates'
+import { getDialKpisToday, type DialScope } from '@/lib/kpis/dial-counts'
 
 export default async function DayHubPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -149,10 +150,15 @@ export default async function DayHubPage({ params }: { params: { tenant: string 
     })(),
 
     // Calls made today + meaningful convos (>=45s)
-    Promise.all([
-      db.call.count({ where: { tenantId, assignedToId: userId, createdAt: { gte: dayStart, lte: dayEnd } } }),
-      db.call.count({ where: { tenantId, assignedToId: userId, createdAt: { gte: dayStart, lte: dayEnd }, durationSeconds: { gte: 45 } } }),
-    ]).then(([calls, convos]) => ({ calls, convos })),
+    // Admins/owners see tenant-wide totals (matches milestone/goal aggregation
+    // above); everyone else sees their own. Uses calledAt — the canonical
+    // timestamp shared with the Calls page and dayhub/kpis API.
+    // Helper: lib/kpis/dial-counts.ts
+    getDialKpisToday(
+      (isAdmin
+        ? { kind: 'all', tenantId }
+        : { kind: 'user', tenantId, userId }) as DialScope,
+    ),
 
     // Properties for milestone entry dropdown (active only)
     db.property.findMany({

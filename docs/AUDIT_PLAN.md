@@ -103,6 +103,63 @@ Blocker #2 work should target the 4-step fix sequence above, in order. Each step
 
 ## Priority items (non-blocking)
 
+**P1 — Day Hub LM dial-count aggregation · ✅ CLOSED (2026-04-28, Wave 2 of v1-finish sprint).**
+Authored retroactively from a fresh codebase grep — the original Wave-2 prompt
+referenced "AUDIT_PLAN P1" but no such entry existed; the item lived as a
+one-line tech-debt mention in PROGRESS.md ("Fix LM tab '227' dial count
+aggregation across LM role"). The fresh grep resolved the symptom to a
+different surface than the prompt suggested:
+
+- The "LM tab" (admin role tabs ADMIN/LM/AM/DISPO) only exists on the **legacy**
+  `/{tenant}/tasks/` Day Hub (`app/(tenant)/[tenant]/tasks/day-hub-client.tsx:641`).
+  Its backend `/api/[tenant]/dayhub/kpis/route.ts` was already correct: passes
+  `userIds=` of all LEAD_MANAGER users → `assignedToId: { in: [...] }`.
+- The canonical `/{tenant}/day-hub/` (Rule 3 surface) had no role tabs but **did**
+  have a related bug: `app/(tenant)/[tenant]/day-hub/page.tsx:153` always filtered
+  by `assignedToId: userId` regardless of admin status. Admin/owner saw their
+  own calls, not the team total — the most plausible source of the "227 not
+  aggregating" complaint.
+- Both surfaces also drifted on the date field: canonical Day Hub used
+  `createdAt`, legacy /tasks/ backend used `calledAt` (canonical), so even a
+  same-user count could differ at midnight boundaries.
+
+Fix: extracted `lib/kpis/dial-counts.ts` (calledAt-pinned, three scopes:
+`all` / `user` / `users`) and routed both surfaces through it. Canonical Day
+Hub now aggregates tenant-wide for admin/owner and per-user for everyone else.
+Legacy `/tasks/` Day Hub backend keeps its existing role-tab semantics but
+now goes through the same helper, so the two can't drift again on date field
+or aggregation rule.
+
+**Lesson:** symptom narration ("LM tab 227") doesn't always pin the surface —
+the canonical /day-hub/ doesn't have an LM tab at all, but does have the
+admin-aggregation bug that produced the symptom. Fresh grep before fixing
+caught this; same Wave-1 discipline.
+
+**P2 — Day Hub vs Calls page call-count source-of-truth · ✅ CLOSED (2026-04-28, Wave 2 of v1-finish sprint).**
+Same retroactive-authoring caveat as P1. The fresh grep found three surfaces
+with three different queries:
+
+| Surface | Date field | User filter |
+|---|---|---|
+| `/day-hub/` canonical | `createdAt` | always single-user (BUG) |
+| `/api/[tenant]/dayhub/kpis` (legacy /tasks/) | `calledAt` | role-aware via `userIds` |
+| `/calls` page | `calledAt` | tenant-wide list, JS-side date filter (default 7d) |
+
+The `/calls` page is a list view ordered by `calledAt desc, take: 500` — no
+shared count query to refactor, but its filter semantics (calledAt-based)
+became the canonical contract that the helper enforces.
+
+Fix: same shared helper as P1. Both Day Hub surfaces now use `calledAt`,
+matching `/calls` and `app/(tenant)/[tenant]/health/page.tsx`.
+
+**Out of scope for Wave 2 but surfaced in the grep:**
+- `app/(tenant)/[tenant]/dashboard/page.tsx:127-135` still uses `createdAt`
+  for `callsToday/Week/Month`. Same drift family. Logged as PROGRESS P4 #7
+  for a future wave; kept out of Wave 2 to keep the change set surgical.
+- `scripts/kpi-snapshot.ts:40-42, 84` uses `createdAt` for nightly snapshots.
+  Whether to switch to `calledAt` is debatable (snapshot semantics vs call
+  semantics); not touching without an explicit decision.
+
 **P3 — AI model date-pin standardization · ✅ CLOSED (2026-04-27, Wave 1 of v1-finish sprint).**
 Original entry scoped only `lib/ai/enrich-property.ts:57` — the actual scope
 discovered during Wave 1 was **9 occurrences of `claude-sonnet-4-20250514`

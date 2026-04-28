@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 45 — Wave 1 of v1-finish sprint (2026-04-27)
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 (dual grading worker) + AUDIT_PLAN P3 (date-pin sweep). Multi-vendor enrichment live, in-process grading worker live (now sole driver), bug-report system live.
+**Current session**: 46 — Wave 2 of v1-finish sprint (2026-04-28)
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 (dual grading worker) + AUDIT_PLAN P3 (date-pin sweep). Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift + LM aggregation) via shared helper `lib/kpis/dial-counts.ts`. Multi-vendor enrichment live, in-process grading worker live (now sole driver), bug-report system live.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
@@ -56,6 +56,87 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 46 — Wave 2 of v1-finish sprint (2026-04-28)
+
+Two display-correctness bugs on the dial-count surface, bundled because both
+touched the same aggregation logic. Closed PROGRESS P4 #3 + #4 (the items the
+user mapped to Wave-2 P1/P2 — see scope-correction note below).
+
+**Part A — Wave-2 P1: canonical Day Hub "Calls Made" never aggregated for admins.**
+
+`app/(tenant)/[tenant]/day-hub/page.tsx:153` always filtered the calls count
+by `assignedToId: userId` regardless of role. The `isAdmin` branch above it
+(line 39) only multiplied **goals** by headcount — the actual numerator was
+single-user. Result: an admin/owner viewing Day Hub saw their own dials over
+a goal scaled to the whole team.
+
+The query also used `createdAt` while `/calls` page ordering, the `/api/[tenant]/dayhub/kpis`
+backend, and `app/(tenant)/[tenant]/health/page.tsx` all use `calledAt`.
+Webhook lag at midnight boundaries put boundary calls in the wrong day,
+pushing the rendered count further out of sync.
+
+**Part B — Wave-2 P2: three surfaces, three queries.**
+
+- `/day-hub/` canonical → `createdAt` + always-single-user (BUG, fixed above).
+- `/api/[tenant]/dayhub/kpis` (backs legacy `/tasks/` Day Hub including the
+  admin LM/AM/DISPO role tabs) → `calledAt` + role-aware via `userIds=` query
+  param. Logic was correct.
+- `/calls` page → `calledAt` ordering, JS-side date filter (default 7d).
+
+The fix: extracted `lib/kpis/dial-counts.ts` as the single source of truth.
+Three scopes (`all` | `user` | `users`), `calledAt`-pinned, plus convo
+helper (graded ≥45s). Both Day Hub surfaces now go through it. Drift can't
+recur on the date field or the aggregation rule because there's only one
+place to change.
+
+**Scope-correction note (Wave-1-style audit accuracy):**
+
+The Wave-2 prompt referenced "AUDIT_PLAN P1/P2" — those entries did not
+exist. The two items lived in `PROGRESS.md` "P4 — Technical debt" #3 + #4
+as one-line tech-debt mentions, never authored as AUDIT_PLAN P-entries.
+Per Wave-1 lesson ("AUDIT_PLAN P-entries must be authored from a fresh
+codebase grep, not from a single-file finding"), Wave 2 added them
+retroactively to AUDIT_PLAN as CLOSED entries with the fresh-grep scope.
+
+The other catch from the fresh grep: the "LM tab" only ever existed on the
+**legacy /tasks/ Day Hub** (`app/(tenant)/[tenant]/tasks/day-hub-client.tsx`),
+not on the canonical `/day-hub/`. The legacy backend at `/api/[tenant]/dayhub/kpis`
+was already correct for that tab. The "227 not aggregating" symptom most
+plausibly traced to the **canonical /day-hub/ admin bug**, not to the LM
+tab itself. Fix on canonical surface fixes the symptom; refactor on the
+legacy surface protects against future drift while it sticks around.
+
+**Files changed:**
+
+- `lib/kpis/dial-counts.ts` — new, 80 lines.
+- `app/(tenant)/[tenant]/day-hub/page.tsx` — calls/convos count now via helper.
+- `app/api/[tenant]/dayhub/kpis/route.ts` — calls/convos count now via helper.
+- `docs/SYSTEM_MAP.md` §Computed metrics — new entry for `lib/kpis/dial-counts.ts`.
+- `docs/AUDIT_PLAN.md` — P1 + P2 added retroactively as CLOSED.
+- `PROGRESS.md` — header bumped to Session 46; P4 #3 + #4 dropped.
+
+**Verification owed (post-deploy):**
+
+- Pick today's CT date. Run reconciliation:
+  ```sql
+  SELECT
+    COUNT(*) FILTER (WHERE assigned_to_id IN
+      (SELECT id FROM users WHERE tenant_id=$1 AND role='LEAD_MANAGER'))
+      AS lm_dials,
+    COUNT(*) AS tenant_dials
+  FROM calls
+  WHERE tenant_id = $1
+    AND called_at >= (NOW() AT TIME ZONE 'America/Chicago')::date
+                       AT TIME ZONE 'America/Chicago'
+    AND called_at <  (NOW() AT TIME ZONE 'America/Chicago')::date + INTERVAL '1 day'
+                       AT TIME ZONE 'America/Chicago';
+  ```
+- Compare `lm_dials` to legacy /tasks/ Day Hub LM tab "Calls Made".
+- Compare `tenant_dials` to canonical /day-hub/ "Calls Made" when viewed
+  as admin/owner (no view-as).
+- Compare both to count rendered on /calls when filtered to today.
+- All three should reconcile to the same SQL number for the same scope.
 
 ### Session 45 — Wave 1 of v1-finish sprint (2026-04-27)
 
@@ -332,10 +413,11 @@ down — escalate per Session 38 notes.
 **P4 — Technical debt:**
 1. Migrate ~64 remaining API routes to `withTenant` helper.
 2. Sweep remaining silent catches in broader codebase (79 total).
-3. Align Day Hub vs Calls page call count source-of-truth.
-4. Fix LM tab "227" dial count aggregation across LM role.
+3. ~~Align Day Hub vs Calls page call count source-of-truth.~~ ✅ Closed Wave 2 (Session 46).
+4. ~~Fix LM tab "227" dial count aggregation across LM role.~~ ✅ Closed Wave 2 (Session 46).
 5. P4 from AUDIT_PLAN — delete legacy `/{tenant}/tasks/` page (coordinate with Chris).
 6. P5 from AUDIT_PLAN — `assign_contact_to_user` UI flow vs route discrepancy.
+7. Dashboard `/{tenant}/dashboard/page.tsx:127-135` still uses `createdAt` for callsToday/Week/Month + tenant-wide. Same drift family as the Day Hub bug Wave 2 just fixed; surfaced during Wave 2 grep but left for a future wave to keep the change set surgical.
 
 **Railway + Logging:** Railway API token noted invalid in Session 38 — request
 a fresh one if the post-Wave-1 verification (P2) needs Railway dashboard access.

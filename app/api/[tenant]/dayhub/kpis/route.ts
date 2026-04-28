@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getCentralDayBounds } from '@/lib/dates'
 import { resolveEffectiveUser } from '@/lib/auth/view-as'
+import { getDialKpisToday, type DialScope } from '@/lib/kpis/dial-counts'
 
 export async function GET(
   req: Request,
@@ -76,15 +77,19 @@ export async function GET(
     }
 
     // Scope: role tab filter > view-as > admin (all) > own
+    // Mirrored into a DialScope for the shared dial-count helper
+    // (lib/kpis/dial-counts.ts) so this route and the canonical Day Hub
+    // page can't drift on date field or aggregation rules.
     const userScope = roleFilterIds
       ? { in: roleFilterIds }
       : isAdmin ? undefined : effective.userId
 
-    const callWhere = {
-      tenantId,
-      calledAt: { gte: dayStart, lte: dayEnd },
-      ...(userScope ? { assignedToId: userScope } : {}),
-    }
+    const dialScope: DialScope = roleFilterIds
+      ? { kind: 'users', tenantId, userIds: roleFilterIds }
+      : isAdmin
+      ? { kind: 'all', tenantId }
+      : { kind: 'user', tenantId, userId: effective.userId }
+
     const milestoneWhere = (type: string) => ({
       tenantId,
       type: type as import('@prisma/client').MilestoneType,
@@ -92,9 +97,8 @@ export async function GET(
       ...(userScope ? { loggedById: userScope } : {}),
     })
 
-    const [callsToday, convosToday, leadsToday, aptsToday, offersToday, contractsToday, sendsToday, dispoOffersToday, dispoContractsToday] = await Promise.all([
-      db.call.count({ where: callWhere }),
-      db.call.count({ where: { ...callWhere, gradingStatus: 'COMPLETED', durationSeconds: { gte: 45 } } }),
+    const [dialKpis, leadsToday, aptsToday, offersToday, contractsToday, sendsToday, dispoOffersToday, dispoContractsToday] = await Promise.all([
+      getDialKpisToday(dialScope),
       db.propertyMilestone.count({ where: milestoneWhere('LEAD') }),
       db.propertyMilestone.count({ where: milestoneWhere('APPOINTMENT_SET') }),
       db.propertyMilestone.count({ where: milestoneWhere('OFFER_MADE') }),
@@ -113,8 +117,8 @@ export async function GET(
     ])
 
     return NextResponse.json({
-      calls: { count: callsToday, goal: goals.calls ?? 0 },
-      convos: { count: convosToday, goal: goals.convos ?? 0 },
+      calls: { count: dialKpis.calls, goal: goals.calls ?? 0 },
+      convos: { count: dialKpis.convos, goal: goals.convos ?? 0 },
       lead: { count: leadsToday, goal: goals.lead ?? 0 },
       apts: { count: aptsToday, goal: goals.apts ?? 0 },
       offers: { count: offersToday, goal: goals.offers ?? 0 },
