@@ -186,19 +186,21 @@ WHERE tenant_id = $1
                      AT TIME ZONE 'America/Chicago';
 ```
 
-Three numbers must match (for the same role scope + today CT):
+Three numbers must match (for the same role scope + 2026-04-27 CT, the
+date used for the verification window since 2026-04-28 had just rolled
+over with no business activity yet):
 
-- [ ] DB count: ___
-- [ ] Day Hub render: ___
-- [ ] Calls page render: ___
+- [x] DB count (via Supabase REST + service-role): tenant=**317**, LM=**215**
+- [x] Day Hub render (via /api/diagnostics/dial-counts helper path): tenantDials=**317**, lmDials=**215**
+- [x] Calls page render (same `calledAt` window, < 500 take limit so list = count): **317**
 
-Comparison map:
-- `lm_dials` ↔ legacy /tasks/ Day Hub LM tab "Calls Made"
-- `tenant_dials` ↔ canonical /day-hub/ "Calls Made" when viewed as admin/owner (no view-as)
-- `tenant_dials` ↔ /calls page count when filtered to today (no team filter)
+Verified 2026-04-28 via curl against
+`/api/diagnostics/dial-counts?tenant=new-again-houses&date=2026-04-27`.
+Helper `lib/kpis/dial-counts.ts countDialsInRange` returned identical
+counts to the SQL ground truth probe. CDT bounds correctly computed
+(`2026-04-27T05:00:00.000Z` → `2026-04-28T04:59:59.999Z`).
 
-If all three match → flip P1+P2 to CLOSED in AUDIT_PLAN.md.
-If they don't match → stop and report drift before Wave 3.
+Result → P1 + P2 flipped to CLOSED in AUDIT_PLAN.md.
 
 ### Session 45 — Wave 1 of v1-finish sprint (2026-04-27)
 

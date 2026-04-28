@@ -362,6 +362,30 @@ caught during Fix #6 Phase 2 all came from manual tenantId tracking. withTenant 
 
 Reference: lib/api/withTenant.ts, commit c63cb03 (helper) + f484820 (3-route refactor template)
 
+### Public/self-gating routes need TWO entries (added 2026-04-28 — Wave 2)
+
+When adding a new public/self-gating API endpoint (token-gated cron, webhook,
+diagnostic, etc.), it needs BOTH:
+1. A route handler auth check (token, HMAC signature, etc.).
+2. An entry in `PUBLIC_PATHS` in `middleware.ts`.
+
+The middleware runs FIRST. It uses `getToken({ req, secret: NEXTAUTH_SECRET })`
+to enforce session auth on every non-public path — and on miss, returns a 307
+redirect to `/login`. A perfectly valid `Authorization: Bearer` request to a
+diagnostic endpoint without the PUBLIC_PATHS entry will be redirected before
+the route handler ever sees it. The route handler's bearer-token check would
+never fire.
+
+Caught during Wave 2 of v1-finish sprint: `f0c4de9` shipped
+`/api/diagnostics/dial-counts` with route-handler auth but no PUBLIC_PATHS
+entry. Post-push probe returned `307 → /login?callbackUrl=/api/diagnostics/dial-counts`
+instead of the expected 401. Followup commit `f8e58bb` fixed it with a one-line
+addition. See `app/api/cron`, `app/api/webhooks`, `app/api/vieira` for the
+matching pattern (all in PUBLIC_PATHS, all self-gating in their handlers).
+
+When in doubt, probe the deployed endpoint with no auth and confirm it returns
+the route handler's 401 JSON, not a 307 redirect.
+
 ---
 
 ## Repo Conventions

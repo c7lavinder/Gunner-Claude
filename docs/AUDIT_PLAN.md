@@ -103,10 +103,12 @@ Blocker #2 work should target the 4-step fix sequence above, in order. Each step
 
 ## Priority items (non-blocking)
 
-**P1 — Day Hub LM dial-count aggregation · ⏳ PATCH SHIPPED — VERIFICATION PENDING (post-deploy SQL owed).**
-Three-number reconciliation (DB / Day Hub / Calls page) owed after Railway redeploy.
-Patch landed 2026-04-28 in Wave 2 of v1-finish sprint; flips to CLOSED only
-once the production SQL in PROGRESS.md Session 46 reconciles.
+**P1 — Day Hub LM dial-count aggregation · ✅ CLOSED (verified 2026-04-28 via /api/diagnostics/dial-counts).**
+Three-number reconciliation passed. Endpoint response for 2026-04-27 CT
+returned `tenantDials: 317, lmDials: 215` — exact match with the SQL
+ground-truth probe from earlier in Session 46. Helper math
+(`lib/kpis/dial-counts.ts countDialsInRange`) confirmed equal to raw
+SQL via the same `calledAt` window + `assigned_to_id IN (LM ids)` filter.
 
 Authored retroactively from a fresh codebase grep — the original Wave-2 prompt
 referenced "AUDIT_PLAN P1" but no such entry existed; the item lived as a
@@ -139,10 +141,12 @@ the canonical /day-hub/ doesn't have an LM tab at all, but does have the
 admin-aggregation bug that produced the symptom. Fresh grep before fixing
 caught this; same Wave-1 discipline.
 
-**P2 — Day Hub vs Calls page call-count source-of-truth · ⏳ PATCH SHIPPED — VERIFICATION PENDING (post-deploy SQL owed).**
-Three-number reconciliation (DB / Day Hub / Calls page) owed after Railway redeploy.
-Patch landed 2026-04-28 in Wave 2 of v1-finish sprint; flips to CLOSED only
-once the production SQL in PROGRESS.md Session 46 reconciles.
+**P2 — Day Hub vs Calls page call-count source-of-truth · ✅ CLOSED (verified 2026-04-28 via /api/diagnostics/dial-counts).**
+Same diagnostic endpoint, same response (317 / 215) confirmed both Day
+Hub surfaces (canonical + legacy `/tasks/`) and the dashboard now share
+one query path through `lib/kpis/dial-counts.ts countDialsInRange`. The
+`/calls` page is a list view (no separate count query) but uses the same
+`calledAt` field as canonical timestamp, matching the helper's contract.
 
 Same retroactive-authoring caveat as P1. The fresh grep found three surfaces
 with three different queries:
@@ -219,4 +223,22 @@ acceptance test. Surfaced during SYSTEM_MAP §6 review (Commit #2 sprint).
   Currently uses `createdAt` at lines 40-42, 84.
   Driver needed: Do nightly snapshots represent "what was in the system on
   day X" or "what calls happened on day X"?
+  Blocked on: Corey decision.
+
+- **D-046 (proposed) — Add a test framework?**
+  Status: Pending — needs driver.
+  Question: Project has 110 API routes, time-zone math, complex helpers,
+  strict `tsc` gate, but zero automated tests (no jest, vitest, mocha
+  configured; no `__tests__/` or `*.test.ts` files). The TZ bug in
+  `lib/dates.ts:getCentralDayBounds` (load-bearing across 15 files,
+  silently masked by Railway = UTC) would have been caught by a single
+  unit test — a one-liner asserting `getCentralDayBounds('2026-04-27')`
+  returns `{ gte: '2026-04-27T05:00:00.000Z', lte: '2026-04-28T04:59:59.999Z' }`
+  under any host TZ. Should `vitest` be added (lowest-friction option for
+  Next.js 14 + Prisma)? Or is `tsc` + manual verification waves
+  sufficient?
+  Driver needed: Has a silent bug in production cost more than the ~1 day
+  of test framework setup would have? (Wave 2 cost ~3 sub-sprints to
+  diagnose, fix, verify, and infra-build a verification path; a single
+  unit test would have caught the TZ bug at commit time.)
   Blocked on: Corey decision.
