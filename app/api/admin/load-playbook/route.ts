@@ -2,7 +2,7 @@
 // One-time admin endpoint to load playbook into knowledge_documents + user_profiles
 // Hit this URL once after deploy to populate the knowledge base
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -88,17 +88,13 @@ const USER_PROFILES = [
   },
 ]
 
-export async function POST() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  // Admin/Owner only
-  const user = await db.user.findUnique({ where: { id: session.userId }, select: { role: true } })
-  if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
+export const POST = withTenant(async (_req, ctx) => {
+  // SIMPLIFY: removed redundant db.user.findUnique role lookup — ctx.userRole is canonical
+  if (!['OWNER', 'ADMIN'].includes(ctx.userRole)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
-  const tenantId = session.tenantId
+  const tenantId = ctx.tenantId
   const results = { docs: 0, profiles: 0, errors: [] as string[] }
 
   // ── Load playbook documents ──
@@ -119,8 +115,12 @@ export async function POST() {
       })
 
       if (existing) {
+        // FIX: was leaking — prior code used `update({ where: { id: existing.id } })`
+        // without tenant scope. existing.id came from a tenant-scoped findFirst above
+        // so no active leak, but a future refactor that broke the upstream filter
+        // would silently cross the tenant boundary. Defense-in-depth scoping.
         await db.knowledgeDocument.update({
-          where: { id: existing.id },
+          where: { id: existing.id, tenantId: ctx.tenantId },
           data: { content, type: file.type, callType: file.callType, role: file.role },
         })
       } else {
@@ -178,4 +178,4 @@ export async function POST() {
     embedded: embeddingResults?.embedded ?? 0,
     errors: results.errors.length > 0 ? results.errors : undefined,
   })
-}
+})

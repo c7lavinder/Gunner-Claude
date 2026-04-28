@@ -389,7 +389,42 @@ Concrete examples from Wave 3 batch 1:
   pulled ids from a tenant-scoped findMany but the updateMany itself didn't
   re-enforce; now scoped.
 
-Reference: Wave 3 batch 1 commit (this batch).
+Wave 3 batch 3 added two more variants of the same class:
+
+**Variant: id-only `findUnique` + JS-side tenantId comparison.** Caught in
+`bugs/[id]/route.ts` GET/PATCH/DELETE — the route did
+`db.bugReport.findUnique({ where: { id } })` and then compared
+`bug.tenantId !== admin.tenantId` in JavaScript. The DB query was
+unscoped; any refactor that dropped the JS guard would expose
+cross-tenant rows. Same fix shape: `findFirst` with `tenantId` in the
+WHERE pushes the boundary into the query layer.
+
+**Variant: id-only `delete()`.** Caught in `bugs/[id]/route.ts` DELETE
+and `ai/assistant/execute/route.ts` `remove_team_member` tool. Prisma
+`delete` on a unique key (id, or compound `propertyId_userId`) doesn't
+allow extra-key fields without `extendedWhereUnique`. The clean fix is
+`deleteMany({ where: { id, tenantId } })` — same WHERE freedom as
+update/findMany, just less ergonomic.
+
+**Variant: id-only `findUnique` for read-then-merge before tenant-scoped
+update.** Caught in `ai/assistant/execute/route.ts` (`add_internal_note`,
+`update_deal_intel`): the find was id-only (so the read could leak
+another tenant's row) even though the follow-up update was tenant-scoped.
+Defense-in-depth: scope the find too. `findFirst` with tenantId, not
+`findUnique` by id.
+
+#### Don't re-fetch user role — `ctx.userRole` is canonical
+
+A separate cleanup class found across Wave 3 batches 2-3: routes did
+`db.user.findUnique({ where: { id: session.userId }, select: { role: true } })`
+to gate admin-only endpoints, then compared the result to `['OWNER', 'ADMIN']`.
+After migration, `ctx.userRole` already exposes the role from the JWT
+session. Drop the lookup. Saves a DB roundtrip per request and removes
+a "look up the same user twice" pattern. Examples in batch 3:
+`admin/knowledge`, `admin/load-playbook`, `admin/user-profiles`,
+`bugs/[id]`, `bugs/route.ts`, `ai/assistant/session`.
+
+Reference: Wave 3 batch 1 + batch 3 commits (this convention extended in batch 3).
 
 ### Public/self-gating routes need TWO entries (added 2026-04-28 — Wave 2)
 

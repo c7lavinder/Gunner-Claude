@@ -1,14 +1,11 @@
 // GET /api/admin/ai-logs — fetch AI logs for admin dashboard
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const user = await db.user.findUnique({ where: { id: session.userId }, select: { role: true } })
-  if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
+export const GET = withTenant(async (req, ctx) => {
+  // ctx.userRole is set by withTenant — no need for a follow-up user lookup
+  if (!['OWNER', 'ADMIN'].includes(ctx.userRole)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
@@ -20,7 +17,7 @@ export async function GET(req: Request) {
   const limit = parseInt(url.searchParams.get('limit') ?? '50')
   const offset = parseInt(url.searchParams.get('offset') ?? '0')
 
-  const where: Record<string, unknown> = { tenantId: session.tenantId }
+  const where: Record<string, unknown> = { tenantId: ctx.tenantId }
 
   // scope takes precedence and maps to the three tabs
   if (scope === 'chat') {
@@ -43,7 +40,7 @@ export async function GET(req: Request) {
 
   // Fetch user names for display
   const users = await db.user.findMany({
-    where: { tenantId: session.tenantId },
+    where: { tenantId: ctx.tenantId },
     select: { id: true, name: true },
   })
   const userNames = new Map(users.map(u => [u.id, u.name]))
@@ -67,17 +64,17 @@ export async function GET(req: Request) {
     db.aiLog.count({ where: where as Parameters<typeof db.aiLog.count>[0] extends { where?: infer W } ? W : never }),
     Promise.all([
       // chats today
-      db.aiLog.count({ where: { tenantId: session.tenantId, type: 'assistant_chat', createdAt: { gte: startOfToday } } }),
+      db.aiLog.count({ where: { tenantId: ctx.tenantId, type: 'assistant_chat', createdAt: { gte: startOfToday } } }),
       // background work today (everything except assistant_chat)
-      db.aiLog.count({ where: { tenantId: session.tenantId, type: { not: 'assistant_chat' }, createdAt: { gte: startOfToday } } }),
+      db.aiLog.count({ where: { tenantId: ctx.tenantId, type: { not: 'assistant_chat' }, createdAt: { gte: startOfToday } } }),
       // problems today (any type, status=error)
-      db.aiLog.count({ where: { tenantId: session.tenantId, status: 'error', createdAt: { gte: startOfToday } } }),
+      db.aiLog.count({ where: { tenantId: ctx.tenantId, status: 'error', createdAt: { gte: startOfToday } } }),
       // week error rate (unchanged)
-      db.aiLog.count({ where: { tenantId: session.tenantId, status: 'error', createdAt: { gte: weekAgo } } }),
-      db.aiLog.count({ where: { tenantId: session.tenantId, createdAt: { gte: weekAgo } } }),
+      db.aiLog.count({ where: { tenantId: ctx.tenantId, status: 'error', createdAt: { gte: weekAgo } } }),
+      db.aiLog.count({ where: { tenantId: ctx.tenantId, createdAt: { gte: weekAgo } } }),
       // today cost sum (server-side so it's accurate across pagination)
       db.aiLog.aggregate({
-        where: { tenantId: session.tenantId, createdAt: { gte: startOfToday } },
+        where: { tenantId: ctx.tenantId, createdAt: { gte: startOfToday } },
         _sum: { estimatedCost: true },
       }),
     ]),
@@ -99,4 +96,4 @@ export async function GET(req: Request) {
       todayCost,
     },
   })
-}
+})

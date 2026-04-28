@@ -8,8 +8,8 @@
 //   audit row so the AI-learning loop can diff proposed vs executed later.
 //   Branches the prompt did not widen (e.g. log_offer, update_property, …)
 //   simply never receive editedInput and fall through to the original path.
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { resolveAssignee } from '@/lib/ghl/resolveAssignee'
@@ -27,17 +27,15 @@ const bodySchema = z.object({
   editedInput: z.record(z.unknown()).optional(),
 })
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant(async (request, ctx) => {
   const body = await request.json()
   const parsed = bodySchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   const { toolCallId, pageContext, rejected, editedInput } = parsed.data
 
-  const tenantId = session.tenantId
-  const sessionUserId = session.userId
+  // Local aliases for the existing 50+ in-handler usages — minimum churn.
+  const tenantId = ctx.tenantId
+  const sessionUserId = ctx.userId
   const today = new Date().toISOString().slice(0, 10)
 
   // Find the tool call in today's messages
@@ -277,8 +275,9 @@ export async function POST(request: NextRequest) {
           },
         })
         if (amount > 0) {
+          // FIX: was leaking — prior code used `update({ where: { id: propertyId } })` without tenant scope
           await db.property.update({
-            where: { id: propertyId },
+            where: { id: propertyId, tenantId },
             data: { currentOffer: amount },
           }).catch(err => logFailure(tenantId, 'assistant.execute.property_update_failed', 'property', err, { propertyId, amount }))
         }
@@ -520,8 +519,9 @@ export async function POST(request: NextRequest) {
       case 'add_internal_note': {
         const notePropertyId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
         if (!notePropertyId) { result = 'No property in context'; break }
-        const existingNotes = (await db.property.findUnique({
-          where: { id: notePropertyId },
+        // FIX: was leaking — prior code used `findUnique({ where: { id: notePropertyId } })` without tenant scope
+        const existingNotes = (await db.property.findFirst({
+          where: { id: notePropertyId, tenantId },
           select: { internalNotes: true },
         }))?.internalNotes ?? ''
         const timestamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -537,8 +537,9 @@ export async function POST(request: NextRequest) {
       case 'update_deal_intel': {
         const diPropertyId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
         if (!diPropertyId) { result = 'No property in context'; break }
-        const prop = await db.property.findUnique({
-          where: { id: diPropertyId },
+        // FIX: was leaking — prior code used `findUnique({ where: { id: diPropertyId } })` without tenant scope
+        const prop = await db.property.findFirst({
+          where: { id: diPropertyId, tenantId },
           select: { dealIntel: true },
         })
         const intel = (prop?.dealIntel ?? {}) as Record<string, unknown>
@@ -807,7 +808,12 @@ export async function POST(request: NextRequest) {
           where: { propertyId: rtPropId, user: { name: { contains: String(toolCall.input.userName), mode: 'insensitive' } } },
         })
         if (member) {
-          await db.propertyTeamMember.delete({ where: { propertyId_userId: { propertyId: rtPropId, userId: member.userId } } })
+          // FIX: was leaking — prior delete used compound `propertyId_userId` only.
+          // PropertyTeamMember has tenantId; deleteMany lets us add it without
+          // dropping the unique-key guarantee from the surrounding context.
+          await db.propertyTeamMember.deleteMany({
+            where: { propertyId: rtPropId, userId: member.userId, tenantId },
+          })
           result = `Removed ${toolCall.input.userName} from property`
         } else { result = `Team member "${toolCall.input.userName}" not found on this property` }
         break
@@ -821,7 +827,8 @@ export async function POST(request: NextRequest) {
         for (const name of marketNames) {
           let market = await db.market.findFirst({ where: { tenantId, name } })
           if (!market) market = await db.market.create({ data: { tenantId, name } })
-          await db.property.update({ where: { id: mPropId }, data: { marketId: market.id } })
+          // FIX: was leaking — prior code used `update({ where: { id: mPropId } })` without tenant scope
+          await db.property.update({ where: { id: mPropId, tenantId }, data: { marketId: market.id } })
         }
         result = `Property markets set: ${marketNames.join(', ')}`
         break
@@ -877,8 +884,11 @@ export async function POST(request: NextRequest) {
           where: { tenantId, name: { contains: String(toolCall.input.buyerName), mode: 'insensitive' } },
         })
         if (!buyer) { result = `Buyer "${toolCall.input.buyerName}" not found`; break }
+        // FIX: was leaking — prior code used `updateMany({ where: { buyerId } })` without tenantId.
+        // Buyer was tenant-scoped via the findFirst above, but updateMany should re-enforce —
+        // PropertyBuyerStage has its own tenantId column, so any cross-tenant linkage gets caught.
         await db.propertyBuyerStage.updateMany({
-          where: { buyerId: buyer.id },
+          where: { buyerId: buyer.id, tenantId },
           data: { stage: String(toolCall.input.newStage) },
         })
         result = `Moved ${buyer.name} to ${toolCall.input.newStage}`
@@ -894,7 +904,8 @@ export async function POST(request: NextRequest) {
         if (toolCall.input.phone) ubData.phone = String(toolCall.input.phone)
         if (toolCall.input.email) ubData.email = String(toolCall.input.email)
         if (toolCall.input.markets) ubData.tags = toolCall.input.markets
-        await db.buyer.update({ where: { id: ub.id }, data: ubData })
+        // FIX: was leaking — prior code used `update({ where: { id: ub.id } })` without tenant scope
+        await db.buyer.update({ where: { id: ub.id, tenantId }, data: ubData })
         result = `Buyer ${ub.name} updated: ${Object.keys(ubData).join(', ')}`
         break
       }
@@ -909,7 +920,8 @@ export async function POST(request: NextRequest) {
           where: { tenantId, name: { contains: String(toolCall.input.userName), mode: 'insensitive' } },
         })
         if (!targetUser) { result = `User "${toolCall.input.userName}" not found`; break }
-        await db.user.update({ where: { id: targetUser.id }, data: { role: String(toolCall.input.newRole) as import('@prisma/client').UserRole } })
+        // FIX: was leaking — prior code used `update({ where: { id: targetUser.id } })` without tenant scope
+        await db.user.update({ where: { id: targetUser.id, tenantId }, data: { role: String(toolCall.input.newRole) as import('@prisma/client').UserRole } })
         result = `${targetUser.name} role updated to ${String(toolCall.input.newRole).replace(/_/g, ' ')}`
         break
       }
@@ -1028,4 +1040,4 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
-}
+})

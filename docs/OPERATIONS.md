@@ -104,13 +104,13 @@ loop) has heartbeats today.
 
 ## API surface
 
-110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-28 (post-Wave-3-Session-A):
+110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-28 (post-Wave-3-Session-C):
 
 | Pattern | Count | Tenant isolation |
 |---|---|---|
 | Total `route.ts` files | 110 | — |
-| Uses `withTenant` | 31 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
-| Uses `getSession` directly | 63 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
+| Uses `withTenant` | 55 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
+| Uses `getSession` directly | 39 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
 | Other (auth / webhooks / cron / health / service-token / diagnostics) | 16 | N/A — see breakdown below |
 
 ### The 15 non-tenant-session routes

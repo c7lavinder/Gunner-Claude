@@ -2,16 +2,13 @@
 // POST /api/[tenant]/ghl/appointments  → create appointment in GHL
 //   Body: { contactId, calendarId, startTime (ISO), endTime (ISO), title?, assignedUserId?, address? }
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
+export const GET = withTenant<{ tenant: string }>(async (_req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     const result = await ghl.getCalendars()
     const calendars = (result.calendars ?? []).map(c => ({ id: c.id, name: c.name }))
     return NextResponse.json({ calendars })
@@ -19,20 +16,17 @@ export async function GET() {
     const message = err instanceof Error ? err.message : 'Failed to load calendars'
     return NextResponse.json({ calendars: [], error: message }, { status: 500 })
   }
-}
+})
 
-export async function POST(req: Request) {
+export const POST = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const body = await req.json()
     const { contactId, calendarId, startTime, endTime, title, assignedUserId, address } = body
     if (!contactId || !calendarId || !startTime || !endTime) {
       return NextResponse.json({ error: 'contactId, calendarId, startTime, endTime required' }, { status: 400 })
     }
 
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     const result = await ghl.createAppointment({
       contactId, calendarId, startTime, endTime,
       ...(title ? { title } : {}),
@@ -42,8 +36,8 @@ export async function POST(req: Request) {
 
     await db.auditLog.create({
       data: {
-        tenantId: session.tenantId,
-        userId: session.userId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
         action: 'ghl.appointment_created',
         resource: 'appointment',
         resourceId: result?.id ?? null,
@@ -58,4 +52,4 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : 'Failed to create appointment'
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})

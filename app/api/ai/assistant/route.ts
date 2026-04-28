@@ -1,7 +1,7 @@
 // POST /api/ai/assistant — Role Assistant main endpoint
 // Receives user message, builds full context, calls Claude with tools, returns response
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
@@ -10,22 +10,19 @@ import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant(async (request, ctx) => {
   const { message, pageContext } = await request.json()
   if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 })
 
-  const tenantId = session.tenantId
-  const userId = session.userId
+  const tenantId = ctx.tenantId
+  const userId = ctx.userId
   const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 
   try {
-    // Get user info
+    // SIMPLIFY: only fetch `name` here — `role` is canonical via ctx.userRole
     const user = await db.user.findUnique({
       where: { id: userId },
-      select: { name: true, role: true },
+      select: { name: true },
     })
 
     // Get tenant info
@@ -104,7 +101,7 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
     // Load playbook knowledge for this user's role (with semantic search if embeddings available)
     const { buildKnowledgeContext, formatKnowledgeForPrompt } = await import('@/lib/ai/context-builder')
     const knowledge = await buildKnowledgeContext({
-      tenantId, userId, userRole: user?.role ?? null,
+      tenantId, userId, userRole: ctx.userRole ?? null,
       query: message, // Semantic search: finds relevant playbook docs for the user's question
     })
     const knowledgeBlock = formatKnowledgeForPrompt(knowledge, 8000)
@@ -120,7 +117,7 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
       ? `\nRECENTLY REJECTED ACTIONS — the user has rejected these, avoid suggesting similar:\n${recentRejections.map(r => `- ${r.actionType}: ${JSON.stringify(r.proposed).slice(0, 100)}`).join('\n')}`
       : ''
 
-    const roleName = user?.role?.replace(/_/g, ' ') ?? 'Team Member'
+    const roleName = ctx.userRole.replace(/_/g, ' ') || 'Team Member'
     const timer = startTimer()
 
     // System prompt
@@ -200,10 +197,10 @@ ${knowledgeBlock}${rejectionContext}`
     return NextResponse.json({
       reply: replyText,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      userRole: user?.role,
+      userRole: ctx.userRole,
     })
   } catch (err) {
     console.error('[Assistant] Error:', err)
     return NextResponse.json({ error: 'Assistant unavailable' }, { status: 500 })
   }
-}
+})

@@ -1,25 +1,17 @@
 // GET /api/ai/assistant/session — load today's conversation history
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const GET = withTenant(async (_req, ctx) => {
   const today = new Date().toISOString().slice(0, 10)
 
-  const [messages, user] = await Promise.all([
-    db.assistantMessage.findMany({
-      where: { tenantId: session.tenantId, userId: session.userId, sessionDate: today },
-      orderBy: { createdAt: 'asc' },
-      select: { role: true, content: true, toolCalls: true },
-    }),
-    db.user.findUnique({
-      where: { id: session.userId },
-      select: { role: true },
-    }),
-  ])
+  // SIMPLIFY: removed redundant db.user.findUnique role lookup — ctx.userRole is canonical
+  const messages = await db.assistantMessage.findMany({
+    where: { tenantId: ctx.tenantId, userId: ctx.userId, sessionDate: today },
+    orderBy: { createdAt: 'asc' },
+    select: { role: true, content: true, toolCalls: true },
+  })
 
-  return NextResponse.json({ messages, userRole: user?.role })
-}
+  return NextResponse.json({ messages, userRole: ctx.userRole })
+})

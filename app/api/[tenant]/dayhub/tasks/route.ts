@@ -2,33 +2,26 @@
 // GET: Returns tasks from DB sorted by overdue → today → upcoming
 // POST: Completes a GHL task
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
-import { addDays, differenceInDays } from 'date-fns'
+import { differenceInDays } from 'date-fns'
 import { getCentralDayBounds } from '@/lib/dates'
 
 const priorityScores: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const url = new URL(req.url)
     const category = url.searchParams.get('category') ?? ''
     const assignedTo = url.searchParams.get('assignedTo') ?? ''
     const limit = parseInt(url.searchParams.get('limit') ?? '50')
     const offset = parseInt(url.searchParams.get('offset') ?? '0')
 
-    const today = new Date()
     const { dayStart, dayEnd } = getCentralDayBounds()
 
-    const isAdmin = session.role === 'ADMIN' || session.role === 'OWNER'
+    const isAdmin = ctx.userRole === 'ADMIN' || ctx.userRole === 'OWNER'
 
     const where: Record<string, unknown> = {
       tenantId,
@@ -38,7 +31,7 @@ export async function GET(
     if (category) where.category = category
     // Explicit filter overrides default. Otherwise: admin sees all, non-admin sees own.
     if (assignedTo) where.assignedToId = assignedTo
-    else if (!isAdmin) where.assignedToId = session.userId
+    else if (!isAdmin) where.assignedToId = ctx.userId
 
     const [tasks, totalCount, overdueCount] = await Promise.all([
       db.task.findMany({
@@ -99,17 +92,11 @@ export async function GET(
     const message = err instanceof Error ? err.message : 'Failed to fetch tasks'
     return NextResponse.json({ tasks: [], total: 0, overdue: 0, error: message }, { status: 500 })
   }
-}
+})
 
-export async function POST(
-  req: Request,
-  { params }: { params: { tenant: string } }
-) {
+export const POST = withTenant<{ tenant: string }>(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const body = await req.json()
     const { action, taskId, contactId } = body
 
@@ -120,7 +107,7 @@ export async function POST(
       await db.auditLog.create({
         data: {
           tenantId,
-          userId: session.userId,
+          userId: ctx.userId,
           action: 'task.completed_ghl',
           source: 'USER',
           severity: 'INFO',
@@ -136,4 +123,4 @@ export async function POST(
     const message = err instanceof Error ? err.message : 'Failed to complete task'
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})

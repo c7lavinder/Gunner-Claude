@@ -1,20 +1,17 @@
 // GET + PATCH /api/admin/user-profiles
 // Admin-only: view and edit user performance profiles
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const user = await db.user.findUnique({ where: { id: session.userId }, select: { role: true } })
-  if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
+export const GET = withTenant(async (_req, ctx) => {
+  // SIMPLIFY: removed redundant db.user.findUnique role lookup — ctx.userRole is canonical
+  if (!['OWNER', 'ADMIN'].includes(ctx.userRole)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
   const profiles = await db.userProfile.findMany({
-    where: { tenantId: session.tenantId },
+    where: { tenantId: ctx.tenantId },
     include: { user: { select: { name: true, role: true, email: true } } },
     orderBy: { updatedAt: 'desc' },
   })
@@ -36,14 +33,11 @@ export async function GET() {
       updatedAt: p.updatedAt.toISOString(),
     })),
   })
-}
+})
 
-export async function PATCH(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const user = await db.user.findUnique({ where: { id: session.userId }, select: { role: true } })
-  if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
+export const PATCH = withTenant(async (request, ctx) => {
+  // SIMPLIFY: removed redundant db.user.findUnique role lookup — ctx.userRole is canonical
+  if (!['OWNER', 'ADMIN'].includes(ctx.userRole)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
@@ -52,12 +46,16 @@ export async function PATCH(request: NextRequest) {
 
   // Verify profile belongs to this tenant
   const profile = await db.userProfile.findFirst({
-    where: { id: profileId, tenantId: session.tenantId },
+    where: { id: profileId, tenantId: ctx.tenantId },
   })
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
+  // FIX: was leaking — prior code used `update({ where: { id: profileId } })`
+  // without tenant scope. The findFirst above was the only guard; if a future
+  // refactor dropped that check, the update would silently cross tenants.
+  // Defense-in-depth: scope on the update too.
   await db.userProfile.update({
-    where: { id: profileId },
+    where: { id: profileId, tenantId: ctx.tenantId },
     data: {
       ...(strengths !== undefined ? { strengths } : {}),
       ...(weaknesses !== undefined ? { weaknesses } : {}),
@@ -69,4 +67,4 @@ export async function PATCH(request: NextRequest) {
   })
 
   return NextResponse.json({ status: 'success' })
-}
+})

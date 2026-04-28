@@ -1,16 +1,13 @@
 // POST /api/ai/outreach-action — LLM parses natural language into structured outreach action
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const POST = withTenant(async (request, ctx) => {
   const { message, propertyId } = await request.json()
   if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
@@ -50,12 +47,12 @@ RULES:
     const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
 
     logAiCall({
-      tenantId: session.tenantId, userId: session.userId,
+      tenantId: ctx.tenantId, userId: ctx.userId,
       type: 'action_execution', pageContext: propertyId ? `property:${propertyId}` : null,
       input: message, output: text.slice(0, 500),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: timer(), model: 'claude-haiku-4-5-20251001',
-    }).catch(err => logFailure(session.tenantId, 'outreach.ai_call_log_failed', 'aiCall', err))
+    }).catch(err => logFailure(ctx.tenantId, 'outreach.ai_call_log_failed', 'aiCall', err))
 
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {
@@ -67,4 +64,4 @@ RULES:
     console.error('[AI Outreach] Parse failed:', err)
     return NextResponse.json({ error: 'Failed to parse' }, { status: 500 })
   }
-}
+})

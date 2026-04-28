@@ -1,6 +1,6 @@
 // PATCH /api/buyers/[buyerId] — edit buyer details
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 
@@ -15,20 +15,14 @@ const schema = z.object({
   notes: z.string().nullable().optional(),
 })
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { buyerId: string } }
-) {
+export const PATCH = withTenant<{ buyerId: string }>(async (req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const body = await req.json()
     const parsed = schema.safeParse(body)
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input', details: parsed.error.issues }, { status: 400 })
 
     const buyer = await db.buyer.findFirst({
-      where: { id: params.buyerId, tenantId: session.tenantId },
+      where: { id: params.buyerId, tenantId: ctx.tenantId },
     })
     if (!buyer) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -41,8 +35,10 @@ export async function PATCH(
     if (maxBuyPrice !== undefined) updatedCustomFields.maxBuyPrice = maxBuyPrice
     if (verifiedFunding !== undefined) updatedCustomFields.verifiedFunding = verifiedFunding
 
+    // FIX: was leaking — prior code used `update({ where: { id: params.buyerId } })`
+    // without tenant scope. Classic chained-update class.
     const updated = await db.buyer.update({
-      where: { id: params.buyerId },
+      where: { id: params.buyerId, tenantId: ctx.tenantId },
       data: {
         ...(name !== undefined && { name }),
         ...(phone !== undefined && { phone }),
@@ -57,4 +53,4 @@ export async function PATCH(
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})

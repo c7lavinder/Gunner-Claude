@@ -1,16 +1,12 @@
 // POST /api/admin/embed-knowledge
 // Generate vector embeddings for all knowledge documents (requires OPENAI_API_KEY)
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
-import { db } from '@/lib/db/client'
+import { withTenant } from '@/lib/api/withTenant'
 import { embedAllDocuments, isEmbeddingsEnabled } from '@/lib/ai/embeddings'
 
-export async function POST() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const user = await db.user.findUnique({ where: { id: session.userId }, select: { role: true } })
-  if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
+export const POST = withTenant(async (_req, ctx) => {
+  // ctx.userRole is set by withTenant — no need for a follow-up user lookup
+  if (!['OWNER', 'ADMIN'].includes(ctx.userRole)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
@@ -20,10 +16,10 @@ export async function POST() {
     }, { status: 400 })
   }
 
-  const result = await embedAllDocuments(session.tenantId)
+  const result = await embedAllDocuments(ctx.tenantId)
 
   return NextResponse.json({
     status: 'success',
     ...result,
   })
-}
+})

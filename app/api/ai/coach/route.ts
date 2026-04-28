@@ -1,8 +1,7 @@
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 // app/api/ai/coach/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-
-
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
+import { getSession } from '@/lib/auth/session'
 import { getCoachResponse } from '@/lib/ai/coach'
 import type { UserRole } from '@/types/roles'
 import { z } from 'zod'
@@ -16,13 +15,13 @@ const schema = z.object({
   currentRoute: z.string().optional(),
 })
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const userId = session.userId
-  const tenantId = session.tenantId
-  const userRole = (session.role) as UserRole
+export const POST = withTenant(async (request, ctx) => {
+  const userId = ctx.userId
+  const tenantId = ctx.tenantId
+  const userRole = ctx.userRole as UserRole
+  // ctx doesn't expose userName — re-fetch session for it. Same tax as the
+  // resolveEffectiveUser pattern; queued for end-of-Wave-3 ctx extension.
+  const session = (await getSession())!
   const userName = session.name
 
   const body = await request.json()
@@ -36,4 +35,4 @@ export async function POST(request: NextRequest) {
     console.error('[AI Coach] Error:', err)
     return NextResponse.json({ error: 'Coach unavailable' }, { status: 500 })
   }
-}
+})

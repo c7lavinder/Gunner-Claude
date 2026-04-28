@@ -2,6 +2,7 @@
 // GET  /api/bugs — admin-only list view with filters
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { withTenant } from '@/lib/api/withTenant'
 import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 
@@ -22,9 +23,10 @@ const createSchema = z.object({
     .nullable(),
 })
 
-export async function POST(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export const POST = withTenant(async (req, ctx) => {
+  // ctx doesn't expose name/email — re-fetch session for the reporter label.
+  // Same tax as ai/coach; queued for end-of-Wave-3 ctx extension.
+  const session = (await getSession())!
 
   let body: unknown
   try {
@@ -43,8 +45,8 @@ export async function POST(req: Request) {
 
   const bug = await db.bugReport.create({
     data: {
-      tenantId: session.tenantId,
-      reporterId: session.userId,
+      tenantId: ctx.tenantId,
+      reporterId: ctx.userId,
       reporterName: session.name || session.email || null,
       description: parsed.data.description,
       severity: parsed.data.severity,
@@ -56,17 +58,11 @@ export async function POST(req: Request) {
   })
 
   return NextResponse.json({ success: true, bug })
-}
+})
 
-export async function GET(req: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const user = await db.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true },
-  })
-  if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
+export const GET = withTenant(async (req, ctx) => {
+  // SIMPLIFY: removed redundant db.user.findUnique role lookup — ctx.userRole is canonical
+  if (!['OWNER', 'ADMIN'].includes(ctx.userRole)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
@@ -75,7 +71,7 @@ export async function GET(req: Request) {
   const severity = url.searchParams.get('severity')
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '100'), 500)
 
-  const where: Record<string, unknown> = { tenantId: session.tenantId }
+  const where: Record<string, unknown> = { tenantId: ctx.tenantId }
   if (status) where.status = status
   if (severity) where.severity = severity
 
@@ -113,7 +109,7 @@ export async function GET(req: Request) {
     }),
     db.bugReport.groupBy({
       by: ['status'],
-      where: { tenantId: session.tenantId },
+      where: { tenantId: ctx.tenantId },
       _count: { _all: true },
     }),
   ])
@@ -127,4 +123,4 @@ export async function GET(req: Request) {
   }, {})
 
   return NextResponse.json({ bugs, statusCounts })
-}
+})

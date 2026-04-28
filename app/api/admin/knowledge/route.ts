@@ -1,28 +1,22 @@
 // GET + POST + PATCH + DELETE /api/admin/knowledge
 // CRUD for knowledge documents
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const GET = withTenant(async (_req, ctx) => {
   const documents = await db.knowledgeDocument.findMany({
-    where: { tenantId: session.tenantId },
+    where: { tenantId: ctx.tenantId },
     select: { id: true, title: true, type: true, callType: true, role: true, source: true, isActive: true, updatedAt: true },
     orderBy: [{ type: 'asc' }, { title: 'asc' }],
   })
 
   return NextResponse.json({ documents })
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const user = await db.user.findUnique({ where: { id: session.userId }, select: { role: true } })
-  if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
+export const POST = withTenant(async (request, ctx) => {
+  // SIMPLIFY: removed redundant db.user.findUnique role lookup — ctx.userRole is canonical
+  if (!['OWNER', 'ADMIN'].includes(ctx.userRole)) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
@@ -33,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   const document = await db.knowledgeDocument.create({
     data: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       title, type, callType: callType || null, role: role || 'ALL',
       content, source: 'upload', isActive: true,
     },
@@ -46,17 +40,14 @@ export async function POST(request: NextRequest) {
   }).catch(() => {})
 
   return NextResponse.json({ document })
-}
+})
 
-export async function PATCH(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const PATCH = withTenant(async (request, ctx) => {
   const { id, isActive, title, content } = await request.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   await db.knowledgeDocument.updateMany({
-    where: { id, tenantId: session.tenantId },
+    where: { id, tenantId: ctx.tenantId },
     data: {
       ...(isActive !== undefined ? { isActive } : {}),
       ...(title ? { title } : {}),
@@ -72,18 +63,15 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json({ status: 'success' })
-}
+})
 
-export async function DELETE(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const DELETE = withTenant(async (request, ctx) => {
   const { id } = await request.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   await db.knowledgeDocument.deleteMany({
-    where: { id, tenantId: session.tenantId, source: { not: 'playbook' } },
+    where: { id, tenantId: ctx.tenantId, source: { not: 'playbook' } },
   })
 
   return NextResponse.json({ status: 'success' })
-}
+})

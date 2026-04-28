@@ -1,7 +1,7 @@
 // app/api/blasts/route.ts
 // Deal blast — create + approve + send
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { requireApproval, approveAction } from '@/lib/gates/requireApproval'
 import { z } from 'zod'
@@ -18,10 +18,7 @@ const approveSchema = z.object({
 })
 
 // POST — create a new blast (may require approval)
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const POST = withTenant(async (request, ctx) => {
   const body = await request.json()
 
   // Handle approval action
@@ -30,14 +27,15 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
     const blast = await db.dealBlast.findFirst({
-      where: { id: parsed.data.blastId, tenantId: session.tenantId },
+      where: { id: parsed.data.blastId, tenantId: ctx.tenantId },
     })
     if (!blast) return NextResponse.json({ error: 'Blast not found' }, { status: 404 })
 
-    await approveAction(blast.id, session.userId, session.tenantId)
+    await approveAction(blast.id, ctx.userId, ctx.tenantId)
 
+    // FIX: was leaking — prior code used `update({ where: { id: blast.id } })` without tenant scope
     await db.dealBlast.update({
-      where: { id: blast.id },
+      where: { id: blast.id, tenantId: ctx.tenantId },
       data: { status: 'approved', approvedAt: new Date() },
     })
 
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
 
   // Verify property belongs to tenant
   const property = await db.property.findFirst({
-    where: { id: parsed.data.propertyId, tenantId: session.tenantId },
+    where: { id: parsed.data.propertyId, tenantId: ctx.tenantId },
     select: { id: true, address: true },
   })
   if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
@@ -62,16 +60,16 @@ export async function POST(request: NextRequest) {
     action: `${parsed.data.channel}_blast`,
     description: `Send ${parsed.data.channel.toUpperCase()} to ${parsed.data.buyerIds.length} buyers for ${property.address}`,
     data: { count: parsed.data.buyerIds.length, recipientCount: parsed.data.buyerIds.length, propertyId: property.id },
-    userId: session.userId,
-    tenantId: session.tenantId,
+    userId: ctx.userId,
+    tenantId: ctx.tenantId,
   })
 
   // Create the blast record
   const blast = await db.dealBlast.create({
     data: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       propertyId: parsed.data.propertyId,
-      createdById: session.userId,
+      createdById: ctx.userId,
       channel: parsed.data.channel,
       message: parsed.data.message,
       status: gate.approved ? 'approved' : 'pending',
@@ -94,4 +92,4 @@ export async function POST(request: NextRequest) {
       gateReason: gate.reason,
     },
   }, { status: 201 })
-}
+})

@@ -1,19 +1,13 @@
 // app/api/[tenant]/tasks/[contactId]/details/route.ts
 // Fetches contact details for task expand panel: notes, last call, today's activity
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { getCentralDayBounds } from '@/lib/dates'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { tenant: string; contactId: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const tenantId = session.tenantId
+export const GET = withTenant<{ tenant: string; contactId: string }>(async (_req, ctx, params) => {
+  const tenantId = ctx.tenantId
   const contactId = params.contactId
 
   try {
@@ -87,4 +81,4 @@ export async function GET(
     console.error('[Task Details] Error:', err instanceof Error ? err.message : err)
     return NextResponse.json({ notes: [], lastCall: null, todayActivity: [] })
   }
-}
+})

@@ -2,19 +2,13 @@
 // Body: { contactId, title?, body?, dueDate?, assignedTo?, completed? }
 // Updates task fields in GHL via PUT /contacts/{cid}/tasks/{tid}
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 import type { GHLTaskInput } from '@/lib/ghl/client'
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { tenant: string; taskId: string } },
-) {
+export const PATCH = withTenant<{ tenant: string; taskId: string }>(async (req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const body = await req.json()
     const { contactId, title, body: taskBody, dueDate, assignedTo, completed } = body
     if (!contactId) {
@@ -33,13 +27,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'no fields to update' }, { status: 400 })
     }
 
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     const result = await ghl.updateTask(contactId, params.taskId, patch)
 
     await db.auditLog.create({
       data: {
-        tenantId: session.tenantId,
-        userId: session.userId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
         action: 'ghl.task_updated',
         resource: 'task',
         resourceId: params.taskId,
@@ -54,4 +48,4 @@ export async function PATCH(
     const message = err instanceof Error ? err.message : 'Failed to update task'
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})

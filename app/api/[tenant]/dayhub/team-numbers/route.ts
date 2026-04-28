@@ -9,17 +9,14 @@
 // user.phone (personal cell) is intentionally NOT used — it's not send-capable
 // and kept sending Kyle's calls from his personal #. See Phase 2c notes.
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
+export const GET = withTenant<{ tenant: string }>(async (_req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const dbUsers = await db.user.findMany({
-      where: { tenantId: session.tenantId },
+      where: { tenantId: ctx.tenantId },
       select: { id: true, name: true, ghlUserId: true },
     })
 
@@ -27,7 +24,7 @@ export async function GET() {
     const lcByGhlUser = new Map<string, { phone: string; label: string | null }>()
     let defaultLcNumber: string | null = null
     try {
-      const ghl = await getGHLClient(session.tenantId)
+      const ghl = await getGHLClient(ctx.tenantId)
       const result = await ghl.getPhoneNumbers()
       for (const n of result.numbers ?? []) {
         if (n.isDefault && n.phoneNumber) defaultLcNumber = n.phoneNumber
@@ -56,4 +53,4 @@ export async function GET() {
   } catch {
     return NextResponse.json({ numbers: [], defaultLcNumber: null })
   }
-}
+})

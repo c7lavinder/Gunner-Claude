@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 47 — Wave 3 Session A of v1-finish sprint (2026-04-28)
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). Wave 3 Session A migrated 12 routes to `withTenant` helper (batch 1 of 6) and caught 5 latent cross-tenant defense gaps in the existing code. Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
+**Current session**: 49 — Wave 3 Session C of v1-finish sprint (2026-04-28)
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). Wave 3 Sessions A+B+C migrated 36 routes to `withTenant` (batches 1-3 of 6); 21 latent cross-tenant defense gaps caught and fixed across the three batches (5 + 0 + 16 — distribution explained by route shape: chained-update class clusters in CRUD-shape routes). Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
@@ -56,6 +56,138 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 49 — Wave 3 Session C of v1-finish sprint (2026-04-28)
+
+`withTenant` migration, batch 3 of 6. Twelve routes migrated; **16 latent
+defense gaps fixed** across 6 of those routes. Hot-zone prediction was
+correct: the AI assistant cluster (`ai/assistant/execute`) and CRUD-shape
+routes (`bugs/[id]`, `buyers/[buyerId]`, `admin/user-profiles`,
+`admin/load-playbook`) accounted for all 16 fixes. Cool routes
+(`ai/assistant/session`, `ai/coach`, `ai/outreach-action`,
+`admin/knowledge`, `bugs/route.ts`) were leak-free as expected.
+
+**Routes migrated (alphabetical, batch 3):**
+
+1. `admin/knowledge/route.ts` — clean migration, 1 ctx.userRole redundancy drop
+2. `admin/load-playbook/route.ts` — **1 leak** (`knowledgeDocument.update` by id-only) + 1 redundancy drop
+3. `admin/user-profiles/route.ts` — **1 leak** (`userProfile.update` by id-only after tenant-scoped findFirst) + 2 redundancy drops
+4. `ai/assistant/execute/route.ts` — **7 leaks across the 13-tool dispatch table**:
+   - `log_offer`: `Property.update` by id only
+   - `add_internal_note`: id-only `Property.findUnique` → re-merge → tenant-scoped update (read could leak)
+   - `update_deal_intel`: same pattern as add_internal_note
+   - `set_property_markets`: `Property.update` by id only inside the markets loop
+   - `move_buyer_in_pipeline`: `PropertyBuyerStage.updateMany({ buyerId })` without tenantId — `PropertyBuyerStage` has its own tenantId column
+   - `update_buyer`: `Buyer.update` by id only after tenant-scoped findFirst
+   - `update_user_role`: `User.update` by id only after tenant-scoped findFirst
+   - `remove_team_member`: id+userId compound delete on `PropertyTeamMember` without tenantId — switched to `deleteMany` to add tenantId
+5. `ai/assistant/route.ts` — clean migration, 1 redundancy drop (used `ctx.userRole` instead of re-fetching `user.role`)
+6. `ai/assistant/session/route.ts` — clean migration, 1 redundancy drop
+7. `ai/coach/route.ts` — clean migration, retained `getSession()` re-fetch for `userName` (ctx doesn't expose name; queued for end-of-Wave-3 ctx extension)
+8. `ai/outreach-action/route.ts` — clean migration
+9. `blasts/route.ts` — **1 leak** (`dealBlast.update` by id-only after tenant-scoped findFirst)
+10. `bugs/[id]/route.ts` — **5 leak sites** across GET/PATCH/DELETE: three `findUnique({ id })` + JS-side `tenantId !==` comparison anti-pattern; one id-only `update`; one id-only `delete` (switched to `deleteMany`). Plus 1 redundancy drop (the `requireAdmin` helper).
+11. `bugs/route.ts` — clean migration, 1 redundancy drop. Retains `getSession()` re-fetch for reporter name/email.
+12. `buyers/[buyerId]/route.ts` — **1 leak** (`Buyer.update` by id-only after tenant-scoped findFirst). Predicted hot zone confirmed.
+
+**New leak-class variants codified in AGENTS.md:**
+
+- `findUnique({ where: { id } })` + `bug.tenantId !== ctx.tenantId` JS comparison.
+  The DB query is unscoped; the JS guard is the only thing keeping the row
+  from leaking. Replaced with `findFirst({ where: { id, tenantId } })`.
+- `delete({ where: { compoundUniqueKey } })` without tenantId. Prisma `delete`
+  on a unique key doesn't accept extra-key fields. Fix: `deleteMany({ id, tenantId })`.
+
+**ctx.userRole canonical pattern codified.** Six routes had a redundant
+`db.user.findUnique({ where: { id: session.userId }, select: { role: true } })`
+to gate admin endpoints. `ctx.userRole` is already populated from the JWT
+session by `withTenant`. Drops a DB roundtrip per request and removes the
+"look up the same user twice" pattern.
+
+**Coverage delta:**
+- `withTenant` routes: 43 → **55** (+12)
+- `getSession`-direct routes: 51 → **39** (−12)
+- Documented exceptions: 16 (unchanged)
+- Total `route.ts` files: 110 (unchanged)
+
+**Wave 3 cumulative (sessions A+B+C, 36 routes):**
+- 21 latent leak sites fixed (5 in batch 1, 0 in batch 2, 16 in batch 3)
+- 10 redundancy drops (4 in batch 1, 0 in batch 2, 6 in batch 3)
+- ~3 sessions × 12 routes = 36 routes complete; **3 batches remaining (~36 routes)**.
+
+**Cross-batch leak distribution diagnosis:**
+Batch 1 hit the calls cluster (5 leaks); batch 2 was cool (0 leaks);
+batch 3 hit the AI-assistant + CRUD cluster (16 leaks). The structural
+explanation: routes that follow a "find a record, then mutate that record"
+shape are leak hot zones; routes that pass through to GHL or do read-only
+work are cool. Bell curve confirmed — batches 4-6 will likely be a mix.
+
+**Files changed:**
+- 12 route files (in `app/api/admin/`, `app/api/ai/`, `app/api/blasts/`,
+  `app/api/bugs/`, `app/api/buyers/[buyerId]/`).
+- `AGENTS.md` Route Conventions — extended with two new leak-class
+  variants (id-only findUnique + JS comparison; id-only delete on compound
+  unique). Plus the new "Don't re-fetch user role — `ctx.userRole` is canonical"
+  sub-section.
+- `PROGRESS.md` — header bumped to Session 49, this entry, coverage stats.
+- `OPERATIONS.md` — API surface table updated (43→55 / 51→39).
+
+**No tsc errors. No production behavior changes** — every leak fix is
+defensive against scenarios that don't currently occur. Pre-push tsc gate
+clean.
+
+### Session 48 — Wave 3 Session B of v1-finish sprint (2026-04-28)
+
+`withTenant` migration, batch 2 of 6. Twelve routes migrated. **Zero
+latent defense gaps** found — the lower extreme that triggered the
+"STOP AND REPORT" check. Diagnosis (also captured below): structural,
+not a methodology gap. Batch 2's 12 routes are dominated by GHL
+pass-throughs (route reads tenant config, hands off to GHL API, writes
+an audit log only — no DB find-then-update on tenant-scoped tables) and
+admin gates that already had `getSession()`-direct tenant scoping
+elsewhere. The "find a record then mutate that record" shape — the
+hot zone for the chained-update leak class — simply isn't present in
+this batch.
+
+**Routes migrated:**
+
+1. `app/api/[tenant]/dayhub/tasks/route.ts` (GET + POST)
+2. `app/api/[tenant]/dayhub/team-numbers/route.ts` (GET)
+3. `app/api/[tenant]/ghl/appointments/route.ts` (GET + POST)
+4. `app/api/[tenant]/ghl/notes/route.ts` (POST)
+5. `app/api/[tenant]/ghl/tasks/[taskId]/route.ts` (PATCH)
+6. `app/api/[tenant]/ghl/workflows/[workflowId]/route.ts` (POST)
+7. `app/api/[tenant]/ghl/workflows/route.ts` (GET)
+8. `app/api/[tenant]/tasks/[contactId]/details/route.ts` (GET)
+9. `app/api/admin/ai-logs/[id]/route.ts` (GET)
+10. `app/api/admin/ai-logs/route.ts` (GET)
+11. `app/api/admin/embed-knowledge/route.ts` (POST)
+12. `app/api/admin/generate-profiles/route.ts` (POST)
+
+**Bonus:** four admin routes (`ai-logs/[id]`, `ai-logs`, `embed-knowledge`,
+`generate-profiles`) had a redundant `db.user.findUnique({ where: { id:
+session.userId }, select: { role: true } })` to gate admin endpoints.
+After migration, `ctx.userRole` is canonical — dropped four DB roundtrips.
+Pattern formalized as a Wave 3 convention in batch 3's AGENTS.md update.
+
+**Coverage delta:**
+- `withTenant` routes: 31 → **43** (+12)
+- `getSession`-direct routes: 63 → **51** (−12)
+- Documented exceptions: 16 (unchanged)
+- Total `route.ts` files: 110 (unchanged)
+
+**Leak find rate diagnosis (batch 1: 5/12, batch 2: 0/12):** batch 1
+hit `app/api/[tenant]/calls/[id]/*` and `calls/bulk-regrade` — every leak
+followed the same shape (tenant-scoped find followed by id-only write back).
+That's a hot zone for the chained-update class. Batch 2's clusters
+(`dayhub/*`, `ghl/*`, `tasks/[contactId]/details`, `admin/*`) are
+GHL-pass-through or read-only — no shape match. **This is consistent with
+the prompt's hypothesis that "either extreme is a signal worth diagnosing."**
+Not a methodology bug. Future batches that touch
+`app/api/properties/[propertyId]/*` and `app/api/buyers/*` are predicted
+to surface chained-update leaks again (same find-then-update shape).
+
+**No tsc errors. No production behavior changes.**
 
 ### Session 47 — Wave 3 Session A of v1-finish sprint (2026-04-28)
 
