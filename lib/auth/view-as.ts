@@ -3,6 +3,7 @@
 // If the caller is admin and passes asUserId, returns that user's info instead.
 
 import { db } from '@/lib/db/client'
+import type { TenantContext } from '@/lib/api/withTenant'
 
 interface EffectiveUser {
   userId: string
@@ -12,9 +13,10 @@ interface EffectiveUser {
 }
 
 export async function resolveEffectiveUser(
-  session: { userId: string; tenantId: string },
+  ctx: TenantContext,
   asUserId: string | null,
 ): Promise<EffectiveUser> {
+  const session = { userId: ctx.userId, tenantId: ctx.tenantId }
   // No impersonation requested — use the caller
   if (!asUserId || asUserId === session.userId) {
     const user = await db.user.findUnique({

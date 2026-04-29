@@ -5,7 +5,6 @@
 // so appointments are correctly matched to the user's actual day.
 import { NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
-import { getSession } from '@/lib/auth/session'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 import { resolveEffectiveUser } from '@/lib/auth/view-as'
@@ -89,13 +88,9 @@ export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
     }
 
     // Resolve effective user (supports admin View As via ?asUserId=).
-    // resolveEffectiveUser still expects the legacy session shape, so re-fetch
-    // here rather than threading a synthetic shape through. ctx already
-    // guarantees tenantId/userId so this getSession() call cannot null out.
-    const session = (await getSession())!
     const asUserId = url.searchParams.get('asUserId')
     const ghlUserIdsParam = url.searchParams.get('ghlUserIds') // comma-separated, for role tab
-    const effective = await resolveEffectiveUser(session, asUserId)
+    const effective = await resolveEffectiveUser(ctx, asUserId)
     const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
     const userGhlId = effective.ghlUserId
     const roleGhlIds = ghlUserIdsParam ? new Set(ghlUserIdsParam.split(',').filter(Boolean)) : null

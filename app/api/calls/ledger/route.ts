@@ -12,11 +12,7 @@ export const GET = withTenant(async (request, ctx) => {
   const asUserId = request.nextUrl.searchParams.get('asUserId')
   if (!type || !date) return NextResponse.json({ error: 'type and date required' }, { status: 400 })
 
-  // resolveEffectiveUser is duck-typed on { userId, tenantId } — TenantContext satisfies it.
-  const effective = await resolveEffectiveUser(
-    { userId: ctx.userId, tenantId: ctx.tenantId },
-    asUserId,
-  )
+  const effective = await resolveEffectiveUser(ctx, asUserId)
   const isAdmin = !effective.isImpersonating && (effective.role === 'OWNER' || effective.role === 'ADMIN')
   const { dayStart, dayEnd } = getCentralDayBounds(date)
 
