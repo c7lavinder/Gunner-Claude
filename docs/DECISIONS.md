@@ -328,6 +328,72 @@ daily-kpi-snapshot, weekly-profiles).
 
 ---
 
+### D-044 — AI Model Selection Rule
+
+**Status:** Accepted
+**Date:** 2026-04-29
+**Driver:** Lead acquisition cost
+
+**Context**
+
+Different parts of the codebase had used different Claude models without
+a written rule. Pre-Wave-1 state:
+- Grading on Opus 4.6
+- Coaching on Sonnet 4.6
+- `lib/ai/enrich-property.ts` pinned to `claude-sonnet-4-20250514`
+  (date-stamped 2025 snapshot)
+- 8 other files pinned to the same date-stamped snapshot
+
+Wave 1 swept all 9 occurrences to `claude-sonnet-4-6` (commit `047ca18`)
+and identified the need for a written rule. The rule had been referenced
+as pending "D-044" across PROGRESS.md / SYSTEM_MAP.md / AUDIT_PLAN.md
+since Wave 1 closed; this entry codifies it.
+
+**Decision**
+
+Stability-first model selection. Default to the most capable model that
+fits the task. Downgrade only when latency or cost becomes a measured
+problem, never preemptively.
+
+**Driver**
+
+Wholesale real estate teams spend hundreds of dollars per qualified
+seller conversation. Maximum value extraction from each call matters
+more than per-token cost optimization. Lead acquisition cost is the
+binding constraint, not AI inference spend.
+
+**Rules**
+
+- Grading + structured high-stakes extraction (deal intel, next steps)
+  → `claude-opus-4-6`
+- Coaching + nuanced reasoning + audit reasoning → `claude-opus-4-6`
+- Conversational outputs (coaching chat, Role Assistant) →
+  `claude-sonnet-4-6`
+- Generated narrative artifacts (property stories, user profiles) →
+  `claude-sonnet-4-6`
+- No date-pinned model snapshots anywhere — drift hazard. The Wave 1
+  sweep removed 9 such pins; new code must use unpinned identifiers.
+
+**Consequences**
+
+- Higher per-call AI spend than minimum-viable
+- Predictable output quality across features
+- New AI features require capability assessment, not cost assessment
+- Downgrade requires measured evidence (latency or cost data), not
+  speculation
+
+**Related**
+
+- Wave 1 (commit `047ca18`): swept `claude-sonnet-4-20250514` across
+  5 files. The original D-007 (single-model rule) is superseded by this
+  finer-grained rule.
+- Pending D-045 — KPI snapshot timestamp semantics (raised in
+  AUDIT_PLAN.md, awaiting Corey decision).
+- Pending D-046 — Add test framework (vitest)? Not yet raised in
+  AUDIT_PLAN; provisional placeholder for the next session.
+
+---
+
 ## Decisions Still Open
 
 | # | Question | Options | Notes |
