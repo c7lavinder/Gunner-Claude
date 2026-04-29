@@ -27,10 +27,10 @@ export const POST = withTenant<{ propertyId: string }>(async (_request, ctx, par
   //      User explicitly clicked "re-enrich" so force BD regardless of
   //      cache / PR-no-match skip — they want the full dataset.
   //   2. Claude AI estimates — ARV, repair, rental.
-  enrichProperty(property.id, { forceBatchData: true }).catch(err =>
+  enrichProperty(property.id, ctx.tenantId, { forceBatchData: true }).catch(err =>
     console.error('[Re-Enrich Vendor] Background error:', err instanceof Error ? err.message : err)
   )
-  enrichPropertyWithAI(property.id).catch(err =>
+  enrichPropertyWithAI(property.id, ctx.tenantId).catch(err =>
     console.error('[Re-Enrich AI] Background error:', err instanceof Error ? err.message : err)
   )
 

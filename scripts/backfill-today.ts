@@ -42,7 +42,7 @@ async function main() {
         { googlePlaceId: null },
       ],
     },
-    select: { id: true, address: true, city: true, state: true, zip: true, tenant: { select: { slug: true } } },
+    select: { id: true, tenantId: true, address: true, city: true, state: true, zip: true, tenant: { select: { slug: true } } },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -62,7 +62,7 @@ async function main() {
     try {
       // Force BD → bypass cache + PR-no-match skip. Still subject to the daily
       // budget cap (BATCHDATA_DAILY_BUDGET_USD) as the hard safety.
-      const r = await enrichProperty(lead.id, { forceBatchData: true })
+      const r = await enrichProperty(lead.id, lead.tenantId, { forceBatchData: true })
       if (r.batchdata.matched && !r.batchdata.skipped) bdRan++
       if (r.propertyRadar.matched) prRan++
       if (r.google.matched) gRan++

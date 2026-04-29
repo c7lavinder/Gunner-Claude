@@ -12,7 +12,7 @@ const DRY = process.argv.includes('--dry-run')
 
 async function main() {
   const candidates = await db.property.findMany({
-    select: { id: true, address: true, city: true, state: true, ghlContactId: true },
+    select: { id: true, tenantId: true, address: true, city: true, state: true, ghlContactId: true },
   })
   const toSplit = candidates.filter(p => matchCombinedAddress(p.address) !== null)
   console.log(`${DRY ? '[DRY] ' : ''}Combined-address rows: ${toSplit.length}\n`)
@@ -24,7 +24,7 @@ async function main() {
     console.log(`  → ${parts.num2} ${parts.streetName}`)
     if (DRY) continue
     try {
-      const result = await splitCombinedAddressIfNeeded(p.id)
+      const result = await splitCombinedAddressIfNeeded(p.id, p.tenantId)
       if (result.splitInto) {
         console.log(`  ✓ split into ${result.splitInto[0]} + ${result.splitInto[1]}`)
       } else {

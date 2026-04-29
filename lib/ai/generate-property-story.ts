@@ -30,9 +30,13 @@ export interface GenerateStoryResult {
   story?: string
 }
 
-export async function generatePropertyStory(propertyId: string): Promise<GenerateStoryResult> {
-  const property = await db.property.findUnique({
-    where: { id: propertyId },
+export async function generatePropertyStory(
+  propertyId: string,
+  tenantId: string,
+): Promise<GenerateStoryResult> {
+  // Scoped on tenantId — caller is no longer load-bearing for tenant boundary.
+  const property = await db.property.findFirst({
+    where: { id: propertyId, tenantId },
     include: {
       tenant: { select: { id: true } },
       assignedTo: { select: { name: true, role: true } },
@@ -124,7 +128,7 @@ export async function generatePropertyStory(propertyId: string): Promise<Generat
     })
 
     await db.property.update({
-      where: { id: propertyId },
+      where: { id: propertyId, tenantId },
       data: {
         story,
         storyUpdatedAt: new Date(),

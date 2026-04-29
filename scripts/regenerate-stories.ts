@@ -37,8 +37,8 @@ async function main() {
   // updatedAt bumps on any property edit OR any related write that flows through
   // a property.update() — plus the generator itself bumps storyUpdatedAt on
   // success, so a successful run won't re-queue the same row.
-  const candidates = await db.$queryRaw<Array<{ id: string; address: string }>>`
-    SELECT id, address
+  const candidates = await db.$queryRaw<Array<{ id: string; address: string; tenant_id: string }>>`
+    SELECT id, address, tenant_id
     FROM properties
     WHERE updated_at > COALESCE(story_updated_at, '1970-01-01'::timestamp)
       AND updated_at > ${cutoff}
@@ -53,7 +53,7 @@ async function main() {
   for (const p of candidates) {
     const t0 = Date.now()
     try {
-      const r = await generatePropertyStory(p.id)
+      const r = await generatePropertyStory(p.id, p.tenant_id)
       results.push({ id: p.id, address: p.address, status: r.status, reason: r.reason, ms: Date.now() - t0 })
       if (r.status === 'success') {
         console.log(`[Story Cron] ✓ ${p.address} (${Date.now() - t0}ms)`)

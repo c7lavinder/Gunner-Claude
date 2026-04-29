@@ -119,7 +119,7 @@ async function main() {
 
   console.log('[E2E] Running orchestrator...')
   const t0 = Date.now()
-  const outcome = await enrichProperty(target.id, { skipTrace: false })
+  const outcome = await enrichProperty(target.id, target.tenantId, { skipTrace: false })
   console.log(`[E2E] Done in ${Date.now() - t0}ms`)
   console.log(`[E2E] Vendors: BD=${outcome.batchdata.matched ? 'y' : 'n'} PR=${outcome.propertyRadar.matched ? 'y' : 'n'} G=${outcome.google.matched ? 'y' : 'n'} CL=${outcome.courtlistener.ran ? outcome.courtlistener.totalCases + ' cases' : 'skipped'}`)
   console.log(`[E2E] Columns written: ${outcome.columnsWritten}`)

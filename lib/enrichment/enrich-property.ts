@@ -123,6 +123,7 @@ function mergeResults(
 
 export async function enrichProperty(
   propertyId: string,
+  tenantId: string,
   opts: MultiVendorEnrichOptions = {},
 ): Promise<MultiVendorEnrichResult> {
   const startedAt = Date.now()
@@ -136,8 +137,9 @@ export async function enrichProperty(
     durationMs: 0,
   }
 
-  const property = await db.property.findUnique({
-    where: { id: propertyId },
+  // Scoped on tenantId — caller is no longer load-bearing for tenant boundary.
+  const property = await db.property.findFirst({
+    where: { id: propertyId, tenantId },
     select: {
       id: true, address: true, city: true, state: true, zip: true,
       fieldSources: true, zillowData: true,
@@ -370,12 +372,12 @@ export async function enrichProperty(
   // full update fails (e.g. schema drift, bad value types).
   if (Object.keys(update).length > 1) {
     try {
-      await db.property.update({ where: { id: propertyId }, data: update })
+      await db.property.update({ where: { id: propertyId, tenantId }, data: update })
       result.columnsWritten = Object.keys(update).length - 1
     } catch (err) {
       console.error('[enrichProperty] Full update failed, retrying with fieldSources only:', err instanceof Error ? err.message : err)
       try {
-        await db.property.update({ where: { id: propertyId }, data: { fieldSources } })
+        await db.property.update({ where: { id: propertyId, tenantId }, data: { fieldSources } })
       } catch (retryErr) {
         console.error('[enrichProperty] Retry also failed:', retryErr instanceof Error ? retryErr.message : retryErr)
       }
@@ -405,7 +407,7 @@ export async function enrichProperty(
   // ── Step 5: optional skip-trace ────────────────────────────────────
   if (opts.skipTrace) {
     try {
-      const trace = await skipTraceSellersForProperty(propertyId)
+      const trace = await skipTraceSellersForProperty(propertyId, tenantId)
       result.skipTrace = {
         ran: true,
         sellersTraced: trace.totalTraced,

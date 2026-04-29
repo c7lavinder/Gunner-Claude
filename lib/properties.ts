@@ -265,7 +265,7 @@ export async function createPropertyFromContact(
         },
       }).catch(() => { /* audit failure shouldn't block enrichment */ })
 
-      enrichProperty(property.id)
+      enrichProperty(property.id, tenantId)
         .then(result => {
           db.auditLog.create({
             data: {
@@ -303,7 +303,7 @@ export async function createPropertyFromContact(
     }
 
     // AI auto-enrichment (fire-and-forget — estimates ARV, repair, rental, neighborhood)
-    enrichPropertyWithAI(property.id).catch(err =>
+    enrichPropertyWithAI(property.id, tenantId).catch(err =>
       console.error('[Property] AI enrich failed:', err instanceof Error ? err.message : err)
     )
 
@@ -401,9 +401,11 @@ export function matchCombinedAddress(address: string): { num1: string; num2: str
 // Safe to re-run against an already-split dataset.
 export async function splitCombinedAddressIfNeeded(
   propertyId: string,
+  tenantId: string,
 ): Promise<{ splitInto: [string, string] | null }> {
-  const p = await db.property.findUnique({
-    where: { id: propertyId },
+  // Scoped on tenantId — caller is no longer load-bearing for tenant boundary.
+  const p = await db.property.findFirst({
+    where: { id: propertyId, tenantId },
     include: {
       sellers: true,
       milestones: { select: { type: true, createdAt: true, source: true, loggedById: true, notes: true } },
@@ -464,7 +466,8 @@ export async function splitCombinedAddressIfNeeded(
     })
 
     // Cascade deletes the original's sellers + milestones (already duplicated above).
-    await tx.property.delete({ where: { id: propertyId } })
+    // Scoped: deleteMany with tenantId. Property already validated above; this is DiD.
+    await tx.property.deleteMany({ where: { id: propertyId, tenantId } })
 
     return [a.id, b.id] as [string, string]
   })

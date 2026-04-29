@@ -205,7 +205,7 @@ async function main() {
     const t0 = Date.now()
     let outcome: Awaited<ReturnType<typeof enrichProperty>> | null = null
     try {
-      outcome = await enrichProperty(property.id, { skipTrace: false })
+      outcome = await enrichProperty(property.id, tenant.id, { skipTrace: false })
     } catch (err) {
       console.log(`  [!] Orchestrator error: ${err instanceof Error ? err.message : String(err)}`)
     }

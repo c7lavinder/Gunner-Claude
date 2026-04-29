@@ -845,7 +845,7 @@ export const POST = withTenant(async (request, ctx) => {
       case 'trigger_property_enrichment': {
         const ePropId = pageContext?.startsWith('property:') ? pageContext.split(':')[1] : null
         if (!ePropId) { result = 'No property in context'; break }
-        import('@/lib/ai/enrich-property').then(({ enrichPropertyWithAI }) => enrichPropertyWithAI(ePropId)).catch(err => logFailure(tenantId, 'assistant.execute.enrichment_failed', 'property', err, { ePropId }))
+        import('@/lib/ai/enrich-property').then(({ enrichPropertyWithAI }) => enrichPropertyWithAI(ePropId, tenantId)).catch(err => logFailure(tenantId, 'assistant.execute.enrichment_failed', 'property', err, { ePropId }))
         result = 'Property enrichment triggered — ARV, repair estimate, rental estimate, and neighborhood summary will update shortly.'
         break
       }

@@ -38,7 +38,7 @@ async function main() {
       address: { not: '' },
     },
     select: {
-      id: true, address: true, city: true, state: true, zip: true,
+      id: true, tenantId: true, address: true, city: true, state: true, zip: true,
       advancedPropertyType: true, lotDepthFootage: true,
       zillowData: true,
     },
@@ -68,7 +68,7 @@ async function main() {
       lotDepthFootage: lead.lotDepthFootage,
     }
 
-    const outcome = await enrichProperty(lead.id, { skipTrace: false })
+    const outcome = await enrichProperty(lead.id, lead.tenantId, { skipTrace: false })
     console.log(`  BD:${outcome.batchdata.matched ? 'y' : 'n'} PR:${outcome.propertyRadar.matched ? 'y' : 'n'} G:${outcome.google.matched ? 'y' : 'n'}  ${outcome.columnsWritten} cols written  ${outcome.durationMs}ms`)
 
     if (outcome.propertyRadar.error) {

@@ -6,11 +6,10 @@ import { db } from '@/lib/db/client'
 import { computePropertyMetrics } from '@/lib/computed-metrics'
 
 export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) => {
-  // FIX: was leaking — Class 1 (helper-delegate variant) — `computePropertyMetrics`
-  // does an id-only `db.property.findUnique` and then trusts the row's tenantId
-  // to scope downstream queries. Without route-level validation, any tenant
-  // could read another tenant's metrics by passing the propertyId. Validate
-  // the property belongs to ctx.tenantId before delegating.
+  // computePropertyMetrics now requires tenantId — leak vector closed at the
+  // helper level (was Class 4 helper-delegate). Route-level findFirst gate is
+  // no longer required for safety, but kept here for the 404 contract: returns
+  // a clear "Not found" before delegating to a metrics function that throws.
   const property = await db.property.findFirst({
     where: { id: params.propertyId, tenantId: ctx.tenantId },
     select: { id: true },
@@ -18,7 +17,7 @@ export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) 
   if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   try {
-    const metrics = await computePropertyMetrics(params.propertyId)
+    const metrics = await computePropertyMetrics(params.propertyId, ctx.tenantId)
     return NextResponse.json({ metrics })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })

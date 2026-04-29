@@ -839,7 +839,7 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
         // cause of the historical doubles: empty address at creation, combined
         // address arrives here after GHL contact is enriched), split now.
         if (updates.address) {
-          await splitCombinedAddressIfNeeded(property.id).catch(err => {
+          await splitCombinedAddressIfNeeded(property.id, tenantId).catch(err => {
             console.error('[GHL Webhook] Address split failed:', err)
           })
         }
@@ -873,7 +873,7 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
 
         // Re-trigger full multi-vendor enrichment when address changes.
         if (updates.address) {
-          enrichProperty(property.id).catch(err =>
+          enrichProperty(property.id, tenantId).catch(err =>
             console.warn('[GHL webhook] address-change enrichment failed:', err instanceof Error ? err.message : err)
           )
         }

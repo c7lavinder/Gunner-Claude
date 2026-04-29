@@ -33,7 +33,7 @@ export const POST = withTenant<{ sellerId: string }>(async (request, ctx, params
   if (!seller) return NextResponse.json({ error: 'seller not found' }, { status: 404 })
 
   const force = new URL(request.url).searchParams.get('force') === '1'
-  const result = await skipTraceSeller(seller.id, { force })
+  const result = await skipTraceSeller(seller.id, ctx.tenantId, { force })
 
   if (!result) {
     return NextResponse.json({ error: 'skip-trace unavailable' }, { status: 502 })

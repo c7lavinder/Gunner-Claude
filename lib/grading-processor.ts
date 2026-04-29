@@ -201,7 +201,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
         dealIntelHistory: { equals: Prisma.DbNull },
         durationSeconds: { gte: 45 },
       },
-      select: { id: true, contactName: true, propertyId: true },
+      select: { id: true, contactName: true, propertyId: true, tenantId: true },
       orderBy: { gradedAt: 'desc' },
       take: 1,
     })
@@ -214,7 +214,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
         // log to audit_logs inside the generator.
         if (call.propertyId) {
           const { generatePropertyStory } = await import('@/lib/ai/generate-property-story')
-          generatePropertyStory(call.propertyId).then(
+          generatePropertyStory(call.propertyId, call.tenantId).then(
             r => console.log(`[call-processor] Story regen ${r.status} for property ${call.propertyId}`),
             err => console.warn(`[call-processor] Story regen threw for ${call.propertyId}:`, err instanceof Error ? err.message : err),
           )

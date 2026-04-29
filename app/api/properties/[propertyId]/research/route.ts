@@ -118,7 +118,7 @@ export const POST = withTenant<{ propertyId: string }>(async (_req, ctx, params)
     // Also trigger full multi-vendor enrichment (non-blocking). User hit
     // the research button → force BD even if the cache/no-match gate
     // would normally skip.
-    enrichProperty(params.propertyId, { forceBatchData: true }).catch(err =>
+    enrichProperty(params.propertyId, tenantId, { forceBatchData: true }).catch(err =>
       console.warn('[Research] Multi-vendor enrich failed:', err instanceof Error ? err.message : err)
     )
 

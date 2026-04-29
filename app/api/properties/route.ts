@@ -116,24 +116,21 @@ export const POST = withTenant(async (request, ctx) => {
     // If the user entered a combined address (e.g., "2716 & 2720 Enterprise Ave")
     // split it into two properties now. Non-blocking decision: we created the
     // combined row in the transaction and let the splitter delete + replace it.
-    // NOTE: splitCombinedAddressIfNeeded does an internal id-only findUnique
-    // (Class 4 helper). Safe here because property.id was JUST created in this
-    // transaction with our tenantId — collision would require CUID guessing.
-    const splitResult = await splitCombinedAddressIfNeeded(property.id).catch(err => {
+    // splitCombinedAddressIfNeeded now requires tenantId — closes Class 4
+    // vector at the helper level.
+    const splitResult = await splitCombinedAddressIfNeeded(property.id, ctx.tenantId).catch(err => {
       console.error('[Properties POST] Split check failed:', err)
       return { splitInto: null as [string, string] | null }
     })
     const returnedId = splitResult.splitInto?.[0] ?? property.id
 
     // Auto-enrichment (fire-and-forget — non-blocking). If split, enrich both halves.
-    // NOTE: enrichProperty + enrichPropertyWithAI are Class 4 helpers but
-    // operate on just-created property ids, so safe in this caller.
     const enrichIds = splitResult.splitInto ?? [property.id]
     for (const id of enrichIds) {
-      enrichProperty(id).catch(err =>
+      enrichProperty(id, ctx.tenantId).catch(err =>
         console.error('[Vendor Enrich] Background error:', err instanceof Error ? err.message : err)
       )
-      enrichPropertyWithAI(id).catch(err =>
+      enrichPropertyWithAI(id, ctx.tenantId).catch(err =>
         console.error('[AI Enrich] Background error:', err instanceof Error ? err.message : err)
       )
     }

@@ -28,7 +28,7 @@ export const POST = withTenant<{ propertyId: string }>(async (_req, ctx, params)
   })
   if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
 
-  const result = await generatePropertyStory(params.propertyId)
+  const result = await generatePropertyStory(params.propertyId, ctx.tenantId)
   if (result.status === 'error') {
     return NextResponse.json({ error: result.reason ?? 'Generation failed' }, { status: 500 })
   }

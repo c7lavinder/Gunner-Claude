@@ -649,6 +649,7 @@ export async function enrichPropertyFromBatchData(
   const property = await db.property.findUnique({
     where: { id: propertyId },
     select: {
+      tenantId: true,
       address: true, city: true, state: true, zip: true,
       beds: true, baths: true, sqft: true, yearBuilt: true,
       lotSize: true, propertyType: true, occupancy: true,
@@ -944,7 +945,7 @@ export async function enrichPropertyFromBatchData(
   // the caller (e.g., manual re-enrich button, not the cron backfill).
   if (opts.skipTrace) {
     try {
-      const trace = await skipTraceSellersForProperty(propertyId)
+      const trace = await skipTraceSellersForProperty(propertyId, property.tenantId)
       if (trace.totalTraced > 0) {
         console.log(`[BatchData] Skip-trace: ${trace.totalTraced} seller(s) traced, ${trace.totalFieldsTouched} fields filled, ${trace.skipped} skipped (already complete)`)
       }

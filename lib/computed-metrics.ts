@@ -28,15 +28,19 @@ export interface PropertyMetrics {
   taxAssessmentVsARV: number | null  // % difference
 }
 
-export async function computePropertyMetrics(propertyId: string): Promise<PropertyMetrics> {
-  const property = await db.property.findUnique({
-    where: { id: propertyId },
+export async function computePropertyMetrics(
+  propertyId: string,
+  tenantId: string,
+): Promise<PropertyMetrics> {
+  // Scoped on tenantId — caller is no longer load-bearing for tenant boundary.
+  const property = await db.property.findFirst({
+    where: { id: propertyId, tenantId },
     select: {
       createdAt: true,
       arv: true, askingPrice: true, offerPrice: true,
       repairEstimate: true, taxAssessment: true,
       zillowData: true, dealIntel: true,
-      ghlContactId: true, tenantId: true,
+      ghlContactId: true,
     },
   })
 
@@ -46,7 +50,7 @@ export async function computePropertyMetrics(propertyId: string): Promise<Proper
 
   // ── Call data ──────────────────────────────────────────────────────────
   const calls = await db.call.findMany({
-    where: { tenantId: property.tenantId, ghlContactId: property.ghlContactId ?? undefined },
+    where: { tenantId, ghlContactId: property.ghlContactId ?? undefined },
     select: {
       calledAt: true, direction: true, durationSeconds: true,
       score: true, sentiment: true, gradingStatus: true,
@@ -73,7 +77,7 @@ export async function computePropertyMetrics(propertyId: string): Promise<Proper
 
   // Milestone-based metrics
   const milestones = await db.propertyMilestone.findMany({
-    where: { propertyId },
+    where: { propertyId, tenantId },
     orderBy: { createdAt: 'asc' },
     select: { type: true, createdAt: true },
   })

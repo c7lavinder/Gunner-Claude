@@ -13,19 +13,17 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 })
 
-export async function enrichPropertyWithAI(propertyId: string) {
-  let tenantId: string | undefined
-
+export async function enrichPropertyWithAI(propertyId: string, tenantId: string) {
   try {
+    // Scoped on tenantId at every site — caller is no longer load-bearing.
     await db.property.update({
-      where: { id: propertyId },
+      where: { id: propertyId, tenantId },
       data: { aiEnrichmentStatus: 'pending' },
     })
 
-    const property = await db.property.findUnique({
-      where: { id: propertyId },
+    const property = await db.property.findFirst({
+      where: { id: propertyId, tenantId },
       select: {
-        tenantId: true,
         address: true, city: true, state: true, zip: true,
         beds: true, baths: true, sqft: true, yearBuilt: true,
         propertyType: true, description: true, fieldSources: true,
@@ -34,7 +32,6 @@ export async function enrichPropertyWithAI(propertyId: string) {
     })
     if (!property) return
 
-    tenantId = property.tenantId
     const timer = startTimer()
 
     // Use Claude to generate estimates
@@ -129,12 +126,12 @@ Base estimates on the location, size, and year. If insufficient data, use null.`
     updateData.fieldSources = fieldSources
     updateData.aiEnrichmentStatus = 'complete'
 
-    await db.property.update({ where: { id: propertyId }, data: updateData })
+    await db.property.update({ where: { id: propertyId, tenantId }, data: updateData })
     console.log(`[AI Enrich] Completed for ${property.address}`)
   } catch (err) {
     console.error('[AI Enrich] Failed:', err)
     await db.property.update({
-      where: { id: propertyId },
+      where: { id: propertyId, tenantId },
       data: {
         aiEnrichmentStatus: 'failed',
         aiEnrichmentError: err instanceof Error ? err.message : 'Unknown',

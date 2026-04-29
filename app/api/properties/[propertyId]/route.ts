@@ -325,7 +325,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     // common via AI extraction / GHL sync), split it here. No-op if the address
     // is single. Skips gracefully if the property has already been deleted.
     if (rawAddress) {
-      await splitCombinedAddressIfNeeded(params.propertyId).catch(err => {
+      await splitCombinedAddressIfNeeded(params.propertyId, ctx.tenantId).catch(err => {
         console.error('[Properties PATCH] Split check failed:', err)
       })
     }

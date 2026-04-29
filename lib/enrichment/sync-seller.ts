@@ -348,12 +348,14 @@ function pickBestPhones(phones: SkipTraceResult['phones']): {
  */
 export async function skipTraceSeller(
   sellerId: string,
+  tenantId: string,
   opts: { force?: boolean } = {},
 ): Promise<{ fieldsTouched: string[]; traced: boolean } | null> {
-  const seller = await db.seller.findUnique({
-    where: { id: sellerId },
+  // Scoped on tenantId — caller is no longer load-bearing for tenant boundary.
+  const seller = await db.seller.findFirst({
+    where: { id: sellerId, tenantId },
     select: {
-      id: true, tenantId: true, name: true,
+      id: true, name: true,
       phone: true, secondaryPhone: true, mobilePhone: true,
       email: true, secondaryEmail: true,
       doNotContact: true, isDeceased: true, isBankruptcy: true, hasLiens: true,
@@ -435,7 +437,7 @@ export async function skipTraceSeller(
   }
 
   await db.seller.update({
-    where: { id: seller.id },
+    where: { id: seller.id, tenantId },
     data: { ...update, fieldSources },
   })
 
@@ -448,7 +450,10 @@ export async function skipTraceSeller(
  */
 export async function skipTraceSellersForProperty(
   propertyId: string,
+  tenantId: string,
 ): Promise<{ totalTraced: number; totalFieldsTouched: number; skipped: number }> {
+  // PropertySeller is FK-scoped via property — DiD-via-FK applies here, but
+  // we pass tenantId to skipTraceSeller below so the inner findFirst is scoped.
   const links = await db.propertySeller.findMany({
     where: { propertyId },
     select: { sellerId: true },
@@ -459,7 +464,7 @@ export async function skipTraceSellersForProperty(
   let skipped = 0
 
   for (const link of links) {
-    const result = await skipTraceSeller(link.sellerId)
+    const result = await skipTraceSeller(link.sellerId, tenantId)
     if (!result || !result.traced) {
       skipped++
       continue
