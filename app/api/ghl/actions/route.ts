@@ -1,11 +1,9 @@
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 // app/api/ghl/actions/route.ts
 // Unified GHL action endpoint — execute any GHL action from the frontend
 // Used by AI Coach, property pages, call detail pages
 
-import { NextRequest, NextResponse } from 'next/server'
-
-
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
 import { hasPermission, type UserRole } from '@/types/roles'
@@ -42,16 +40,11 @@ const actionSchema = z.discriminatedUnion('type', [
   }),
 ])
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const role = (session.role) as UserRole
-  if (!hasPermission(role, 'ghl.actions')) {
+export const POST = withTenant(async (request, ctx) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'ghl.actions')) {
     return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
   }
 
-  const tenantId = session.tenantId
   const body = await request.json()
   const parsed = actionSchema.safeParse(body)
 
@@ -60,7 +53,7 @@ export async function POST(request: NextRequest) {
   const action = parsed.data
 
   try {
-    const ghl = await getGHLClient(tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     let result: unknown
 
     switch (action.type) {
@@ -88,8 +81,8 @@ export async function POST(request: NextRequest) {
     // Log the action
     await db.auditLog.create({
       data: {
-        tenantId,
-        userId: session.userId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
         action: `ghl.${action.type}`,
         resource: 'ghl',
         source: 'USER',
@@ -103,4 +96,4 @@ export async function POST(request: NextRequest) {
     console.error('[GHL Actions] Error:', err)
     return NextResponse.json({ error: 'GHL action failed' }, { status: 500 })
   }
-}
+})

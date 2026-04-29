@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 49 — Wave 3 Session C of v1-finish sprint (2026-04-28)
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). Wave 3 Sessions A+B+C migrated 36 routes to `withTenant` (batches 1-3 of 6); 21 latent cross-tenant defense gaps caught and fixed across the three batches (5 + 0 + 16 — distribution explained by route shape: chained-update class clusters in CRUD-shape routes). Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
+**Current session**: 50 — Wave 3 Session D of v1-finish sprint (2026-04-29)
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). Wave 3 Sessions A+B+C+D migrated 48 routes to `withTenant` (batches 1-4 of 6); 21 latent cross-tenant defense gaps caught and fixed across the four batches (5 + 0 + 16 + 0 — distribution explained by route shape: chained-update class clusters in CRUD-shape routes; GHL passthrough + read-only routes are leak-free). Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
@@ -56,6 +56,77 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 50 — Wave 3 Session D of v1-finish sprint (2026-04-29)
+
+`withTenant` migration, batch 4 of 6. Twelve routes migrated; **0 latent
+defense gaps fixed**. Cool-zone prediction was correct: this batch was the
+GHL-passthrough cluster (7 routes under `app/api/ghl/`) plus simple
+list/create CRUD (`buyers/route.ts`, `call-rubrics/route.ts`,
+`buyers/sync`), one read-only ledger query (`calls/ledger`), and one
+already-defense-in-depth route (`kpi-entries`). No find-then-update shape
+in any of the 12 routes — the structural diagnosis from Session C held
+exactly: "routes that pass through to GHL or do read-only work are cool."
+
+**Routes migrated (alphabetical, batch 4):**
+
+1. `buyers/route.ts` — clean migration. GET list + POST create, no find-then-update.
+2. `buyers/sync/route.ts` — clean migration. POST passthrough to GHL + lib helper.
+3. `call-rubrics/route.ts` — clean migration. POST `updateMany` was already tenant-scoped.
+4. `calls/ledger/route.ts` — clean migration. `resolveEffectiveUser` is duck-typed on `{userId, tenantId}` — passed `ctx` directly, no `getSession()` re-fetch tax (this route doesn't need `userName/userEmail`).
+5. `ghl/actions/route.ts` — clean migration. POST → GHL passthrough + auditLog create.
+6. `ghl/calendars/route.ts` — clean migration. `tenant.findUnique({ id: ctx.tenantId })` is correct — `Tenant.id` IS the tenant boundary.
+7. `ghl/contacts/route.ts` — clean migration. GET → GHL search passthrough.
+8. `ghl/phone-numbers/route.ts` — clean migration. GET → GHL passthrough.
+9. `ghl/pipelines/route.ts` — clean migration. GET → GHL passthrough.
+10. `ghl/reregister-webhook/route.ts` — clean migration. POST → lib helper.
+11. `ghl/users/route.ts` — clean migration. GET → GHL + fire-and-forget lib sync.
+12. `kpi-entries/route.ts` — clean migration. POST already had defense-in-depth on the property lookup; DELETE already used `deleteMany` with tenantId.
+
+**No new leak-class variants found.** Variants 1-4 from Sessions A+C are
+sufficient for this batch's shape coverage — there were no find-then-update
+sites to scrutinize. AGENTS.md unchanged.
+
+**No redundancy drops.** None of the 12 routes had the "re-fetch user role"
+anti-pattern (admin gating was already done via `hasPermission(role, …)`
+on the session role field, not via `db.user.findUnique`). All 6 redundancy
+drops in this Wave's tally came from batches 1-3.
+
+**Coverage delta:**
+- `withTenant` routes: 55 → **67** (+12)
+- `getSession`-direct routes: 39 → **27** (−12)
+- Documented exceptions: 16 (unchanged)
+- Total `route.ts` files: 110 (unchanged)
+
+**Wave 3 cumulative (sessions A+B+C+D, 48 routes):**
+- 21 latent leak sites fixed (5 in batch 1, 0 in batch 2, 16 in batch 3, 0 in batch 4)
+- 10 redundancy drops (4 in batch 1, 0 in batch 2, 6 in batch 3, 0 in batch 4)
+- ~4 sessions × 12 routes = 48 routes complete; **2 batches remaining (~24 routes)**.
+
+**Cross-batch leak distribution diagnosis confirmed:**
+Batches 1+3 hit CRUD/AI clusters (21 leaks combined); batches 2+4 were
+GHL/read-only passthroughs (0 leaks combined). Bell curve confirmed —
+hot/cool prediction now reliable based on route shape (find-then-update
+present = hot; GHL passthrough or read-only = cool). Predictive accuracy
+this batch: **12/12 routes correctly classified as cool, 0/0 leaks predicted
+vs found**.
+
+**Files changed:**
+- 12 route files (in `app/api/buyers/`, `app/api/call-rubrics/`,
+  `app/api/calls/ledger/`, `app/api/ghl/` (7 routes), `app/api/kpi-entries/`).
+- `PROGRESS.md` — header bumped to Session 50, this entry, coverage stats.
+- `OPERATIONS.md` — API surface table updated (55→67 / 39→27).
+
+**Queued cleanup (end of Wave 3, after batch 6):**
+- Extend `TenantContext` to include `userName` + `userEmail`; drop the 3
+  `getSession()` re-fetch sites (`ai/coach`, `bugs/route.ts`, the
+  `resolveEffectiveUser` callers in `dayhub/*` if they need name).
+- Refactor `resolveEffectiveUser` to accept `TenantContext` instead of
+  legacy `AppSession` (current duck-typing works but is implicit).
+
+**No tsc errors. No production behavior changes** — all 12 routes are
+behaviorally identical to before the migration (structural enforcement
+only, no semantic changes). Pre-push tsc gate clean.
 
 ### Session 49 — Wave 3 Session C of v1-finish sprint (2026-04-28)
 
@@ -676,7 +747,7 @@ down — escalate per Session 38 notes.
    still need the `UPDATE … SET gradingStatus='SKIPPED'` cleanup.
 
 **P4 — Technical debt:**
-1. Migrate ~64 remaining API routes to `withTenant` helper.
+1. Migrate remaining 27 API routes to `withTenant` helper (down from 75 pre-migration; batches 1-4 of 6 closed Sessions 47-50, 21 latent leaks fixed).
 2. Sweep remaining silent catches in broader codebase (79 total).
 3. ~~Align Day Hub vs Calls page call count source-of-truth.~~ ✅ Closed Wave 2 (Session 46).
 4. ~~Fix LM tab "227" dial count aggregation across LM role.~~ ✅ Closed Wave 2 (Session 46).

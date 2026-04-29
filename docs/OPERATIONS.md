@@ -104,13 +104,13 @@ loop) has heartbeats today.
 
 ## API surface
 
-110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-28 (post-Wave-3-Session-C):
+110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-29 (post-Wave-3-Session-D):
 
 | Pattern | Count | Tenant isolation |
 |---|---|---|
 | Total `route.ts` files | 110 | — |
-| Uses `withTenant` | 55 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
-| Uses `getSession` directly | 39 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
+| Uses `withTenant` | 67 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
+| Uses `getSession` directly | 27 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
 | Other (auth / webhooks / cron / health / service-token / diagnostics) | 16 | N/A — see breakdown below |
 
 ### The 15 non-tenant-session routes
@@ -136,19 +136,19 @@ loop) has heartbeats today.
 
 ### Migration framing
 
-The 75 `getSession`-direct routes are not bugs in themselves — they predate the
-`withTenant` helper (introduced 2026-04-07, Session 33). Each one tracks
-`tenantId` manually. The risk is structural: every route is one missing
-`tenantId: ctx.tenantId` `where`-clause away from a cross-tenant data leak
-(see Bug #13/#14/#15 history in DECISIONS / SESSION_ARCHIVE — three real
-leaks caught and fixed via this migration).
+The 27 remaining `getSession`-direct routes (down from 75 pre-migration) are
+not bugs in themselves — they predate the `withTenant` helper (introduced
+2026-04-07, Session 33). Each one tracks `tenantId` manually. The risk is
+structural: every route is one missing `tenantId: ctx.tenantId` `where`-clause
+away from a cross-tenant data leak (see Bug #13/#14/#15 history in DECISIONS
+/ SESSION_ARCHIVE — three real leaks caught and fixed via this migration).
 
 `withTenant` makes the leak structurally impossible to ship. Migration is
 **ongoing tech-debt**, parked as P5 in PROGRESS Next Session. No fixed
 deadline; sweep opportunistically when touching a route for other reasons.
 
 Per AGENTS.md Route Conventions: **all NEW routes MUST use `withTenant`** —
-new code should never add to the 75.
+new code should never add to the backlog.
 
 ### Top-level API directory layout
 

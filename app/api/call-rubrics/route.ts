@@ -1,8 +1,9 @@
 // app/api/call-rubrics/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { hasPermission } from '@/types/roles'
+import { hasPermission, type UserRole } from '@/types/roles'
 import { z } from 'zod'
 
 const criteriaSchema = z.object({
@@ -19,24 +20,19 @@ const rubricSchema = z.object({
   criteria: z.array(criteriaSchema).min(1).max(10),
 })
 
-export async function GET(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant(async (_req, ctx) => {
   const rubrics = await db.callRubric.findMany({
-    where: { tenantId: session.tenantId },
+    where: { tenantId: ctx.tenantId },
     orderBy: [{ role: 'asc' }, { name: 'asc' }],
   })
 
   return NextResponse.json({ rubrics })
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'settings.manage')) return forbiddenResponse()
+export const POST = withTenant(async (req, ctx) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'settings.manage')) return forbiddenResponse()
 
-  const body = await request.json()
+  const body = await req.json()
   const parsed = rubricSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
@@ -45,14 +41,14 @@ export async function POST(request: NextRequest) {
   // If setting as default, unset other defaults for same role
   if (parsed.data.isDefault) {
     await db.callRubric.updateMany({
-      where: { tenantId: session.tenantId, role: parsed.data.role as any, isDefault: true },
+      where: { tenantId: ctx.tenantId, role: parsed.data.role as any, isDefault: true },
       data: { isDefault: false },
     })
   }
 
   const rubric = await db.callRubric.create({
     data: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       name: parsed.data.name,
       role: parsed.data.role as any,
       callType: parsed.data.callType ?? null,
@@ -62,4 +58,4 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({ rubric }, { status: 201 })
-}
+})

@@ -1,21 +1,18 @@
 // POST /api/buyers/sync — sync buyers from GHL in batches
 // Each call processes ~100 contacts (takes ~15s), returns progress.
 // Client loops until done.
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 import { syncBuyerFromGHL } from '@/lib/buyers/sync'
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant(async (request, ctx) => {
   const body = await request.json().catch(() => ({}))
   const offset = (body.offset as number) ?? 0
   const batchSize = 100
 
   try {
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     const pipelines = await ghl.getPipelines()
     const buyerPipeline = pipelines.pipelines?.find(p => p.name.toLowerCase().includes('buyer'))
     if (!buyerPipeline) return NextResponse.json({ error: 'No buyer pipeline found' }, { status: 404 })
@@ -38,7 +35,7 @@ export async function POST(request: NextRequest) {
       for (const c of contacts) {
         if (!c) continue
         try {
-          await syncBuyerFromGHL(session.tenantId, {
+          await syncBuyerFromGHL(ctx.tenantId, {
             id: c.id, firstName: c.firstName, lastName: c.lastName,
             phone: c.phone, email: c.email, city: c.city, state: c.state,
             tags: c.tags ?? [], customFields: c.customFields ?? [],
@@ -64,4 +61,4 @@ export async function POST(request: NextRequest) {
     console.error('[BuyerSync]', err)
     return NextResponse.json({ error: 'Sync failed' }, { status: 500 })
   }
-}
+})

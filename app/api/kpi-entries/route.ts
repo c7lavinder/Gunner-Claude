@@ -2,8 +2,8 @@
 // Stored in audit_logs with action 'kpi.entry'
 // When type is apts/offers/contracts AND a propertyId is provided,
 // also creates a PropertyMilestone record for deal progress tracking.
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { Prisma, MilestoneType } from '@prisma/client'
 import { getCentralDayBounds } from '@/lib/dates'
@@ -15,10 +15,7 @@ const KPI_TO_MILESTONE: Record<string, MilestoneType> = {
   contracts: 'UNDER_CONTRACT',
 }
 
-export async function GET(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const GET = withTenant(async (request, ctx) => {
   const type = request.nextUrl.searchParams.get('type') // 'calls' | 'convos' | 'apts' | 'offers' | 'contracts'
   const date = request.nextUrl.searchParams.get('date') // 'YYYY-MM-DD'
   if (!type || !date) return NextResponse.json({ error: 'type and date required' }, { status: 400 })
@@ -27,7 +24,7 @@ export async function GET(request: NextRequest) {
 
   const entries = await db.auditLog.findMany({
     where: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       action: 'kpi.entry',
       createdAt: { gte: dayStart, lte: dayEnd },
     },
@@ -55,12 +52,9 @@ export async function GET(request: NextRequest) {
   })
 
   return NextResponse.json({ entries: filtered })
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant(async (request, ctx) => {
   const body = await request.json()
   const { type, contactName, propertyId, propertyAddress, notes, time } = body as {
     type: string; contactName?: string; propertyId?: string; propertyAddress?: string; notes?: string; time?: string
@@ -70,8 +64,8 @@ export async function POST(request: NextRequest) {
 
   const entry = await db.auditLog.create({
     data: {
-      tenantId: session.tenantId,
-      userId: session.userId,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'kpi.entry',
       resource: 'kpi',
       source: 'USER',
@@ -98,16 +92,16 @@ export async function POST(request: NextRequest) {
     try {
       // Verify the property exists and belongs to this tenant
       const property = await db.property.findUnique({
-        where: { id: propertyId, tenantId: session.tenantId },
+        where: { id: propertyId, tenantId: ctx.tenantId },
         select: { id: true },
       })
       if (property) {
         await db.propertyMilestone.create({
           data: {
-            tenantId: session.tenantId,
+            tenantId: ctx.tenantId,
             propertyId,
             type: milestoneType,
-            loggedById: session.userId,
+            loggedById: ctx.userId,
             source: 'MANUAL',
             notes: notes ?? `Logged via KPI entry (${type})`,
           },
@@ -134,18 +128,15 @@ export async function POST(request: NextRequest) {
     },
     milestoneCreated,
   })
-}
+})
 
-export async function DELETE(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const DELETE = withTenant(async (request, ctx) => {
   const { id } = await request.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   await db.auditLog.deleteMany({
-    where: { id, tenantId: session.tenantId, action: 'kpi.entry' },
+    where: { id, tenantId: ctx.tenantId, action: 'kpi.entry' },
   })
 
   return NextResponse.json({ success: true })
-}
+})

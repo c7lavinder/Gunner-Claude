@@ -1,14 +1,11 @@
 // GET /api/ghl/calendars — returns all GHL calendars for the tenant
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const GET = withTenant(async (_req, ctx) => {
   const tenant = await db.tenant.findUnique({
-    where: { id: session.tenantId },
+    where: { id: ctx.tenantId },
     select: { ghlAccessToken: true, ghlLocationId: true },
   })
   if (!tenant?.ghlAccessToken || !tenant.ghlLocationId) {
@@ -26,4 +23,4 @@ export async function GET() {
   } catch {
     return NextResponse.json({ calendars: [] })
   }
-}
+})

@@ -1,7 +1,7 @@
 // app/api/buyers/route.ts
 // Buyer list CRUD — GET list, POST create
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
@@ -17,12 +17,9 @@ const createSchema = z.object({
   notes: z.string().optional(),
 })
 
-export async function GET(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant(async (_req, ctx) => {
   const buyers = await db.buyer.findMany({
-    where: { tenantId: session.tenantId, isActive: true },
+    where: { tenantId: ctx.tenantId, isActive: true },
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { blastRecipients: true } },
@@ -30,13 +27,10 @@ export async function GET(request: NextRequest) {
   })
 
   return NextResponse.json({ buyers })
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const body = await request.json()
+export const POST = withTenant(async (req, ctx) => {
+  const body = await req.json()
   const parsed = createSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
@@ -44,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   const buyer = await db.buyer.create({
     data: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       name: parsed.data.name,
       phone: parsed.data.phone ?? null,
       email: parsed.data.email ?? null,
@@ -57,4 +51,4 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({ buyer }, { status: 201 })
-}
+})

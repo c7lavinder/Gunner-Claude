@@ -1,17 +1,14 @@
 // POST /api/ghl/reregister-webhook — update GHL webhook subscription
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { reregisterWebhookForTenant, GHL_WEBHOOK_EVENTS } from '@/lib/ghl/webhook-register'
 
-export async function POST() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant(async (_req, ctx) => {
   try {
-    const webhookId = await reregisterWebhookForTenant(session.tenantId)
+    const webhookId = await reregisterWebhookForTenant(ctx.tenantId)
     return NextResponse.json({ success: true, webhookId, events: GHL_WEBHOOK_EVENTS })
   } catch (err) {
     console.error('[GHL] Webhook re-registration failed:', err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})

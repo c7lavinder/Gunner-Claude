@@ -3,19 +3,16 @@
 // These are the numbers the send_sms action must use as the "From" — NOT the
 // user.phone field returned by /users/ (that's personal cell, not send-capable).
 import { NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { getGHLClient } from '@/lib/ghl/client'
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant(async (_req, ctx) => {
   try {
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
     const result = await ghl.getPhoneNumbers()
     return NextResponse.json({ numbers: result.numbers ?? [] })
   } catch (err) {
     console.error('[GHL phone-numbers] Failed:', err instanceof Error ? err.message : err)
     return NextResponse.json({ numbers: [] }, { status: 200 })
   }
-}
+})
