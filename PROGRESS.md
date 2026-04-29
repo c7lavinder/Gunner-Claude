@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 55 — Wave 5 of v1-finish sprint (2026-04-29) — Cleanup wave: P4 STOPPED, Bug #12 closed
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4. **Wave 3 fully closed** (Sessions 47-53: 72 routes migrated, 38 latent leaks fixed, 4 leak classes catalogued, helper-level Class 4 vector closed). **Wave 4 closed** (Session 54: 17 prod identifiers scrubbed across 9 files, D-044 codified). **Wave 5 partial close** (this session): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **STOPPED** — discovery showed `/tasks/` is still wired as the canonical "Day Hub" nav target with 7 active references; pre-deletion migration steps documented in AUDIT_PLAN.md for a future session. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Wave 6 (manual View-As-LM walkthrough).**
+**Current session**: 57 — Wave 6.2 of v1-finish sprint (2026-04-29) — View-As hydration race fixed on /tasks/
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4. **Wave 3 fully closed** (Sessions 47-53: 72 routes migrated, 38 latent leaks fixed, 4 leak classes catalogued, helper-level Class 4 vector closed). **Wave 4 closed** (Session 54: 17 prod identifiers scrubbed across 9 files, D-044 codified). **Wave 5 partial close** (Session 55): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **STOPPED** — discovery showed `/tasks/` is still wired as the canonical "Day Hub" nav target with 7 active references; pre-deletion migration steps documented in AUDIT_PLAN.md for a future session. **Wave 6.1** (Session 56, diagnostic-only, no commits): traced reproducible cross-user data leak on /tasks/ View As to a client-state hydration race in `day-hub-client.tsx` (localStorage read in `useEffect` after first render → first fetch fires with `viewAsUserId=null` → owner-scoped data renders for ~2s before LM data replaces it). **Wave 6.2 closed** (this session): synchronous `useState` initializer pattern (Shape A) drops the race; first fetch carries `?asUserId=…` from mount. Shape C (cookie + server-side resolution) queued in AUDIT_PLAN as P6 — defer until concrete need. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Blocker #2 production verification (P1 in Next Session).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: [PRODUCTION_URL]
@@ -56,6 +56,113 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 57 — Wave 6.2 (2026-04-29) — View As hydration race fixed on /tasks/
+
+Closes a reproducible cross-user data leak surfaced during a manual
+View-As-LM walkthrough. Single-file fix in
+`app/(tenant)/[tenant]/tasks/day-hub-client.tsx`. Shape C (architectural
+follow-up) queued, not implemented.
+
+**Wave 6.1 (Session 56) — retroactive diagnostic summary.** No commits;
+diagnostic-only session. Reproduction: log in as owner, switch View As →
+Daniel via Settings > Team, navigate to `/tasks/`. For ~2 seconds, the
+inbox + appointments panels render owner-scoped data (LM-irrelevant calls,
+owner appointments) before snapping to Daniel's data. Initial guesses
+ruled out:
+
+- NOT a cache leak — `Cache-Control: no-store` already set on the three
+  routes; new fetch on every navigation.
+- NOT a Wave 3 `withTenant` leak — `tenantId` filtering correct on every
+  query; the leak is intra-tenant (owner ↔ LM), not cross-tenant.
+- NOT a route handler bug — `/api/[tenant]/dayhub/{kpis,inbox,appointments}`
+  all correctly call `resolveEffectiveUser(ctx, asUserId)`; when `asUserId`
+  is null they return owner-scoped data per the admin path, which is
+  correct behavior given a null input.
+
+Root cause: client hydration race in `day-hub-client.tsx`:
+
+| Lines | What it did |
+|---|---|
+| 308-309 | `useState<string \| null>(null)` for viewAsUser/viewAsUserId |
+| 312-319 | Separate `useEffect` reads localStorage AFTER first render |
+| 380-389 | KPI fetch `useEffect` — depends on `viewAsUserId`, fires on mount |
+| 400-416 | Inbox fetch `useEffect` — same pattern |
+| 438-462 | Appointments fetch `useEffect` — same pattern |
+
+First mount renders all three fetches with `viewAsUserId=null`. URL has
+no `?asUserId` param. Routes return owner-scoped data (admin path).
+localStorage `useEffect` then commits `viewAsUserId='daniel-id'`, deps
+change, three fetches re-fire — LM data replaces owner data on screen.
+
+Scope confirmation:
+- `/day-hub/` unaffected — server-rendered data, no View As propagation
+  in the client.
+- `/calls/` unaffected — uses View As only for admin gating, not for
+  fetch scoping.
+
+**Wave 6.2 (this session) — Shape A fix shipped.**
+
+Single edit in `day-hub-client.tsx`:
+
+1. Module-level helper added in the Helpers section:
+   ```ts
+   function readViewAs(key: string): string | null {
+     if (typeof window === 'undefined') return null
+     try { return localStorage.getItem(key) } catch { return null }
+   }
+   ```
+2. Synchronous `useState` initializer replaces the `useState(null)` +
+   hydration `useEffect` pair:
+   ```ts
+   const [viewAsUser, setViewAsUser] = useState<string | null>(() =>
+     readViewAs('gunner_view_as_user')
+   )
+   const [viewAsUserId, setViewAsUserId] = useState<string | null>(() =>
+     readViewAs('gunner_view_as_user_id')
+   )
+   ```
+3. Hydration `useEffect` deleted. `exitViewAs()` unchanged.
+
+The three data-fetching `useEffect`s already had `viewAsUserId` in their
+dep arrays, so they now fire ONCE on mount with the correct value. No
+flash, no re-fetch.
+
+**Verification:**
+- `npx tsc --noEmit` → exit 0.
+- Pre-push tsc gate clean.
+- Manual browser reproduction (the 7 scenarios in the prompt) is owed by
+  Corey on the live Railway URL — Claude cannot drive a browser, so the
+  no-flash and no-hydration-warning checks need a human pass.
+
+**Hydration mismatch caveat (Shape A's known cost):** the synchronous
+initializer reads localStorage during render. Server render returns
+`null` (no `window`); client first render returns the stored value. The
+JSX uses `viewAsUser` in conditional branches (lines 502, 640, 661, 685),
+so the server HTML and the client's hydration render will disagree
+whenever a View-As is active. React 18 will log a hydration mismatch
+warning and discard the server tree for this subtree, then re-render
+client-side with the correct value. Functionally this is FINE — the data
+leak is gone either way — but it is noisy in dev console. This is the
+exact reason Shape C is queued: a cookie-based mechanism would let the
+server render the correct state on the first byte, eliminating both the
+race AND the warning.
+
+**Files changed this session:**
+- `app/(tenant)/[tenant]/tasks/day-hub-client.tsx` — readViewAs helper
+  (module scope), synchronous useState initializer, hydration useEffect
+  removed.
+- `PROGRESS.md` — header bumped to Session 57, this entry added.
+- `docs/AUDIT_PLAN.md` — P6 added (Shape C: View-As propagation refactor).
+
+**Surprises:**
+- The "first guess" mental model was a Wave 3 cross-tenant leak, but
+  Wave 3 is fully closed — the leak was intra-tenant (admin ↔ LM)
+  caused by client-side state, not by a route-level scoping bug. Worth
+  remembering: not every "wrong data on screen" bug is a tenant leak;
+  some are just race conditions in the client.
+- The fix is one file and ~10 lines. The diagnostic was the work; the
+  patch was a one-liner.
 
 ### Session 55 — Wave 5: cleanup wave (2026-04-29) — P4 STOPPED, Bug #12 closed
 

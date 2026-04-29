@@ -20,6 +20,11 @@ import { NoteModal, AppointmentModal, WorkflowModal, TaskEditModal } from '@/com
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function readViewAs(key: string): string | null {
+  if (typeof window === 'undefined') return null
+  try { return localStorage.getItem(key) } catch { return null }
+}
+
 function formatPhone(phone: string | null): string {
   if (!phone) return ''
   const digits = phone.replace(/\D/g, '')
@@ -304,19 +309,15 @@ export function DayHubClient({ tasks, completedTasks = [], isAdmin, tenantSlug, 
     ? `&userIds=${roleTabUserIds.join(',')}`
     : ''
 
-  // View As — set from Settings > Team, read from localStorage
-  const [viewAsUser, setViewAsUser] = useState<string | null>(null)
-  const [viewAsUserId, setViewAsUserId] = useState<string | null>(null)
-
-  // Load viewAsUser from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('gunner_view_as_user')
-      const storedId = localStorage.getItem('gunner_view_as_user_id')
-      if (stored) setViewAsUser(stored)
-      if (storedId) setViewAsUserId(storedId)
-    } catch {}
-  }, [])
+  // View As — set from Settings > Team, read from localStorage.
+  // Synchronous initializer prevents the hydration race that previously
+  // caused the first fetch to return owner-scoped data (Wave 6.1 diagnostic).
+  const [viewAsUser, setViewAsUser] = useState<string | null>(() =>
+    readViewAs('gunner_view_as_user')
+  )
+  const [viewAsUserId, setViewAsUserId] = useState<string | null>(() =>
+    readViewAs('gunner_view_as_user_id')
+  )
 
   // Query param suffix for API calls when impersonating
   const asParam = viewAsUserId ? `&asUserId=${viewAsUserId}` : ''
