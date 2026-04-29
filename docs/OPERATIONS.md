@@ -11,7 +11,7 @@
 
 ## Crons + long-running services
 
-Live in `railway.toml`. Healthcheck at `https://gunner-claude-production.up.railway.app/api/health`.
+Live in `railway.toml`. Healthcheck at `[PRODUCTION_URL]/api/health`.
 
 ### Long-running services
 
@@ -212,7 +212,7 @@ Example:
 
 ```bash
 curl -H "Authorization: Bearer $DIAGNOSTIC_TOKEN" \
-  "https://gunner-claude-production.up.railway.app/api/diagnostics/dial-counts?tenant=new-again-houses&date=2026-04-27"
+  "[PRODUCTION_URL]/api/diagnostics/dial-counts?tenant=new-again-houses&date=2026-04-27"
 ```
 
 Response includes `centralDayBounds` (so callers can spot TZ issues),

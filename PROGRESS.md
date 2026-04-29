@@ -12,8 +12,8 @@
 **Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). **Wave 3 fully closed** — Sessions 47-52 (migration: 72 routes, 38 latent leaks fixed) + Session 53 (cleanup: 5 commits closing Class 4 helper vectors, TenantContext extension, resolveEffectiveUser refactor, redundancy sweep, architectural pattern codification). All 91 tenant-scoped routes use `withTenant`; helper-level Class 4 vector closed at the source. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Wave 4 (repo scrub + D-044 writeup).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
-**Railway**: https://gunner-claude-production.up.railway.app
-**GHL OAuth**: CONNECTED — tenant "New Again Houses" (location: hmD7eWGQJE7EVFpJxj4q)
+**Railway**: [PRODUCTION_URL]
+**GHL OAuth**: CONNECTED — tenant "New Again Houses" (location: [GHL_LOCATION_ID])
 **Grading worker**: in-process via `instrumentation.ts` → `lib/grading-worker.ts` → `lib/grading-processor.ts` (60s tick). Sole driver as of Wave 1 — legacy `[[services]] grading-worker` removed (Blocker #3 closed). Manual debug surface remains at `app/api/cron/process-recording-jobs/route.ts`.
 **Pipeline verifier**: `scripts/verify-calls-pipeline.ts` — bidirectional A/B with sanity gate + canary
 **Active blockers**: #2 (Action execution discipline — production verification pending). #3 closed Wave 1.
@@ -803,7 +803,7 @@ Once `DIAGNOSTIC_TOKEN` is set:
 
 ```bash
 curl -H "Authorization: Bearer $DIAGNOSTIC_TOKEN" \
-  "https://gunner-claude-production.up.railway.app/api/diagnostics/dial-counts?tenant=new-again-houses&date=2026-04-27"
+  "[PRODUCTION_URL]/api/diagnostics/dial-counts?tenant=new-again-houses&date=2026-04-27"
 ```
 
 Expected match against the prior REST-API SQL probe (Session 46 first

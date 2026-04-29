@@ -30,10 +30,10 @@ This is NOT a CRM. This is a revenue intelligence layer.
 | Metric | Value |
 |--------|-------|
 | Tenant | New Again Houses |
-| Owner | corey@newagainhouses.com |
-| GHL Location | hmD7eWGQJE7EVFpJxj4q |
-| Pipeline ID | tOqQbembKlIoPiXbepP3 |
-| Trigger Stage | f919c1a7-17da-456f-b8f9-10c1aca62691 |
+| Owner | [OWNER_EMAIL] |
+| GHL Location | [GHL_LOCATION_ID] |
+| Pipeline ID | [PIPELINE_ID] |
+| Trigger Stage | [TRIGGER_STAGE_ID] |
 | Calls Graded | 17 of 17 COMPLETED |
 | Score Range | 8–72 (metadata-only grades, no transcripts yet) |
 | Properties | 2 created via live webhook (Emi Yoshimura, Gregory Palm) |

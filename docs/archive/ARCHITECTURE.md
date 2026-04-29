@@ -65,7 +65,7 @@ This exact failure killed the previous build. It cannot happen again.
 ### OAuth callback path
 The OAuth callback route is at /api/auth/crm/callback (NOT /ghl/callback).
 GHL Marketplace blocks redirect URIs containing the word "ghl".
-Railway URL: https://gunner-claude-production.up.railway.app/api/auth/crm/callback
+Railway URL: [PRODUCTION_URL]/api/auth/crm/callback
 
 ### Token flow
 User clicks Connect GHL in onboarding

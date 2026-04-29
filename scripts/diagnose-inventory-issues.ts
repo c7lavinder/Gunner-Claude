@@ -26,7 +26,9 @@ async function main() {
     console.log('No tenants found.')
     return
   }
-  const tenant = tenants.find(t => t.ghlLocationId === 'hmD7eWGQJE7EVFpJxj4q') ?? tenants[0]
+  // Pick a tenant by GHL location ID (override via env), else default to first tenant.
+  const targetLocationId = process.env.DIAGNOSE_GHL_LOCATION_ID ?? ''
+  const tenant = (targetLocationId && tenants.find(t => t.ghlLocationId === targetLocationId)) || tenants[0]
   console.log(`Diagnosing tenant: ${tenant.name} (${tenant.slug}) — ${tenant.id}`)
 
   // ── Issue 1 — zip without market ───────────────────────────────────────────

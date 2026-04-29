@@ -4,7 +4,7 @@
 //
 // GHL WEBHOOK SETUP:
 // 1. Go to GHL -> Settings -> Webhooks
-// 2. Add webhook URL: https://gunner-claude-production.up.railway.app/api/webhooks/ghl/buyer-response
+// 2. Add webhook URL: [PRODUCTION_URL]/api/webhooks/ghl/buyer-response
 // 3. Select events: InboundMessage
 // 4. Save
 

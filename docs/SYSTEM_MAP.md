@@ -53,8 +53,8 @@ in `docs/archive/` (after sprint Commit #5).
 | Billing | Stripe (built, gated by env vars) | `lib/stripe/index.ts` |
 | Styling | Tailwind CSS | `tailwind.config.ts` |
 | Deploy | Railway + Supabase | `railway.toml` |
-| Live tenant | New Again Houses (slug `new-again-houses`, GHL location `hmD7eWGQJE7EVFpJxj4q`, pipeline `tOqQbembKlIoPiXbepP3`, trigger stage `f919c1a7-17da-456f-b8f9-10c1aca62691`) | — |
-| Production URL | `https://gunner-claude-production.up.railway.app` | — |
+| Live tenant | New Again Houses (slug `new-again-houses`, GHL location `[GHL_LOCATION_ID]`, pipeline `[PIPELINE_ID]`, trigger stage `[TRIGGER_STAGE_ID]` — real values in Railway env + database) | — |
+| Production URL | `[PRODUCTION_URL]` (real value in Railway env + `.env.local`) | — |
 | Repo | `c7lavinder/Gunner-Claude` (private) | — |
 
 ---

@@ -211,6 +211,38 @@ The end-of-session checklist in Rule 7 now has 6 items reflecting this.
 
 ---
 
+## Production identifier hygiene
+
+Markdown files in this repo are public. Never commit:
+- Production GHL location IDs, pipeline IDs, stage IDs
+- Production URLs (Railway, Vercel, etc.)
+- User email addresses (owner, team, anyone real)
+- Database row IDs from production (tenant IDs, user IDs)
+
+Use placeholders instead: `[GHL_LOCATION_ID]`, `[PIPELINE_ID]`,
+`[TRIGGER_STAGE_ID]`, `[PRODUCTION_URL]`, `[OWNER_EMAIL]`, `[TENANT_ID]`,
+`[LM_USER_ID_N]`. Real values live in:
+- Railway environment variables (production)
+- `.env.local` (gitignored, local development)
+- Database rows (read at runtime, never echoed into docs)
+
+Applies to: `PROGRESS.md`, `AUDIT_PLAN.md`, `OPERATIONS.md`, `SYSTEM_MAP.md`,
+`README.md`, anything in `docs/`, anything in `docs/archive/`, plus inline
+code comments (especially webhook setup notes and diagnostic scripts).
+
+When in doubt, scrub. The combined value of (GHL location ID + pipeline ID
++ trigger stage + production URL + owner email) is an attack blueprint
+even without credentials.
+
+Reference: Wave 4 (commit Y, see PROGRESS.md Session 54 for the original
+17-site scrub). Verify any new doc commit with:
+```
+grep -rn "hmD7\|tOqQ\|f919c1a7\|gunner-claude-production\|c7lavinder@\|@newagainhouses" --include="*.md" --include="*.ts" --include="*.tsx"
+```
+Should return zero matches.
+
+---
+
 ## Stack — locked
 
 | Layer | Tech | Entry point |

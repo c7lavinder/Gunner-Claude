@@ -1,6 +1,6 @@
 # Gunner AI
 
-Internal repo. Production at <https://gunner-claude-production.up.railway.app>.
+Internal repo. Production at `[PRODUCTION_URL]` (real value lives in Railway env + `.env.local`).
 
 This README is for agents and the team. No marketing surface — what Gunner is and how it works lives in the orientation docs below.
 
