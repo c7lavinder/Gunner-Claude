@@ -3,7 +3,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withTenant } from '@/lib/api/withTenant'
-import { getSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 
 // Screenshot cap: ~5MB raw image → ~6.7MB base64 → 7.5MB data URL with
@@ -24,10 +23,6 @@ const createSchema = z.object({
 })
 
 export const POST = withTenant(async (req, ctx) => {
-  // ctx doesn't expose name/email — re-fetch session for the reporter label.
-  // Same tax as ai/coach; queued for end-of-Wave-3 ctx extension.
-  const session = (await getSession())!
-
   let body: unknown
   try {
     body = await req.json()
@@ -47,7 +42,7 @@ export const POST = withTenant(async (req, ctx) => {
     data: {
       tenantId: ctx.tenantId,
       reporterId: ctx.userId,
-      reporterName: session.name || session.email || null,
+      reporterName: ctx.userName || ctx.userEmail || null,
       description: parsed.data.description,
       severity: parsed.data.severity,
       pageUrl: parsed.data.pageUrl ?? null,

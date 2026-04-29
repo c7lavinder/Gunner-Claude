@@ -1,6 +1,6 @@
 // app/api/tenants/invite/route.ts
 import { NextResponse } from 'next/server'
-import { getSession, forbiddenResponse } from '@/lib/auth/session'
+import { forbiddenResponse } from '@/lib/auth/session'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { hasPermission, type UserRole } from '@/types/roles'
@@ -19,12 +19,7 @@ const inviteSchema = z.object({
 export const POST = withTenant(async (request, ctx) => {
   if (!hasPermission(ctx.userRole as UserRole, 'users.invite')) return forbiddenResponse()
 
-  // QUEUED CLEANUP: TenantContext doesn't yet expose userName — retained
-  // getSession() re-fetch for `session.name` (used as inviterName in the
-  // invite email). To be removed when TenantContext is extended at end of
-  // Wave 3 (cleanup item #2).
-  const session = await getSession()
-  const inviterName = session?.name ?? 'A teammate'
+  const inviterName = ctx.userName || 'A teammate'
 
   const body = await request.json()
   const parsed = inviteSchema.safeParse(body)

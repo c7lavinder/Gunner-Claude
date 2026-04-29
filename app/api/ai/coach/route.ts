@@ -1,7 +1,6 @@
 // app/api/ai/coach/route.ts
 import { NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
-import { getSession } from '@/lib/auth/session'
 import { getCoachResponse } from '@/lib/ai/coach'
 import type { UserRole } from '@/types/roles'
 import { z } from 'zod'
@@ -19,10 +18,7 @@ export const POST = withTenant(async (request, ctx) => {
   const userId = ctx.userId
   const tenantId = ctx.tenantId
   const userRole = ctx.userRole as UserRole
-  // ctx doesn't expose userName — re-fetch session for it. Same tax as the
-  // resolveEffectiveUser pattern; queued for end-of-Wave-3 ctx extension.
-  const session = (await getSession())!
-  const userName = session.name
+  const userName = ctx.userName
 
   const body = await request.json()
   const parsed = schema.safeParse(body)

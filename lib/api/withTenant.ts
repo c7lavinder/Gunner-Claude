@@ -21,6 +21,8 @@ export interface TenantContext {
   userId: string
   userRole: string
   tenantSlug: string
+  userName: string
+  userEmail: string
 }
 
 type RouteHandler<TParams> = (
@@ -45,6 +47,8 @@ export function withTenant<TParams = Record<string, never>>(
       userId: session.userId,
       userRole: session.role,
       tenantSlug: session.tenantSlug,
+      userName: session.name,
+      userEmail: session.email,
     }
 
     try {
