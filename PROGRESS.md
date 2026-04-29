@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 53 — Wave 3 Session G of v1-finish sprint (2026-04-29) — **Wave 3 FULLY CLOSED (migration + cleanup)**
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). **Wave 3 fully closed** — Sessions 47-52 (migration: 72 routes, 38 latent leaks fixed) + Session 53 (cleanup: 5 commits closing Class 4 helper vectors, TenantContext extension, resolveEffectiveUser refactor, redundancy sweep, architectural pattern codification). All 91 tenant-scoped routes use `withTenant`; helper-level Class 4 vector closed at the source. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Wave 4 (repo scrub + D-044 writeup).**
+**Current session**: 55 — Wave 5 of v1-finish sprint (2026-04-29) — Cleanup wave: P4 STOPPED, Bug #12 closed
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4. **Wave 3 fully closed** (Sessions 47-53: 72 routes migrated, 38 latent leaks fixed, 4 leak classes catalogued, helper-level Class 4 vector closed). **Wave 4 closed** (Session 54: 17 prod identifiers scrubbed across 9 files, D-044 codified). **Wave 5 partial close** (this session): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **STOPPED** — discovery showed `/tasks/` is still wired as the canonical "Day Hub" nav target with 7 active references; pre-deletion migration steps documented in AUDIT_PLAN.md for a future session. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Wave 6 (manual View-As-LM walkthrough).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: [PRODUCTION_URL]
@@ -56,6 +56,71 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 55 — Wave 5: cleanup wave (2026-04-29) — P4 STOPPED, Bug #12 closed
+
+Two items in scope: legacy `/tasks/` deletion (P4) and Bug #12 (GHL API
+version header verification). Mixed result.
+
+**Part A — Legacy /tasks/ deletion: STOPPED at safety gate.**
+
+Pre-flight inventory revealed multiple active production references that
+contradicted the prompt's assumption "no production traffic on /tasks/":
+
+| Check | Result | Evidence |
+|---|---|---|
+| Nav menu entry pointing to /tasks/ | ❌ FAIL | `components/ui/top-nav.tsx:66` — `{ href: \`${base}/tasks\`, label: 'Day Hub' }` (the visible nav link IS the /tasks/ URL) |
+| Active redirects to /tasks/ | ❌ FAIL | 4 sites: `health/page.tsx:14`, `ai-logs/page.tsx:18`, `bugs/page.tsx:18`, `kpis/page.tsx:18` (non-admin redirects) |
+| Internal links | ❌ FAIL | `dashboard-client.tsx:276` (link), `settings-client.tsx:487` (router.push) |
+| /day-hub/ is a drop-in replacement | ❌ FAIL | The two pages are different products: `/tasks/` (83K) renders GHL tasks via `ghl.searchTasks()`; `/day-hub/` (24K) renders local `db.task` rows. Different data sources, different feature sets (AM/PM tracking, KpiLedgerModal exist only in /tasks/) |
+
+Per prompt instruction "If any check fails, STOP and report. Don't delete
+and ask forgiveness", deletion was halted before any file was touched.
+
+AUDIT_PLAN.md P4 entry expanded with the 5-step pre-deletion migration
+required (rewire 7 nav/redirect/link sites to `/day-hub`, then audit
+`/day-hub/` covers needed functionality, then delete). P4 stays OPEN.
+
+**Part B — Bug #12 (GHL API version header): CLOSED, no code change.**
+
+Inventory of `Version` header usage in repo (13 sites):
+- `Version: 2021-07-28` — 11 sites (main LeadConnector API)
+- `Version: 2021-04-15` — 2 sites (recording subsystem only;
+  documented inline in `lib/ghl/fetch-recording.ts:4` as a separate
+  required value for that endpoint plane)
+
+Web verification (HighLevel/LeadConnector docs, 2026):
+- [HighLevel marketplace docs](https://marketplace.gohighlevel.com/docs/)
+  + [Stoplight integrations docs](https://highlevel.stoplight.io/docs/integrations/0443d7d1a4bd0-api-2-0-overview):
+  current example curl requests still use `Version: 2021-07-28` as the
+  canonical GA value. No newer GA version published.
+- The recording-API value `2021-04-15` is unchanged per inline comment
+  in `fetch-recording.ts`.
+
+Production live-check (proxy for header acceptance):
+- `/api/health` → 200
+- All GHL surfaces (enrichment, calendars, contacts, pipelines)
+  functional through Wave 4 — would visibly break if 2021-07-28 were
+  rejected.
+
+**Verdict**: header values are current. Bug #12 closed in PROGRESS.md
+known-bugs table without code changes. Audit doc flag was false-positive.
+
+**Files changed this session:**
+- `PROGRESS.md` — header bumped to Session 55, this entry, Bug #12 marked closed.
+- `docs/AUDIT_PLAN.md` — P4 entry expanded with Wave 5 stop notes + 5-step pre-deletion migration plan.
+
+**Surprises:**
+- The prompt's mental model of `/tasks/` ("Chris and Daniel still on the
+  legacy system, no production traffic") confused USER routing with CODE
+  routing. Code wires `Day Hub → /tasks/` regardless of who uses it; any
+  Gunner user clicking "Day Hub" lands on the legacy URL. The prompt's
+  pre-Wave-2 confirmation appears to have been about user habits, not
+  the actual nav wiring.
+- The presence of two parallel Day Hub implementations (`/tasks/` GHL-
+  backed, `/day-hub/` Gunner-backed) is itself a Wave-2-era artifact
+  that was never closed: the canonical helper `lib/kpis/dial-counts.ts`
+  is shared, but the page-level migration was incomplete.
 
 ### Session 53 — Wave 3 Session G — End-of-Wave-3 cleanup (2026-04-29) — **WAVE 3 FULLY CLOSED**
 
@@ -1036,7 +1101,7 @@ Net result: ~doubled property field coverage; -92% projected BatchData spend.
 | 7 | withTenantContext() RLS not called per-request | MEDIUM | Before multi-tenant production |
 | 10 | GHL webhook registration returns 404 | HIGH | Relying on polling fallback |
 | 11 | Appointments 401 — scope may need update | HIGH | Investigate GHL scope |
-| 12 | GHL API version header may be outdated | MEDIUM | Test newer version |
+| 12 | ~~GHL API version header may be outdated~~ ✅ **CLOSED Wave 5 (2026-04-29).** Verified `Version: 2021-07-28` is the current GA value across HighLevel/LeadConnector docs in 2026; production /api/health 200 and all GHL surfaces (enrichment, calendars, contacts) functioning. The `2021-04-15` value in `lib/ghl/fetch-recording.ts` and `lib/ai/transcribe.ts` is a separate-and-required value for the recording subsystem (documented inline). No code change needed. | RESOLVED | Closed |
 | 16 | DEV_BYPASS_AUTH references hardcoded slugs | LOW | Clean up before tenant #2 |
 | 17 | callResult `no_answer` never rewritten to `short_call` when cron routes <45s call to SKIPPED. Surfaced 4× in Session 37 verifier Pass B. | MEDIUM | Either fix in cron processor or update spec to accept both for short calls |
 | 18 | 2487 `calls` rows have `source IS NULL` (oldest 2026-03-21, newest 2026-04-18, **0 in last 24h**). Likely from `scripts/recover-stuck-calls.ts` not setting source. | LOW | One-time `UPDATE` to backfill `source='recovery'`; grep `db.call.create` to add `source` to all script callsites |

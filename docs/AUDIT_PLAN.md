@@ -196,6 +196,33 @@ bookmarked. Deleting `/tasks/` enforces "one canonical surface" and reduces
 split-brain risk on KPI source-of-truth bugs (currently in PROGRESS as a
 parked tech-debt item). Coordinate with Chris before removal.
 
+**Wave 5 attempt (2026-04-29) — STOPPED, not closed.** Investigation
+discovered `/tasks/` is still wired as the canonical "Day Hub" link in
+production code, contradicting the assumption that traffic had migrated:
+- `components/ui/top-nav.tsx:66` — `{ href: \`${base}/tasks\`, label: 'Day Hub' }`
+- `health/page.tsx`, `ai-logs/page.tsx`, `bugs/page.tsx`, `kpis/page.tsx` — all
+  redirect non-admins to `/${tenant}/tasks` (4 sites)
+- `dashboard-client.tsx:276` and `settings-client.tsx:487` — internal links
+  to `/${tenant}/tasks`
+
+The two pages are NOT equivalent: `/tasks/` (83K client) renders GHL tasks
+via `ghl.searchTasks()` with classification, AM/PM call tracking, and
+`KpiLedgerModal`; `/day-hub/` (24K client) renders local `db.task` rows
+plus dial KPIs. They're different products on different data sources.
+
+Pre-deletion migration required:
+1. Repoint `top-nav.tsx` "Day Hub" link from `/tasks` → `/day-hub`
+2. Repoint 4 redirect pages (health/ai-logs/bugs/kpis) from `/tasks` → `/day-hub`
+3. Repoint `dashboard-client.tsx` and `settings-client.tsx` internal links
+4. Confirm `/day-hub/` covers all functionality reps actually use:
+   - GHL task fetch + classify (or accept the loss)
+   - AM/PM call tracking pills (or accept the loss)
+   - KpiLedgerModal (or rebuild)
+5. Then `rm -rf app/(tenant)/[tenant]/tasks/`
+
+Until that migration lands, deletion would break the production "Day Hub"
+nav target. P4 stays OPEN.
+
 **P5 — `assign_contact_to_user` bypasses propose-edit-confirm UI flow.**
 `/api/ai/assistant/execute/route.ts` handles `assign_contact_to_user` via
 server-side name-contains fuzzy matching, not through the propose → edit →
