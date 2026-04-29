@@ -435,8 +435,8 @@ vector.
 
 **Variant: helper-delegate id-only lookup.** Caught in
 `properties/[propertyId]/metrics/route.ts` calling `computePropertyMetrics(propertyId)`
-in `lib/computed-metrics.ts`. The helper does
-`db.property.findUnique({ where: { id: propertyId } })` and then trusts
+in `lib/computed-metrics.ts`. The helper did
+`db.property.findUnique({ where: { id: propertyId } })` and then trusted
 the row's `tenantId` to scope downstream queries. Without route-level
 validation, any tenant could read another tenant's metrics by passing
 the right propertyId. The pre-scan heuristic misses this because the
@@ -446,7 +446,17 @@ parameter, add a route-level `findFirst({ id, tenantId })` validation
 gate before the delegate call. The fix can also be made in the helper
 itself, but route-level gates are the safer ship-now move.
 
-Reference: Wave 3 batch 5 commit (this convention added in batch 5).
+**End-of-Wave-3 update (Session G commit 1)**: all 6 Class-4 helpers
+have been refactored to take `tenantId` as a required parameter
+(`computePropertyMetrics`, `generatePropertyStory`,
+`splitCombinedAddressIfNeeded`, `enrichProperty`, `enrichPropertyWithAI`,
+`skipTraceSeller`). Internal queries are now scoped on tenantId. The
+route-level gates remain in place for the 404 contract but are no
+longer load-bearing for safety. New helpers added under `lib/` that take
+record ids should follow the same pattern: take `tenantId` explicitly,
+scope every internal query.
+
+Reference: Wave 3 batch 5 + Session G commit 1.
 
 #### Don't re-fetch user role — `ctx.userRole` is canonical
 
@@ -460,6 +470,51 @@ a "look up the same user twice" pattern. Examples in batch 3:
 `bugs/[id]`, `bugs/route.ts`, `ai/assistant/session`.
 
 Reference: Wave 3 batch 1 + batch 3 commits (this convention extended in batch 3).
+
+#### Architectural patterns: two cases where warm-shape routes are structurally safe (added 2026-04-29 — Wave 3 closure)
+
+Two patterns surfaced during Wave 3 where a route looks warm under the
+find/write pre-scan heuristic but is actually safe by construction. Both
+should be recognized at audit time so they don't get flagged as leaks
+when there's nothing to fix.
+
+**Pattern: DiD-via-FK (defense-in-depth via foreign key).** When a
+route validates the parent record's tenant boundary once at the top of
+every handler, all downstream operations on FK-scoped child records
+become implicitly tenant-scoped. The compound unique keys on the
+children (`propertyId_sellerId`, `propertyId_userId`, etc.) can only
+match rows that belong to the validated parent's tenant.
+
+Canonical example: `app/api/properties/[propertyId]/sellers/route.ts`
+(8 DB ops, 0 leaks). GET/POST/DELETE each begin with
+`db.property.findUnique({ id: params.propertyId, tenantId: ctx.tenantId })`
+before any PropertySeller op. Result: every subsequent
+`propertySeller.findMany` / `findUnique` / `update` / `updateMany` /
+`delete` / `create` on the validated `propertyId` is FK-scoped to the
+caller's tenant — even though those operations don't include `tenantId`
+in their WHERE clauses.
+
+When you see the warm shape (find + write co-present) but every
+mutation is on an FK of a parent that was already validated, the route
+is DiD-via-FK clean. Mark with a `// NOTE: warm shape but pre-scoped
+tenantId in WHERE; no fix needed` comment per Wave 3 convention.
+
+**Pattern: Tenant-table-as-boundary (special case for tables where
+`id === tenantId`).** Routes that operate on the `Tenant` table itself
+are structurally safe with id-only WHERE clauses, because the table's
+`id` column IS the tenant boundary. There's no possible cross-tenant
+leak vector — `db.tenant.findUnique({ where: { id: ctx.tenantId } })`
+can only ever return the caller's own tenant.
+
+Examples: `tenants/config/route.ts` (GET + PATCH), `ghl/calendars/route.ts`
+(GET tenant token + GHL fetch). Both look warm by find+write
+co-presence but are inherently safe.
+
+The same logic does NOT extend to other tables — `User.id`, `Property.id`,
+etc. are per-record IDs that need explicit `tenantId` scoping. Only the
+Tenant table itself benefits from this special case.
+
+Reference: Wave 3 closure (Session G commit 5).
 
 ### Public/self-gating routes need TWO entries (added 2026-04-28 — Wave 2)
 

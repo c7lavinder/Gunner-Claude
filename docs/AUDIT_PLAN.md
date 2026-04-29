@@ -90,7 +90,7 @@ Manual debug trigger remains at `app/api/cron/process-recording-jobs/route.ts`.
 ## Audits queued
 
 - **Silent-catch sweep** — 79 matches across broader codebase per Session 33; work started but not finished. Row 22 of the action audit is an example of one that slipped through.
-- **`withTenant` migration** — ~64 routes still on manual `tenantId` tracking per PROGRESS.md.
+- ~~**`withTenant` migration** — ~64 routes still on manual `tenantId` tracking per PROGRESS.md.~~ ✅ **CLOSED Wave 3** (2026-04-29). All 91 tenant-scoped routes now use `withTenant`; 38 latent cross-tenant defense gaps fixed across 4 leak classes (catalogued in AGENTS.md). Helper-level Class 4 vector closed in Session G commit 1 (6 lib helpers now take `tenantId` explicitly). 19 documented exceptions remain (auth/cron/webhooks/etc., listed in OPERATIONS.md "non-tenant-session routes").
 - **Poll cron liveness on Railway** — blocked on fresh Railway API token. Largest diagnostic gap.
 - **`source IS NULL` backfill** — one-time SQL plus scripted write-path audit to ensure no future untagged rows.
 - **Railway log ingestion** — no visibility into cron stdout/stderr today. Blocker for catching issues the verifier's audit_log query doesn't see.
