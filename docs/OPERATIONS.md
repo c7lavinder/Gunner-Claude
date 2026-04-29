@@ -104,13 +104,13 @@ loop) has heartbeats today.
 
 ## API surface
 
-110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-29 (post-Wave-3-Session-D):
+110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-29 (post-Wave-3-Session-E):
 
 | Pattern | Count | Tenant isolation |
 |---|---|---|
 | Total `route.ts` files | 110 | — |
-| Uses `withTenant` | 67 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
-| Uses `getSession` directly | 27 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
+| Uses `withTenant` | 79 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
+| Uses `getSession` directly | 15 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
 | Other (auth / webhooks / cron / health / service-token / diagnostics) | 16 | N/A — see breakdown below |
 
 ### The 15 non-tenant-session routes
@@ -136,7 +136,7 @@ loop) has heartbeats today.
 
 ### Migration framing
 
-The 27 remaining `getSession`-direct routes (down from 75 pre-migration) are
+The 15 remaining `getSession`-direct routes (down from 75 pre-migration) are
 not bugs in themselves — they predate the `withTenant` helper (introduced
 2026-04-07, Session 33). Each one tracks `tenantId` manually. The risk is
 structural: every route is one missing `tenantId: ctx.tenantId` `where`-clause

@@ -1,22 +1,18 @@
 // app/api/properties/[propertyId]/re-enrich/route.ts
 // POST — re-triggers AI enrichment for a property
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { hasPermission } from '@/types/roles'
+import { hasPermission, type UserRole } from '@/types/roles'
 import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
 import { enrichProperty } from '@/lib/enrichment/enrich-property'
 
-export async function POST(
-  _request: NextRequest,
-  { params }: { params: { propertyId: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'properties.edit')) return forbiddenResponse()
+export const POST = withTenant<{ propertyId: string }>(async (_request, ctx, params) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'properties.edit')) return forbiddenResponse()
 
   const property = await db.property.findUnique({
-    where: { id: params.propertyId, tenantId: session.tenantId },
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
     select: { id: true, aiEnrichmentStatus: true },
   })
   if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -39,4 +35,4 @@ export async function POST(
   )
 
   return NextResponse.json({ status: 'started' })
-}
+})

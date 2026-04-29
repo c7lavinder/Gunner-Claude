@@ -1,7 +1,7 @@
 // app/api/lead-sources/route.ts
 // Lead source cost tracking — GET costs with ROI, POST/PUT costs
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 
@@ -12,11 +12,8 @@ const upsertSchema = z.object({
   year: z.number().min(2024),
 })
 
-export async function GET(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const tenantId = session.tenantId
+export const GET = withTenant(async (_req, ctx) => {
+  const tenantId = ctx.tenantId
   const now = new Date()
   const currentMonth = now.getMonth() + 1
   const currentYear = now.getFullYear()
@@ -63,27 +60,26 @@ export async function GET(request: NextRequest) {
   }).sort((a, b) => b.leads - a.leads)
 
   return NextResponse.json({ sources: summary, costs })
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const body = await request.json()
+export const POST = withTenant(async (req, ctx) => {
+  const body = await req.json()
   const parsed = upsertSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
+  // Compound unique key tenantId_source_month_year already binds to tenantId,
+  // so this upsert is structurally tenant-scoped.
   await db.leadSourceCost.upsert({
     where: {
       tenantId_source_month_year: {
-        tenantId: session.tenantId,
+        tenantId: ctx.tenantId,
         source: parsed.data.source,
         month: parsed.data.month,
         year: parsed.data.year,
       },
     },
     create: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       source: parsed.data.source,
       cost: parsed.data.cost,
       month: parsed.data.month,
@@ -95,4 +91,4 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({ status: 'success' })
-}
+})

@@ -1,6 +1,6 @@
 // GET + POST /api/properties/[propertyId]/blast — blast history + generate + send
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
@@ -8,16 +8,10 @@ import { approveAction } from '@/lib/gates/requireApproval'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { propertyId: string } }
-) {
+export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const blasts = await db.dealBlast.findMany({
-      where: { propertyId: params.propertyId, tenantId: session.tenantId },
+      where: { propertyId: params.propertyId, tenantId: ctx.tenantId },
       orderBy: { createdAt: 'desc' },
       take: 20,
       include: { _count: { select: { recipients: true } } },
@@ -35,17 +29,11 @@ export async function GET(
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})
 
-export async function POST(
-  req: Request,
-  { params }: { params: { propertyId: string } }
-) {
+export const POST = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const { action, tiers, tier, message, channel, subject, buyerIds, approvalGateId } = await req.json()
 
     const propertyRaw = await db.property.findUnique({
@@ -172,7 +160,7 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
           results[t] = { emailSubject, emailBody, smsBody: smsText.trim() }
 
           logAiCall({
-            tenantId, userId: session.userId,
+            tenantId, userId: ctx.userId,
             type: 'blast_gen', pageContext: `property:${params.propertyId}`,
             input: `Blast gen for ${property.address} tier=${t}`,
             output: `Email: ${emailSubject} | SMS: ${smsText.trim().slice(0, 100)}`,
@@ -227,7 +215,7 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
         const gate = await db.auditLog.create({
           data: {
             tenantId,
-            userId: session.userId,
+            userId: ctx.userId,
             action: `gate.${resolvedChannel}_blast.pending`,
             resource: `${resolvedChannel}_blast`,
             resourceId: params.propertyId,
@@ -260,28 +248,34 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
 
       // Verify the approval gate — same tenant, same user, same property, same
       // action family, still fresh (≤5 min old).
-      const gate = await db.auditLog.findUnique({
-        where: { id: approvalGateId },
-        select: { id: true, tenantId: true, userId: true, action: true, resourceId: true, createdAt: true },
+      // FIX: was leaking — Class 2 — prior code used findUnique({ id }) then
+      // JS-side `gate.tenantId !== tenantId` comparison. The DB query was
+      // unscoped; the JS guard was the only thing keeping the row from leaking.
+      // Now: findFirst({ id, tenantId, userId }) pushes the boundary into the query.
+      const gate = await db.auditLog.findFirst({
+        where: {
+          id: approvalGateId,
+          tenantId,
+          userId: ctx.userId,
+          resourceId: params.propertyId,
+        },
+        select: { id: true, action: true, createdAt: true },
       })
       const gateAgeMs = gate ? Date.now() - gate.createdAt.getTime() : Infinity
       if (!gate
-          || gate.tenantId !== tenantId
-          || gate.userId !== session.userId
           || !gate.action.startsWith('gate.')
           || !gate.action.endsWith('_blast.pending')
-          || gate.resourceId !== params.propertyId
           || gateAgeMs > 5 * 60_000) {
         return NextResponse.json({ error: 'Invalid or expired approval gate' }, { status: 403 })
       }
-      await approveAction(gate.id, session.userId, tenantId)
+      await approveAction(gate.id, ctx.userId, tenantId)
 
       // Create blast record
       const blast = await db.dealBlast.create({
         data: {
           tenantId,
           propertyId: params.propertyId,
-          createdById: session.userId,
+          createdById: ctx.userId,
           channel: channel ?? 'sms',
           message: message ?? '',
           status: 'sending',
@@ -320,15 +314,17 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
       }
 
       // Update blast status
+      // FIX: was leaking — Class 1 — prior code was `update({ where: { id: blast.id } })`.
+      // We just created `blast` with tenantId scoped, but defense-in-depth: scope every write.
       await db.dealBlast.update({
-        where: { id: blast.id },
+        where: { id: blast.id, tenantId },
         data: { status: 'sent', sentAt: new Date() },
       })
 
       await db.auditLog.create({
         data: {
           tenantId,
-          userId: session.userId,
+          userId: ctx.userId,
           action: 'deal_blast.sent',
           source: 'USER',
           severity: 'INFO',
@@ -344,4 +340,4 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
     const msg = err instanceof Error ? err.message : 'Failed to process blast'
     return NextResponse.json({ error: msg }, { status: 500 })
   }
-}
+})

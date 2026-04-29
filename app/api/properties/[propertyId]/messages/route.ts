@@ -1,16 +1,10 @@
 // POST /api/properties/[propertyId]/messages — create an internal message with @mentions
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { propertyId: string } },
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant<{ propertyId: string }>(async (request, ctx, params) => {
   const body = await request.json()
   const { text, mentions } = body as { text: string; mentions?: Array<{ id: string; name: string }> }
 
@@ -18,7 +12,7 @@ export async function POST(
 
   // Verify property belongs to tenant
   const property = await db.property.findUnique({
-    where: { id: params.propertyId, tenantId: session.tenantId },
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
     select: { id: true, address: true },
   })
   if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -26,8 +20,8 @@ export async function POST(
   // Store message as audit log
   const log = await db.auditLog.create({
     data: {
-      tenantId: session.tenantId,
-      userId: session.userId,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
       action: 'property.message',
       resource: 'property',
       resourceId: params.propertyId,
@@ -47,9 +41,9 @@ export async function POST(
       id: log.id,
       text: text.trim(),
       mentions: mentions ?? [],
-      userId: session.userId,
+      userId: ctx.userId,
       userName: log.user?.name ?? 'Unknown',
       createdAt: log.createdAt.toISOString(),
     },
   })
-}
+})

@@ -1,15 +1,12 @@
 // GET + POST + DELETE /api/markets — market CRUD
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
+export const GET = withTenant(async (_req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const markets = await db.market.findMany({
-      where: { tenantId: session.tenantId },
+      where: { tenantId: ctx.tenantId },
       orderBy: { name: 'asc' },
     })
 
@@ -17,13 +14,10 @@ export async function GET() {
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})
 
-export async function POST(req: Request) {
+export const POST = withTenant(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const { name, zipCodes } = await req.json()
     if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 })
 
@@ -34,7 +28,7 @@ export async function POST(req: Request) {
 
     const market = await db.market.create({
       data: {
-        tenantId: session.tenantId,
+        tenantId: ctx.tenantId,
         name,
         zipCodes: zips,
       },
@@ -44,19 +38,17 @@ export async function POST(req: Request) {
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})
 
-export async function DELETE(req: Request) {
+export const DELETE = withTenant(async (req, ctx) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const { id } = await req.json()
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    await db.market.delete({ where: { id, tenantId: session.tenantId } })
+    // Canonical pattern: id+tenantId in WHERE works under extendedWhereUnique.
+    await db.market.delete({ where: { id, tenantId: ctx.tenantId } })
     return NextResponse.json({ status: 'deleted' })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})

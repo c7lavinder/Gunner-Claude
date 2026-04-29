@@ -1,17 +1,14 @@
 // GET /api/notifications — fetch recent @mention notifications for the current user
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const GET = withTenant(async (_req, ctx) => {
   // Fetch recent property.message audit logs where current user is mentioned
   // Prisma JSON path query on PostgreSQL: payload->'mentions' contains user ID
   const recentMessages = await db.auditLog.findMany({
     where: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       action: 'property.message',
       // Only last 30 days
       createdAt: { gte: new Date(Date.now() - 30 * 86400000) },
@@ -33,7 +30,7 @@ export async function GET() {
     .filter(m => {
       const payload = m.payload as Record<string, unknown> | null
       const mentions = (payload?.mentions ?? []) as Array<{ id: string }>
-      return mentions.some(mention => mention.id === session.userId)
+      return mentions.some(mention => mention.id === ctx.userId)
     })
     .map(m => {
       const payload = m.payload as Record<string, unknown>
@@ -49,4 +46,4 @@ export async function GET() {
     })
 
   return NextResponse.json({ notifications })
-}
+})

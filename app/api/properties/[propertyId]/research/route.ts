@@ -1,6 +1,6 @@
 // POST /api/properties/[propertyId]/research — fetch property data from Google
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { enrichProperty } from '@/lib/enrichment/enrich-property'
 
@@ -20,19 +20,13 @@ interface PlaceResult {
   }>
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { propertyId: string } }
-) {
+export const POST = withTenant<{ propertyId: string }>(async (_req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     if (!GOOGLE_API_KEY) {
       return NextResponse.json({ error: 'Google API key not configured' }, { status: 500 })
     }
 
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
     const property = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
       select: { address: true, city: true, state: true, zip: true },
@@ -102,15 +96,20 @@ export async function POST(
 
     // Store Google research in property
     // Merge with any existing batchData
+    // FIX: was leaking — Class 1 (variant 4: id-only findUnique for read-then-merge
+    // before tenant-scoped update). Prior code used findUnique({ id }) here even
+    // though the update below was already tenant-scoped. The read could leak
+    // another tenant's row even though the write was scoped.
     const existingData = await db.property.findUnique({
-      where: { id: params.propertyId },
+      where: { id: params.propertyId, tenantId },
       select: { zillowData: true },
     })
     const existing = (existingData?.zillowData ?? {}) as Record<string, unknown>
     const merged = { ...existing, ...researchData }
 
+    // FIX: was leaking — Class 1 — prior code used update({ id }) (no tenantId).
     await db.property.update({
-      where: { id: params.propertyId },
+      where: { id: params.propertyId, tenantId },
       data: {
         zillowData: merged as unknown as import('@prisma/client').Prisma.InputJsonValue,
       },
@@ -131,19 +130,13 @@ export async function POST(
     console.error('[Research] Error:', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Research failed' }, { status: 500 })
   }
-}
+})
 
 // GET — return existing research data
-export async function GET(
-  req: Request,
-  { params }: { params: { propertyId: string } }
-) {
+export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const property = await db.property.findUnique({
-      where: { id: params.propertyId, tenantId: session.tenantId },
+      where: { id: params.propertyId, tenantId: ctx.tenantId },
       select: { zillowData: true },
     })
     if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -152,4 +145,4 @@ export async function GET(
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})

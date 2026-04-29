@@ -1,6 +1,6 @@
 // GET + POST /api/properties/[propertyId]/buyers — match + add buyers via GHL
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { CONTACT_FIELDS, TIER_MAP, getMarketsForZip } from '@/lib/config/crm.config'
@@ -228,15 +228,9 @@ Return ONLY JSON: {"id": {"score": N, "breakdown": "..."}, ...}. Score is 0-50 (
   return allResults
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { propertyId: string } }
-) {
+export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const tenantId = session.tenantId
+    const tenantId = ctx.tenantId
 
     const property = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
@@ -345,7 +339,7 @@ export async function GET(
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to match buyers' }, { status: 500 })
   }
-}
+})
 
 // ─── Reverse map: field name → GHL custom field ID ──────────────────────────
 const FIELD_NAME_TO_GHL: Record<string, string> = Object.fromEntries(
@@ -370,27 +364,21 @@ const addBuyerSchema = z.object({
   tags: z.string().optional(), // comma-separated
 })
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { propertyId: string } },
-) {
+export const POST = withTenant<{ propertyId: string }>(async (request, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const body = await request.json()
 
     // If action is 'getFormOptions', return pipeline stages + custom field options from GHL
     // Get manually added buyers for this property
     if (body.action === 'getManualBuyers') {
       const prop = await db.property.findUnique({
-        where: { id: params.propertyId, tenantId: session.tenantId },
+        where: { id: params.propertyId, tenantId: ctx.tenantId },
         select: { manualBuyerIds: true },
       })
       const ids = (prop?.manualBuyerIds ?? []) as string[]
       if (ids.length === 0) return NextResponse.json({ buyers: [] })
 
-      const ghl = await getGHLClient(session.tenantId)
+      const ghl = await getGHLClient(ctx.tenantId)
       const buyers = []
       for (let i = 0; i < ids.length; i += 10) {
         const batch = ids.slice(i, i + 10)
@@ -409,7 +397,7 @@ export async function POST(
     }
 
     if (body.action === 'getStages' || body.action === 'getFormOptions') {
-      const ghl = await getGHLClient(session.tenantId)
+      const ghl = await getGHLClient(ctx.tenantId)
       const pipelines = await ghl.getPipelines()
       const buyerPipeline = pipelines.pipelines?.find(p => p.name.toLowerCase().includes('buyer'))
       if (!buyerPipeline) return NextResponse.json({ error: 'No buyer pipeline found' }, { status: 404 })
@@ -475,7 +463,7 @@ export async function POST(
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input', details: parsed.error.issues }, { status: 400 })
 
     const d = parsed.data
-    const ghl = await getGHLClient(session.tenantId)
+    const ghl = await getGHLClient(ctx.tenantId)
 
     // Build custom fields array
     const customFields: Array<{ id: string; value: unknown }> = []
@@ -521,62 +509,72 @@ export async function POST(
     })
 
     // Save contactId to property's manualBuyerIds
+    // FIX: was leaking — Class 1 — prior code used findUnique({ id }) (no tenantId).
     const prop = await db.property.findUnique({
-      where: { id: params.propertyId },
+      where: { id: params.propertyId, tenantId: ctx.tenantId },
       select: { manualBuyerIds: true },
     })
     const existingIds = (prop?.manualBuyerIds ?? []) as string[]
     if (!existingIds.includes(contactId)) {
+      // FIX: was leaking — Class 1 — prior code used update({ id }) (no tenantId).
       await db.property.update({
-        where: { id: params.propertyId },
+        where: { id: params.propertyId, tenantId: ctx.tenantId },
         data: { manualBuyerIds: [...existingIds, contactId] },
       })
     }
 
     // Also write to local Buyer DB so they're immediately available for matching
+    // FIX: was leaking — Class 1 — prior code used upsert({ where: { id } }) which
+    // matches across tenants on the unique id. Now: tenant-scoped findFirst,
+    // then conditional create-or-update with id+tenantId in WHERE.
     const tierNorm = TIER_MAP[d.buyerTier] ?? d.buyerTier.toLowerCase()
-    await db.buyer.upsert({
-      where: { id: `ghl_${contactId}` },
-      create: {
-        id: `ghl_${contactId}`,
-        tenantId: session.tenantId,
-        name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
-        phone, email: d.email ?? null,
-        ghlContactId: contactId,
-        primaryMarkets: d.markets,
-        customFields: JSON.parse(JSON.stringify({
-          tier: tierNorm, buybox: d.buybox.join(', '),
-          secondaryMarkets: d.secondaryMarket ? [d.secondaryMarket] : [],
-          verifiedFunding: d.verifiedFunding ?? false,
-          hasPurchased: d.hasPurchased ?? false,
-          responseSpeed: d.responseSpeed ?? '',
-        })),
-        tags,
-        internalNotes: d.notes ?? null,
-        isActive: true,
-      },
-      update: {
-        name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
-        phone, email: d.email ?? null,
-        primaryMarkets: d.markets,
-        customFields: JSON.parse(JSON.stringify({
-          tier: tierNorm, buybox: d.buybox.join(', '),
-          secondaryMarkets: d.secondaryMarket ? [d.secondaryMarket] : [],
-          verifiedFunding: d.verifiedFunding ?? false,
-          hasPurchased: d.hasPurchased ?? false,
-          responseSpeed: d.responseSpeed ?? '',
-        })),
-        tags,
-        internalNotes: d.notes ?? null,
-        isActive: true,
-      },
-    }).catch(err => console.error('[Buyers] DB upsert failed:', err))
+    const buyerId = `ghl_${contactId}`
+    const buyerCustomFields = JSON.parse(JSON.stringify({
+      tier: tierNorm, buybox: d.buybox.join(', '),
+      secondaryMarkets: d.secondaryMarket ? [d.secondaryMarket] : [],
+      verifiedFunding: d.verifiedFunding ?? false,
+      hasPurchased: d.hasPurchased ?? false,
+      responseSpeed: d.responseSpeed ?? '',
+    }))
+    const existingBuyer = await db.buyer.findFirst({
+      where: { id: buyerId, tenantId: ctx.tenantId },
+      select: { id: true },
+    })
+    if (existingBuyer) {
+      await db.buyer.update({
+        where: { id: buyerId, tenantId: ctx.tenantId },
+        data: {
+          name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
+          phone, email: d.email ?? null,
+          primaryMarkets: d.markets,
+          customFields: buyerCustomFields,
+          tags,
+          internalNotes: d.notes ?? null,
+          isActive: true,
+        },
+      }).catch(err => console.error('[Buyers] DB update failed:', err))
+    } else {
+      await db.buyer.create({
+        data: {
+          id: buyerId,
+          tenantId: ctx.tenantId,
+          name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
+          phone, email: d.email ?? null,
+          ghlContactId: contactId,
+          primaryMarkets: d.markets,
+          customFields: buyerCustomFields,
+          tags,
+          internalNotes: d.notes ?? null,
+          isActive: true,
+        },
+      }).catch(err => console.error('[Buyers] DB create failed:', err))
+    }
 
     return NextResponse.json({
       success: true,
       contactId,
       buyer: {
-        id: `ghl_${contactId}`,
+        id: buyerId,
         name: `${d.firstName} ${d.lastName ?? ''}`.trim(),
         phone: d.phone,
         email: d.email ?? null,
@@ -591,4 +589,4 @@ export async function POST(
     console.error('[Buyers] Add buyer failed:', err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to add buyer' }, { status: 500 })
   }
-}
+})

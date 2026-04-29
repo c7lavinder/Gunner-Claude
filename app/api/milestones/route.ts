@@ -1,7 +1,7 @@
 // app/api/milestones/route.ts
 // CRUD for PropertyMilestone — used by Day Hub KPI ledger + property detail
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 import { MilestoneType } from '@prisma/client'
@@ -33,10 +33,7 @@ const deleteSchema = z.object({
 })
 
 // POST — create milestone (manual, source = MANUAL)
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const POST = withTenant(async (request, ctx) => {
   const body = await request.json()
   const parsed = createSchema.safeParse(body)
   if (!parsed.success) {
@@ -44,7 +41,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { propertyId, type, notes, date, loggedById } = parsed.data
-  const tenantId = session.tenantId
+  const tenantId = ctx.tenantId
 
   const property = await db.property.findUnique({
     where: { id: propertyId, tenantId },
@@ -56,7 +53,10 @@ export async function POST(request: NextRequest) {
 
   try {
     // Auto-add milestone creator to property team
-    const milestoneUserId = loggedById || session.userId
+    const milestoneUserId = loggedById || ctx.userId
+    // NOTE: warm shape (upsert on compound unique propertyId_userId without
+    // tenantId in WHERE) but DiD-via-FK — propertyId is tenant-validated above,
+    // so propertyTeamMember rows for this propertyId can only belong to this tenant.
     await db.propertyTeamMember.upsert({
       where: { propertyId_userId: { propertyId, userId: milestoneUserId } },
       create: { propertyId, userId: milestoneUserId, tenantId, role: 'Team', source: 'milestone' },
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
         action: `milestone.${type.toLowerCase()}`,
         resource: 'property',
         resourceId: propertyId,
-        userId: session.userId,
+        userId: ctx.userId,
         source: 'USER',
         severity: 'INFO',
         payload: { type, propertyId },
@@ -97,13 +97,10 @@ export async function POST(request: NextRequest) {
     console.error('[Milestones] Create failed:', err)
     return NextResponse.json({ error: 'Failed to log milestone' }, { status: 500 })
   }
-}
+})
 
 // GET — fetch milestones by propertyId OR by type+date (for KPI ledger)
-export async function GET(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant(async (request, ctx) => {
   const { searchParams } = new URL(request.url)
   const propertyId = searchParams.get('propertyId')
   const type = searchParams.get('type')
@@ -113,7 +110,7 @@ export async function GET(request: NextRequest) {
     // Mode 1: fetch by property (for property detail pipeline)
     if (propertyId) {
       const milestones = await db.propertyMilestone.findMany({
-        where: { tenantId: session.tenantId, propertyId },
+        where: { tenantId: ctx.tenantId, propertyId },
         orderBy: { createdAt: 'asc' },
         include: { loggedBy: { select: { name: true } } },
       })
@@ -123,7 +120,7 @@ export async function GET(request: NextRequest) {
     // Mode 3: fetch team members (for edit dropdown)
     if (searchParams.get('members') === '1') {
       const users = await db.user.findMany({
-        where: { tenantId: session.tenantId },
+        where: { tenantId: ctx.tenantId },
         select: { id: true, name: true, role: true },
         orderBy: { name: 'asc' },
       })
@@ -135,7 +132,7 @@ export async function GET(request: NextRequest) {
       const { dayStart, dayEnd } = getCentralDayBounds(date)
       const milestones = await db.propertyMilestone.findMany({
         where: {
-          tenantId: session.tenantId,
+          tenantId: ctx.tenantId,
           type: type as MilestoneType,
           createdAt: { gte: dayStart, lte: dayEnd },
         },
@@ -164,13 +161,10 @@ export async function GET(request: NextRequest) {
     console.error('[Milestones] Fetch failed:', err)
     return NextResponse.json({ milestones: [] })
   }
-}
+})
 
 // PATCH — update milestone (notes, date). Changes source to MANUAL (green = user-verified)
-export async function PATCH(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const PATCH = withTenant(async (request, ctx) => {
   const body = await request.json()
   const parsed = updateSchema.safeParse(body)
   if (!parsed.success) {
@@ -181,7 +175,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const milestone = await db.propertyMilestone.update({
-      where: { id, tenantId: session.tenantId },
+      where: { id, tenantId: ctx.tenantId },
       data: {
         source: 'MANUAL', // editing turns it green (user-verified)
         ...(notes !== undefined ? { notes } : {}),
@@ -200,13 +194,10 @@ export async function PATCH(request: NextRequest) {
     console.error('[Milestones] Update failed:', err)
     return NextResponse.json({ error: 'Failed to update milestone' }, { status: 500 })
   }
-}
+})
 
 // DELETE — remove milestone
-export async function DELETE(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const DELETE = withTenant(async (request, ctx) => {
   const body = await request.json()
   const parsed = deleteSchema.safeParse(body)
   if (!parsed.success) {
@@ -215,11 +206,11 @@ export async function DELETE(request: NextRequest) {
 
   try {
     await db.propertyMilestone.deleteMany({
-      where: { id: parsed.data.id, tenantId: session.tenantId },
+      where: { id: parsed.data.id, tenantId: ctx.tenantId },
     })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[Milestones] Delete failed:', err)
     return NextResponse.json({ error: 'Failed to delete milestone' }, { status: 500 })
   }
-}
+})

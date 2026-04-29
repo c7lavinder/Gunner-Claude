@@ -413,6 +413,41 @@ another tenant's row) even though the follow-up update was tenant-scoped.
 Defense-in-depth: scope the find too. `findFirst` with tenantId, not
 `findUnique` by id.
 
+Wave 3 batch 5 added two more variants of the same class:
+
+**Variant: id-only `upsert` (or `upsert` on compound unique without
+tenant validation).** Caught in `properties/[propertyId]/buyers/route.ts`
+(`buyer.upsert({ where: { id } })`) and `properties/[propertyId]/buyer-stage/route.ts`
+(`propertyBuyerStage.upsert({ where: { propertyId_buyerId } })`). Prisma
+`upsert.where` requires a unique input, so you can't add `tenantId` to
+the WHERE directly. Two valid fixes:
+1. Validate the tenant boundary upstream first: `findFirst({ id, tenantId })`
+   on the parent record (e.g. property), then proceed with the upsert.
+   The compound unique becomes implicitly tenant-scoped via the FK.
+2. Manually expand the upsert: `findFirst({ unique-key, tenantId })` →
+   conditional `update` with `id+tenantId` in WHERE, else `create`.
+
+The pre-scan grep `(update|delete|updateMany|deleteMany)` does NOT match
+`upsert` (no substring overlap with `update`). When pre-scanning routes,
+add `upsert` to the write-pattern grep — buyer-stage was misclassified
+cool by the original heuristic and contained a real cross-tenant write
+vector.
+
+**Variant: helper-delegate id-only lookup.** Caught in
+`properties/[propertyId]/metrics/route.ts` calling `computePropertyMetrics(propertyId)`
+in `lib/computed-metrics.ts`. The helper does
+`db.property.findUnique({ where: { id: propertyId } })` and then trusts
+the row's `tenantId` to scope downstream queries. Without route-level
+validation, any tenant could read another tenant's metrics by passing
+the right propertyId. The pre-scan heuristic misses this because the
+find is in the lib, not the route. **Rule**: when a route delegates to
+a lib helper that takes a record id without an explicit tenantId
+parameter, add a route-level `findFirst({ id, tenantId })` validation
+gate before the delegate call. The fix can also be made in the helper
+itself, but route-level gates are the safer ship-now move.
+
+Reference: Wave 3 batch 5 commit (this convention added in batch 5).
+
 #### Don't re-fetch user role — `ctx.userRole` is canonical
 
 A separate cleanup class found across Wave 3 batches 2-3: routes did

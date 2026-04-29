@@ -1,20 +1,13 @@
 // GET + POST + PATCH /api/properties/[propertyId]/outreach
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { Prisma } from '@prisma/client'
 import { titleCase } from '@/lib/format'
 
-export async function GET(
-  req: Request,
-  { params }: { params: { propertyId: string } }
-) {
+export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const logs = await db.outreachLog.findMany({
-      where: { tenantId: session.tenantId, propertyId: params.propertyId },
+      where: { tenantId: ctx.tenantId, propertyId: params.propertyId },
       orderBy: { loggedAt: 'desc' },
       include: { user: { select: { name: true } } },
       take: 50,
@@ -41,13 +34,17 @@ export async function GET(
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})
 
 // Helper: sync highestOffer + acceptedPrice on property from all offer logs
 // Also auto-links the accepted buyer contact to the property
-async function syncOfferFields(propertyId: string, tenantId?: string) {
+// FIX: tenantId is now REQUIRED (was optional) — every read/write inside is
+// scoped to it. Was previously a major leak surface: the helper read+wrote
+// Property + OutreachLog by id-only.
+async function syncOfferFields(propertyId: string, tenantId: string) {
+  // FIX: was leaking — Class 1 — prior code used findMany without tenantId.
   const offers = await db.outreachLog.findMany({
-    where: { propertyId, type: 'offer', offerAmount: { not: null } },
+    where: { tenantId, propertyId, type: 'offer', offerAmount: { not: null } },
     select: { offerAmount: true, offerStatus: true, ghlContactId: true, recipientName: true, recipientContact: true },
     orderBy: { loggedAt: 'desc' },
   })
@@ -57,17 +54,20 @@ async function syncOfferFields(propertyId: string, tenantId?: string) {
   const accepted = offers.find(o => o.offerStatus === 'Accepted')
   const acceptedAmount = accepted ? Number(accepted.offerAmount) : null
 
-  const prop = await db.property.findUnique({
-    where: { id: propertyId },
-    select: { fieldSources: true, tenantId: true },
+  // FIX: was leaking — Class 1 — prior code used findUnique({ id }) and read
+  // tenantId from the row (so the row read could be from another tenant).
+  const prop = await db.property.findFirst({
+    where: { id: propertyId, tenantId },
+    select: { fieldSources: true },
   })
-  const resolvedTenantId = tenantId ?? prop?.tenantId
+  if (!prop) return // property not in this tenant — silently no-op
   const sources = { ...((prop?.fieldSources as Record<string, string>) ?? {}) }
   if (highest !== null) sources.highestOffer = 'ai'; else delete sources.highestOffer
   if (acceptedAmount !== null) sources.acceptedPrice = 'ai'
 
+  // FIX: was leaking — Class 1 — prior code used update({ id }) (no tenantId).
   await db.property.update({
-    where: { id: propertyId },
+    where: { id: propertyId, tenantId },
     data: {
       highestOffer: highest,
       ...(acceptedAmount !== null ? { acceptedPrice: acceptedAmount } : {}),
@@ -76,11 +76,11 @@ async function syncOfferFields(propertyId: string, tenantId?: string) {
   })
 
   // Auto-link accepted buyer contact to property with "Buyer" role
-  if (accepted && accepted.ghlContactId && resolvedTenantId) {
+  if (accepted && accepted.ghlContactId) {
     try {
       // Find or create seller record for this buyer contact
       let seller = await db.seller.findFirst({
-        where: { tenantId: resolvedTenantId, ghlContactId: accepted.ghlContactId },
+        where: { tenantId, ghlContactId: accepted.ghlContactId },
       })
       if (!seller) {
         // Parse phone from recipientContact if it looks like a phone
@@ -88,7 +88,7 @@ async function syncOfferFields(propertyId: string, tenantId?: string) {
         const isPhone = /^\+?\d[\d\s()-]{6,}$/.test(contact)
         seller = await db.seller.create({
           data: {
-            tenantId: resolvedTenantId,
+            tenantId,
             name: titleCase(accepted.recipientName),
             phone: isPhone ? contact : null,
             email: !isPhone && contact.includes('@') ? contact : null,
@@ -98,6 +98,8 @@ async function syncOfferFields(propertyId: string, tenantId?: string) {
       }
 
       // Check if already linked to this property
+      // NOTE: warm shape (compound unique propertyId_sellerId without tenantId)
+      // but DiD-via-FK — both propertyId and sellerId are tenant-validated above.
       const existing = await db.propertySeller.findUnique({
         where: { propertyId_sellerId: { propertyId, sellerId: seller.id } },
       })
@@ -113,14 +115,8 @@ async function syncOfferFields(propertyId: string, tenantId?: string) {
   }
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { propertyId: string } }
-) {
+export const POST = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
   try {
-    const session = await getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const body = await req.json()
     const { type, channel, recipientName, recipientContact, ghlContactId, notes, offerAmount, showingDate, source } = body
 
@@ -146,13 +142,15 @@ export async function POST(
       }
       if (body.channel !== undefined) updateData.channel = body.channel
 
-      await db.outreachLog.update({
-        where: { id: body.logId },
+      // FIX: was leaking — Class 1 — prior code used update({ where: { id: body.logId } })
+      // (no tenantId in WHERE). Now scoped via updateMany with tenantId.
+      await db.outreachLog.updateMany({
+        where: { id: body.logId, tenantId: ctx.tenantId, propertyId: params.propertyId },
         data: updateData,
       })
 
       // Sync offer fields on property (highestOffer, acceptedPrice, buyer link)
-      await syncOfferFields(params.propertyId, session.tenantId)
+      await syncOfferFields(params.propertyId, ctx.tenantId)
 
       return NextResponse.json({ success: true })
     }
@@ -163,9 +161,9 @@ export async function POST(
 
     const log = await db.outreachLog.create({
       data: {
-        tenantId: session.tenantId,
+        tenantId: ctx.tenantId,
         propertyId: params.propertyId,
-        userId: session.userId,
+        userId: ctx.userId,
         type,
         channel: channel ?? (type === 'offer' ? 'offer' : type === 'showing' ? 'in_person' : 'sms'),
         recipientName: titleCase(recipientName),
@@ -182,11 +180,11 @@ export async function POST(
 
     // Sync offer fields on property (highestOffer, acceptedPrice, buyer link)
     if (type === 'offer') {
-      await syncOfferFields(params.propertyId, session.tenantId)
+      await syncOfferFields(params.propertyId, ctx.tenantId)
     }
 
     return NextResponse.json({ id: log.id, status: 'success' })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })
   }
-}
+})

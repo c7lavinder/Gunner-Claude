@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 50 — Wave 3 Session D of v1-finish sprint (2026-04-29)
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). Wave 3 Sessions A+B+C+D migrated 48 routes to `withTenant` (batches 1-4 of 6); 21 latent cross-tenant defense gaps caught and fixed across the four batches (5 + 0 + 16 + 0 — distribution explained by route shape: chained-update class clusters in CRUD-shape routes; GHL passthrough + read-only routes are leak-free). Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
+**Current session**: 51 — Wave 3 Session E of v1-finish sprint (2026-04-29)
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4 (Day Hub dial-count drift). Wave 3 Sessions A+B+C+D+E migrated 60 routes to `withTenant` (batches 1-5 of 6); **34 latent cross-tenant defense gaps** caught and fixed across the five batches (5 + 0 + 16 + 0 + 13 — distribution explained by route shape: properties/[propertyId]/* sub-routes are the densest leak cluster). Multi-vendor enrichment live, in-process grading worker live, bug-report system live.
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: https://gunner-claude-production.up.railway.app
@@ -56,6 +56,125 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 51 — Wave 3 Session E of v1-finish sprint (2026-04-29)
+
+`withTenant` migration, batch 5 of 6. Twelve routes migrated; **13 latent
+defense gaps fixed** across 6 of those routes. The properties/[propertyId]/*
+cluster lived up to its hot-zone reputation: `outreach` (4 leaks), `buyers`
+(3 leaks), `research` (2), `blast` (2), `buyer-stage` (1), `metrics` (1).
+
+**Pre-scan prediction (run for first time as a structural pre-flight):**
+- 7 cool / 5 warm by find+write co-presence heuristic.
+- Predicted ~4-6 leak sites total. Actual: **13** — 2-3× the prediction.
+- Heuristic correctly identified WHICH routes were warm (5/5 hits) but
+  underestimated leak DENSITY per warm route. Average 2.4 leaks per
+  warm-with-leak route, vs assumed ~1.
+
+**Two new heuristic refinements discovered:**
+
+1. **`upsert` was missing from the pre-scan write-pattern grep.**
+   `(update|delete|updateMany|deleteMany)` doesn't match `upsert` (no
+   substring overlap with `update`). `buyer-stage` was misclassified
+   cool but contained a real cross-tenant-write vector (compound unique
+   `propertyId_buyerId` upsert without tenant validation). For batch 6,
+   include `upsert` in the write-pattern grep.
+
+2. **Helper-delegate variant — pre-scan can't see lib/ code.**
+   `metrics/route.ts` calls `computePropertyMetrics(propertyId)` in
+   `lib/computed-metrics.ts`, which does an id-only `findUnique` and
+   then trusts the row's tenantId for downstream scoping. This is a real
+   cross-tenant read leak invisible to a route-only pre-scan. Rule for
+   batch 6: when a route delegates to a lib helper that takes an opaque
+   id without explicit tenantId, add a route-level
+   `findFirst({ id, tenantId })` validation gate first.
+
+**Routes migrated (alphabetical, batch 5):**
+
+1. `lead-sources/route.ts` — clean. POST upserts on compound key
+   `tenantId_source_month_year` (tenantId in unique key = structurally safe).
+2. `markets/route.ts` — clean. DELETE uses canonical `delete({ id, tenantId })`.
+3. `milestones/route.ts` — clean. POST has `propertyTeamMember.upsert` on
+   compound `propertyId_userId` without tenantId in WHERE — DiD-via-FK
+   because propertyId is tenant-validated immediately above; noted in code.
+4. `notifications/route.ts` — clean. Read-only.
+5. `properties/[propertyId]/blast/route.ts` — **2 leaks**:
+   - Class 2: approval-gate verification used `auditLog.findUnique({ id })`
+     + JS-side `gate.tenantId !== tenantId` comparison. Replaced with
+     `findFirst({ id, tenantId, userId, resourceId })`.
+   - Class 1: `dealBlast.update({ where: { id } })` post-send was
+     id-only. Now scoped with `tenantId`.
+6. `properties/[propertyId]/buyer-stage/route.ts` — **1 leak**: upsert
+   on compound unique `propertyId_buyerId` without tenant validation.
+   Fix: validate property belongs to ctx.tenantId first via findFirst.
+   This was the route the pre-scan misclassified cool.
+7. `properties/[propertyId]/buyers/route.ts` — **3 leaks** (all in POST
+   manual-add flow):
+   - `property.findUnique({ id })` for manualBuyerIds read — id-only.
+   - `property.update({ id })` for manualBuyerIds write — id-only.
+   - `buyer.upsert({ where: { id: \`ghl_${contactId}\` } })` — id-only.
+     Replaced with findFirst → conditional create-or-update with
+     id+tenantId in WHERE.
+8. `properties/[propertyId]/messages/route.ts` — clean. Already DiD-clean
+   pre-migration.
+9. `properties/[propertyId]/metrics/route.ts` — **1 leak (helper-delegate
+   variant)**: route delegated to `computePropertyMetrics(propertyId)`
+   without first validating property belongs to caller. Helper does
+   id-only findUnique. Fix: route-level `findFirst({ id, tenantId })`
+   gate before delegate call.
+10. `properties/[propertyId]/outreach/route.ts` — **4 leaks** (densest
+    of the batch):
+    - `syncOfferFields` helper: `outreachLog.findMany` without tenantId.
+    - `syncOfferFields` helper: `property.findUnique({ id })` (variant 4
+      read-then-merge — read could leak another tenant's row).
+    - `syncOfferFields` helper: `property.update({ id })` (Class 1).
+    - POST: `outreachLog.update({ where: { id: body.logId } })` — id-only.
+      Now `updateMany({ id, tenantId, propertyId })`.
+    Helper signature changed: `tenantId` is now required (was optional).
+11. `properties/[propertyId]/re-enrich/route.ts` — clean. Already
+    DiD-clean.
+12. `properties/[propertyId]/research/route.ts` — **2 leaks**:
+    - `property.findUnique({ id })` for read-merge of zillowData (variant 4).
+    - `property.update({ id })` for zillowData write (Class 1).
+
+**Coverage delta:**
+- `withTenant` routes: 67 → **79** (+12)
+- `getSession`-direct routes: 27 → **15** (−12)
+- Documented exceptions: 16 (unchanged)
+- Total `route.ts` files: 110 (unchanged)
+
+**Wave 3 cumulative (sessions A+B+C+D+E, 60 routes):**
+- 34 latent leak sites fixed (5 + 0 + 16 + 0 + 13)
+- 10 redundancy drops (4 + 0 + 6 + 0 + 0)
+- 5 sessions × 12 routes = 60 routes complete; **1 batch remaining (~12 routes)**.
+
+**Cross-batch leak distribution diagnosis updated:**
+| Batch | Routes | Leaks | Density | Cluster |
+|---|---|---|---|---|
+| 1 | 12 | 5 | 0.42 | Calls cluster (CRUD) |
+| 2 | 12 | 0 | 0.00 | Cool (admin/auth-adjacent) |
+| 3 | 12 | 16 | 1.33 | AI-assistant + CRUD (very hot) |
+| 4 | 12 | 0 | 0.00 | GHL passthrough + read-only |
+| 5 | 12 | 13 | 1.08 | properties/[propertyId]/* (hot) |
+| **Total** | **60** | **34** | 0.57 | Bell curve confirmed |
+
+The ~1+ leak/route density in batches 3 and 5 reflects routes with
+multiple find-then-write sites per file. Single-file leak counts of
+3-7 are common in property-CRUD and AI-tool-dispatch shapes.
+
+**Files changed:**
+- 12 route files (in `app/api/lead-sources/`, `app/api/markets/`,
+  `app/api/milestones/`, `app/api/notifications/`,
+  `app/api/properties/[propertyId]/{blast,buyer-stage,buyers,messages,metrics,outreach,re-enrich,research}/`).
+- `AGENTS.md` Route Conventions — extended with two new variants
+  (id-only upsert / compound-unique upsert + helper-delegate id-only).
+  Plus the upsert-in-pre-scan-grep heuristic refinement.
+- `PROGRESS.md` — header bumped to Session 51, this entry, coverage stats.
+- `OPERATIONS.md` — API surface table updated (67→79 / 27→15).
+
+**No tsc errors. No production behavior changes** — every leak fix is
+defensive against scenarios that don't currently occur in production
+data. Pre-push tsc gate clean.
 
 ### Session 50 — Wave 3 Session D of v1-finish sprint (2026-04-29)
 
@@ -747,7 +866,7 @@ down — escalate per Session 38 notes.
    still need the `UPDATE … SET gradingStatus='SKIPPED'` cleanup.
 
 **P4 — Technical debt:**
-1. Migrate remaining 27 API routes to `withTenant` helper (down from 75 pre-migration; batches 1-4 of 6 closed Sessions 47-50, 21 latent leaks fixed).
+1. Migrate remaining 15 API routes to `withTenant` helper (down from 75 pre-migration; batches 1-5 of 6 closed Sessions 47-51, 34 latent leaks fixed).
 2. Sweep remaining silent catches in broader codebase (79 total).
 3. ~~Align Day Hub vs Calls page call count source-of-truth.~~ ✅ Closed Wave 2 (Session 46).
 4. ~~Fix LM tab "227" dial count aggregation across LM role.~~ ✅ Closed Wave 2 (Session 46).
