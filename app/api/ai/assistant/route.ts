@@ -19,11 +19,8 @@ export const POST = withTenant(async (request, ctx) => {
   const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 
   try {
-    // SIMPLIFY: only fetch `name` here — `role` is canonical via ctx.userRole
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { name: true },
-    })
+    // SIMPLIFY: dropped redundant db.user.findUnique — ctx.userName is canonical
+    // (added to TenantContext in Wave 3 cleanup commit 2).
 
     // Get tenant info
     const tenant = await db.tenant.findUnique({
@@ -123,7 +120,7 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
     // System prompt
     const systemPrompt = `You are the ${roleName} Assistant for ${tenant?.name ?? 'this company'}, a wholesale real estate company.
 
-User: ${user?.name ?? 'Unknown'} (${roleName})
+User: ${ctx.userName || 'Unknown'} (${roleName})
 
 YOUR CAPABILITIES:
 - Answer any question about properties, calls, deals, team performance, KPIs
