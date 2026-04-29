@@ -1,8 +1,6 @@
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 // app/api/tenants/config/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-
-
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
@@ -20,12 +18,10 @@ const configSchema = z.object({
   config: z.record(z.unknown()).optional(),
 })
 
-export async function GET() {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant(async (_req, ctx) => {
+  // Tenant.id IS the tenant boundary — id-only WHERE is structurally safe.
   const tenant = await db.tenant.findUnique({
-    where: { id: session.tenantId },
+    where: { id: ctx.tenantId },
     select: {
       id: true, slug: true,
       callTypes: true, callResults: true, gradingMaterials: true,
@@ -37,21 +33,18 @@ export async function GET() {
   if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
 
   return NextResponse.json({ tenant })
-}
+})
 
-export async function PATCH(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const tenantId = session.tenantId
+export const PATCH = withTenant(async (request, ctx) => {
   const body = await request.json()
   const parsed = configSchema.safeParse(body)
 
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   const { config, ...rest } = parsed.data
+  // Tenant.id IS the tenant boundary — id-only WHERE is structurally safe.
   const updated = await db.tenant.update({
-    where: { id: tenantId },
+    where: { id: ctx.tenantId },
     data: {
       ...rest,
       ...(config !== undefined && {
@@ -61,4 +54,4 @@ export async function PATCH(request: NextRequest) {
   })
 
   return NextResponse.json({ tenant: { id: updated.id, slug: updated.slug, onboardingStep: updated.onboardingStep } })
-}
+})

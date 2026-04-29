@@ -1,18 +1,15 @@
 // GET /api/properties/search?q=123+Main — search properties by address
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const GET = withTenant(async (request, ctx) => {
   const q = request.nextUrl.searchParams.get('q') ?? ''
   if (q.length < 2) return NextResponse.json({ properties: [] })
 
   const properties = await db.property.findMany({
     where: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       OR: [
         { address: { contains: q, mode: 'insensitive' } },
         { city: { contains: q, mode: 'insensitive' } },
@@ -25,4 +22,4 @@ export async function GET(request: NextRequest) {
   })
 
   return NextResponse.json({ properties })
-}
+})

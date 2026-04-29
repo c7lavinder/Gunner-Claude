@@ -1,18 +1,12 @@
 // GET + POST + DELETE /api/properties/[propertyId]/team
 // Manages team members assigned to a property
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { propertyId: string } }
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) => {
   const members = await db.propertyTeamMember.findMany({
-    where: { propertyId: params.propertyId, tenantId: session.tenantId },
+    where: { propertyId: params.propertyId, tenantId: ctx.tenantId },
     include: { user: { select: { id: true, name: true, role: true } } },
     orderBy: { createdAt: 'asc' },
   })
@@ -28,33 +22,41 @@ export async function GET(
       createdAt: m.createdAt.toISOString(),
     })),
   })
-}
+})
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { propertyId: string } }
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const POST = withTenant<{ propertyId: string }>(async (request, ctx, params) => {
   const { userId, role } = await request.json()
   if (!userId || !role) {
     return NextResponse.json({ error: 'userId and role required' }, { status: 400 })
   }
 
+  // FIX: was leaking — Class 3 (compound-unique upsert without parent
+  // validation). Prior code did `propertyTeamMember.upsert({ where: {
+  // propertyId_userId } })` without first verifying propertyId belongs to
+  // this tenant. An attacker passing another tenant's propertyId could
+  // mutate that tenant's PropertyTeamMember row via the compound match.
+  // Fix: validate property belongs to ctx.tenantId first.
+  const property = await db.property.findFirst({
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
+    select: { id: true },
+  })
+  if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
+
   // Verify user belongs to same tenant
   const user = await db.user.findFirst({
-    where: { id: userId, tenantId: session.tenantId },
+    where: { id: userId, tenantId: ctx.tenantId },
     select: { id: true, name: true, role: true },
   })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  // NOTE: upsert remains on compound `propertyId_userId` — DiD-via-FK now
+  // that property is validated above.
   const member = await db.propertyTeamMember.upsert({
     where: { propertyId_userId: { propertyId: params.propertyId, userId } },
     create: {
       propertyId: params.propertyId,
       userId,
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       role,
       source: 'manual',
     },
@@ -72,21 +74,15 @@ export async function POST(
       createdAt: member.createdAt.toISOString(),
     },
   })
-}
+})
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { propertyId: string } }
-) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+export const DELETE = withTenant<{ propertyId: string }>(async (request, ctx, params) => {
   const { userId } = await request.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
 
   await db.propertyTeamMember.deleteMany({
-    where: { propertyId: params.propertyId, userId, tenantId: session.tenantId },
+    where: { propertyId: params.propertyId, userId, tenantId: ctx.tenantId },
   })
 
   return NextResponse.json({ status: 'success' })
-}
+})

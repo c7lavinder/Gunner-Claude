@@ -104,25 +104,28 @@ loop) has heartbeats today.
 
 ## API surface
 
-110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **partial**. Status as of 2026-04-29 (post-Wave-3-Session-E):
+110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **complete for all tenant-scoped routes** as of 2026-04-29 (post-Wave-3-Session-F):
 
 | Pattern | Count | Tenant isolation |
 |---|---|---|
 | Total `route.ts` files | 110 | — |
-| Uses `withTenant` | 79 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
-| Uses `getSession` directly | 15 | ⚠️ Manual `tenantId` tracking — **migration backlog** |
-| Other (auth / webhooks / cron / health / service-token / diagnostics) | 16 | N/A — see breakdown below |
+| Uses `withTenant` | 91 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
+| Uses `getSession` directly | 0 | ✅ Migration complete |
+| Other (auth / webhooks / cron / health / service-token / diagnostics / OAuth callback / Stripe checkout) | 19 | N/A — see breakdown below |
 
-### The 15 non-tenant-session routes
+### The 19 non-tenant-session routes
 
 | Route | Auth scheme |
 |---|---|
 | `app/api/auth/[...nextauth]/route.ts` | NextAuth handles session itself |
+| `app/api/auth/crm/callback/route.ts` | OAuth callback — exchanges code for token before session exists |
 | `app/api/auth/reset-password/route.ts` | Token in URL (forgotten-password flow) |
 | `app/api/cron/poll-calls/route.ts` | Public — Railway cron + manual debug |
 | `app/api/cron/process-recording-jobs/route.ts` | Public — Railway cron + manual debug |
+| `app/api/debug/webhooks/route.ts` | Internal debug — public no-op endpoint |
 | `app/api/diagnostics/dial-counts/route.ts` | `Authorization: Bearer ${DIAGNOSTIC_TOKEN}` — see "Diagnostic endpoints" below |
 | `app/api/health/route.ts` | Public — Railway healthcheck |
+| `app/api/stripe/checkout/route.ts` | Pre-tenant — creates Stripe checkout session before tenant onboarding completes |
 | `app/api/tenants/register/route.ts` | Public — creates tenant + owner before session exists |
 | `app/api/vieira/calls/recent/route.ts` | `lib/vieira-auth.ts` — `X-Vieira-Token` header against `VIEIRA_SERVICE_TOKEN` env |
 | `app/api/vieira/health/route.ts` | Same |
@@ -136,19 +139,19 @@ loop) has heartbeats today.
 
 ### Migration framing
 
-The 15 remaining `getSession`-direct routes (down from 75 pre-migration) are
-not bugs in themselves — they predate the `withTenant` helper (introduced
-2026-04-07, Session 33). Each one tracks `tenantId` manually. The risk is
-structural: every route is one missing `tenantId: ctx.tenantId` `where`-clause
-away from a cross-tenant data leak (see Bug #13/#14/#15 history in DECISIONS
-/ SESSION_ARCHIVE — three real leaks caught and fixed via this migration).
+**Wave 3 migration complete as of 2026-04-29 (Session 52, batch 6/6).**
+All 91 tenant-scoped routes now use `withTenant`. The original 75
+`getSession`-direct routes were migrated across 6 batches (Sessions 47-52);
+**38 latent cross-tenant defense gaps were caught and fixed** during the
+sweep, organized into 4 leak classes documented in AGENTS.md.
 
-`withTenant` makes the leak structurally impossible to ship. Migration is
-**ongoing tech-debt**, parked as P5 in PROGRESS Next Session. No fixed
-deadline; sweep opportunistically when touching a route for other reasons.
+The remaining 19 routes are all non-tenant-session by design — listed in
+the table above with their auth schemes (NextAuth, OAuth callback, public
+crons, healthchecks, HMAC-verified webhooks, service-token Vieira routes,
+diagnostic-token endpoints, pre-tenant Stripe checkout).
 
-Per AGENTS.md Route Conventions: **all NEW routes MUST use `withTenant`** —
-new code should never add to the backlog.
+Per AGENTS.md Route Conventions: **all NEW tenant-scoped routes MUST use
+`withTenant`** — there is no longer a backlog to grow.
 
 ### Top-level API directory layout
 

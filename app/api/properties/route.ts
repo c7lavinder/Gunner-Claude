@@ -1,8 +1,9 @@
 // app/api/properties/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { hasPermission } from '@/types/roles'
+import { hasPermission, type UserRole } from '@/types/roles'
 import { PropertyStatus } from '@prisma/client'
 import { z } from 'zod'
 import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
@@ -26,10 +27,8 @@ const propertySchema = z.object({
   sellerEmail: z.string().nullable().optional(),
 })
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'properties.create')) return forbiddenResponse()
+export const POST = withTenant(async (request, ctx) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'properties.create')) return forbiddenResponse()
 
   const body = await request.json()
   const parsed = propertySchema.safeParse(body)
@@ -49,7 +48,7 @@ export async function POST(request: NextRequest) {
     const property = await db.$transaction(async (tx) => {
       const prop = await tx.property.create({
         data: {
-          tenantId: session.tenantId,
+          tenantId: ctx.tenantId,
           address: standardizeStreet(rawAddr),
           city: standardizeCity(rawCity),
           state: standardizeState(rawState),
@@ -69,12 +68,14 @@ export async function POST(request: NextRequest) {
       if (sellerName) {
         const seller = await tx.seller.create({
           data: {
-            tenantId: session.tenantId,
+            tenantId: ctx.tenantId,
             name: sellerName,
             phone: sellerPhone ?? null,
             email: sellerEmail ?? null,
           },
         })
+        // NOTE: PropertySeller has no tenantId column — DiD-via-FK via
+        // prop.id (just created in this tx with our tenantId).
         await tx.propertySeller.create({
           data: { propertyId: prop.id, sellerId: seller.id, isPrimary: true },
         })
@@ -85,15 +86,15 @@ export async function POST(request: NextRequest) {
 
     // Auto-log LEAD milestone (dedup: skip if one already exists)
     const existingLead = await db.propertyMilestone.findFirst({
-      where: { tenantId: session.tenantId, propertyId: property.id, type: 'LEAD' },
+      where: { tenantId: ctx.tenantId, propertyId: property.id, type: 'LEAD' },
     }).catch(() => null)
     if (!existingLead) {
       await db.propertyMilestone.create({
         data: {
-          tenantId: session.tenantId,
+          tenantId: ctx.tenantId,
           propertyId: property.id,
           type: 'LEAD',
-          loggedById: session.userId,
+          loggedById: ctx.userId,
           source: 'MANUAL',
         },
       }).catch(() => {}) // non-fatal
@@ -101,8 +102,8 @@ export async function POST(request: NextRequest) {
 
     await db.auditLog.create({
       data: {
-        tenantId: session.tenantId,
-        userId: session.userId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
         action: 'property.created',
         resource: 'property',
         resourceId: property.id,
@@ -115,6 +116,9 @@ export async function POST(request: NextRequest) {
     // If the user entered a combined address (e.g., "2716 & 2720 Enterprise Ave")
     // split it into two properties now. Non-blocking decision: we created the
     // combined row in the transaction and let the splitter delete + replace it.
+    // NOTE: splitCombinedAddressIfNeeded does an internal id-only findUnique
+    // (Class 4 helper). Safe here because property.id was JUST created in this
+    // transaction with our tenantId — collision would require CUID guessing.
     const splitResult = await splitCombinedAddressIfNeeded(property.id).catch(err => {
       console.error('[Properties POST] Split check failed:', err)
       return { splitInto: null as [string, string] | null }
@@ -122,11 +126,8 @@ export async function POST(request: NextRequest) {
     const returnedId = splitResult.splitInto?.[0] ?? property.id
 
     // Auto-enrichment (fire-and-forget — non-blocking). If split, enrich both halves.
-    // Runs BOTH paths in parallel:
-    //   1. Multi-vendor orchestrator (BatchData + PropertyRadar + Google + CourtListener)
-    //      — populates ~150 queryable columns + USPS / owner demographics / court cases
-    //   2. Claude AI estimates — ARV, repair/rental estimate, neighborhood summary
-    //      (computed from whatever the vendors just wrote)
+    // NOTE: enrichProperty + enrichPropertyWithAI are Class 4 helpers but
+    // operate on just-created property ids, so safe in this caller.
     const enrichIds = splitResult.splitInto ?? [property.id]
     for (const id of enrichIds) {
       enrichProperty(id).catch(err =>
@@ -142,4 +143,4 @@ export async function POST(request: NextRequest) {
     console.error('[Properties] Create error:', err)
     return NextResponse.json({ error: 'Failed to create property' }, { status: 500 })
   }
-}
+})

@@ -4,10 +4,11 @@
 // READ BY: property detail page → Contacts section
 // READ QUERY: db.propertySeller.findMany({ where: { propertyId }, include: { seller: true } })
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { hasPermission } from '@/types/roles'
+import { hasPermission, type UserRole } from '@/types/roles'
 import { z } from 'zod'
 import { titleCase } from '@/lib/format'
 
@@ -29,19 +30,16 @@ const updateRoleSchema = z.object({
   role: z.string().min(1),
 })
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { propertyId: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant<{ propertyId: string }>(async (_request, ctx, params) => {
   const property = await db.property.findUnique({
-    where: { id: params.propertyId, tenantId: session.tenantId },
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
     select: { id: true },
   })
   if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // NOTE: warm shape (propertySeller.findMany without tenantId) but DiD-via-FK —
+  // propertyId is tenant-validated above; PropertySeller rows for this propertyId
+  // can only belong to this tenant.
   const sellers = await db.propertySeller.findMany({
     where: { propertyId: params.propertyId },
     include: { seller: { select: { id: true, name: true, phone: true, email: true, ghlContactId: true } } },
@@ -59,18 +57,13 @@ export async function GET(
       role: ps.role,
     })),
   })
-}
+})
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { propertyId: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'properties.edit')) return forbiddenResponse()
+export const POST = withTenant<{ propertyId: string }>(async (request, ctx, params) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'properties.edit')) return forbiddenResponse()
 
   const property = await db.property.findUnique({
-    where: { id: params.propertyId, tenantId: session.tenantId },
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
     select: { id: true },
   })
   if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -83,6 +76,8 @@ export async function POST(
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
     try {
+      // NOTE: warm shape (compound unique propertyId_sellerId without tenantId)
+      // but DiD-via-FK — property pre-validated above.
       await db.propertySeller.update({
         where: {
           propertyId_sellerId: {
@@ -106,7 +101,7 @@ export async function POST(
     // Find or create seller by ghlContactId
     let seller = await db.seller.findFirst({
       where: {
-        tenantId: session.tenantId,
+        tenantId: ctx.tenantId,
         ghlContactId: parsed.data.ghlContactId,
       },
     })
@@ -114,7 +109,7 @@ export async function POST(
     if (!seller) {
       seller = await db.seller.create({
         data: {
-          tenantId: session.tenantId,
+          tenantId: ctx.tenantId,
           name: titleCase(parsed.data.name),
           phone: parsed.data.phone ?? null,
           email: parsed.data.email ?? null,
@@ -123,7 +118,7 @@ export async function POST(
       })
     }
 
-    // Check if already linked
+    // Check if already linked — DiD-via-FK (property pre-validated above).
     const existing = await db.propertySeller.findUnique({
       where: {
         propertyId_sellerId: {
@@ -137,7 +132,7 @@ export async function POST(
       return NextResponse.json({ error: 'Contact already linked' }, { status: 409 })
     }
 
-    // If marking as primary, unset other primaries first
+    // If marking as primary, unset other primaries first — DiD-via-FK.
     if (parsed.data.isPrimary) {
       await db.propertySeller.updateMany({
         where: { propertyId: params.propertyId, isPrimary: true },
@@ -169,18 +164,13 @@ export async function POST(
     console.error('[Sellers] Add error:', err)
     return NextResponse.json({ error: 'Failed to add contact' }, { status: 500 })
   }
-}
+})
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { propertyId: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'properties.edit')) return forbiddenResponse()
+export const DELETE = withTenant<{ propertyId: string }>(async (request, ctx, params) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'properties.edit')) return forbiddenResponse()
 
   const property = await db.property.findUnique({
-    where: { id: params.propertyId, tenantId: session.tenantId },
+    where: { id: params.propertyId, tenantId: ctx.tenantId },
     select: { id: true },
   })
   if (!property) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -190,6 +180,8 @@ export async function DELETE(
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   try {
+    // NOTE: warm shape (compound unique without tenantId) but DiD-via-FK
+    // — property pre-validated above.
     await db.propertySeller.delete({
       where: {
         propertyId_sellerId: {
@@ -202,4 +194,4 @@ export async function DELETE(
   } catch {
     return NextResponse.json({ error: 'Failed to remove contact' }, { status: 500 })
   }
-}
+})

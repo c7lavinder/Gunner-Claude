@@ -1,8 +1,6 @@
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 // app/api/tasks/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-
-
+import { NextResponse } from 'next/server'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { z } from 'zod'
@@ -18,12 +16,9 @@ const createSchema = z.object({
   syncToGhl: z.boolean().default(true),
 })
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
-  const userId = session.userId
-  const tenantId = session.tenantId
+export const POST = withTenant(async (request, ctx) => {
+  const userId = ctx.userId
+  const tenantId = ctx.tenantId
 
   const body = await request.json()
   const parsed = createSchema.safeParse(body)
@@ -70,7 +65,9 @@ export async function POST(request: NextRequest) {
           body: description,
           dueDate: dueAt ?? new Date(Date.now() + 86400000).toISOString(),
         })
-        await db.task.update({ where: { id: task.id }, data: { ghlTaskId: ghlTask.id } })
+        // FIX: was leaking — Class 1 — prior code used update({ where: { id: task.id } })
+        // (no tenantId). Defense-in-depth: scope every write.
+        await db.task.update({ where: { id: task.id, tenantId }, data: { ghlTaskId: ghlTask.id } })
       } catch (ghlErr) {
         console.warn('[Tasks] GHL sync failed (non-fatal):', ghlErr)
       }
@@ -81,4 +78,4 @@ export async function POST(request: NextRequest) {
     console.error('[Tasks] Create failed:', err)
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 })
   }
-}
+})

@@ -1,9 +1,10 @@
 // app/api/workflows/route.ts
 // Workflow CRUD — list, create, toggle
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { hasPermission } from '@/types/roles'
+import { hasPermission, type UserRole } from '@/types/roles'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
@@ -26,12 +27,9 @@ const toggleSchema = z.object({
   isActive: z.boolean(),
 })
 
-export async function GET(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-
+export const GET = withTenant(async (_request, ctx) => {
   const workflows = await db.workflowDefinition.findMany({
-    where: { tenantId: session.tenantId },
+    where: { tenantId: ctx.tenantId },
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { executions: true } },
@@ -49,12 +47,10 @@ export async function GET(request: NextRequest) {
       createdAt: w.createdAt.toISOString(),
     })),
   })
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'settings.manage')) return forbiddenResponse()
+export const POST = withTenant(async (request, ctx) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'settings.manage')) return forbiddenResponse()
 
   const body = await request.json()
 
@@ -63,8 +59,9 @@ export async function POST(request: NextRequest) {
     const parsed = toggleSchema.safeParse(body)
     if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
+    // Already DiD-clean: updateMany scoped with tenantId.
     await db.workflowDefinition.updateMany({
-      where: { id: parsed.data.id, tenantId: session.tenantId },
+      where: { id: parsed.data.id, tenantId: ctx.tenantId },
       data: { isActive: parsed.data.isActive },
     })
     return NextResponse.json({ status: 'success' })
@@ -78,7 +75,7 @@ export async function POST(request: NextRequest) {
 
   const workflow = await db.workflowDefinition.create({
     data: {
-      tenantId: session.tenantId,
+      tenantId: ctx.tenantId,
       name: parsed.data.name,
       triggerEvent: parsed.data.triggerEvent,
       steps: parsed.data.steps as unknown as Prisma.InputJsonValue,
@@ -86,4 +83,4 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({ workflow }, { status: 201 })
-}
+})

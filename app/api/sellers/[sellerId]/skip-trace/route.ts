@@ -14,22 +14,20 @@
 // Gated by `properties.edit` permission — same as the property enrichment
 // routes. Skip-trace is a paid API call, so editors only.
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { hasPermission } from '@/types/roles'
+import { hasPermission, type UserRole } from '@/types/roles'
 import { skipTraceSeller } from '@/lib/enrichment/sync-seller'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { sellerId: string } },
-) {
-  const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'properties.edit')) return forbiddenResponse()
+export const POST = withTenant<{ sellerId: string }>(async (request, ctx, params) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'properties.edit')) return forbiddenResponse()
 
+  // Class 4 gate: skipTraceSeller does internal id-only findUnique on Seller.
+  // Validate seller belongs to ctx.tenantId before delegating.
   const seller = await db.seller.findUnique({
-    where: { id: params.sellerId, tenantId: session.tenantId },
+    where: { id: params.sellerId, tenantId: ctx.tenantId },
     select: { id: true },
   })
   if (!seller) return NextResponse.json({ error: 'seller not found' }, { status: 404 })
@@ -45,4 +43,4 @@ export async function POST(
     traced: result.traced,
     fieldsTouched: result.fieldsTouched,
   })
-}
+})

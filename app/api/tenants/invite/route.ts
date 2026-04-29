@@ -1,8 +1,9 @@
 // app/api/tenants/invite/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getSession, unauthorizedResponse, forbiddenResponse } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { getSession, forbiddenResponse } from '@/lib/auth/session'
+import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import { hasPermission } from '@/types/roles'
+import { hasPermission, type UserRole } from '@/types/roles'
 import { sendTeamInvite } from '@/lib/email'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
@@ -15,10 +16,15 @@ const inviteSchema = z.object({
   })).min(1).max(20),
 })
 
-export async function POST(request: NextRequest) {
+export const POST = withTenant(async (request, ctx) => {
+  if (!hasPermission(ctx.userRole as UserRole, 'users.invite')) return forbiddenResponse()
+
+  // QUEUED CLEANUP: TenantContext doesn't yet expose userName — retained
+  // getSession() re-fetch for `session.name` (used as inviterName in the
+  // invite email). To be removed when TenantContext is extended at end of
+  // Wave 3 (cleanup item #2).
   const session = await getSession()
-  if (!session) return unauthorizedResponse()
-  if (!hasPermission(session.role, 'users.invite')) return forbiddenResponse()
+  const inviterName = session?.name ?? 'A teammate'
 
   const body = await request.json()
   const parsed = inviteSchema.safeParse(body)
@@ -26,17 +32,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  // Fetch tenant name for invite email (fixes bug #8: empty companyName)
+  // Fetch tenant name for invite email (fixes bug #8: empty companyName).
+  // Tenant.id IS the tenant boundary — id-only WHERE is structurally safe.
   const tenant = await db.tenant.findUnique({
-    where: { id: session.tenantId },
+    where: { id: ctx.tenantId },
     select: { name: true },
   })
-  const companyName = tenant?.name ?? session.tenantSlug
+  const companyName = tenant?.name ?? ctx.tenantSlug
 
   const results = []
 
   for (const invite of parsed.data.invites) {
-    // Check if email already exists anywhere in the system
+    // Check if email already exists anywhere in the system.
+    // Deliberate global lookup — email is unique across all tenants;
+    // the result is just a status flag, no user data is leaked.
     const existing = await db.user.findUnique({ where: { email: invite.email } })
     if (existing) {
       results.push({ email: invite.email, status: 'already_exists' })
@@ -49,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     await db.user.create({
       data: {
-        tenantId: session.tenantId,
+        tenantId: ctx.tenantId,
         email: invite.email,
         name: invite.name ?? invite.email.split('@')[0],
         role: invite.role as any,
@@ -60,17 +69,17 @@ export async function POST(request: NextRequest) {
     // Send invite email (non-blocking — don't fail the invite if email fails)
     const emailResult = await sendTeamInvite({
       toEmail: invite.email,
-      inviterName: session.name,
+      inviterName,
       companyName,
-      tenantSlug: session.tenantSlug,
+      tenantSlug: ctx.tenantSlug,
       role: invite.role,
       tempPassword,
     })
 
     await db.auditLog.create({
       data: {
-        tenantId: session.tenantId,
-        userId: session.userId,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
         action: 'user.invited',
         resource: 'user',
         source: 'USER',
@@ -87,7 +96,7 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ results })
-}
+})
 
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
