@@ -244,7 +244,7 @@ async function importHistoricalCalls() {
       let tcpUpdated = 0
       for (const prop of propertiesWithCalls) {
         try {
-          await calculateTCP(prop.id)
+          await calculateTCP(tenant.id, prop.id)
           tcpUpdated++
           console.log(`    ✓ TCP updated: ${prop.address}`)
         } catch (tcpErr) {

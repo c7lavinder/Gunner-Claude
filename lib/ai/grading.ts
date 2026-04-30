@@ -371,11 +371,26 @@ export async function gradeCall(callId: string): Promise<void> {
       )
     }
 
-    // Recalculate TCP for the associated property
+    // Recalculate TCP for the associated property. Class-4 hardened —
+    // calculateTCP now requires tenantId so its internal Property + Seller
+    // queries scope correctly even when called from an untrusted boundary.
     if (call.propertyId) {
-      calculateTCP(call.propertyId).catch((tcpErr) => {
+      calculateTCP(call.tenantId, call.propertyId).catch((tcpErr) => {
         console.warn(`[Call Grading] TCP recalc failed for property ${call.propertyId}:`, tcpErr)
       })
+    }
+
+    // v1.1 Wave 4 — fire-and-forget seller rollup. Recomputes the
+    // Seller's motivationScore, likelihoodToSellScore, totalCallCount,
+    // lastContactDate, noAnswerStreak, and additive lists (objection
+    // profile, red/green flags) from the seller's full call history.
+    // Idempotent. Skips silently if call.sellerId is null.
+    if (call.sellerId) {
+      import('@/lib/v1_1/seller_rollup').then(({ rollupSellerFromCalls }) =>
+        rollupSellerFromCalls(call.tenantId, call.sellerId!, { dryRun: false }).catch(err =>
+          console.error('[Grading] Seller rollup failed:', err instanceof Error ? err.message : err)
+        )
+      )
     }
   } catch (err) {
     console.error(`[Call Grading] Error grading call ${callId}:`, err)

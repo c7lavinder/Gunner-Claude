@@ -5,6 +5,14 @@
 //
 // WRITES TO: properties.tcp_score, properties.tcp_factors, properties.tcp_updated_at
 // READ BY: dashboard priority widget, inventory sort, AI coach context
+//
+// v1.1 Wave 4 — Class-4 hardened (takes tenantId explicitly; every
+// internal query is tenant-scoped). Property TCP keeps its existing
+// 8-factor formula (plan §7: "Property TCP keeps its existing formula
+// unchanged"). After computing Property.tcpScore, this also fans out a
+// Seller.likelihoodToSellScore rollup for every linked Seller — so a
+// stage-change or task-completion TCP recalc trigger keeps Seller-side
+// scores fresh even when no new call has landed.
 
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
@@ -39,9 +47,10 @@ const WEIGHTS = {
   equityOver30pct: 0.15,
 }
 
-export async function calculateTCP(propertyId: string): Promise<TCPResult> {
-  const property = await db.property.findUnique({
-    where: { id: propertyId },
+export async function calculateTCP(tenantId: string, propertyId: string): Promise<TCPResult> {
+  // Class-4: scope every internal query by tenantId (AGENTS.md helper rule).
+  const property = await db.property.findFirst({
+    where: { id: propertyId, tenantId },
     include: {
       calls: {
         select: {
@@ -60,7 +69,7 @@ export async function calculateTCP(propertyId: string): Promise<TCPResult> {
       sellers: {
         include: {
           seller: {
-            select: { createdAt: true },
+            select: { id: true, createdAt: true },
           },
         },
       },
@@ -143,15 +152,30 @@ export async function calculateTCP(propertyId: string): Promise<TCPResult> {
     : 999
   const buySignal = score > 0.5 && daysSinceLastCall > 3
 
-  // Save to DB
+  // Save to DB — id+tenantId WHERE keeps the write tenant-scoped.
   await db.property.update({
-    where: { id: propertyId },
+    where: { id: propertyId, tenantId },
     data: {
       tcpScore: score,
       tcpFactors: factors as unknown as Prisma.InputJsonValue,
       tcpUpdatedAt: new Date(),
     },
   })
+
+  // v1.1 Wave 4 — fan out Seller-side rollups for every linked Seller.
+  // Fire-and-forget so the Property TCP write doesn't block on Seller
+  // aggregate recomputes. Idempotent. Reaches the Seller table on every
+  // TCP recalc trigger (call graded, stage change, task completed)
+  // so Seller scores stay aligned with Property scores.
+  for (const link of property.sellers) {
+    const sellerId = link.seller?.id
+    if (!sellerId) continue
+    import('@/lib/v1_1/seller_rollup').then(({ rollupSellerFromCalls }) =>
+      rollupSellerFromCalls(tenantId, sellerId, { dryRun: false }).catch(err =>
+        console.error(`[TCP] Seller rollup failed for ${sellerId}:`, err instanceof Error ? err.message : err)
+      )
+    )
+  }
 
   return { score, factors, buySignal }
 }
@@ -165,7 +189,7 @@ export async function recalculateTenantTCP(tenantId: string): Promise<number> {
 
   let updated = 0
   for (const prop of properties) {
-    await calculateTCP(prop.id)
+    await calculateTCP(tenantId, prop.id)
     updated++
   }
 

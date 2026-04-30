@@ -159,6 +159,7 @@ RESPONSE FORMAT — valid JSON only, no markdown:
       "field": "<exact field name from the schema>",
       "label": "<human-readable label>",
       "category": "<seller_profile|decision_making|price_negotiation|property_condition|legal_title|communication_intel|deal_status|marketing>",
+      "target": "<property|seller>",
       "currentValue": <what's currently stored, or null>,
       "proposedValue": <the new/updated value>,
       "confidence": "<high|medium|low>",
@@ -203,7 +204,28 @@ CRITICAL EXTRACTION PRIORITIES (these are the most valuable for deal decisions):
 5. dealGreenFlags — Anything that increases deal probability
 6. objectionsEncountered — Include whatWorked AND whatDidntWork for each objection
 
-VALID FIELD NAMES (use these exact strings):
+PROPOSAL TARGET — every proposedChange MUST set "target":
+
+  - "target": "property"  — proposal writes to Property.dealIntel (JSON blob)
+                            via the propose→edit→confirm UI. This is the
+                            default for deal-state and property-condition fields.
+  - "target": "seller"    — proposal writes directly to a typed column on
+                            the linked Seller row when the rep approves.
+                            Use this for cross-property person facts:
+                            motivation, hardship, timeline, communication
+                            style, person-level legal flags. v1.1 Wave 4
+                            promotes these out of the JSON blob into typed
+                            Seller columns. Only valid when this call has
+                            a linked Seller (call.sellerId set in context);
+                            you don't need to check that — emit the proposal
+                            and the apply layer will gate.
+
+  Rule of thumb: if the fact would still be true if THIS property sold
+  tomorrow and the seller listed a different property next month, it's a
+  Seller-targeted fact. If the fact only applies to this house/this deal,
+  it's a Property-targeted fact.
+
+VALID FIELD NAMES — Property-targeted (target: "property"):
 sellerMotivationLevel, sellerMotivationReason, statedVsImpliedMotivation, sellerWhySelling,
 sellerTimeline, sellerTimelineUrgency, sellerKnowledgeLevel, sellerCommunicationStyle,
 sellerContactPreference, sellerPersonalityProfile, sellerEmotionalTriggers, sellerFamilySituation,
@@ -231,6 +253,68 @@ leadQualityScore (1-100 composite), sellerResponsiveness (highly_responsive|resp
 financialDistressLevel (none|mild|moderate|severe|foreclosure_imminent), financialDistressDetails,
 disqualificationRisks, isDisqualified (true only if deal is clearly dead), disqualificationReason,
 qualificationCallCompleted (boolean), qualificationOutcome (qualified|nurture|disqualified|no_contact)
+
+VALID FIELD NAMES — Seller-targeted (target: "seller"):
+These promote person-level facts out of the Property dealIntel blob into
+typed Seller columns. Use exact field names; updateType is "overwrite"
+(latest call wins) unless noted.
+
+  Motivation & situation:
+    motivationPrimary    — single string: inheritance | divorce | foreclosure | tired_landlord | relocation | health | financial | other
+    motivationSecondary  — single string, same vocabulary
+    situation            — free-text rolling summary of WHY they're selling
+    urgencyScore         — integer 1-10
+    urgencyLevel         — high | medium | low | unknown
+    saleTimeline         — ASAP | 30_days | 60_days | 90_days | flexible
+    hardshipType         — financial | divorce | death | relocation | tired_landlord | health | other
+    emotionalState       — distressed | neutral | motivated | testing
+    moveOutTimeline      — free text
+
+  Person flags (latest-true sticks; do NOT propose flipping to false unless
+  the seller explicitly retracts it on this call):
+    isPreProbate, isRecentlyInherited, behindOnPayments, isTenantOccupied,
+    isVacant, isListedWithAgent, isEvictionInProgress,
+    willingToDoSellerFinancing, willingToDoSubjectTo
+
+  Q5 LEGAL-DISTRESS MIRROR-WRITE (v1.1 Wave 4 — important):
+    When the call mentions probate / divorce / bankruptcy, emit TWO
+    proposedChanges with the SAME boolean value:
+      - one with target: "property", field: "inProbate" / "inDivorce" / "inBankruptcy"
+      - one with target: "seller",   field: "isProbate" / "isDivorce" / "isBankruptcy"
+    Foreclosure has NO Property mirror — emit only target: "seller", field: "isForeclosure".
+    Recent eviction has NO Seller mirror — emit only target: "property", field: "hasRecentEviction".
+    Once true, never propose flipping to false unless the seller explicitly retracts.
+
+  Communication & personality (only propose when 2+ separate calls support
+  the same value — these are stable traits, not single-call observations):
+    personalityType      — analytical | driver | expressive | amiable
+    communicationStyle   — direct | indirect | data-driven | story-driven | terse | verbose
+    priceSensitivity     — high | medium | low
+    preferredContactMethod, preferredContactTime, bestDayToCall, bestTimeToCall, languagePreference
+
+  Lists (additive — emit only NEW items observed on THIS call; rollup
+  pass dedupes across the seller's history):
+    objectionProfile     — strings or {label, whatWorked, whatDidntWork} objects
+    redFlags             — short phrases
+    positiveSignals      — short phrases
+
+  Financial / asking (latest wins):
+    sellerAskingPrice (Decimal), lowestAcceptablePrice (Decimal),
+    amountNeededToClear (Decimal), askingReason (text)
+
+  Notes:
+    aiCoachingNotes      — text, rolling rep-facing playbook for THIS seller
+    recommendedApproach  — text
+
+DO NOT emit Seller-targeted proposals for fields that the rollup pass
+computes itself — the helper at lib/v1_1/seller_rollup.ts handles these
+post-grade and they should not appear in proposedChanges:
+  motivationScore, likelihoodToSellScore, totalCallCount, lastContactDate,
+  noAnswerStreak
+
+If the call has no linked seller in the context, you can still emit
+target: "seller" proposals — the apply layer will gate them. But prefer
+target: "property" when uncertain.
 
 IMPORTANT:
 - Extract EVERYTHING mentioned. More data points = better. Don't leave value on the table.

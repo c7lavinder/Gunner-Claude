@@ -159,6 +159,14 @@ export interface ProposedDealIntelChange {
   confidence: 'high' | 'medium' | 'low'
   evidence: string              // verbatim quote or paraphrase from transcript
   updateType: 'overwrite' | 'accumulate' // single-value vs list append
+  // v1.1 Wave 4 — proposal target. 'property' (default) writes to
+  // Property.dealIntel JSON; 'seller' writes to a typed Seller column on
+  // the call's linked Seller row. Both go through the same propose→edit→
+  // confirm UI; only the apply destination differs. Q5 mirror-write
+  // (probate/divorce/bankruptcy) emits TWO proposals — one with
+  // target='property' for the in_* column, one with target='seller' for
+  // the is_* column — so the rep can review/approve each.
+  target?: 'property' | 'seller'
   // Reconciliation hint — how this change relates to prior state. Populated
   // when the AI has previous deal intel to compare against.
   //   new         — field was empty before; first-write

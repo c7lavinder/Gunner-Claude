@@ -33,7 +33,7 @@ export const PATCH = withTenant<{ tenant: string; id: string }>(async (request, 
 
   const call = await db.call.findFirst({
     where: { id: params.id, tenantId: ctx.tenantId },
-    select: { id: true, dealIntelHistory: true, propertyId: true },
+    select: { id: true, dealIntelHistory: true, propertyId: true, sellerId: true },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
@@ -59,65 +59,124 @@ export const PATCH = withTenant<{ tenant: string; id: string }>(async (request, 
     data: { dealIntelHistory: changes as unknown as Prisma.InputJsonValue },
   })
 
-  // If approved or edited, write to property dealIntel
-  if ((decision === 'approved' || decision === 'edited') && call.propertyId) {
-    // FIX (cross-tenant defense): prior code did
-    //   db.property.findUnique({ where: { id: call.propertyId } })
-    //   db.property.update({ where: { id: call.propertyId } })
-    // both unscoped. call.propertyId is a foreign key; if a corrupted/wrong-tenant
-    // value ever made it onto a call row, this could leak or overwrite another
-    // tenant's property dealIntel. findFirst+tenantId enforces the boundary.
-    const property = await db.property.findFirst({
-      where: { id: call.propertyId, tenantId: ctx.tenantId },
-      select: { dealIntel: true },
-    })
-    if (!property) {
-      return NextResponse.json({ error: 'Property not found in tenant' }, { status: 404 })
-    }
-    const currentIntel = (property.dealIntel ?? {}) as Record<string, unknown>
+  // If approved or edited, dispatch to the proposal's target.
+  // v1.1 Wave 4 — proposals can target 'property' (default — writes to
+  // Property.dealIntel JSON blob) or 'seller' (writes to a typed Seller
+  // column on the call's linked Seller row). Existing rows pre-Wave 4
+  // have no `target` field; default behavior is unchanged for them.
+  if (decision === 'approved' || decision === 'edited') {
     const valueToWrite = decision === 'edited' ? editedValue : change.proposedValue
-    const now = new Date().toISOString()
+    const target = change.target ?? 'property'
 
-    if (change.updateType === 'accumulate') {
-      // Add to existing array
-      const existing = currentIntel[field] as AccumulatedField<unknown> | undefined
-      const currentItems = existing?.items ?? []
-      const newItems = Array.isArray(valueToWrite) ? valueToWrite : [valueToWrite]
-      currentIntel[field] = {
-        items: [...currentItems, ...newItems.map((item: unknown) => ({
-          ...(typeof item === 'object' && item !== null ? item : { value: item }),
-          _addedAt: now,
-          _sourceCallId: call.id,
-        }))],
-        updatedAt: now,
+    if (target === 'seller') {
+      if (!call.sellerId) {
+        return NextResponse.json(
+          { error: 'Cannot apply seller-targeted proposal: call has no linked seller' },
+          { status: 400 },
+        )
       }
-    } else {
-      // Overwrite single value
-      currentIntel[field] = {
-        value: valueToWrite,
-        updatedAt: now,
-        sourceCallId: call.id,
-        confidence: change.confidence,
-      } satisfies FieldValue<unknown>
-    }
+      // Defense-in-depth: verify the Seller belongs to this tenant before
+      // writing. Foreign-key trust isn't enough — if a corrupted call.sellerId
+      // ever pointed cross-tenant, we'd leak a write here without this check.
+      const seller = await db.seller.findFirst({
+        where: { id: call.sellerId, tenantId: ctx.tenantId },
+        select: { id: true, fieldSources: true },
+      })
+      if (!seller) {
+        return NextResponse.json({ error: 'Seller not found in tenant' }, { status: 404 })
+      }
 
-    // Write dealIntel + update queryable fields
-    const updateData: Record<string, unknown> = {
-      dealIntel: currentIntel as Prisma.InputJsonValue,
-    }
+      // Track provenance — match wave_2_backfill convention.
+      const fieldSources: Record<string, string> = {
+        ...((seller.fieldSources as Record<string, string>) ?? {}),
+      }
+      fieldSources[field] = decision === 'edited' ? 'user' : 'ai'
 
-    // Sync queryable columns from dealIntel (seller fields moved to Seller model)
-    if (field === 'competingOffers' && Array.isArray(valueToWrite)) {
-      updateData.competingOfferCount = valueToWrite.length
-    }
-    if (field === 'dealHealthScore' && typeof valueToWrite === 'number') {
-      updateData.dealHealthScore = valueToWrite
-    }
+      try {
+        await db.seller.update({
+          where: { id: call.sellerId, tenantId: ctx.tenantId },
+          data: {
+            [field]: valueToWrite,
+            fieldSources,
+          } as Prisma.SellerUpdateInput,
+        })
+      } catch (err) {
+        return NextResponse.json(
+          {
+            error: 'Failed to write seller-targeted proposal',
+            field,
+            detail: err instanceof Error ? err.message : 'unknown',
+            suggestion: 'Verify the field name matches a Seller column.',
+          },
+          { status: 500 },
+        )
+      }
+    } else if (call.propertyId) {
+      // FIX (cross-tenant defense): prior code did
+      //   db.property.findUnique({ where: { id: call.propertyId } })
+      //   db.property.update({ where: { id: call.propertyId } })
+      // both unscoped. call.propertyId is a foreign key; if a corrupted/wrong-tenant
+      // value ever made it onto a call row, this could leak or overwrite another
+      // tenant's property dealIntel. findFirst+tenantId enforces the boundary.
+      const property = await db.property.findFirst({
+        where: { id: call.propertyId, tenantId: ctx.tenantId },
+        select: { dealIntel: true },
+      })
+      if (!property) {
+        return NextResponse.json({ error: 'Property not found in tenant' }, { status: 404 })
+      }
+      const currentIntel = (property.dealIntel ?? {}) as Record<string, unknown>
+      const now = new Date().toISOString()
 
-    await db.property.update({
-      where: { id: call.propertyId, tenantId: ctx.tenantId },
-      data: updateData,
-    })
+      if (change.updateType === 'accumulate') {
+        const existing = currentIntel[field] as AccumulatedField<unknown> | undefined
+        const currentItems = existing?.items ?? []
+        const newItems = Array.isArray(valueToWrite) ? valueToWrite : [valueToWrite]
+        currentIntel[field] = {
+          items: [...currentItems, ...newItems.map((item: unknown) => ({
+            ...(typeof item === 'object' && item !== null ? item : { value: item }),
+            _addedAt: now,
+            _sourceCallId: call.id,
+          }))],
+          updatedAt: now,
+        }
+      } else {
+        currentIntel[field] = {
+          value: valueToWrite,
+          updatedAt: now,
+          sourceCallId: call.id,
+          confidence: change.confidence,
+        } satisfies FieldValue<unknown>
+      }
+
+      const updateData: Record<string, unknown> = {
+        dealIntel: currentIntel as Prisma.InputJsonValue,
+      }
+
+      // Sync queryable columns from dealIntel (seller fields moved to Seller model)
+      if (field === 'competingOffers' && Array.isArray(valueToWrite)) {
+        updateData.competingOfferCount = valueToWrite.length
+      }
+      if (field === 'dealHealthScore' && typeof valueToWrite === 'number') {
+        updateData.dealHealthScore = valueToWrite
+      }
+
+      // Q5 mirror-write — Property's in_* legal flags. The Seller side
+      // (is_*) lands as a separate proposal with target='seller'; this
+      // branch handles the Property-side typed column write. The dealIntel
+      // JSON blob still gets the value (so existing UI rendering paths
+      // still see it), AND the typed column gets written so inventory
+      // filters keep working.
+      const PROP_LEGAL_FLAG_FIELDS = new Set(['inProbate', 'inDivorce', 'inBankruptcy', 'hasRecentEviction'])
+      if (PROP_LEGAL_FLAG_FIELDS.has(field) && typeof valueToWrite === 'boolean') {
+        updateData[field] = valueToWrite
+      }
+
+      await db.property.update({
+        where: { id: call.propertyId, tenantId: ctx.tenantId },
+        data: updateData,
+      })
+    }
   }
 
   // Log for AI learning
