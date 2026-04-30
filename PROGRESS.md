@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 60 — v1.1 Wave 1 (2026-04-30) — Seller/Buyer additive schema shipped
+**Current session**: 60 — v1.1 Wave 1 + Wave 2 commit 1 (2026-04-30) — additive schema shipped + dual-write live (apply pending dry-run review)
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -56,6 +56,57 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 60 — v1.1 Wave 1 + Wave 2 commit 1 (2026-04-30)
+
+**Wave 2 commit 1 (this session, after Wave 1):** Dual-write turn-on +
+bearer-gated diagnostic endpoint. **NO apply yet** — gated on dry-run
+review.
+
+**Constraint locked by Corey 2026-04-30:** No auto-create of Sellers or
+Buyers in this wave. Backfill only updates entities that already have
+the right relationship:
+- Sellers: only those linked via `PropertySeller`. Properties with owner
+  data but no linked Seller are SKIPPED + logged for manual creation.
+- `PropertyBuyerStage` rows from `Property.manualBuyerIds[]`: only when
+  a `Buyer` row with the matching `ghlContactId` already exists.
+  Otherwise SKIPPED + logged.
+
+**Files added:**
+- `lib/v1_1/wave_2_backfill.ts` — backfill logic exposed as two functions:
+  - `backfillSellersFromProperty(tenantId, opts)` — fills empty Seller
+    columns from linked Property's owner data (name parts, skip-trace
+    fallback identity, portfolio aggregates, person flags). Idempotent.
+  - `migrateManualBuyerIdsForTenant(tenantId, opts)` — converts JSON
+    array into PropertyBuyerStage rows with `stage='added'`,
+    `source='manual'`. Idempotent.
+- `app/api/diagnostics/v1_1_seller_backfill/route.ts` — bearer-token
+  gated control surface. GET = dry-run, POST = apply. Both produce a
+  detailed report (counts, fields touched, samples, skipped samples,
+  errors). Apply runs additionally write an audit_logs row with action
+  `v1_1_wave_2_backfill.applied`.
+
+**Files modified for dual-write:**
+- `lib/enrichment/sync-seller.ts:buildSellerSyncUpdate` extended:
+  - SellerSlice interface gained 16 new fields.
+  - Now writes name parts (`firstName`/`middleName`/`lastName`) on every
+    vendor enrichment. Prefers PropertyRadar's structured form
+    (`ownerFirstName1`/`ownerLastName1`); falls back to `splitName`.
+  - Mirrors `phone`/`email` writes into `skipTracedPhone`/`skipTracedEmail`,
+    and `mailing*` into `skipTracedMailing*`. Legacy columns keep being
+    written through Wave 5 cutover.
+  - Person flags (`seniorOwner`/`deceasedOwner`/`cashBuyerOwner`) and
+    portfolio aggregates write only on ordinal=1 (owner-of-record).
+  - `setIfEmpty` semantics preserved — never overwrites existing values.
+
+**Verification:**
+- `npx tsc --noEmit`: 0 errors.
+- Endpoint inert until `DIAGNOSTIC_TOKEN` set (matches dial-counts
+  pattern). PUBLIC_PATHS in middleware.ts already covers
+  `/api/diagnostics`.
+
+**Next:** deploy → curl GET dry-run → Corey reviews report → curl POST
+apply (Wave 2 commit 2). Then Wave 3 (read-path migration).
 
 ### Session 60 — v1.1 Wave 1 (2026-04-30) — Seller/Buyer additive schema shipped
 

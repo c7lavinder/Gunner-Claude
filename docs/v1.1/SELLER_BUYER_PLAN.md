@@ -16,6 +16,18 @@
 > `searchCourtListenerForProperty`). 0 column drops — those land in Wave 5
 > cutover. `npx tsc --noEmit` clean.
 >
+> **Wave 2 IN PROGRESS 2026-04-30 (Session 60).** Dual-write turn-on +
+> bearer-gated diagnostic endpoint shipped at commit (Wave 2 commit 1).
+> NO auto-create of Sellers or Buyers — Corey constraint locked
+> 2026-04-30. Backfill only updates linked Sellers (via PropertySeller)
+> and only inserts PropertyBuyerStage rows when the matching Buyer
+> already exists (via ghlContactId). Properties / contact IDs without
+> matches are skipped + logged.
+>
+> Endpoint: `GET|POST /api/diagnostics/v1_1_seller_backfill?tenant=<slug>`
+> (bearer-token gated via `DIAGNOSTIC_TOKEN`). GET = dry-run, POST = apply.
+> Both idempotent.
+>
 > **Decisions locked 2026-04-30 (after first Corey review):**
 > - **Q1 → Shape A** (pure live-fetch from GHL on render). GHL-overlap columns
 >   on Seller and Buyer are DROPPED. Skip-trace columns added for unlinked

@@ -207,6 +207,7 @@ var is a no-op rather than an open door. Set on Railway dashboard.
 | Endpoint | Helper exercised | Use when |
 |---|---|---|
 | `GET /api/diagnostics/dial-counts?tenant=<slug>[&date=YYYY-MM-DD]` | `lib/kpis/dial-counts.ts countDialsInRange` | Reconciling Day Hub / Calls page dial counts vs SQL (Wave 2 verification) |
+| `GET\|POST /api/diagnostics/v1_1_seller_backfill?tenant=<slug>[&limit=<n>]` | `lib/v1_1/wave_2_backfill.ts` (`backfillSellersFromProperty` + `migrateManualBuyerIdsForTenant`) | v1.1 Wave 2: GET = dry-run report (counts + samples), POST = apply backfill. Idempotent. Apply runs write audit_logs row `v1_1_wave_2_backfill.applied`. |
 
 Example:
 

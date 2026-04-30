@@ -24,6 +24,11 @@ import {
 interface SellerSlice {
   id: string
   name: string | null
+  // v1.1 Wave 2 — Q2 name parts (decomposed identity)
+  firstName: string | null
+  middleName: string | null
+  lastName: string | null
+  nameSuffix: string | null
   phone: string | null
   secondaryPhone: string | null
   mobilePhone: string | null
@@ -39,6 +44,13 @@ interface SellerSlice {
   mailingDeliveryPoint: string | null
   mailingDpvFootnotes: string | null
   mailingDpvMatchCode: string | null
+  // v1.1 Wave 2 — Q1/Shape A skip-trace fallback identity (dual-write target)
+  skipTracedPhone: string | null
+  skipTracedEmail: string | null
+  skipTracedMailingAddress: string | null
+  skipTracedMailingCity: string | null
+  skipTracedMailingState: string | null
+  skipTracedMailingZip: string | null
   spouseName: string | null
   spousePhone: string | null
   spouseEmail: string | null
@@ -70,6 +82,18 @@ interface SellerSlice {
   isBankruptcy: boolean | null
   isRecentlyInherited: boolean | null
   isVacant: boolean | null
+  // v1.1 Wave 2 — Q3 person flags + portfolio aggregates (dual-write target)
+  seniorOwner: boolean | null
+  deceasedOwner: boolean | null
+  cashBuyerOwner: boolean | null
+  totalPropertiesOwned: number
+  ownerPortfolioTotalEquity: unknown
+  ownerPortfolioTotalValue: unknown
+  ownerPortfolioTotalPurchase: unknown
+  ownerPortfolioAvgAssessed: unknown
+  ownerPortfolioAvgPurchase: unknown
+  ownerPortfolioAvgYearBuilt: number | null
+  ownerPortfolioJson: unknown
   fieldSources: unknown
 }
 
@@ -102,6 +126,27 @@ export function buildSellerSyncUpdate(
   setIfEmpty('phone', primaryPhone)
   setIfEmpty('email', primaryEmail)
 
+  // v1.1 Wave 2 — dual-write Q2 name parts. Prefer PropertyRadar's structured
+  // form (ownerFirstName1/LastName1) when present; fall back to splitting
+  // the single-string name. Drops the legacy `name` column at Wave 5.
+  const firstFromVendor = ordinal === 1 ? result.ownerFirstName1 : result.ownerFirstName2
+  const lastFromVendor = ordinal === 1 ? result.ownerLastName1 : result.ownerLastName2
+  if (firstFromVendor || lastFromVendor) {
+    setIfEmpty('firstName', firstFromVendor)
+    setIfEmpty('lastName', lastFromVendor)
+  } else if (primaryName) {
+    const parts = splitName(primaryName)
+    setIfEmpty('firstName', parts.first)
+    setIfEmpty('middleName', parts.middle)
+    setIfEmpty('lastName', parts.last)
+  }
+
+  // v1.1 Wave 2 — dual-write Q1/Shape A skip-trace fallback identity. Mirror
+  // legacy phone/email writes into skip-traced columns; legacy columns drop
+  // at Wave 5 and these become the canonical fallback when ghlContactId is null.
+  setIfEmpty('skipTracedPhone', primaryPhone)
+  setIfEmpty('skipTracedEmail', primaryEmail)
+
   // Spouse info when single Seller represents the household (ordinal === 1 +
   // result has secondOwnerName). Skip for ordinal 2 (they ARE the spouse).
   if (ordinal === 1) {
@@ -131,6 +176,12 @@ export function buildSellerSyncUpdate(
   setIfEmpty('mailingCity', mailCity)
   setIfEmpty('mailingState', mailState)
   setIfEmpty('mailingZip', mailZip)
+
+  // v1.1 Wave 2 — dual-write Q1/Shape A skip-trace mailing fallback.
+  setIfEmpty('skipTracedMailingAddress', mailStreet)
+  setIfEmpty('skipTracedMailingCity', mailCity)
+  setIfEmpty('skipTracedMailingState', mailState)
+  setIfEmpty('skipTracedMailingZip', mailZip)
 
   // USPS deliverability components surfaced by BatchData normalize()
   setIfEmpty('mailingZipPlus4', result.mailingZipPlus4)
@@ -188,6 +239,34 @@ export function buildSellerSyncUpdate(
     setIfEmpty('isDeceased', true)
   }
 
+  // ── v1.1 Wave 2 — person flags + portfolio aggregates (ordinal 1 only) ─
+  // These describe the owner-of-record, so they only attach to the primary
+  // Seller. PropertyRadar/BatchData report them per-property record but the
+  // facts are about the person.
+  if (ordinal === 1) {
+    if (result.seniorOwner === true) setIfEmpty('seniorOwner', true)
+    if (result.deceasedOwner === true) setIfEmpty('deceasedOwner', true)
+    if (result.cashBuyerOwner === true) setIfEmpty('cashBuyerOwner', true)
+
+    setIfEmpty('ownerPortfolioTotalEquity', result.ownerPortfolioTotalEquity)
+    setIfEmpty('ownerPortfolioTotalValue', result.ownerPortfolioTotalValue)
+    setIfEmpty('ownerPortfolioTotalPurchase', result.ownerPortfolioTotalPurchase)
+    setIfEmpty('ownerPortfolioAvgAssessed', result.ownerPortfolioAvgAssessed)
+    setIfEmpty('ownerPortfolioAvgPurchase', result.ownerPortfolioAvgPurchase)
+    setIfEmpty('ownerPortfolioAvgYearBuilt', result.ownerPortfolioAvgYearBuilt)
+    setIfEmpty('ownerPortfolioJson', result.ownerPortfolioJson)
+    // totalPropertiesOwned has @default(0); promote vendor count when seller
+    // is still at the default and vendor reports >0.
+    if (
+      typeof result.ownerPortfolioCount === 'number' &&
+      result.ownerPortfolioCount > 0 &&
+      seller.totalPropertiesOwned === 0
+    ) {
+      out.totalPropertiesOwned = result.ownerPortfolioCount
+      if (fieldSources.totalPropertiesOwned !== 'user') fieldSources.totalPropertiesOwned = 'api'
+    }
+  }
+
   return out
 }
 
@@ -216,11 +295,18 @@ export async function syncSellersFromVendorResult(
     include: {
       seller: {
         select: {
-          id: true, name: true, phone: true, secondaryPhone: true, mobilePhone: true,
+          id: true, name: true,
+          // v1.1 Wave 2 — Q2 name parts (dual-write target)
+          firstName: true, middleName: true, lastName: true, nameSuffix: true,
+          phone: true, secondaryPhone: true, mobilePhone: true,
           email: true, secondaryEmail: true,
           mailingAddress: true, mailingCity: true, mailingState: true, mailingZip: true,
           mailingZipPlus4: true, mailingCounty: true, mailingValidity: true,
           mailingDeliveryPoint: true, mailingDpvFootnotes: true, mailingDpvMatchCode: true,
+          // v1.1 Wave 2 — Q1/Shape A skip-trace fallback (dual-write target)
+          skipTracedPhone: true, skipTracedEmail: true,
+          skipTracedMailingAddress: true, skipTracedMailingCity: true,
+          skipTracedMailingState: true, skipTracedMailingZip: true,
           spouseName: true, spousePhone: true, spouseEmail: true, isDeceased: true,
           age: true, gender: true, personType: true, occupation: true,
           yearsOwned: true, howAcquired: true, ownershipType: true, entityName: true,
@@ -231,6 +317,13 @@ export async function syncSellersFromVendorResult(
           hasLiens: true, lienAmount: true, lienType: true,
           isProbate: true, isDivorce: true, isForeclosure: true, isBankruptcy: true,
           isRecentlyInherited: true, isVacant: true,
+          // v1.1 Wave 2 — person flags + portfolio aggregates (dual-write target)
+          seniorOwner: true, deceasedOwner: true, cashBuyerOwner: true,
+          totalPropertiesOwned: true,
+          ownerPortfolioTotalEquity: true, ownerPortfolioTotalValue: true,
+          ownerPortfolioTotalPurchase: true, ownerPortfolioAvgAssessed: true,
+          ownerPortfolioAvgPurchase: true, ownerPortfolioAvgYearBuilt: true,
+          ownerPortfolioJson: true,
           fieldSources: true,
         },
       },
