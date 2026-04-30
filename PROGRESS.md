@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 57 — Wave 6.2 of v1-finish sprint (2026-04-29) — View-As hydration race fixed on /tasks/
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4. **Wave 3 fully closed** (Sessions 47-53: 72 routes migrated, 38 latent leaks fixed, 4 leak classes catalogued, helper-level Class 4 vector closed). **Wave 4 closed** (Session 54: 17 prod identifiers scrubbed across 9 files, D-044 codified). **Wave 5 partial close** (Session 55): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **STOPPED** — discovery showed `/tasks/` is still wired as the canonical "Day Hub" nav target with 7 active references; pre-deletion migration steps documented in AUDIT_PLAN.md for a future session. **Wave 6.1** (Session 56, diagnostic-only, no commits): traced reproducible cross-user data leak on /tasks/ View As to a client-state hydration race in `day-hub-client.tsx` (localStorage read in `useEffect` after first render → first fetch fires with `viewAsUserId=null` → owner-scoped data renders for ~2s before LM data replaces it). **Wave 6.2 closed** (this session): synchronous `useState` initializer pattern (Shape A) drops the race; first fetch carries `?asUserId=…` from mount. Shape C (cookie + server-side resolution) queued in AUDIT_PLAN as P6 — defer until concrete need. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Blocker #2 production verification (P1 in Next Session).**
+**Current session**: 58 — Wave 6 closure (2026-04-30) — V1+V4 verifications passed, Wave 6 fully closed
+**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4. **Wave 3 fully closed** (Sessions 47-53: 72 routes migrated, 38 latent leaks fixed, 4 leak classes catalogued, helper-level Class 4 vector closed). **Wave 4 closed** (Session 54: 17 prod identifiers scrubbed across 9 files, D-044 codified). **Wave 5 partial close** (Session 55): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **STOPPED** — discovery showed `/tasks/` is still wired as the canonical "Day Hub" nav target with 7 active references; pre-deletion migration steps documented in AUDIT_PLAN.md for a future session. **Wave 6 fully closed** (Sessions 56-58): Wave 6.1 (Session 56) diagnostic-only traced reproducible cross-user data leak on /tasks/ View As to a client-state hydration race in `day-hub-client.tsx`. Wave 6.2 (Session 57, commit `375354b`) shipped Shape A — synchronous `useState` initializer pattern; first fetch carries `?asUserId=…` from mount. Wave 6 closure (this session): V1 (no hydration warning) + V4 (5+ navigation cycles, zero leak frames) verified live by Corey on 2026-04-30; V2/V3 skipped, V4 evidence sufficient. Shape C (cookie + server-side resolution) queued in AUDIT_PLAN as P6 — defer until concrete need. Two side bugs surfaced during V1 verification: Bug #25 (`/api/calls-review-count` 404 from top-nav vestigial fetch) logged for v1.1; P4 evidence strengthened with Wave 6 visual confirmation. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Wave 7 — verification + handoff (opens in next chat).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: [PRODUCTION_URL]
@@ -56,6 +56,59 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 58 — Wave 6 closure (2026-04-30) — V1+V4 verifications passed
+
+Docs-only session closing the Wave 6 arc.
+
+**Browser verifications completed by Corey on 2026-04-30:**
+- V1 (no hydration mismatch warning) — PASS. Console clean of React
+  hydration warnings. The two console items that did appear (a 404
+  on `/api/calls-review-count` and a canvas2d notice) are unrelated
+  to the Wave 6.2 fix; logged separately as side bugs.
+- V2 (first-paint URL params include `asUserId`) — SKIPPED. DevTools
+  Network tab opened too late on first attempt; V4 user-visible
+  evidence makes wire-level confirmation redundant.
+- V3 (Strict Mode double-invoke safe) — SKIPPED. Folds into V2
+  evidence.
+- V4 (5+ navigation cycles, zero leak frames) — PASS. Repeated
+  navigation as Daniel Lozano showed no owner-data flash on any
+  cycle. The user-visible behavioral test is the test that matters;
+  V4 is the proof Wave 6.2's race fix works in practice.
+
+V1 + V4 are the strongest pair for this kind of race: V1 rules out a
+React-internal symptom and V4 rules out a user-visible symptom. V2/V3
+were instrumentation-level checks that V4 already covers in effect.
+
+**Side bugs surfaced from V1 console output:**
+- Bug #25 — `GET /[tenantSlug]/api/calls-review-count` 404. Source
+  pinpointed to `components/ui/top-nav.tsx:42`. Vestigial
+  fire-and-forget fetch with wrong path order; the working
+  review-count call lives on line 45 of the same file. One-line
+  delete to fix; deferred to v1.1.
+- P4 visual confirmation — top nav "Day Hub" link still routes to
+  `/tasks/` rather than `/day-hub/`. Already-known per Wave 5 stop;
+  Wave 6 walkthrough is the live evidence. Strengthens the case for
+  v1.1 P4 sprint without changing P4's status.
+
+**Files changed this session:**
+- `PROGRESS.md` — Session 57 verifications checklist updated with
+  `[x]/[~]` status; header bumped to Session 58; Bug #25 added to
+  Known Bugs table; this entry added.
+- `docs/AUDIT_PLAN.md` — P4 entry annotated with Wave 6 visual
+  confirmation note (2026-04-30).
+
+**Surprises:**
+- The 404 on `/api/calls-review-count` was almost-invisible: a
+  fire-and-forget `fetch().catch(() => null)` so the user sees
+  nothing, but it's still a real failed request on every page load.
+  The bug had been in `top-nav.tsx` since the badge was added — the
+  developer wrote two different fetches, kept the one that worked,
+  forgot to delete the other. Wave 6's V1 console inspection was the
+  first time anyone looked.
+- Wave 6 closure is a clean tri-session arc (56 diagnostic → 57 fix
+  → 58 verification). Each session was small and bounded; the whole
+  arc cost two doc sessions plus one ten-line code change.
 
 ### Session 57 — Wave 6.2 (2026-04-29) — View As hydration race fixed on /tasks/
 
@@ -164,13 +217,17 @@ race AND the warning.
 - The fix is one file and ~10 lines. The diagnostic was the work; the
   patch was a one-liner.
 
-**Verifications Owed (Wave 6.2 fix, browser-side):**
-- [ ] V1: No hydration mismatch warning in dev console
-- [ ] V2: First-paint fetches to `/api/[tenant]/dayhub/{kpis,inbox,appointments}` include `&asUserId=` query param
-- [ ] V3: Strict Mode double-invoke safe (effects fire twice in dev, both with asUserId)
-- [ ] V4: 5+ navigation cycles to /tasks/ with View As active, zero leak frames observed
+**Verifications (Wave 6.2 fix, browser-side) — completed 2026-04-30:**
+- [x] V1: No hydration mismatch warning in dev console
+      VERIFIED 2026-04-30 — console clean (404 + canvas2d are unrelated; logged as side bugs)
+- [~] V2: First-paint fetches include `&asUserId=`
+      SKIPPED — V4 user-visible evidence makes wire-level confirmation redundant
+- [~] V3: Strict Mode double-invoke safe
+      SKIPPED — folds into V2 evidence
+- [x] V4: 5+ navigation cycles, zero leak frames
+      VERIFIED 2026-04-30 — Corey confirmed no leak frames across repeated navigation as Daniel Lozano
 
-If any verification FAILS, pivot to Shape B (explicit hydration gate) in a follow-up session.
+Status: PASS. Wave 6.2 fix verified sufficient. Wave 6 fully closed.
 
 ### Session 55 — Wave 5: cleanup wave (2026-04-29) — P4 STOPPED, Bug #12 closed
 
@@ -1226,6 +1283,7 @@ Net result: ~doubled property field coverage; -92% projected BatchData spend.
 | 22 | 24 empty-shell FAILED rows from 2026-04-20 have `ghlContactId=NULL`, `recording_url=NULL`, `duration=NULL`. Pre-existing structural issue — GHL fires call-like webhooks with no payload content. Fix 1 (Session 38 `a77911c`) prevents NEW ones but does not remediate these 24. | LOW | One-time `UPDATE calls SET gradingStatus='SKIPPED' WHERE gradingStatus='FAILED' AND recording_url IS NULL AND tenantId=(…)` to clean up |
 | 23 | Railway `[[cron]] process-recording-jobs` would not self-register even after no-op redeploy. Workaround: converted to `[[services]] grading-worker` long-running worker (Session 38). Unknown if poll-calls, daily-audit, daily-kpi-snapshot, weekly-profiles crons are at risk of the same failure. | MEDIUM | Add per-cron heartbeat audit rows (same pattern as `1c8befe`) so a similar silent outage is immediately visible |
 | 24 | Body-size gap on `/api/ai/assistant/execute` — `editedInput` is `z.record(z.unknown()).optional()`, no content-length check. Malicious/malformed client could POST multi-MB payloads that bloat audit_logs. | LOW (P2) | Logged in AUDIT_PLAN.md. Follow-up: tighter per-action zod schemas across all endpoints, not piecemeal |
+| 25 | `GET /[tenantSlug]/api/calls-review-count` returns 404 on /tasks/ page. Surfaced during Wave 6 V1 verification (2026-04-30). Source: `components/ui/top-nav.tsx:42` — `fetch(\`/${tenantSlug}/api/calls-review-count\`).catch(() => null)`. Path order is wrong (the working call on line 45 is `/api/${tenantSlug}/calls/review-count`). Inline comment on line 43 says "avoid new endpoint" — author pivoted to the existing tenant API but forgot to delete the original fetch. Fire-and-forget with `.catch(() => null)`, so no user-visible breakage; only console noise. | LOW | One-line cleanup: delete line 42 of `components/ui/top-nav.tsx`. Defer to v1.1. Not a security issue. |
 
 All other bugs from sessions 1-32 are resolved.
 

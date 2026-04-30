@@ -223,6 +223,12 @@ Pre-deletion migration required:
 Until that migration lands, deletion would break the production "Day Hub"
 nav target. P4 stays OPEN.
 
+**Wave 6 visual confirmation (2026-04-30):** top nav "Day Hub" link
+routes to `/tasks/`, not `/day-hub/`. `/tasks/` is the LM-visible Day
+Hub. Wave 6.2 closed the hydration race here, but the underlying P4
+migration (rewire nav + 4 redirect targets + settings post-action →
+`/day-hub/`) remains queued for v1.1.
+
 **P5 — `assign_contact_to_user` bypasses propose-edit-confirm UI flow.**
 `/api/ai/assistant/execute/route.ts` handles `assign_contact_to_user` via
 server-side name-contains fuzzy matching, not through the propose → edit →
