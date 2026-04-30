@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 60 — v1.1 Wave 1 + Wave 2 commit 1 (2026-04-30) — additive schema shipped + dual-write live (apply pending dry-run review)
+**Current session**: 60 — v1.1 Wave 1 + Wave 2 COMPLETE (2026-04-30) — additive schema shipped, dual-write live, backfill applied + verified idempotent
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -57,7 +57,27 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
-### Session 60 — v1.1 Wave 1 + Wave 2 commit 1 (2026-04-30)
+### Session 60 — v1.1 Wave 1 + Wave 2 COMPLETE (2026-04-30)
+
+**Wave 2 commit 2 (apply, after dry-run review approved by Corey):**
+Backfill APPLIED via `POST /api/diagnostics/v1_1_seller_backfill`. Live
+production database now reflects:
+
+| Metric | Result |
+|---|---|
+| Properties scanned (with owner data) | 15 |
+| Sellers updated | 16 (across 15 properties; 1 prop has 2 linked sellers — co-owner) |
+| Total field writes | 221 |
+| Skipped (no linked Seller) | 0 |
+| Errors | 0 |
+| Apply duration | 1.6 s |
+| Idempotency check | PASS — re-run dry-run shows wouldUpdate=0, alreadyComplete=15 |
+| Audit log | `v1_1_wave_2_backfill.applied` written with full counts payload |
+
+**Manual buyer IDs migration:** No-op for this tenant — `Property.manualBuyerIds[]`
+is empty across all 15 properties. (`PropertyBuyerStage.source='manual'` path
+is still wired up; will engage on any future tenant where the JSON-array
+hack is in use.)
 
 **Wave 2 commit 1 (this session, after Wave 1):** Dual-write turn-on +
 bearer-gated diagnostic endpoint. **NO apply yet** — gated on dry-run

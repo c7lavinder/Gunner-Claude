@@ -16,16 +16,20 @@
 > `searchCourtListenerForProperty`). 0 column drops — those land in Wave 5
 > cutover. `npx tsc --noEmit` clean.
 >
-> **Wave 2 IN PROGRESS 2026-04-30 (Session 60).** Dual-write turn-on +
-> bearer-gated diagnostic endpoint shipped at commit (Wave 2 commit 1).
-> NO auto-create of Sellers or Buyers — Corey constraint locked
-> 2026-04-30. Backfill only updates linked Sellers (via PropertySeller)
-> and only inserts PropertyBuyerStage rows when the matching Buyer
-> already exists (via ghlContactId). Properties / contact IDs without
-> matches are skipped + logged.
+> **Wave 2 SHIPPED + APPLIED 2026-04-30 (Session 60).** Two commits:
+> commit 1 = dual-write code path + bearer-gated diagnostic endpoint;
+> commit 2 = apply (POST endpoint) + verification. Live tenant
+> "New Again Houses": 15 properties scanned, 16 Sellers updated
+> (1 property has 2 linked sellers), 221 field writes, 0 errors,
+> 0 properties skipped. `manualBuyerIds[]` migration was a no-op
+> (column unused in this tenant). Idempotency verified — re-running
+> dry-run after apply shows `alreadyComplete=15, wouldUpdate=0`.
+> Audit log: `v1_1_wave_2_backfill.applied` row persisted.
 >
-> Endpoint: `GET|POST /api/diagnostics/v1_1_seller_backfill?tenant=<slug>`
-> (bearer-token gated via `DIAGNOSTIC_TOKEN`). GET = dry-run, POST = apply.
+> NO auto-create of Sellers or Buyers per Corey constraint
+> 2026-04-30. Endpoint:
+> `GET|POST /api/diagnostics/v1_1_seller_backfill?tenant=<slug>`
+> (bearer-gated via `DIAGNOSTIC_TOKEN`). GET = dry-run, POST = apply.
 > Both idempotent.
 >
 > **Decisions locked 2026-04-30 (after first Corey review):**
