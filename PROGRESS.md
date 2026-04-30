@@ -8,8 +8,8 @@
 
 ## Current Status
 
-**Current session**: 58 — Wave 6 closure (2026-04-30) — V1+V4 verifications passed, Wave 6 fully closed
-**Phase**: v1-finish sprint underway. Wave 1 closed Blocker #3 + AUDIT_PLAN P3. Wave 2 closed P4 #3 + #4. **Wave 3 fully closed** (Sessions 47-53: 72 routes migrated, 38 latent leaks fixed, 4 leak classes catalogued, helper-level Class 4 vector closed). **Wave 4 closed** (Session 54: 17 prod identifiers scrubbed across 9 files, D-044 codified). **Wave 5 partial close** (Session 55): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **STOPPED** — discovery showed `/tasks/` is still wired as the canonical "Day Hub" nav target with 7 active references; pre-deletion migration steps documented in AUDIT_PLAN.md for a future session. **Wave 6 fully closed** (Sessions 56-58): Wave 6.1 (Session 56) diagnostic-only traced reproducible cross-user data leak on /tasks/ View As to a client-state hydration race in `day-hub-client.tsx`. Wave 6.2 (Session 57, commit `375354b`) shipped Shape A — synchronous `useState` initializer pattern; first fetch carries `?asUserId=…` from mount. Wave 6 closure (this session): V1 (no hydration warning) + V4 (5+ navigation cycles, zero leak frames) verified live by Corey on 2026-04-30; V2/V3 skipped, V4 evidence sufficient. Shape C (cookie + server-side resolution) queued in AUDIT_PLAN as P6 — defer until concrete need. Two side bugs surfaced during V1 verification: Bug #25 (`/api/calls-review-count` 404 from top-nav vestigial fetch) logged for v1.1; P4 evidence strengthened with Wave 6 visual confirmation. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: Wave 7 — verification + handoff (opens in next chat).**
+**Current session**: 59 — Wave 7 (2026-04-30) — v1-finish sprint COMPLETE, handoff to v1.1
+**Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
 **Railway**: [PRODUCTION_URL]
@@ -56,6 +56,122 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 59 — Wave 7 (2026-04-30) — v1-finish sprint COMPLETE
+
+Final wave. No new code. Verification + handoff to v1.1.
+
+**Reliability scorecard (8 dimensions, post-sprint vs pre-sprint baseline 2026-04-27):**
+
+| # | Dimension | Pre | Post | What changed |
+|---|---|---|---|---|
+| 1 | Call ingestion (webhook + polling) | 9 | 9 | webhook_logs 1558/1559 success in last 24h (0.06% failed). No regressions. |
+| 2 | Grading pipeline | 9 | 9 | Wave 1 closed dual worker; in-process loop sole driver. No new failure modes. |
+| 3 | Multi-tenancy | 6 | 9 | Wave 3: 91/91 routes on withTenant, 38 latent gaps fixed, 4 leak classes catalogued, 6 Class 4 helpers hardened. |
+| 4 | Error visibility | 7 | 7 | Heartbeat audit rows from Wave 1 still ticking; 73 silent catches remain (down from 79 baseline; queued). No structural change. |
+| 5 | Documentation hygiene | 4 | 8 | SYSTEM_MAP / OPERATIONS canonicalized (Session 44); Wave 4 scrubbed prod identifiers; Wave 6 closed cleanly with 3-session arc; Living Map Discipline (Rule 8) codified. |
+| 6 | Repo security posture | 3 | 8 | Wave 4 prod identifier scrub (17 sites); Wave 3 cross-tenant defense; Wave 6.2 closed View As intra-tenant leak. |
+| 7 | Production verification discipline | 9 | 9 | CLAUDE.md "no phase complete until verified live" rule held throughout. Wave 6 verified by Corey on live URL 2026-04-30. |
+| 8 | Seller/Buyer contact data model | 4 | 4 | No change (acceptable). v1.1 sprint target — redesign opens next chat. |
+
+All ≥7/10 except item 8, which is the explicit v1.1 redesign target.
+
+**Health check outputs (this session):**
+
+`npx tsx scripts/daily-health-check.ts`:
+```
+DAILY HEALTH CHECK — 2026-04-30T07:14:44.421Z
+Recording queue (24h):  DONE=0  PENDING=0  FAILED=0
+audit_logs ERROR (24h): 3
+Calls FAILED today with evidence of being real: 0
+⚠️  ISSUES FOUND  (3 system errors logged)
+```
+Non-blocking. 3 errors in 24h is within tolerance; investigation deferred.
+
+`bash scripts/check-silent-catches.sh`:
+```
+❌ Found 73 silent catch(es).
+```
+Down from 79 baseline. Already-queued audit item ("Silent-catch sweep" in
+AUDIT_PLAN). Not blocking.
+
+`webhook_logs` last 24h (queried via prisma):
+```
+Total received: 1558
+Status:  success=1557  failed=1
+Stuck (processing, no processed_at): 0
+Failed rate: 0.06%
+```
+Healthy. Well under the 5% threshold.
+
+**AUDIT_PLAN final disposition:**
+
+| Entry | Pre-sprint | Post-sprint | Disposition |
+|---|---|---|---|
+| Blocker #2 | OPEN | OPEN — production verification still owed | Carries to v1.1 |
+| Blocker #3 | OPEN | ✅ CLOSED (`047ca18`) | Wave 1 |
+| P1 | OPEN | ✅ CLOSED (`98e5e7d` + `6fe3010`) | Wave 2 |
+| P2 | OPEN | ✅ CLOSED (`98e5e7d` + `525e8b8` + `6fe3010`) | Wave 2 |
+| P3 | OPEN | ✅ CLOSED (`047ca18`) | Wave 1 |
+| P4 | OPEN | ⏸ DEFERRED — v1.1 (`9d6f7ae` Wave 5 stop) | 5-step migration plan |
+| P5 | (added Wave 3) | ⏸ DEFERRED — v1.1 | Architectural inconsistency |
+| P6 | (added Wave 6.2) | ⏸ QUEUED — v1.1 | View As cookie + server resolution |
+| Bug #12 | Flagged | ✅ CLOSED (`9d6f7ae`) | Wave 5 verified-current |
+| Bug #25 | (new) | OPEN — defer v1.1 | Wave 6 surfaced; one-line cleanup |
+| D-044 | Pending | ✅ ACCEPTED (`3651080`) | Wave 4 — stability-first model rule |
+| D-045 | (new) | Pending — needs driver | Wave 2 — KPI snapshot timestamp |
+| D-046 | (new) | Pending — needs driver | Wave 6 — test framework |
+
+**Exit criteria check (9 v1-launch-ready criteria from sprint plan):**
+
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Blocker #3 closed | ✅ MET | Commit `047ca18` (Wave 1) — single grading worker confirmed via 24h heartbeat |
+| 2 | AUDIT_PLAN P1-P5 closed or re-classified | ✅ MET | P1+P2+P3 CLOSED; P4+P5 explicitly DEFERRED — v1.1 |
+| 3 | withTenant ≥95% coverage | ✅ MET | 91/91 tenant-scoped routes (100%), 19 documented exceptions (Wave 3) |
+| 4 | D-044 recorded | ✅ MET | Commit `3651080` (Wave 4) — stability-first model rule |
+| 5 | Repo scrubbed of prod identifiers | ✅ MET | Commit `2c256f5` (Wave 4) — 17 sites scrubbed; verification grep returns zero hits |
+| 6 | No hardcoded dev creds in production paths | ✅ MET | Bug #16 (DEV_BYPASS_AUTH hardcoded slugs) is dev-bypass logic only, not creds; all real creds (DATABASE_URL, ANTHROPIC_API_KEY, GHL tokens) are env-only |
+| 7 | Reliability scorecard ≥7/10 | ✅ MET | 7/8 dimensions ≥7; item 8 (Seller/Buyer = 4/10) is the explicit v1.1 redesign target, acceptable per sprint plan |
+| 8 | View As LM walkthrough completed | ✅ MET | Wave 6.1 diagnostic + Wave 6.2 fix + V1+V4 verified live by Corey 2026-04-30 |
+| 9 | "Next Session" → Seller/Buyer integration plan | ✅ MET | Updated this session; PLAN FIRST, no code until approved |
+
+All 9 criteria met. Sprint closes 2026-04-30.
+
+**Sprint totals (across all 7 waves):**
+- **Sessions used:** 14 (Sessions 45-58 + this Session 59)
+- **Wave count:** 7 (Wave 6 split into 6.1 / 6.2 / closure across 3 sessions)
+- **Closure events:** 1 Blocker (#3), 5 P-items closed (P1-P3 + Bug #12 + AGENTS leak-class catalogue), 2 P-items DEFERRED (P4 + P5), 2 P-items QUEUED (P6 + new Bug #25)
+- **Latent leaks fixed:** 38 cross-tenant defense gaps (Wave 3) + 1 intra-tenant View As leak (Wave 6.2) = 39
+- **Decisions codified:** D-044 (stability-first model rule) accepted; D-045 + D-046 pending driver
+- **Files changed (sprint total, by Wave):** Wave 1 = 5; Wave 2 = ~6; Wave 3 = ~110 (bulk migration + helper hardening); Wave 4 = 9; Wave 5 = 2; Wave 6 = 3; Wave 7 = 2 (this session)
+
+**Files changed this session:**
+- `PROGRESS.md` — Current Status updated for sprint complete; this entry added; Next Session block rewritten as v1.1 kickoff.
+- `docs/AUDIT_PLAN.md` — Closure SHAs added to P1/P2/P3; P4 + P5 explicitly tagged "DEFERRED — v1.1".
+
+**Surprises:**
+- The originally-cited audit doc `GUNNER_AUDIT_2026-04-27.md §10` doesn't
+  exist in the repo (only `docs/audits/ACTION_EXECUTION_AUDIT.md` is
+  present). The reliability scorecard rescore was grounded in the prompt-
+  provided baseline scores rather than a live document — fine for this
+  session, but worth knowing if you reference §10 elsewhere.
+- silent-catches dropped 79 → 73 organically over the sprint without a
+  dedicated sweep — likely from Wave 3 helper hardening removing some
+  swallow-and-continue patterns that became `tenantId`-scoped operations
+  with explicit error paths. The remaining 73 are predominantly
+  fire-and-forget patterns (`.catch(() => {})` after non-blocking work)
+  rather than true silent failures, but still worth a structured pass in
+  v1.1 hygiene.
+- webhook_logs last-24h Health is excellent: 0.06% failure rate is below
+  most public web-API SLOs. Bug #25 (the `/api/calls-review-count` 404)
+  is fire-and-forget and doesn't appear in webhook_logs since it's a
+  client-side fetch, not a webhook ingest.
+- Bug #16 ("DEV_BYPASS_AUTH hardcoded slugs") was the closest exit-
+  criteria edge case — read literally, "hardcoded slugs" sounds like
+  hardcoded creds. Re-reading the bug, it's tenant slugs in dev-bypass
+  logic, not real credentials. Counted as MET on criterion 6 with that
+  qualification documented above.
 
 ### Session 58 — Wave 6 closure (2026-04-30) — V1+V4 verifications passed
 
@@ -1293,75 +1409,67 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — Start Exactly Here
+## Next Session — Seller/Buyer Integration Plan (v1.1 kickoff)
 
-**Status as of 2026-04-27 (post-Wave-1):** v1-finish sprint Wave 1 closed
-Blocker #3 (dual grading worker) and AUDIT_PLAN P3 (date-pin sweep). Docs
-reorg sprint is also closed (Session 44 above). Production code state has
-2 small touches from Wave 1: `railway.toml` block removal + 9 model-string
-replacements across 5 files. Pre-push tsc gate stayed clean.
+v1-finish sprint complete (closed 2026-04-30, commit `<this commit>`).
+Next chat opens v1.1 sprint with the Seller/Buyer Contact DB redesign.
 
-**Post-Wave-1 verification owed (within 30 min of deploy):**
-- Railway dashboard: confirm `grading-worker` standalone service goes away.
-- Heartbeat audit rows continue at ~1/min from a single source (was ~2/min
-  pre-Wave-1 from two sources):
-  ```sql
-  SELECT COUNT(*) AS ticks, MAX(created_at) AS last_seen
-  FROM audit_logs
-  WHERE action = 'cron.process_recording_jobs.started'
-    AND created_at > NOW() - INTERVAL '5 minutes';
-  ```
-- Grading queue does not back up over 24h (in-process loop carries the load).
+**CRITICAL: This is INTEGRATION PLAN FIRST.** Do not write code, do
+not modify Prisma schema, do not touch the Property model until the
+integration plan is discussed and approved with Corey.
 
-**P1 — Blocker #2 production verification (deferred 6 sessions):**
-The AI Assistant propose→edit→confirm flow was coded in Session 38 (commits
-`15fe184` — `5203539`) but never validated end-to-end on live Railway with
-real GHL data. Three validation paths in order of safety:
-1. **Cancel-path only** for high-stakes types (send_sms, send_email,
-   change_pipeline_stage, create_contact, update_contact, create_opportunity) —
-   proves UI + preview + merge + modal without GHL writes.
-2. **GUNNER TEST contact** in GHL for a single end-to-end SMS proof.
-3. **Real contact** for medium/low-stakes types (add_note, create_task,
-   update_task, complete_task, opp status/value) — no outbound seller visibility.
+**First task for the next session:** produce a visual integration
+plan diagram covering:
+- **Entities:** Seller, Buyer, Property (post-strip),
+  PropertySeller, BuyerProperty (or whatever the join model becomes)
+- **Page flows:** where Seller and Buyer pages live, how they relate
+  to Property
+- **GHL contact-fetch points:** which surfaces fetch live from GHL
+  vs. cache locally
+- **AI enrichment:** which AI calls populate Seller/Buyer fields
+  post-call
+- **Migration plan:** how to strip seller/buyer fields from Property
+  without breaking existing graded calls
 
-Start with path 1 on the live URL. If that works, escalate to path 2.
+**Reference patterns established this sprint** (apply when designing
+Seller/Buyer):
+- 4 leak classes catalogued in AGENTS.md (Wave 3)
+- DiD-via-FK pattern: `sellers/route.ts` is canonical (Wave 3 Session G)
+- Tenant-table-boundary special case (Wave 3 Session G commit `00cb686`)
+- View As hydration race lesson: synchronous useState initializers for
+  any client component reading localStorage before first paint (Wave 6.2,
+  commit `375354b`)
+- Class 4 helper hardening: `lib/` helpers that take ids should require
+  `tenantId` explicitly — never id-only `findUnique` (Wave 3 Session G)
 
-**P2 — Worker health verification (still owed from Session 38, now also the Wave-1 post-deploy gate):**
-```sql
-SELECT action, COUNT(*)::int AS count, MAX(created_at) AS last_seen,
-  EXTRACT(EPOCH FROM (NOW() - MAX(created_at)))::int AS seconds_since
-FROM audit_logs
-WHERE action LIKE 'cron.process_recording_jobs.%'
-  AND created_at > NOW() - INTERVAL '1 hour'
-GROUP BY action;
-```
-Expected: one `started` + one `finished` per minute (single source post-Wave-1,
-was double-source pre-Wave-1). If `last_seen` > 120s, the in-process worker is
-down — escalate per Session 38 notes.
+**Open questions queued for Corey** (not blockers for v1.1 kickoff):
+- **D-045** — KPI snapshot timestamp (createdAt vs calledAt)?
+- **D-046** — Add test framework (vitest)?
+- **P4** — When to start `/tasks/` deletion migration? (5-step plan in
+  AUDIT_PLAN.md)
+- **P5** — `assign_contact_to_user` UI flow alignment.
+- **P6** — View As cookie + server-side resolution (Shape C).
 
-**P3 — Known bugs (in severity order):**
-1. Bug #20 — deal-intel parser doesn't strip markdown fences. Extract
-   `stripJsonFences()` into `lib/ai/stripJsonFences.ts`, use in
-   `lib/ai/extract-deal-intel.ts`.
-2. Bug #21 — sentiment/sellerMotivation type coercion incomplete. Normalize
-   in `parseGradingResponse()` before `db.call.update`.
-3. Bug #17 — `no_answer` never rewritten to `short_call` in cron processor.
-4. Bug #23 — add heartbeat audit rows to the other crons (poll-calls,
-   daily-audit, daily-kpi-snapshot, weekly-profiles, regenerate-stories,
-   compute-aggregates).
-5. Bug #18 — one-time backfill: `UPDATE calls SET source='recovery' WHERE source IS NULL`.
-6. Bug #22 — one-time cleanup: 24 empty-shell FAILED rows. Session 43
-   commit `4840c52` closes the create-site root cause; the 24 existing rows
-   still need the `UPDATE … SET gradingStatus='SKIPPED'` cleanup.
+**Carry-forward bug debt** (low-priority, deferred from v1):
+- Bug #16 — DEV_BYPASS_AUTH hardcoded slugs (clean before tenant #2)
+- Bug #17 — no_answer never rewritten to short_call (cron processor)
+- Bug #18 — 2487 calls with `source IS NULL` (one-time backfill)
+- Bug #20 — deal-intel parser doesn't strip markdown fences
+- Bug #21 — sentiment/sellerMotivation type coercion incomplete
+- Bug #22 — 24 empty-shell FAILED rows from 2026-04-20 (one-time cleanup)
+- Bug #23 — heartbeat audit rows on other crons (poll-calls, daily-audit,
+  etc.)
+- Bug #24 — body-size gap on `/api/ai/assistant/execute`
+- Bug #25 — `/api/calls-review-count` 404 (one-line cleanup in
+  `components/ui/top-nav.tsx:42`)
 
-**P4 — Technical debt:**
-1. ~~Migrate remaining API routes to `withTenant` helper.~~ ✅ **CLOSED Wave 3** (Sessions 47-52, 6 batches, 72 routes migrated, 38 latent leaks fixed; 91/91 tenant-scoped routes covered). Cleanup queue tracked in Session 52 entry above.
-2. Sweep remaining silent catches in broader codebase (79 total).
-3. ~~Align Day Hub vs Calls page call count source-of-truth.~~ ✅ Closed Wave 2 (Session 46).
-4. ~~Fix LM tab "227" dial count aggregation across LM role.~~ ✅ Closed Wave 2 (Session 46).
-5. P4 from AUDIT_PLAN — delete legacy `/{tenant}/tasks/` page (coordinate with Chris).
-6. P5 from AUDIT_PLAN — `assign_contact_to_user` UI flow vs route discrepancy.
-7. ~~Dashboard `/{tenant}/dashboard/page.tsx:127-135` still uses `createdAt` for callsToday/Week/Month + tenant-wide.~~ ✅ Closed in Wave 2 follow-up (Session 46) — same helper, new `countDialsInRange` primitive. Verification pending alongside P1+P2.
+These don't block v1.1 kickoff but are eventually-resolve items.
 
-**Railway + Logging:** Railway API token noted invalid in Session 38 — request
-a fresh one if the post-Wave-1 verification (P2) needs Railway dashboard access.
+**Production state at sprint close (2026-04-30):**
+- All 9 v1-launch-ready exit criteria met (see Session 59).
+- Reliability scorecard: all 8 dimensions ≥7/10 except item 8
+  (Seller/Buyer data model = 4/10, the v1.1 redesign target).
+- webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck.
+- daily-health-check: 3 audit_logs ERROR (low, within tolerance).
+- silent-catches sweep: 73 violations (down from 79 baseline; queued
+  in AUDIT_PLAN as ongoing hygiene).

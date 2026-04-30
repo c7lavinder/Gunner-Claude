@@ -103,7 +103,7 @@ Blocker #2 work should target the 4-step fix sequence above, in order. Each step
 
 ## Priority items (non-blocking)
 
-**P1 — Day Hub LM dial-count aggregation · ✅ CLOSED (verified 2026-04-28 via /api/diagnostics/dial-counts).**
+**P1 — Day Hub LM dial-count aggregation · ✅ CLOSED (Wave 2, commits `98e5e7d` + `6fe3010`, verified 2026-04-28 via /api/diagnostics/dial-counts).**
 Three-number reconciliation passed. Endpoint response for 2026-04-27 CT
 returned `tenantDials: 317, lmDials: 215` — exact match with the SQL
 ground-truth probe from earlier in Session 46. Helper math
@@ -141,7 +141,7 @@ the canonical /day-hub/ doesn't have an LM tab at all, but does have the
 admin-aggregation bug that produced the symptom. Fresh grep before fixing
 caught this; same Wave-1 discipline.
 
-**P2 — Day Hub vs Calls page call-count source-of-truth · ✅ CLOSED (verified 2026-04-28 via /api/diagnostics/dial-counts).**
+**P2 — Day Hub vs Calls page call-count source-of-truth · ✅ CLOSED (Wave 2, commits `98e5e7d` + `525e8b8` + `6fe3010`, verified 2026-04-28 via /api/diagnostics/dial-counts).**
 Same diagnostic endpoint, same response (317 / 215) confirmed both Day
 Hub surfaces (canonical + legacy `/tasks/`) and the dashboard now share
 one query path through `lib/kpis/dial-counts.ts countDialsInRange`. The
@@ -173,7 +173,7 @@ matching `/calls` and `app/(tenant)/[tenant]/health/page.tsx`.
   Whether to switch to `calledAt` is debatable (snapshot semantics vs call
   semantics) — logged as **D-045 (proposed)** below; needs Corey decision.
 
-**P3 — AI model date-pin standardization · ✅ CLOSED (2026-04-27, Wave 1 of v1-finish sprint).**
+**P3 — AI model date-pin standardization · ✅ CLOSED (Wave 1, commit `047ca18`, 2026-04-27).**
 Original entry scoped only `lib/ai/enrich-property.ts:57` — the actual scope
 discovered during Wave 1 was **9 occurrences of `claude-sonnet-4-20250514`
 across 5 files** (5× larger than the AUDIT_PLAN entry suggested):
@@ -188,7 +188,7 @@ callers, no drift. **Lesson:** AUDIT_PLAN P-entries should be authored from
 a fresh codebase grep, not from a single-file finding. Future P-entries
 require explicit scope verification via grep before being written.
 
-**P4 — `app/(tenant)/[tenant]/tasks/` deletion candidate.** Day Hub
+**P4 — `app/(tenant)/[tenant]/tasks/` deletion candidate · ⏸ DEFERRED — v1.1 sprint candidate (Wave 5, commit `9d6f7ae`).** Day Hub
 (`app/(tenant)/[tenant]/day-hub/`) is the canonical Tasks/Day Hub surface per
 CLAUDE.md Rule 3 (Single Settings Hub — section 7 Day Hub). The `/tasks/` page
 is older and kept around because at least one user (Chris) still has it
@@ -221,7 +221,8 @@ Pre-deletion migration required:
 5. Then `rm -rf app/(tenant)/[tenant]/tasks/`
 
 Until that migration lands, deletion would break the production "Day Hub"
-nav target. P4 stays OPEN.
+nav target. P4 explicitly DEFERRED to v1.1 sprint with the 5-step
+migration plan above as the entry point.
 
 **Wave 6 visual confirmation (2026-04-30):** top nav "Day Hub" link
 routes to `/tasks/`, not `/day-hub/`. `/tasks/` is the LM-visible Day
@@ -229,7 +230,7 @@ Hub. Wave 6.2 closed the hydration race here, but the underlying P4
 migration (rewire nav + 4 redirect targets + settings post-action →
 `/day-hub/`) remains queued for v1.1.
 
-**P5 — `assign_contact_to_user` bypasses propose-edit-confirm UI flow.**
+**P5 — `assign_contact_to_user` bypasses propose-edit-confirm UI flow · ⏸ DEFERRED — v1.1 sprint candidate.**
 `/api/ai/assistant/execute/route.ts` handles `assign_contact_to_user` via
 server-side name-contains fuzzy matching, not through the propose → edit →
 confirm flow that gates the other 12 action types (per
@@ -239,6 +240,7 @@ preview / edit / confirm. Investigate whether to add it to the UI flow
 (treat it as a high-stakes action — assignment changes who owns the lead)
 or formalize the bypass with explicit documentation + a server-side
 acceptance test. Surfaced during SYSTEM_MAP §6 review (Commit #2 sprint).
+Not a security risk in current single-tenant deployment; deferred to v1.1.
 
 **P6 — Move View As from localStorage to httpOnly cookie (architectural leak-class closure).**
 
