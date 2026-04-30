@@ -16,6 +16,23 @@
 > `searchCourtListenerForProperty`). 0 column drops — those land in Wave 5
 > cutover. `npx tsc --noEmit` clean.
 >
+> **Wave 3 Phase B SHIPPED 2026-04-30 (Session 60).** New top-level
+> Sellers tab on `inventory/[propertyId]/` (renders linked Seller rows
+> with Wave 1+2 backfilled fields — name parts, skip-trace mail, person
+> flag pills, motivation + likelihood scores, portfolio aggregates).
+> Inventory server component now fetches and serializes ~22 Wave 1+2
+> fields per linked Seller. `app/api/properties/[propertyId]/buyers/route.ts`
+> migrated: `getManualBuyers` reads from `PropertyBuyerStage(source='manual')`
+> joined to local `Buyer` rows (no more GHL fetch per id);
+> `addBuyer` POST writes a PropertyBuyerStage row with
+> `source='manual', stage='added'` instead of pushing to
+> `Property.manualBuyerIds[]`. Legacy column stays populated for
+> historical rows; drops in Wave 5. The ~30 property-detail-client.tsx
+> read-points pre-grep turned out to be mostly Seller-side false
+> positives; remaining legacy "owner" cards on the Data tab keep
+> rendering Property fields until Wave 5 (the new Sellers tab provides
+> the canonical surface).
+>
 > **Wave 3 Phase A SHIPPED 2026-04-30 (Session 60).** UI surfaces for
 > the new schema. NEW `/{tenant}/sellers/` list page (server component,
 > table view, ranked by `likelihoodToSellScore DESC, lastContactDate DESC`).

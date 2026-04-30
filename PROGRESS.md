@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A (2026-04-30) — schema, dual-write, backfill applied, sellers list page + nav links shipped
+**Current session**: 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A + Phase B (2026-04-30) — schema, dual-write, backfill applied, sellers list + Sellers tab on inventory + manualBuyerIds → PropertyBuyerStage migration shipped
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -57,7 +57,25 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
-### Session 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A (2026-04-30)
+### Session 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A + Phase B (2026-04-30)
+
+**Wave 3 Phase B (after Phase A):** Property-side read-path migration
++ Sellers tab on inventory detail. Three load-bearing changes:
+
+| Surface | Change |
+|---|---|
+| `app/api/properties/[propertyId]/buyers/route.ts` | `getManualBuyers` action now reads from `PropertyBuyerStage(source='manual')` joined to `Buyer`. Removed the GHL-fetch-per-id slow path entirely (Buyer rows already locally cached via `syncBuyerFromGHL` webhook). The `addBuyer` POST flow no longer writes to `Property.manualBuyerIds[]` — instead it inserts a `PropertyBuyerStage` row with `source='manual', stage='added'` (idempotent). The legacy column stays populated for historical rows but is no longer the read source. Wave 5 drops the column. |
+| `app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx` | Server-component select clause expanded to fetch the linked Seller's Wave 1+2 fields (decomposed name parts, skip-trace fallback identity, person flags, portfolio aggregates, motivation + urgency + likelihoodToSellScore + lastContactDate + totalCallCount + DNC flag). Serialized through to the client. |
+| `components/inventory/property-detail-client.tsx` | New top-level `Sellers` tab (sits between `Data` and `Buyers` in the tab strip). Renders one card per linked Seller with: decomposed name, person flag pills (Senior / Cash Buyer / DNC / Deceased), GHL contact link, motivation + urgency + last-contact stats, portfolio totals, skip-traced mail address. Each card links out to `/sellers/[id]` for the full detail page. `PropertyDetail.sellers` type expanded with all Wave 1+2 fields. |
+
+**Phase B changes shipping per file:**
+- `app/api/properties/[propertyId]/buyers/route.ts` — getManualBuyers refactored, addBuyer POST writes PropertyBuyerStage instead of manualBuyerIds.
+- `app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx` — Seller select expanded + serialization expanded (~22 new fields per linked seller).
+- `components/inventory/property-detail-client.tsx` — TabKey gained 'sellers', TABS array gained Sellers entry, body-render block added, `SellersTab` component (~120 lines) added before `BuyersTab`. PropertyDetail.sellers type expanded.
+
+**Skipped from plan:**
+- Read-path migration of property-detail-client.tsx's ~30 `property.owner*` render points. Discovered post-grep: most matches were false positives (Seller-side reads). The actual remaining sites are inside the existing legacy "owner" cards on the Data tab, which still render from Property until Wave 5. These work as-is; rendering switch can land in a Wave 4/5 cleanup pass since the new Sellers tab provides the canonical surface. Property.manualBuyerIds and Property.owner_* drops will land in Wave 5 with the Property-strip migration.
+- P6 (View-As cookie + server-side resolution) — deferred. The new Sellers tab is read-only and renders server-side data passed through props (no new View-As-keyed fetch). Wave 6.2 fix already protects the existing surfaces. P6 stays queued for any future client component that introduces View-As-keyed state.
 
 **Wave 3 Phase A (after Wave 2 applied):** UI surfaces for the new
 schema. The new fields are now visible to users via:
@@ -1618,7 +1636,72 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — v1.1 Wave 3 Phase B — Read-path migration + Research sub-tabs
+## Next Session — v1.1 Wave 4 — AI enrichment routing
+
+Wave 3 Phase A + Phase B both shipped Session 60. Wave 4 routes the
+existing AI enrichment pipeline to write to the new Seller / PropertyBuyerStage
+columns instead of (or in addition to) the legacy paths.
+
+Plan reference:
+[docs/v1.1/SELLER_BUYER_PLAN.md §5](docs/v1.1/SELLER_BUYER_PLAN.md).
+
+**Wave 4 scope (per plan §5 mapping table):**
+
+1. **`extract-deal-intel.ts` system prompt update.** Today the proposed
+   changes are keyed against Property field names (deal_intel JSON +
+   per-call promoted fields). Re-key the seller-related ones to write
+   directly to Seller fields when `call.sellerId` is set:
+   - `motivationPrimary` / `motivationSecondary` / `urgencyScore` /
+     `urgencyLevel` / `saleTimeline` / `hardshipType` → Seller
+   - `objectionProfile`, `redFlags`, `positiveSignals` → Seller
+     (additive — append to existing arrays, dedupe by canonical key)
+   - `motivationScore`, `likelihoodToSellScore` → Seller (EMA across
+     last 5 calls)
+   - `personalityType`, `communicationStyle`, `priceSensitivity` →
+     Seller (mode across calls; requires 3+ calls before writing)
+   - `isProbate` / `isForeclosure` / `isDivorce` / `isBankruptcy` →
+     mirror-write to Property AND Seller (latest enrichment wins on
+     both sides; latest-wins).
+
+2. **Backfill: replay rollups from existing `Call.dealIntelHistory`**
+   so existing graded calls don't have to re-grade. Pure re-aggregation
+   pass (no new Claude calls).
+
+3. **TCP scorer (`lib/ai/scoring.ts`) — Seller likelihoodToSell write.**
+   On every call grade, compute `Seller.likelihoodToSellScore` if
+   `call.sellerId` is set. Aggregates motivation × urgency × call
+   sentiment trend × hardship across all the seller's properties.
+   Property TCP keeps its existing 8-factor formula (call sentiment +
+   property equity + seller motivation + etc.) — Seller score is a
+   distinct new value scoped to the person.
+
+4. **Buyer matchScore migration (Q7).** Move
+   `Buyer.matchLikelihoodScore` (currently on Buyer — wrong unit) to
+   `PropertyBuyerStage.matchScore` (per-property fit). Keep
+   `Buyer.buyerScore` as cross-portfolio reliability score.
+
+**Acceptance:**
+- Spot-check 3 freshly-graded calls; confirm Seller fields update
+  post-grade in audit_logs + on /sellers/[id].
+- Backfill rollup pass produces non-null `motivationScore` and
+  `likelihoodToSellScore` on Sellers with 3+ calls in history.
+- Property TCP reads unchanged; Seller likelihoodToSellScore now
+  populated for active sellers; PropertyBuyerStage.matchScore populated
+  for matched buyers.
+
+**After Wave 4:**
+- Wave 5 (Property column drops + cutover — destructive, requires
+  Railway snapshot)
+- Wave 6 (verification + handoff)
+
+**Open questions (per plan §11):**
+- Q4 — Auto-link calls by ghlContactId (sprint-time, can defer to post-Wave-4).
+- Q5 — Mirror legal-distress flags between Property and Seller — design
+  call before Wave 4 implementation lands. Recommended: latest-wins on
+  both sides with audit log on conflict.
+- Q6 — Seller Buy Signal (Wave 4 lands during AI integration).
+
+## Next Session — DEFERRED — Wave 3 Phase B [SHIPPED Session 60]
 
 Wave 1 + Wave 2 + Wave 3 Phase A all shipped 2026-04-30 (Session 60).
 Phase B is the larger half of Wave 3 — best done with fresh context.

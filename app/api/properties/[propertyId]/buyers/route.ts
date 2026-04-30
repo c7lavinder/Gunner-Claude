@@ -368,31 +368,60 @@ export const POST = withTenant<{ propertyId: string }>(async (request, ctx, para
   try {
     const body = await request.json()
 
-    // If action is 'getFormOptions', return pipeline stages + custom field options from GHL
-    // Get manually added buyers for this property
+    // Get manually added buyers for this property.
+    // v1.1 Wave 3 Phase B — read from PropertyBuyerStage(source='manual') →
+    // joined Buyer rows. Replaces the legacy Property.manualBuyerIds[] JSON
+    // array path. Property.manualBuyerIds drops in Wave 5 cutover; until then
+    // it stays populated as orphan history but is no longer the read source.
     if (body.action === 'getManualBuyers') {
-      const prop = await db.property.findUnique({
+      // DiD-via-FK: validate the parent property's tenant boundary first,
+      // then trust the PropertyBuyerStage join.
+      const prop = await db.property.findFirst({
         where: { id: params.propertyId, tenantId: ctx.tenantId },
-        select: { manualBuyerIds: true },
+        select: { id: true },
       })
-      const ids = (prop?.manualBuyerIds ?? []) as string[]
-      if (ids.length === 0) return NextResponse.json({ buyers: [] })
+      if (!prop) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
 
-      const ghl = await getGHLClient(ctx.tenantId)
-      const buyers = []
-      for (let i = 0; i < ids.length; i += 10) {
-        const batch = ids.slice(i, i + 10)
-        const contacts = await Promise.all(batch.map(id => ghl.getContact(id).catch(() => null)))
-        for (const c of contacts) {
-          if (!c) continue
-          const parsed = parseBuyerFields({
-            id: c.id, firstName: c.firstName, lastName: c.lastName,
-            phone: c.phone, email: c.email, city: c.city, state: c.state,
-            tags: c.tags ?? [], customFields: c.customFields ?? [],
-          })
-          buyers.push({ ...parsed, matchScore: 0, scoreBreakdown: 'Manually added' })
+      const stages = await db.propertyBuyerStage.findMany({
+        where: { propertyId: params.propertyId, source: 'manual' },
+        select: {
+          stage: true, createdAt: true,
+          buyer: {
+            select: {
+              id: true, name: true, phone: true, email: true,
+              ghlContactId: true,
+              primaryMarkets: true, customFields: true, tags: true,
+              internalNotes: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      const buyers = stages.map(s => {
+        const b = s.buyer
+        const criteria = (b.customFields ?? {}) as Record<string, unknown>
+        const tier = (criteria.tier as string) ?? 'unqualified'
+        const markets = Array.isArray(b.primaryMarkets) ? b.primaryMarkets as string[] : []
+        const tags = Array.isArray(b.tags) ? b.tags as string[] : []
+        return {
+          id: b.id,
+          name: b.name,
+          phone: b.phone ?? '',
+          email: b.email ?? '',
+          tier,
+          markets,
+          secondaryMarkets: (criteria.secondaryMarkets as string[]) ?? [],
+          buybox: (criteria.buybox as string) ?? '',
+          verifiedFunding: (criteria.verifiedFunding as boolean) ?? false,
+          hasPurchased: (criteria.hasPurchased as boolean) ?? false,
+          responseSpeed: (criteria.responseSpeed as string) ?? '',
+          buyerNotes: b.internalNotes ?? '',
+          tags,
+          matchScore: 0,
+          scoreBreakdown: 'Manually added',
         }
-      }
+      })
       return NextResponse.json({ buyers })
     }
 
@@ -508,20 +537,12 @@ export const POST = withTenant<{ propertyId: string }>(async (request, ctx, para
       source: d.source,
     })
 
-    // Save contactId to property's manualBuyerIds
-    // FIX: was leaking — Class 1 — prior code used findUnique({ id }) (no tenantId).
-    const prop = await db.property.findUnique({
-      where: { id: params.propertyId, tenantId: ctx.tenantId },
-      select: { manualBuyerIds: true },
-    })
-    const existingIds = (prop?.manualBuyerIds ?? []) as string[]
-    if (!existingIds.includes(contactId)) {
-      // FIX: was leaking — Class 1 — prior code used update({ id }) (no tenantId).
-      await db.property.update({
-        where: { id: params.propertyId, tenantId: ctx.tenantId },
-        data: { manualBuyerIds: [...existingIds, contactId] },
-      })
-    }
+    // v1.1 Wave 3 Phase B — manual-buyer linkage moved from
+    // Property.manualBuyerIds[] JSON to PropertyBuyerStage rows with
+    // source='manual'. The legacy column stops being written here;
+    // it remains populated for historical rows but drops in Wave 5.
+    // Note: Buyer row is created/updated below — we order things so the
+    // Buyer exists before we insert the join row.
 
     // Also write to local Buyer DB so they're immediately available for matching
     // FIX: was leaking — Class 1 — prior code used upsert({ where: { id } }) which
@@ -568,6 +589,30 @@ export const POST = withTenant<{ propertyId: string }>(async (request, ctx, para
           isActive: true,
         },
       }).catch(err => console.error('[Buyers] DB create failed:', err))
+    }
+
+    // v1.1 Wave 3 Phase B — insert PropertyBuyerStage row to link this
+    // newly-added Buyer to the Property. source='manual' distinguishes the
+    // user-clicked-add path from buybox-matched buyers (source='matched').
+    // Idempotent — skip if (propertyId, buyerId) row already exists.
+    try {
+      const existingStage = await db.propertyBuyerStage.findUnique({
+        where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId } },
+        select: { id: true },
+      })
+      if (!existingStage) {
+        await db.propertyBuyerStage.create({
+          data: {
+            tenantId: ctx.tenantId,
+            propertyId: params.propertyId,
+            buyerId,
+            stage: 'added',
+            source: 'manual',
+          },
+        })
+      }
+    } catch (err) {
+      console.error('[Buyers] PropertyBuyerStage insert failed:', err)
     }
 
     return NextResponse.json({

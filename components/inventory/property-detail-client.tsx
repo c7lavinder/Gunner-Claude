@@ -185,7 +185,25 @@ interface PropertyDetail {
   deedHistoryJson: Array<Record<string, unknown>> | null
   mortgageHistoryJson: Array<Record<string, unknown>> | null
   liensJson: Array<Record<string, unknown>> | null
-  sellers: Array<{ id: string; name: string; phone: string | null; email: string | null; isPrimary: boolean; role: string; ghlContactId: string | null }>
+  sellers: Array<{
+    id: string; name: string; phone: string | null; email: string | null
+    isPrimary: boolean; role: string; ghlContactId: string | null
+    // v1.1 Wave 3 Phase B — backfilled fields from linked Seller.
+    firstName: string | null; middleName: string | null
+    lastName: string | null; nameSuffix: string | null
+    skipTracedPhone: string | null; skipTracedEmail: string | null
+    skipTracedMailingAddress: string | null; skipTracedMailingCity: string | null
+    skipTracedMailingState: string | null; skipTracedMailingZip: string | null
+    seniorOwner: boolean | null; deceasedOwner: boolean | null; cashBuyerOwner: boolean | null
+    totalPropertiesOwned: number
+    ownerPortfolioTotalEquity: string | null
+    ownerPortfolioTotalValue: string | null
+    ownerPortfolioAvgYearBuilt: number | null
+    motivationPrimary: string | null; motivationScore: number | null
+    likelihoodToSellScore: number | null; urgencyLevel: string | null
+    lastContactDate: string | null; totalCallCount: number
+    doNotContact: boolean; isDeceased: boolean
+  }>
   assignedTo: { id: string; name: string; role: string } | null
   calls: Array<{
     id: string; score: number | null; gradingStatus: string; direction: string
@@ -205,12 +223,16 @@ interface PropertyDetail {
 // Timezone abbreviation for display (e.g. "CST", "EST")
 const TZ_ABBR = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
 
-type TabKey = 'overview' | 'data' | 'buyers' | 'outreach' | 'activity' | 'ai' | 'blast'
+type TabKey = 'overview' | 'data' | 'sellers' | 'buyers' | 'outreach' | 'activity' | 'ai' | 'blast'
 
 const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
   { key: 'overview', label: 'Overview',      icon: Home },
   { key: 'activity', label: 'Activity',      icon: Activity },
   { key: 'data',     label: 'Data',          icon: SearchIcon },
+  // v1.1 Wave 3 Phase B — Sellers tab surfaces linked Seller rows with
+  // their Wave 1+2 backfilled fields. Sits next to the existing Buyers
+  // tab so the inventory detail page exposes both sides of the deal.
+  { key: 'sellers',  label: 'Sellers',       icon: User },
   { key: 'buyers',   label: 'Buyers',        icon: Users },
   { key: 'outreach', label: 'Outreach',      icon: Send },
   { key: 'blast',    label: 'Deal Blast',    icon: Megaphone },
@@ -636,6 +658,7 @@ export function PropertyDetailClient({
               <ResearchTab property={property} />
             </div>
           )}
+          {activeTab === 'sellers' && <SellersTab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'outreach' && <OutreachTab property={property} />}
           {activeTab === 'activity' && (
@@ -4746,6 +4769,182 @@ function DealIntelSection({ dealIntel }: { dealIntel: Record<string, unknown> | 
         )
       })}
     </>
+  )
+}
+
+// ─── Sellers Tab (v1.1 Wave 3 Phase B) ───────────────────────────────────────
+// Surfaces every linked Seller for this property (via PropertySeller) with
+// the Wave 1+2 backfilled fields: decomposed name, skip-trace fallback,
+// motivation/likelihood scores, person flags, portfolio aggregates. Each
+// row links out to /sellers/[id] for the full detail page.
+
+function SellersTab({ property, tenantSlug }: { property: PropertyDetail; tenantSlug: string }) {
+  const sellers = property.sellers
+  if (sellers.length === 0) {
+    return (
+      <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[12px] p-8 text-center text-sm text-gray-500">
+        No sellers linked to this property yet. Link one from the Activity tab when a call lands or via the property edit form.
+      </div>
+    )
+  }
+
+  function displayName(s: typeof sellers[number]): string {
+    const parts = [s.firstName, s.middleName, s.lastName, s.nameSuffix]
+      .filter((p): p is string => typeof p === 'string' && p.length > 0)
+    if (parts.length > 0) return parts.join(' ')
+    return s.name || '(unnamed)'
+  }
+
+  function fmtMoney(v: string | null): string {
+    if (!v) return '—'
+    const n = parseFloat(v)
+    if (Number.isNaN(n)) return '—'
+    return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  }
+
+  function fmtRelativeFromIso(iso: string | null): string {
+    if (!iso) return 'never'
+    const days = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24))
+    if (days === 0) return 'today'
+    if (days === 1) return 'yesterday'
+    if (days < 7) return `${days}d ago`
+    if (days < 30) return `${Math.floor(days / 7)}w ago`
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`
+    return `${Math.floor(days / 365)}y ago`
+  }
+
+  return (
+    <div className="space-y-3">
+      {sellers.map((s) => {
+        const phone = s.phone ?? s.skipTracedPhone
+        const email = s.email ?? s.skipTracedEmail
+        const score = s.likelihoodToSellScore != null ? Math.round(s.likelihoodToSellScore * 100) : null
+        const motiv = s.motivationScore != null ? Math.round(s.motivationScore * 100) : null
+        return (
+          <div
+            key={s.id}
+            className="bg-white border border-[rgba(0,0,0,0.08)] rounded-[12px] p-4 hover:border-[rgba(0,0,0,0.16)] transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    href={`/${tenantSlug}/sellers/${s.id}`}
+                    className="font-semibold text-gray-900 hover:text-[#7F77DD]"
+                  >
+                    {displayName(s)}
+                  </Link>
+                  {s.isPrimary && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-100 text-indigo-700">Primary</span>
+                  )}
+                  {!s.isPrimary && s.role !== 'Seller' && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 text-gray-700">{s.role}</span>
+                  )}
+                  {s.doNotContact && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-700">DNC</span>
+                  )}
+                  {s.isDeceased && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 text-gray-600">Deceased</span>
+                  )}
+                  {/* Wave 1+2 person flags from PropertyRadar */}
+                  {s.seniorOwner === true && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-100 text-blue-700">Senior</span>
+                  )}
+                  {s.cashBuyerOwner === true && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-100 text-blue-700">Also Cash Buyer</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                  {phone && (
+                    <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{formatPhone(phone)}</span>
+                  )}
+                  {email && (
+                    <span className="truncate max-w-[280px]">{email}</span>
+                  )}
+                  {s.ghlContactId && (
+                    <a
+                      href={`https://app.gohighlevel.com/contacts/detail/${s.ghlContactId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-400 hover:text-gray-600"
+                      title="Open in GHL"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {score != null && (
+                  <div title="Likelihood-to-sell score (0-100)" className={`px-2 py-1 rounded text-xs font-semibold ${
+                    score >= 70 ? 'bg-green-100 text-green-800' :
+                    score >= 40 ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {score}%
+                  </div>
+                )}
+                {motiv != null && score == null && (
+                  <div title="Motivation score (0-100)" className="px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800">
+                    Motiv {motiv}%
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              {s.motivationPrimary && (
+                <Stat label="Motivation" value={titleCase(s.motivationPrimary)} />
+              )}
+              {s.urgencyLevel && (
+                <Stat label="Urgency" value={titleCase(s.urgencyLevel)} />
+              )}
+              <Stat label="Last contact" value={fmtRelativeFromIso(s.lastContactDate)} />
+              <Stat label="Calls" value={s.totalCallCount.toString()} />
+
+              {s.totalPropertiesOwned > 0 && (
+                <Stat
+                  label="Owns properties"
+                  value={s.totalPropertiesOwned.toString()}
+                  hint="Cross-portfolio (PropertyRadar)"
+                />
+              )}
+              {s.ownerPortfolioTotalEquity && (
+                <Stat
+                  label="Portfolio equity"
+                  value={fmtMoney(s.ownerPortfolioTotalEquity)}
+                  hint="PropertyRadar (Wave 1+2 backfill)"
+                />
+              )}
+              {s.ownerPortfolioTotalValue && (
+                <Stat
+                  label="Portfolio value"
+                  value={fmtMoney(s.ownerPortfolioTotalValue)}
+                  hint="PropertyRadar (Wave 1+2 backfill)"
+                />
+              )}
+              {(s.skipTracedMailingAddress || s.skipTracedMailingCity) && (
+                <Stat
+                  label="Skip-traced mail"
+                  value={[s.skipTracedMailingAddress, s.skipTracedMailingCity, s.skipTracedMailingState, s.skipTracedMailingZip]
+                    .filter(Boolean).join(', ') || '—'}
+                  hint="From skip-trace, not GHL"
+                />
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div title={hint}>
+      <div className="text-[10px] uppercase tracking-wide text-gray-400">{label}</div>
+      <div className="text-xs text-gray-800 truncate" title={value}>{value}</div>
+    </div>
   )
 }
 
