@@ -32,6 +32,12 @@ interface SellerData {
   createdAt: string
   updatedAt: string
   name: string
+  // v1.1 Wave 1+2 — Q2 decomposed name parts (back-filled from Property
+  // owner_first_name_1 / _last_name_1 or splitName(seller.name)).
+  firstName: string | null
+  middleName: string | null
+  lastName: string | null
+  nameSuffix: string | null
   phone: string | null
   secondaryPhone: string | null
   mobilePhone: string | null
@@ -41,6 +47,14 @@ interface SellerData {
   mailingCity: string | null
   mailingState: string | null
   mailingZip: string | null
+  // v1.1 Wave 1+2 — Q1/Shape A skip-trace fallback identity. Mirrors
+  // legacy phone/email/mailing values via dual-write.
+  skipTracedPhone: string | null
+  skipTracedEmail: string | null
+  skipTracedMailingAddress: string | null
+  skipTracedMailingCity: string | null
+  skipTracedMailingState: string | null
+  skipTracedMailingZip: string | null
   dateOfBirth: string | null
   maritalStatus: string | null
   spouseName: string | null
@@ -190,6 +204,18 @@ interface SellerData {
   priorityFlag: boolean
   customFields: Record<string, unknown>
   fieldSources: Record<string, string>
+  // v1.1 Wave 1+2 — Q3 person flags + portfolio aggregates (back-filled
+  // from Property staging during Wave 2 apply).
+  seniorOwner: boolean | null
+  deceasedOwner: boolean | null
+  cashBuyerOwner: boolean | null
+  totalPropertiesOwned: number
+  ownerPortfolioTotalEquity: string | null
+  ownerPortfolioTotalValue: string | null
+  ownerPortfolioTotalPurchase: string | null
+  ownerPortfolioAvgAssessed: string | null
+  ownerPortfolioAvgPurchase: string | null
+  ownerPortfolioAvgYearBuilt: number | null
   // CourtListener case-search (populated by lib/courtlistener)
   clCasesSearchedAt: string | null
   clBankruptcyCount: number
@@ -670,7 +696,41 @@ export function SellerDetailClient({ seller, tenantSlug }: SellerDetailClientPro
             <span className="flex items-center gap-1">
               <Building2 className="w-3 h-3" /> {data.properties.length} {data.properties.length === 1 ? 'Property' : 'Properties'}
             </span>
+            {/* v1.1 Wave 1+2 — person flags from PropertyRadar enrichment */}
+            {data.seniorOwner === true && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-100 text-blue-700">Senior</span>
+            )}
+            {data.deceasedOwner === true && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-700">Deceased</span>
+            )}
+            {data.cashBuyerOwner === true && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-100 text-blue-700">Also Cash Buyer</span>
+            )}
           </div>
+
+          {/* v1.1 Wave 1+2 — decomposed name + portfolio summary, only shown when backfilled */}
+          {(data.firstName || data.lastName || data.totalPropertiesOwned > 0 || data.ownerPortfolioTotalEquity) && (
+            <div className="flex items-center gap-6 mt-1.5 text-[10px] text-gray-400">
+              {(data.firstName || data.lastName) && (
+                <span className="flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  <span className="font-mono text-[10px]">
+                    {[data.firstName, data.middleName, data.lastName, data.nameSuffix].filter(Boolean).join(' ')}
+                  </span>
+                </span>
+              )}
+              {data.totalPropertiesOwned > 0 && (
+                <span title="Cross-portfolio property count from PropertyRadar (Wave 1+2 backfill)">
+                  Owns {data.totalPropertiesOwned} {data.totalPropertiesOwned === 1 ? 'property' : 'properties'}
+                </span>
+              )}
+              {data.ownerPortfolioTotalEquity && (
+                <span title="Owner's total portfolio equity from PropertyRadar (Wave 1+2 backfill)">
+                  Portfolio equity {fmtMoney(data.ownerPortfolioTotalEquity)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

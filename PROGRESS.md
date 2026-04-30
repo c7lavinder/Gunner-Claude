@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 60 — v1.1 Wave 1 + Wave 2 COMPLETE (2026-04-30) — additive schema shipped, dual-write live, backfill applied + verified idempotent
+**Current session**: 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A (2026-04-30) — schema, dual-write, backfill applied, sellers list page + nav links shipped
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -57,7 +57,37 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
-### Session 60 — v1.1 Wave 1 + Wave 2 COMPLETE (2026-04-30)
+### Session 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A (2026-04-30)
+
+**Wave 3 Phase A (after Wave 2 applied):** UI surfaces for the new
+schema. The new fields are now visible to users via:
+
+| Surface | Status |
+|---|---|
+| `/{tenant}/sellers/` (list view) | **NEW** — server component, ranked by `likelihoodToSellScore DESC, lastContactDate DESC`. Renders decomposed name + person flag pills (Senior / Deceased / Cash buyer) + portfolio totals (`totalPropertiesOwned`, `ownerPortfolioTotalEquity`). Uses `requireSession` + `hasPermission('properties.view.assigned')`. |
+| `/{tenant}/sellers/[id]/` | Polished. Server component now serializes the 5 new portfolio Decimal fields. Detail client gains Wave 1+2 type fields + a compact "decomposed name + portfolio summary" sub-row in the header (only visible when backfilled data exists). Person flag pills appear inline next to the existing DNC pill. |
+| Top nav | "Sellers" link added (visible to anyone with `properties.view.assigned`). "Buyers" link added (admin-only — was previously hidden from nav per PROGRESS Built table). |
+| `/{tenant}/buyers/page.tsx` | NO change. Plan §3 said "migrate from `requireSession()` to `withTenant`" but that was a planning error: `withTenant` is for API routes; server pages correctly use `requireSession()`. The existing surface is fine. |
+
+**Wave 3 Phase B (DEFERRED to next session — fresh context):**
+- Property Research tab gains Sellers + Buyers sub-tabs.
+- Read-path migration of ~30 sites currently reading `property.owner*`
+  → switch to read from linked Seller (Property staging columns drop in
+  Wave 5).
+- Optional: P6 (View-As cookie + server-side resolution) before any
+  new client component reading View-As state.
+
+**Files added:**
+- `app/(tenant)/[tenant]/sellers/page.tsx` (NEW server component, ~240 lines).
+
+**Files modified:**
+- `app/(tenant)/[tenant]/sellers/[id]/page.tsx` — added 5 Decimal-to-string conversions for portfolio columns.
+- `components/sellers/seller-detail-client.tsx` — `SellerData` type gained 17 Wave 1+2 fields; header gained person flag pills + a compact "decomposed name + portfolio summary" sub-row (only renders when populated, so legacy sellers don't show empty placeholders).
+- `components/ui/top-nav.tsx` — added Sellers + Buyers nav items.
+
+**Verification:**
+- `npx tsc --noEmit`: 0 errors.
+- Live walkthrough deferred to post-deploy (will spot-check after push).
 
 **Wave 2 commit 2 (apply, after dry-run review approved by Corey):**
 Backfill APPLIED via `POST /api/diagnostics/v1_1_seller_backfill`. Live

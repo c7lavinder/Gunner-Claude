@@ -66,6 +66,9 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     { href: `${base}/tasks`, label: 'Day Hub', always: true },
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as never },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
+    // v1.1 Wave 3 Phase A — surface Sellers list + Buyers (was hidden from nav).
+    { href: `${base}/sellers`, label: 'Sellers', permission: 'properties.view.assigned' as never },
+    { href: `${base}/buyers`, label: 'Buyers', adminOnly: true },
     { href: `${base}/contacts`, label: 'Contacts', adminOnly: true },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
     { href: `${base}/accountability`, label: 'Accountability', adminOnly: true },

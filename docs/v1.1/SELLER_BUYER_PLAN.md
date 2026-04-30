@@ -16,6 +16,17 @@
 > `searchCourtListenerForProperty`). 0 column drops — those land in Wave 5
 > cutover. `npx tsc --noEmit` clean.
 >
+> **Wave 3 Phase A SHIPPED 2026-04-30 (Session 60).** UI surfaces for
+> the new schema. NEW `/{tenant}/sellers/` list page (server component,
+> table view, ranked by `likelihoodToSellScore DESC, lastContactDate DESC`).
+> `/{tenant}/sellers/[id]/` polished — Decimal serialization for portfolio
+> Decimals + compact Wave 1+2 fields surface (person flag pills,
+> decomposed name display, portfolio totals). Top nav gained Sellers +
+> Buyers links. `/{tenant}/buyers/page.tsx` left unchanged — plan §3
+> incorrectly said "migrate to withTenant"; that's an API-route helper,
+> not for server pages. Phase B (Property Research sub-tabs + 30-site
+> read-path migration + optional P6) DEFERRED to next session.
+>
 > **Wave 2 SHIPPED + APPLIED 2026-04-30 (Session 60).** Two commits:
 > commit 1 = dual-write code path + bearer-gated diagnostic endpoint;
 > commit 2 = apply (POST endpoint) + verification. Live tenant

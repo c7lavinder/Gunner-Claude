@@ -86,6 +86,12 @@ export default async function SellerDetailPage({
     countyAssessedValue: seller.countyAssessedValue?.toString() ?? null,
     countyMarketValue: seller.countyMarketValue?.toString() ?? null,
     lastSalePrice: seller.lastSalePrice?.toString() ?? null,
+    // v1.1 Wave 1+2 — portfolio aggregate Decimals.
+    ownerPortfolioTotalEquity: seller.ownerPortfolioTotalEquity?.toString() ?? null,
+    ownerPortfolioTotalValue: seller.ownerPortfolioTotalValue?.toString() ?? null,
+    ownerPortfolioTotalPurchase: seller.ownerPortfolioTotalPurchase?.toString() ?? null,
+    ownerPortfolioAvgAssessed: seller.ownerPortfolioAvgAssessed?.toString() ?? null,
+    ownerPortfolioAvgPurchase: seller.ownerPortfolioAvgPurchase?.toString() ?? null,
     // Properties
     properties: seller.properties.map(ps => ({
       isPrimary: ps.isPrimary,
