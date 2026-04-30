@@ -164,6 +164,14 @@ race AND the warning.
 - The fix is one file and ~10 lines. The diagnostic was the work; the
   patch was a one-liner.
 
+**Verifications Owed (Wave 6.2 fix, browser-side):**
+- [ ] V1: No hydration mismatch warning in dev console
+- [ ] V2: First-paint fetches to `/api/[tenant]/dayhub/{kpis,inbox,appointments}` include `&asUserId=` query param
+- [ ] V3: Strict Mode double-invoke safe (effects fire twice in dev, both with asUserId)
+- [ ] V4: 5+ navigation cycles to /tasks/ with View As active, zero leak frames observed
+
+If any verification FAILS, pivot to Shape B (explicit hydration gate) in a follow-up session.
+
 ### Session 55 — Wave 5: cleanup wave (2026-04-29) — P4 STOPPED, Bug #12 closed
 
 Two items in scope: legacy `/tasks/` deletion (P4) and Bug #12 (GHL API

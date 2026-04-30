@@ -234,50 +234,40 @@ preview / edit / confirm. Investigate whether to add it to the UI flow
 or formalize the bypass with explicit documentation + a server-side
 acceptance test. Surfaced during SYSTEM_MAP §6 review (Commit #2 sprint).
 
-**P6 — View As propagation refactor (cookie + server-side resolution).**
-Status: queued, defer until concrete need.
+**P6 — Move View As from localStorage to httpOnly cookie (architectural leak-class closure).**
 
-Current model: View As is purely client-side localStorage. The /tasks/
-client component appends `?asUserId=…` to fetch URLs; route handlers
-read the query string and call `resolveEffectiveUser(ctx, asUserId)`.
-Wave 6.2 (Session 57) closed the hydration race in `day-hub-client.tsx`
-with a synchronous `useState` initializer (Shape A) — but Shape A has
-two known costs:
+Status: QUEUED — v1.1 sprint candidate
 
-1. **Hydration mismatch warning.** The initializer reads localStorage
-   during render. Server returns null; client returns the stored value.
-   `viewAsUser` is read in JSX branches (lines 502, 640, 661, 685 in
-   `day-hub-client.tsx`), so SSR HTML and client hydration render disagree
-   whenever a View-As is active. React 18 logs a warning and discards the
-   server tree for this subtree. Functional but noisy.
-2. **Pattern fragility.** Any future client component that adds a
-   View-As-keyed fetch must remember the `useState(() => readViewAs())`
-   pattern. A new contributor using `useState(null)` + `useEffect` would
-   silently re-introduce the race. There is no compile-time enforcement.
-3. **No server-component path.** Server components have no mechanism to
-   read View As state, so any future server-rendered View-As-aware
-   surface would need to bounce through a client component just to
-   thread `asUserId` through.
+Context: Wave 6.2 closed the /tasks/ Day Hub hydration race via Shape A
+(synchronous useState initializer reading localStorage). However, View
+As is still client-only state propagated via `?asUserId=` query
+parameter. Any future client component that adds a View-As-keyed fetch
+could reintroduce the same race class if it forgets to use a synchronous
+useState initializer.
 
-Proposed Shape C:
-- Set an httpOnly signed cookie `gunner_view_as_user_id` from the
-  Settings > Team server action (replaces the localStorage write).
-- `withTenant` reads + verifies the cookie, exposes
-  `ctx.effectiveUserId` (already-resolved, signed by the server).
-- Client components (and server components, if needed) consume
-  `effectiveUserId` from the page-level data fetch — no `?asUserId`
-  query strings, no localStorage reads at render time.
-- `exitViewAs()` becomes a server action that clears the cookie.
+Architectural fix: store View As in an httpOnly cookie. Server reads
+cookie in withTenant; resolveEffectiveUser reads cookie when asUserId
+query param is absent. Client localStorage stays for display-label
+purposes only.
 
-Defer trigger: any of the following warrants picking this up.
-- A second client surface needs View-As-scoped fetches (right now /tasks/
-  is the only one).
-- A server component needs View-As-scoped data.
-- The hydration warning becomes user-visible (e.g., a customer reports
-  red console errors during onboarding).
+Benefits:
+- Closes leak class structurally, not patches one component
+- Server components can scope to View As (today they cannot)
+- Single source of truth (cookie + label localStorage), simpler mental model
 
-Until then, Shape A is sufficient: the data leak is closed, and the
-warning is dev-console-only.
+Risks (require security review before implementation):
+- CSRF: cookie-based impersonation needs CSRF token or signed cookie
+- Setter endpoint: bug there could let any user impersonate any user —
+  much higher blast radius than current bug class
+- Cross-tab semantics: cookie is browser-wide; localStorage today is
+  per-tab unless `storage` event syncs it (semantic change)
+
+Dependencies: should land before any new server-side View-As-scoped
+data fetches are added. Currently /day-hub/ does not need View As
+scoping; if that changes, P6 becomes blocking.
+
+Cross-references: Wave 6.2 fix (commit 375354b), original diagnostic
+(PROGRESS Session 56).
 
 ## Pending decisions
 
