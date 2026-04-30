@@ -362,6 +362,24 @@ export async function gradeCall(callId: string): Promise<void> {
       console.error('[Grading] Next steps generation failed:', err)
     )
 
+    // v1.1 Wave 4 — auto-link Call.sellerId via (propertyId, ghlContactId)
+    // BEFORE the extract / TCP / rollup fan-out, so downstream consumers see
+    // the linked Seller. await intentionally — we want sellerId set before
+    // the rollup fires below. autolinkCallSeller is idempotent + cheap (one
+    // findMany on a small join table) and a no-op when sellerId is already
+    // set or when no unique (propertyId, ghlContactId) match exists.
+    let resolvedSellerId = call.sellerId
+    try {
+      const { autolinkCallSeller } = await import('@/lib/v1_1/call_seller_autolink')
+      const linkResult = await autolinkCallSeller(call.tenantId, callId)
+      if (linkResult.status === 'linked' && linkResult.sellerId) {
+        resolvedSellerId = linkResult.sellerId
+        console.log(`[Grading] Auto-linked call ${callId} to seller ${linkResult.sellerId}`)
+      }
+    } catch (err) {
+      console.error('[Grading] Auto-link failed:', err instanceof Error ? err.message : err)
+    }
+
     // Fire-and-forget: extract deal intelligence from transcript
     if (call.propertyId && transcript) {
       import('@/lib/ai/extract-deal-intel').then(({ extractDealIntel }) =>
@@ -384,10 +402,11 @@ export async function gradeCall(callId: string): Promise<void> {
     // Seller's motivationScore, likelihoodToSellScore, totalCallCount,
     // lastContactDate, noAnswerStreak, and additive lists (objection
     // profile, red/green flags) from the seller's full call history.
-    // Idempotent. Skips silently if call.sellerId is null.
-    if (call.sellerId) {
+    // Idempotent. Uses the auto-linked sellerId from the pre-extract step
+    // above — so newly auto-linked calls trigger the rollup on their own.
+    if (resolvedSellerId) {
       import('@/lib/v1_1/seller_rollup').then(({ rollupSellerFromCalls }) =>
-        rollupSellerFromCalls(call.tenantId, call.sellerId!, { dryRun: false }).catch(err =>
+        rollupSellerFromCalls(call.tenantId, resolvedSellerId!, { dryRun: false }).catch(err =>
           console.error('[Grading] Seller rollup failed:', err instanceof Error ? err.message : err)
         )
       )

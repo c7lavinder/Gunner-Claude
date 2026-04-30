@@ -31,6 +31,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { backfillTenantSellerRollups } from '@/lib/v1_1/seller_rollup'
 import { backfillBuyerMatchScores } from '@/lib/v1_1/wave_4_backfill'
+import { backfillCallSellerLinks } from '@/lib/v1_1/call_seller_autolink'
 
 function checkAuth(req: Request): NextResponse | null {
   const token = process.env.DIAGNOSTIC_TOKEN
@@ -77,10 +78,11 @@ async function runBackfill(req: Request, dryRun: boolean) {
 
   const startedAt = Date.now()
 
-  // Run sequentially — the rollup backfill writes to Seller rows; the
-  // matchScore backfill writes to PropertyBuyerStage rows. No overlap,
-  // so they could run in parallel, but sequential is easier to reason
-  // about for the report.
+  // Run sequentially — order matters: auto-link FIRST so the rollup
+  // pass has data to roll up. (Without auto-link, historical calls have
+  // sellerId=null, so the Seller→calls FK returns 0 and the rollup is
+  // a no-op.) matchScore is independent and runs at the end.
+  const autolinkReport = await backfillCallSellerLinks(tenantId, { dryRun, limit, sampleSize: 10 })
   const rollupReport = await backfillTenantSellerRollups(tenantId, { dryRun, limit, sampleSize: 10 })
   const matchScoreReport = await backfillBuyerMatchScores(tenantId, { dryRun, limit, sampleSize: 10 })
 
@@ -100,6 +102,11 @@ async function runBackfill(req: Request, dryRun: boolean) {
         source: 'SYSTEM',
         payload: {
           durationMs,
+          autolinkScanned: autolinkReport.scanned,
+          autolinkLinked: autolinkReport.linked,
+          autolinkNoMatch: autolinkReport.noMatch,
+          autolinkAmbiguous: autolinkReport.ambiguous,
+          autolinkErrors: autolinkReport.errors,
           rollupScanned: rollupReport.scanned,
           rollupUpdated: rollupReport.updated,
           rollupNoCalls: rollupReport.noCalls,
@@ -119,15 +126,17 @@ async function runBackfill(req: Request, dryRun: boolean) {
     mode: dryRun ? 'DRY_RUN' : 'APPLIED',
     tenant: { id: tenantId, slug: tenantSlug, name: tenantName },
     durationMs,
+    callSellerAutolink: autolinkReport,
     sellerRollupBackfill: rollupReport,
     buyerMatchScoreBackfill: matchScoreReport,
     sources: {
+      callSellerAutolink: 'lib/v1_1/call_seller_autolink.ts → backfillCallSellerLinks',
       sellerRollupBackfill: 'lib/v1_1/seller_rollup.ts → backfillTenantSellerRollups',
       buyerMatchScoreBackfill: 'lib/v1_1/wave_4_backfill.ts → backfillBuyerMatchScores',
     },
     notes: dryRun
-      ? 'Dry-run only — no writes. Counts and samples reflect what an APPLY would do.'
-      : 'Applied. Idempotent — re-running is safe and a no-op for already-rolled-up sellers and already-populated matchScores.',
+      ? 'Dry-run only — no writes. Counts and samples reflect what an APPLY would do. Run order on apply: auto-link → rollup → matchScore (auto-link must precede rollup so the rollup has linked-call data to read).'
+      : 'Applied. Idempotent — re-running is safe and a no-op for already-linked calls, already-rolled-up sellers, and already-populated matchScores.',
   })
 }
 
