@@ -5,6 +5,20 @@
 > **Author:** Session 60 (2026-04-30)
 > **Sprint pre-state:** v1-finish closed at commit `1d41d50`. Reliability scorecard
 > dimension #8 (Seller/Buyer contact data model) = 4/10 — the explicit redesign target.
+>
+> **Decisions locked 2026-04-30 (after first Corey review):**
+> - **Q1 → Shape A** (pure live-fetch from GHL on render). GHL-overlap columns
+>   on Seller and Buyer are DROPPED. Skip-trace columns added for unlinked
+>   sellers. Section 4 narrowed to per-surface fetch decisions.
+> - **Q2 → Decompose `Seller.name`** into `firstName` / `middleName` /
+>   `lastName` / `nameSuffix`. The legacy `name` column drops at Wave 5
+>   cutover; UI formats from parts.
+> - **Q3 → Ambiguous Property fields per recommendations:** `absenteeOwner`,
+>   `absenteeOwnerInState`, `ownerMailingVacant` (rename to
+>   `mailingAddressVacant`) STAY on Property; `seniorOwner`,
+>   `deceasedOwner`, `cashBuyerOwner` STRIP to Seller.
+>
+> Q4-Q7 remain open (sprint-time decisions). Q8 carry-forward unchanged.
 
 ---
 
@@ -118,16 +132,21 @@ Property size after strip: **~188 columns**.
 | `ownerPortfolioAvgYearBuilt` | Int? | STRIP-TO-SELLER | NEW field on Seller. |
 | `ownerPortfolioJson` | Json? | STRIP-TO-SELLER | NEW field on Seller. |
 
-**Fields with AMBIGUOUS disposition — needs Corey decision (4 cols):**
+**Q3 resolved 2026-04-30 — formerly ambiguous fields, dispositions locked:**
 
-| Field | Type | Question |
-|---|---|---|
-| `absenteeOwner` | Boolean? | Property fact (this property is absentee-owned) OR seller fact (this person is an absentee owner of multiple)? PropertyRadar reports it per-property. Recommendation: **STAY ON PROPERTY** (fact about THIS property's owner-occupancy). |
-| `absenteeOwnerInState` | Boolean? | Same question. Recommendation: **STAY ON PROPERTY**. |
-| `seniorOwner` | Boolean? | Person-level fact (the owner is a senior). Recommendation: **STRIP-TO-SELLER**. |
-| `deceasedOwner` | Boolean? | Person-level fact. Recommendation: **STRIP-TO-SELLER**. |
-| `cashBuyerOwner` | Boolean? | Person-level fact (this person is also a cash buyer). Recommendation: **STRIP-TO-SELLER** (and surface on Seller detail as a cross-side flag). |
-| `ownerMailingVacant` | Boolean? | Property-level (the owner's MAILING address is vacant per USPS). Recommendation: **STAY ON PROPERTY** (it's about a property, the owner's mailing property — name is misleading; rename to `mailingAddressVacant`?). |
+| Field | Type | Disposition (LOCKED) | Reason |
+|---|---|---|---|
+| `absenteeOwner` | Boolean? | STAY ON PROPERTY | Property fact — this property is absentee-owned. PropertyRadar reports it per-property. |
+| `absenteeOwnerInState` | Boolean? | STAY ON PROPERTY | Same — property-level. |
+| `seniorOwner` | Boolean? | STRIP-TO-SELLER | Person-level fact about the owner. |
+| `deceasedOwner` | Boolean? | STRIP-TO-SELLER | Person-level fact. |
+| `cashBuyerOwner` | Boolean? | STRIP-TO-SELLER | Person-level fact (this person is also a cash buyer); surfacing on Seller detail makes the cross-side flag visible. |
+| `ownerMailingVacant` | Boolean? | STAY ON PROPERTY (renamed to `mailingAddressVacant`) | About a property (the owner's mailing property), not the person. Rename in Wave 1 schema migration. |
+
+Three of these (`seniorOwner`, `deceasedOwner`, `cashBuyerOwner`) join the
+~15 strip targets above, bringing the **total Property → Seller strip to ~18 columns**.
+Two flags (`absenteeOwner`, `absenteeOwnerInState`) stay; one renames in place
+(`ownerMailingVacant` → `mailingAddressVacant`).
 
 **Fields to STRIP from Property → PROPERTYBUYERSTAGE (1 col, JSON hack):**
 
@@ -148,12 +167,12 @@ keyed off the property's owner record, so they describe "the owner of
 this property." Recommendation: **STAY ON PROPERTY** with mirror-write
 to Seller (Q5 in §11).
 
-### Table B — Seller (canonical entity, ~150 columns post-redesign)
+### Table B — Seller (canonical entity, ~145 columns post-redesign)
 
 Seller already has **~150 columns** ([prisma/schema.prisma:729-1007](../../prisma/schema.prisma#L729-L1007)).
-After redesign: ~150 + ~15 (from Property strip) − up to ~12 (GHL-overlap
-fields removed if Section 4 lands on pure live-fetch) ≈ **140-165 columns**
-depending on Section 4.
+After redesign: ~150 + ~18 (from Property strip per Q3 lock) − ~12 (GHL-overlap
+fields DROPPED per Q1/Shape A lock) − 1 (`name` collapses into 4 part columns
+per Q2 lock; net +3) ≈ **~158 columns**.
 
 Grouped by source tag (counts approximate; exact post-Wave-1 audit will produce the
 authoritative inventory):
@@ -161,10 +180,12 @@ authoritative inventory):
 | Group | Count | Examples | Notes |
 |---|---|---|---|
 | **[GHL-cached-id-only]** | 1 | `ghlContactId` | The single load-bearing reference. |
-| **[GHL-overlap]** — overlap with GHL contact identity | ~12 | `name`, `phone`, `secondaryPhone`, `mobilePhone`, `email`, `secondaryEmail`, `mailingAddress`, `mailingCity`, `mailingState`, `mailingZip`, `mailingZipPlus4`, `mailingCounty` | **Decision in Section 4.** Either eliminate (pure live-fetch) or retag as [GHL-cached-fallback] with explicit precedence rule. |
-| **[skip-trace]** — non-GHL contact data | ~8 | `mailingValidity`, `mailingDeliveryPoint`, `mailingDpvFootnotes`, `mailingDpvMatchCode`, `dateOfBirth`, `age`, `gender`, `personType` | PropertyRadar `/persons` enrichment. Stays local. |
+| **[GHL-overlap]** — DROPPED per Q1/Shape A | 0 (was ~12) | (removed: `name`, `phone`, `secondaryPhone`, `mobilePhone`, `email`, `secondaryEmail`, `mailingAddress`, `mailingCity`, `mailingState`, `mailingZip`, `mailingZipPlus4`, `mailingCounty`) | Live-fetched from GHL on render. Cache lives in 60s in-memory layer, not in DB. |
+| **[skip-trace] — name parts (Q2 lock)** | 4 | `firstName`, `middleName`, `lastName`, `nameSuffix` | NEW columns per Q2. Used when `ghlContactId` is null (skip-traced sellers not yet promoted to GHL contacts) AND for CourtListener exact-name search + person disambiguation. UI formats display name from parts. |
+| **[skip-trace] — fallback identity** | 4 | `skipTracedPhone`, `skipTracedEmail`, `skipTracedMailingAddress`, `skipTracedMailingCity/State/Zip` | NEW columns per Q1/Shape A. Render-path fallback when `ghlContactId` is null. Once seller is promoted to a GHL contact, these become orphan history (kept for audit). |
+| **[skip-trace] — non-GHL contact data** | ~8 | `mailingValidity`, `mailingDeliveryPoint`, `mailingDpvFootnotes`, `mailingDpvMatchCode`, `dateOfBirth`, `age`, `gender`, `personType` | PropertyRadar `/persons` enrichment metadata (USPS DPV codes etc.). Not in GHL. Stays local. |
 | **[vendor-extracted]** — public records / court / portfolio | ~30 | `clCasesJson`, `clBankruptcyCount`, `federalBankruptcyActive`, `civilSuitCountAsDefendant`, `evictionFilingCountAsPlaintiff`, `countyOwnerName`, `countyAssessedValue`, `lastSalePrice`, `parcelId`, `legalDescription`, `deedType`, `zoning`, `schoolDistrict`, etc. | CourtListener + county records. Stays local. |
-| **[vendor-extracted] — owner portfolio (NEW from Property strip)** | ~7 | `totalPropertiesOwned`, `ownerPortfolioTotalEquity`, `ownerPortfolioTotalValue`, `ownerPortfolioTotalPurchase`, `ownerPortfolioAvgAssessed`, `ownerPortfolioAvgPurchase`, `ownerPortfolioAvgYearBuilt`, `ownerPortfolioJson` | Stripped from Property (Table A). |
+| **[vendor-extracted] — owner portfolio + person flags (NEW from Property strip)** | ~10 | `totalPropertiesOwned`, `ownerPortfolioTotalEquity`, `ownerPortfolioTotalValue`, `ownerPortfolioTotalPurchase`, `ownerPortfolioAvgAssessed`, `ownerPortfolioAvgPurchase`, `ownerPortfolioAvgYearBuilt`, `ownerPortfolioJson`, `seniorOwner`, `deceasedOwner`, `cashBuyerOwner` | Stripped from Property (Table A — incl. Q3 person flags). |
 | **[AI-extracted]** — Claude-derived from calls | ~25 | `motivationPrimary`, `motivationSecondary`, `urgencyScore`, `urgencyLevel`, `saleTimeline`, `hardshipType`, `emotionalState`, `personalityType`, `communicationStyle`, `priceSensitivity`, `objectionProfile`, `recommendedApproach`, `redFlags`, `positiveSignals`, `priceReductionLikelihood`, `motivationScore`, `likelihoodToSellScore`, `aiSummary`, `aiCoachingNotes`, etc. | Populated by `extract-deal-intel.ts`. Stays local. |
 | **[AI-extracted] — voice/emotion aggregates** | ~7 | `trustScore`, `trustStepCurrent`, `trustStepArc`, `voiceEnergyTrend`, `primaryEmotionMostFrequent`, `competitorsMentionedByName`, `dealkillersRaised` | Aggregated from per-call promoted fields nightly. |
 | **[human-input]** — flags, notes, prefs | ~25 | `doNotContact`, `doNotText`, `isDeceased`, `priorityFlag`, `internalNotes`, `tags`, `customFields`, `preferredContactMethod`, `bestTimeToCall`, `languagePreference`, `relationshipStrength`, `whoReferredThem`, etc. | Manual UI edits. |
@@ -172,24 +193,25 @@ authoritative inventory):
 | **[computed]** — interaction & portfolio rollups | ~15 | `totalCallCount`, `responseRate`, `noAnswerStreak`, `lastContactDate`, `firstContactDate`, `totalDealsWithUs`, `totalDealsClosed`, `totalDealsWalked`, `avgDaysToClose`, `closeRate`, `messageResponseRate`, `lastMeaningfulConversationDate`, etc. | Computed by nightly aggregates cron + on-graded triggers. |
 | **[computed] — message aggregates** | ~7 | `messageResponseTimeAvgHours`, `messageBestReplyHourOfDay`, `messageBestReplyDayOfWeek`, `messageThreadSentimentTrend`, `messageGhostCheckpoint`, `lastMessageReceivedAt`, `textResponseRate` | Currently scaffolded; will populate "once messages persisted" per inline comments. |
 
-**Justification for the ~140-165 count delta from "~200 framing":** the
+**Justification for the ~158 count delta from "~200 framing":** the
 ~200 framing was an upper bound assuming a maximalist build that copies
 GHL fields locally AND adds full skip-trace AND adds 25-field AI block
-AND adds 15-field portfolio block. Reality is mostly already built. If
-Section 4 lands on pure live-fetch (preferred path), Seller drops to ~140;
-if it lands on cache-with-precedence, ~165. Either is on-spec for
-"whatever survives discipline." Both are ≤200.
+AND adds 15-field portfolio block. Reality is mostly already built. With
+Q1/Shape A locked (drop ~12 GHL-overlap cols) + Q2 (decompose name → +3 net) +
+Property strip (+~18 from Q3-amended Table A), Seller lands at **~158** —
+on-spec for "whatever survives discipline" and ≤200.
 
-### Table C — Buyer (canonical entity, ~150 columns post-redesign)
+### Table C — Buyer (canonical entity, ~145 columns post-redesign)
 
 Buyer already has **~150 columns** ([prisma/schema.prisma:1553-1797](../../prisma/schema.prisma#L1553-L1797)).
-After redesign: ~150 − up to ~10 (GHL-overlap fields removed if Section 4
-lands on pure live-fetch) ≈ **140-150 columns**.
+After redesign: ~150 − ~12 (GHL-overlap fields DROPPED per Q1/Shape A lock) +
+~5 (skip-trace fallback columns for unlinked buyers) ≈ **~143 columns**.
 
 | Group | Count | Examples | Notes |
 |---|---|---|---|
 | **[GHL-cached-id-only]** | 1 | `ghlContactId` | Same load-bearing reference. |
-| **[GHL-overlap]** — overlap with GHL contact identity | ~10 | `name`, `phone`, `secondaryPhone`, `mobilePhone`, `email`, `secondaryEmail`, `company`, `mailingAddress`, `mailingCity`, `mailingState`, `mailingZip`, `website` | **Decision in Section 4.** |
+| **[GHL-overlap]** — DROPPED per Q1/Shape A | 0 (was ~12) | (removed: `name`, `phone`, `secondaryPhone`, `mobilePhone`, `email`, `secondaryEmail`, `company`, `mailingAddress`, `mailingCity`, `mailingState`, `mailingZip`, `website`) | Live-fetched from GHL on render. |
+| **[skip-trace] — fallback identity** | ~5 | `skipTracedName`, `skipTracedPhone`, `skipTracedEmail`, `skipTracedCompany`, `skipTracedMailingAddress` | NEW columns per Q1/Shape A. Render-path fallback when `ghlContactId` is null (rare for buyers — most are added with a GHL contact already). |
 | **[human-input]** — buybox geographic | ~8 | `primaryMarkets`, `countiesOfInterest`, `citiesOfInterest`, `zipCodesOfInterest`, `neighborhoodsOfInterest`, `geographicExclusions`, `maxDriveDistanceMiles`, `urbanRuralPreference` | Buyer self-report or rep-entered. |
 | **[human-input]** — buybox property | ~20 | `propertyTypes`, `minBeds`, `maxBeds`, `minBaths`, `maxBaths`, `minSqft`, `maxSqft`, `conditionRange`, `maxRepairBudget`, `structuralIssuesOk`, `tenantOccupiedOk`, `prefersVacant`, etc. | Same. |
 | **[human-input]** — buybox financial | ~20 | `minPurchasePrice`, `maxPurchasePrice`, `maxArvPercent`, `proofOfFundsOnFile`, `pofAmount`, `pofExpiration`, `hardMoneyLender`, `typicalCloseTimelineDays`, `canCloseAsIs`, etc. | Same. |
@@ -200,9 +222,11 @@ lands on pure live-fetch) ≈ **140-150 columns**.
 | **[computed]** — message aggregates | ~6 | `messageResponseRate`, `messageBestReplyHourOfDay`, `messageBestReplyDayOfWeek`, `messageGhostCheckpoint`, `linkCTRate`, `blastOpenToOfferConversion` | Same scaffold as Seller. |
 | **[human-input]** — comm settings & VIP | ~15 | `blastFrequency`, `bestBlastDay`, `bestBlastTime`, `preferredBlastChannel`, `unsubscribedFromEmail`, `unsubscribedFromText`, `tierClassification`, `copyOnEmails`, `badWithUsFlag`, `priorityFlag`, `internalNotes`, `tags`, `customFields`, etc. | Manual UI. |
 
-**Justification for ~140-150 count:** Buyer is mostly buybox and activity
-data — neither is in GHL — so the GHL-overlap subtraction is smaller (~10
-columns) than for Seller. The "~200" framing for Buyer was high.
+**Justification for ~143 count:** Buyer is mostly buybox and activity
+data — neither is in GHL — so the GHL-overlap subtraction (~12) is the only
+material change. The "~200" framing for Buyer was high. Buyer drops more
+proportionally than Seller because it has zero owner-portfolio fields to
+gain back from a Property strip — the strip targets are all seller-side.
 
 ### Join tables
 
@@ -292,9 +316,10 @@ inventory list page.
 
 ## 4. GHL contact-fetch boundary
 
-This is the load-bearing decision in the redesign. Two viable shapes:
+**Q1 RESOLVED 2026-04-30 — Shape A locked.** The two shapes are documented
+below for posterity; only Shape A is implemented.
 
-### Shape A — Pure live-fetch (recommended)
+### Shape A — Pure live-fetch (LOCKED)
 
 When `Seller.ghlContactId` (or `Buyer.ghlContactId`) is set, the local
 `name` / `phone` / `email` / `mailingAddress` columns are **dropped from
@@ -341,7 +366,7 @@ cache is fallback when fetch fails or `ghlContactId` is null.
 - Rule 1 holds with an asterisk: "GHL is authoritative, but here's a cache."
   Future Claude sessions will read the cache and treat it as truth.
 
-### Per-surface fetch decisions (under Shape A)
+### Per-surface fetch decisions (Shape A — LOCKED)
 
 | Surface | Field | Source |
 |---|---|---|
@@ -359,12 +384,27 @@ cache is fallback when fetch fails or `ghlContactId` is null.
 | `inventory/[propertyId]/` Research → Buyers sub-tab | buyer name + phone | Live-fetch via batch |
 | Call detail "About this seller" sidebar | seller name + phone | Live-fetch (single GHL call) |
 
-**Recommendation: Shape A.** The whole point of the 4/10 → 8/10 lift is
-ending the boundary leak structurally. Shape B is a documentation patch on
-a leak. Shape A costs ~1 extra wave of work but the result is the rule
-holding without footnotes for the next 18 months.
+**Decision: Shape A locked 2026-04-30.** The whole point of the 4/10 → 8/10
+lift is ending the boundary leak structurally. Shape A's latency cost
+(per-paint GHL fetch) is mitigated via the 60s in-memory cache + per-request
+batch fetch.
 
-**Decision needed Q1 in §11.**
+**Implementation implications now locked into Wave 1:**
+- ~12 GHL-overlap columns DROPPED from Seller (`name`, `phone`, `secondaryPhone`,
+  `mobilePhone`, `email`, `secondaryEmail`, `mailingAddress`, `mailingCity`,
+  `mailingState`, `mailingZip`, `mailingZipPlus4`, `mailingCounty`).
+- ~12 GHL-overlap columns DROPPED from Buyer (`name`, `phone`, `secondaryPhone`,
+  `mobilePhone`, `email`, `secondaryEmail`, `company`, `mailingAddress`,
+  `mailingCity`, `mailingState`, `mailingZip`, `website`).
+- Seller gains `firstName`, `middleName`, `lastName`, `nameSuffix` (Q2 lock).
+- Seller gains skip-trace fallback columns (`skipTracedPhone`,
+  `skipTracedEmail`, `skipTracedMailingAddress`, `skipTracedMailingCity/State/Zip`).
+- Buyer gains skip-trace fallback columns (`skipTracedName`, `skipTracedPhone`,
+  `skipTracedEmail`, `skipTracedCompany`, `skipTracedMailingAddress`).
+- New `lib/ghl/contact-resolver.ts` helper: per-request batch GHL fetch +
+  60s in-memory cache. Takes `tenantId` explicitly per AGENTS.md Class 4 hardening.
+- Drops are gated by full read-path migration (Wave 3). They land in Wave 5
+  with the rest of the strip cutover, NOT in Wave 1.
 
 ---
 
@@ -506,12 +546,18 @@ The schema strip is the riskiest step because ~30 read sites consume
 strip last.
 
 **Wave 1 — additive schema (1 migration):**
-1. Add ~7 new columns to `Seller` (portfolio totals, NEW fields from Table A).
-2. Add `source` column to `PropertyBuyerStage` (default `"matched"`).
-3. Add `skipTracedName` / `skipTracedPhone` / `skipTracedEmail` /
-   `skipTracedMailingAddress` to Seller and Buyer (Shape A only — gated on
-   Q1 decision in §11).
-4. NO column drops in this wave — additive only.
+1. Add ~10 new columns to `Seller` (portfolio totals + person flags from
+   Q3 lock: `seniorOwner`, `deceasedOwner`, `cashBuyerOwner`).
+2. Add `firstName`, `middleName`, `lastName`, `nameSuffix` to Seller (Q2 lock).
+3. Add skip-trace fallback columns per Q1/Shape A:
+   - Seller: `skipTracedPhone`, `skipTracedEmail`, `skipTracedMailingAddress`,
+     `skipTracedMailingCity`, `skipTracedMailingState`, `skipTracedMailingZip`.
+   - Buyer: `skipTracedName`, `skipTracedPhone`, `skipTracedEmail`,
+     `skipTracedCompany`, `skipTracedMailingAddress`.
+4. Add `source` column to `PropertyBuyerStage` (default `"matched"`).
+5. Rename `Property.ownerMailingVacant` → `mailingAddressVacant` (Q3 lock).
+6. NO column drops in this wave — additive only. The ~22 Property strip
+   columns + ~24 Seller/Buyer GHL-overlap drops all land in Wave 5.
 
 **Wave 2 — backfill + dual-write:**
 1. Backfill: copy `Property.owner*` fields into the right Seller rows. Match
@@ -556,13 +602,18 @@ strip last.
 4. TCP scorer (`lib/ai/scoring.ts`): add Seller likelihoodToSell write on
    every recalc.
 
-**Wave 5 — strip Property + cutover:**
+**Wave 5 — strip Property + Seller/Buyer GHL-overlap + cutover:**
 1. Verify dual-write cutover: every property in production has the new
    Seller rows; every read site has been migrated; pre-flight grep returns
    zero hits for `property.ownerPhone` / `ownerEmail` / `ownerType` /
    `secondOwner*` / `ownerFirstName*` / `ownerLastName*` /
-   `ownershipLengthYears` / `ownerPortfolio*` / `manualBuyerIds`.
-2. Drop the ~22 Property columns in a single migration.
+   `ownershipLengthYears` / `ownerPortfolio*` / `manualBuyerIds` /
+   `seniorOwner` / `deceasedOwner` / `cashBuyerOwner` /
+   `seller.name` / `seller.phone` / `seller.email` / `seller.mailing*` /
+   `buyer.name` / `buyer.phone` / `buyer.email` / `buyer.company` / etc.
+2. Drop the ~22 Property strip columns + ~12 Seller GHL-overlap columns +
+   ~12 Buyer GHL-overlap columns + legacy `Seller.name` (replaced by name parts).
+   ~46 column drops total in a single migration.
 3. Remove dual-write from `sync-seller.ts` — Seller is sole destination.
 4. Property strip is irreversible without a restore. **Tag a Railway
    database snapshot before this migration.**
@@ -734,44 +785,31 @@ redesign.
 These are decisions needed before Wave 1 kicks off. Listed in priority
 order — Q1-Q3 block schema design; Q4-Q7 can be answered during the sprint.
 
-### Q1 — Shape A vs Shape B (Section 4) **[BLOCKER FOR WAVE 1]**
+### Q1 — Shape A vs Shape B (Section 4) **✅ RESOLVED 2026-04-30**
 
-Pure live-fetch from GHL on every Seller/Buyer render (Shape A) vs
-local-cache-with-precedence (Shape B)?
+Locked: **Shape A** (pure live-fetch). GHL-overlap columns DROPPED from
+both Seller and Buyer. Skip-trace fallback columns added for unlinked
+records. New `lib/ghl/contact-resolver.ts` helper handles per-request
+batch fetch + 60s in-memory cache. Drops land in Wave 5 cutover.
 
-- Shape A = stricter GHL boundary, ~22 columns dropped from schema, +1
-  GHL fetch per detail-page paint (mitigatable via batch + in-memory cache).
-- Shape B = no schema column drops on identity fields, search-by-name
-  works locally, smaller wave, but the cache-drift footnote stays.
+### Q2 — Decompose Seller name into firstName / lastName? **✅ RESOLVED 2026-04-30**
 
-**Recommendation: Shape A.** Worth the latency for the boundary discipline.
+Locked: **decompose**. Seller gains `firstName`, `middleName`,
+`lastName`, `nameSuffix` in Wave 1 (additive). Legacy `Seller.name`
+column drops in Wave 5 cutover. UI formats display name from parts.
+CourtListener exact-name search and person-level disambiguation both
+benefit.
 
-### Q2 — Decompose Seller name into firstName / lastName? **[BLOCKER FOR WAVE 1]**
+### Q3 — Ambiguous fields disposition (Table A) **✅ RESOLVED 2026-04-30**
 
-`Seller.name` is currently a single column. PropertyRadar gives us
-`ownerFirstName1` / `ownerLastName1` (which we strip in Table A). To
-preserve the structured form on Seller, do we add `firstName` / `lastName` /
-`middleName` / `nameSuffix` to Seller and reduce `name` to a computed view,
-or keep `name` as the canonical string and lose the structured form?
+Locked per recommendations:
 
-- Pros of decomposing: CourtListener exact-name search needs first/last.
-  Skip-trace match quality improves. GHL contact has structured form.
-- Cons: schema bloat, every UI now formats name from parts.
-
-**Recommendation: decompose.** CourtListener (already running) and
-person-level disambiguation both need the structured form.
-
-### Q3 — Ambiguous fields disposition (Table A) **[BLOCKER FOR WAVE 1]**
-
-For each, recommendation in parentheses; please confirm or correct:
-
-- `absenteeOwner` (STAY ON PROPERTY — it's a property fact)
-- `absenteeOwnerInState` (STAY ON PROPERTY)
-- `seniorOwner` (STRIP-TO-SELLER — person fact)
-- `deceasedOwner` (STRIP-TO-SELLER — person fact)
-- `cashBuyerOwner` (STRIP-TO-SELLER — person fact, and surfacing it on
-  Seller detail makes the cross-side flag visible)
-- `ownerMailingVacant` (STAY ON PROPERTY, rename to `mailingAddressVacant`)
+- `absenteeOwner` — STAY ON PROPERTY (property fact)
+- `absenteeOwnerInState` — STAY ON PROPERTY
+- `seniorOwner` — STRIP-TO-SELLER (person fact)
+- `deceasedOwner` — STRIP-TO-SELLER (person fact)
+- `cashBuyerOwner` — STRIP-TO-SELLER (person fact, cross-side flag)
+- `ownerMailingVacant` — STAY ON PROPERTY, rename to `mailingAddressVacant`
 
 ### Q4 — Auto-link calls to sellers by ghlContactId? (Section 6)
 
