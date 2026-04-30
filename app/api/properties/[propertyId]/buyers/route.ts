@@ -326,13 +326,35 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
     // Fetch buyer pipeline stages for this property (include responseIntent for UI highlighting)
     const buyerStages = await db.propertyBuyerStage.findMany({
       where: { propertyId: params.propertyId, tenantId },
-      select: { buyerId: true, stage: true, responseIntent: true },
+      select: { id: true, buyerId: true, stage: true, responseIntent: true, matchScore: true },
     })
     const stageMap: Record<string, string> = {}
     const intentMap: Record<string, string> = {}
     for (const bs of buyerStages) {
       stageMap[bs.buyerId] = bs.stage
       if (bs.responseIntent) intentMap[bs.buyerId] = bs.responseIntent
+    }
+
+    // v1.1 Wave 4 — fire-and-forget persist matchScore for buyers that
+    // ALREADY have a PropertyBuyerStage row (no row creation here — that
+    // would write N rows per page load for every in-market buyer, which
+    // doesn't scale). Matched buyers without a stage row keep their
+    // score in the response only; persistence happens organically when
+    // they enter the pipeline (manual add, blast send, etc.).
+    const stageByBuyer = new Map(buyerStages.map(bs => [bs.buyerId, bs] as const))
+    const now = new Date()
+    for (const m of matched) {
+      const existing = stageByBuyer.get(m.id)
+      if (!existing) continue
+      // Only write when the persisted value diverges materially.
+      if (
+        typeof existing.matchScore === 'number' &&
+        Math.abs(existing.matchScore - m.matchScore) < 0.5
+      ) continue
+      db.propertyBuyerStage.update({
+        where: { id: existing.id, tenantId },
+        data: { matchScore: m.matchScore, matchScoreUpdatedAt: now },
+      }).catch(err => console.warn('[Buyers] matchScore persist failed:', err instanceof Error ? err.message : err))
     }
 
     return NextResponse.json({ buyers: matched, total: matched.length, buyerStages: stageMap, buyerIntents: intentMap })
