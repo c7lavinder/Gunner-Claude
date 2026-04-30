@@ -1618,53 +1618,67 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — v1.1 Wave 2 — Backfill + Dual-Write
+## Next Session — v1.1 Wave 3 Phase B — Read-path migration + Research sub-tabs
 
-Wave 1 shipped 2026-04-30 (this session, Session 60). Wave 2 fills the
-new destinations and turns dual-write on. Plan reference:
-[docs/v1.1/SELLER_BUYER_PLAN.md §8 Wave 2](docs/v1.1/SELLER_BUYER_PLAN.md).
+Wave 1 + Wave 2 + Wave 3 Phase A all shipped 2026-04-30 (Session 60).
+Phase B is the larger half of Wave 3 — best done with fresh context.
 
-**Wave 2 scope:**
-1. **Property → Seller backfill script** at `scripts/v1_1_wave_2_backfill_sellers.ts`:
-   - Iterate `Property` rows with any `owner*` field populated.
-   - Match to existing `Seller` via `Property.ghlContactId → Seller.ghlContactId`,
-     or fall back to fuzzy match on (normalized phone, name parts, state),
-     or CREATE new Seller + PropertySeller link.
-   - Populate Q2 name parts (parsed from `ownerFirstName1/LastName1` or
-     fallback to splitting `Property.ownerName`/`Seller.name`).
-   - Populate Q1 skip-trace fallback (`skipTracedPhone/Email` from
-     `Property.ownerPhone/Email`).
-   - Populate Q3 person flags (`seniorOwner`, `deceasedOwner`, `cashBuyerOwner`).
-   - Populate portfolio aggregates (`ownerPortfolioTotalEquity` etc.).
-   - Idempotent — re-runnable. Logs per-property outcome to
-     `audit_logs` for spot-check.
-2. **`Property.manualBuyerIds[]` → `PropertyBuyerStage` migration**
-   at `scripts/v1_1_wave_2_migrate_manual_buyer_ids.ts`:
-   - For each Property with non-empty `manualBuyerIds`, iterate GHL contact
-     IDs, find/create Buyer by `ghlContactId`, insert `PropertyBuyerStage`
-     row with `stage='added'`, `source='manual'`. Idempotent.
-3. **Dual-write turn-on** in `lib/enrichment/sync-seller.ts`:
-   `buildSellerSyncUpdate` today writes legacy `name/phone/email`. Expand
-   to also write `firstName/middleName/lastName` (parsed via existing
-   `splitName` helper), `skipTracedPhone/Email` (mirroring legacy fields),
-   portfolio aggregates from BatchData/PropertyRadar payload, and the 3
-   person flags. Legacy fields KEEP getting written (dual-write window).
-4. **Diagnostic endpoint** `app/api/diagnostics/v1_1_seller_backfill/route.ts`:
-   bearer-token gated (PUBLIC_PATHS entry required), returns per-tenant
-   backfill coverage report — counts, sample mismatches, dual-write delta.
+Plan reference:
+[docs/v1.1/SELLER_BUYER_PLAN.md §8 Wave 3](docs/v1.1/SELLER_BUYER_PLAN.md).
+
+**Wave 3 Phase B scope:**
+
+1. **Property Research tab Sellers + Buyers sub-tabs** at
+   `app/(tenant)/[tenant]/inventory/[propertyId]/`. Render linked
+   sellers (via PropertySeller) and buyers (via PropertyBuyerStage)
+   inline so the inventory detail page exposes the new entity model
+   without forcing a click out to /sellers/[id].
+
+2. **Read-path migration of ~30 sites that read `property.owner*`
+   columns directly** → switch to read from linked Seller (via
+   `property.sellers[0].seller` or a fresh helper). Enumerate:
+
+   ```bash
+   grep -rn "ownerPhone\|owner_phone\|ownerEmail\|owner_email\|ownerType\|owner_type\|secondOwner\|second_owner\|ownerFirstName\|owner_first_name\|ownerLastName\|owner_last_name\|ownershipLengthYears\|ownerPortfolio\|seniorOwner\|deceasedOwner\|cashBuyerOwner\|manualBuyerIds\|manual_buyer_ids" \
+     "lib/" "app/" "components/" --include="*.ts" --include="*.tsx" \
+     | grep -v "lib/v1_1\|lib/enrichment/sync-seller.ts"
+   ```
+
+   Excluded files: `lib/v1_1/wave_2_backfill.ts` (intentional reads
+   for the backfill itself) and `lib/enrichment/sync-seller.ts` (the
+   dual-write site — must keep reading both).
+
+   Heaviest read site: `components/inventory/property-detail-client.tsx`
+   (~30 read points around lines 168-3735, including portfolio widgets).
+
+3. **Optional: P6 (View-As cookie + server-side resolution)** before
+   adding new client components that read View-As state. The Wave 6.2
+   hydration race lesson — synchronous useState initializers — applies
+   to anything new in Phase B. P6 closes the leak class structurally
+   (httpOnly cookie + server resolveEffectiveUser). See AUDIT_PLAN.md P6
+   for security review checklist (CSRF, setter blast radius, cross-tab
+   semantics).
 
 **Acceptance:**
-- Diagnostic returns 100% Property→Seller match coverage for the live tenant.
-- 5 spot-check properties manually verified: Seller has correct name parts,
-  skip-trace fallback values, portfolio totals, person flags.
-- Dual-write live: a fresh enrichment run writes both old AND new columns;
-  no read regressions.
+- Pre-flight grep returns zero hits for `property.owner*` reads outside
+  the two excluded files.
+- Inventory detail page renders Sellers + Buyers sub-tabs and the existing
+  legacy-rendering inline owner cards continue to work (dual-read window).
+- No console errors / hydration warnings on /sellers/, /sellers/[id],
+  /buyers/, /buyers/[id], /inventory/[id].
 
-**Open questions still queued (Q4-Q7 from PLAN §11):**
-- Q4 — Auto-link calls by ghlContactId (sprint-time, can defer to Wave 3).
-- Q5 — Mirror legal-distress flags (sprint-time).
-- Q6 — Seller Buy Signal (sprint-time, lands with Wave 4 AI integration).
-- Q7 — Move Buyer matchScore to PropertyBuyerStage (sprint-time, Wave 4).
+**After Phase B lands:**
+- Wave 4 (AI enrichment routing — see PLAN §5)
+- Wave 5 (Property column drops + cutover — destructive, requires
+  Railway snapshot)
+- Wave 6 (verification + handoff)
+
+**Carry-forward decisions still queued (Q4-Q7 from PLAN §11):**
+- Q4 — Auto-link calls by ghlContactId (sprint-time).
+- Q5 — Mirror legal-distress flags between Property and Seller
+  (sprint-time, design call before Wave 4).
+- Q6 — Seller Buy Signal (Wave 4 AI integration).
+- Q7 — Move Buyer matchScore from Buyer → PropertyBuyerStage (Wave 4).
 
 **Carry-forward decisions still queued for Corey** (not blockers for Wave 2):
 - **D-045** — KPI snapshot timestamp (createdAt vs calledAt)?
