@@ -1862,6 +1862,14 @@ model PropertyBuyerStage {
   // vs added-manually. Pre-v1.1 the manual path wrote a JSON array on
   // Property; post-v1.1 both paths land here and `source` tells them apart.
   source     String   @default("matched") // matched | manual
+  // Q7 lock (v1.1 Wave 4) — per-property buyer fit score (0-100). Replaces
+  // Buyer.matchLikelihoodScore which was a per-Buyer column (wrong unit —
+  // match quality is property-specific). Buyer.buyerScore stays as the
+  // cross-portfolio reliability score. Computed by llmScoreBuyers in
+  // app/api/properties/[propertyId]/buyers/route.ts on each match call;
+  // persisted here so list reads don't have to recompute.
+  matchScore         Float?   @map("match_score")
+  matchScoreUpdatedAt DateTime? @map("match_score_updated_at")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
