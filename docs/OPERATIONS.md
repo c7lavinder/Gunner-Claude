@@ -292,7 +292,7 @@ Plus 5 priority items in AUDIT_PLAN: P3 (model fragmentation), P4 (`/tasks/` del
 
 ## Schema migration log
 
-42 migrations in `prisma/migrations/`. Last 15 (Sessions 38-43):
+43 migrations in `prisma/migrations/`. Last 16 (Sessions 38-60):
 
 | Date | Migration | Change |
 |---|---|---|
@@ -314,6 +314,7 @@ Plus 5 priority items in AUDIT_PLAN: P3 (model fragmentation), P4 (`/tasks/` del
 | 2026-04-23 | `20260423060000_capture_all_vendor_fields` | All-vendor capture |
 | 2026-04-24 | `20260424000000_add_bug_reports` | `BugReport` model |
 | 2026-04-27 | `20260427000000_add_bug_screenshot` | Screenshot field on `BugReport` (base64 data URL) |
+| 2026-04-30 | `20260430120000_v1_1_wave_1_seller_buyer_additive` | v1.1 Wave 1 — additive Seller/Buyer columns: name decomposition (firstName/middleName/lastName/nameSuffix) + skip-trace fallback identity (Seller +6, Buyer +5) + owner portfolio aggregates moved from Property staging (Seller +7) + Q3 person flags (seniorOwner / deceasedOwner / cashBuyerOwner) + PropertyBuyerStage.source. Property.ownerMailingVacant renamed to mailingAddressVacant. NO drops — those land in Wave 5 cutover. |
 
 ---
 

@@ -6,6 +6,16 @@
 > **Sprint pre-state:** v1-finish closed at commit `1d41d50`. Reliability scorecard
 > dimension #8 (Seller/Buyer contact data model) = 4/10 — the explicit redesign target.
 >
+> **Wave 1 SHIPPED 2026-04-30 (Session 60).** Additive schema migration
+> `20260430120000_v1_1_wave_1_seller_buyer_additive` applied: Seller +17 cols
+> (4 name parts + 6 skip-trace fallback + 7 portfolio aggregates +
+> 3 person flags), Buyer +5 cols (skip-trace fallback), PropertyBuyerStage
+> +1 col (`source`), Property rename (`ownerMailingVacant` →
+> `mailingAddressVacant`). 3 Class-4 helpers hardened to take `tenantId`
+> explicitly (`syncSellersFromVendorResult`, `searchCourtListenerForSeller`,
+> `searchCourtListenerForProperty`). 0 column drops — those land in Wave 5
+> cutover. `npx tsc --noEmit` clean.
+>
 > **Decisions locked 2026-04-30 (after first Corey review):**
 > - **Q1 → Shape A** (pure live-fetch from GHL on render). GHL-overlap columns
 >   on Seller and Buyer are DROPPED. Skip-trace columns added for unlinked

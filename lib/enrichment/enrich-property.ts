@@ -190,7 +190,7 @@ export async function enrichProperty(
       pctChangeInValue: true, cashSale: true, investorType: true,
       hoaDues: true, hoaPastDue: true, hoaName: true,
       lastMlsStatus: true, lastMlsListPrice: true, lastMlsSoldPrice: true,
-      ownerMailingVacant: true,
+      mailingAddressVacant: true,
       googlePlaceId: true, googleVerifiedAddress: true,
       googleLatitude: true, googleLongitude: true,
       googleStreetViewUrl: true, googleMapsUrl: true,
@@ -386,7 +386,7 @@ export async function enrichProperty(
 
   // ── Step 3: seller sync (owner/ownership/legal from merged payload) ─
   try {
-    await syncSellersFromVendorResult(propertyId, merged)
+    await syncSellersFromVendorResult(propertyId, tenantId, merged)
   } catch (err) {
     console.error('[enrichProperty] Seller sync failed:', err instanceof Error ? err.message : err)
   }
@@ -394,7 +394,7 @@ export async function enrichProperty(
   // ── Step 4: CourtListener per-seller search ─────────────────────────
   if (!opts.skipCourtListener) {
     try {
-      const cl = await searchCourtListenerForProperty(propertyId)
+      const cl = await searchCourtListenerForProperty(propertyId, tenantId)
       result.courtlistener = { ran: true, ...cl }
     } catch (err) {
       result.courtlistener = {

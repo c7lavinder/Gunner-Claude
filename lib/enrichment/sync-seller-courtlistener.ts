@@ -106,13 +106,17 @@ function chapterFromDocket(docket: string | null | undefined): string | null {
 /**
  * Run CourtListener search for one Seller and persist results. Skips if
  * a search happened within RECENT_SEARCH_DAYS unless force=true.
+ *
+ * v1.1 Wave 1 — Class 4 hardening: takes `tenantId` explicitly per AGENTS.md.
+ * findUnique→findFirst with tenantId in WHERE; trailing update scoped too.
  */
 export async function searchCourtListenerForSeller(
   sellerId: string,
+  tenantId: string,
   opts: { force?: boolean; state?: string } = {},
 ): Promise<{ searched: boolean; caseCount: number } | null> {
-  const seller = await db.seller.findUnique({
-    where: { id: sellerId },
+  const seller = await db.seller.findFirst({
+    where: { id: sellerId, tenantId },
     select: {
       id: true, name: true, mailingState: true,
       clCasesSearchedAt: true,
@@ -149,7 +153,7 @@ export async function searchCourtListenerForSeller(
   const update = buildCourtListenerUpdate(seller as SellerSlice, cl, fieldSources)
 
   await db.seller.update({
-    where: { id: seller.id },
+    where: { id: seller.id, tenantId },
     data: { ...update, fieldSources },
   })
 
@@ -159,9 +163,14 @@ export async function searchCourtListenerForSeller(
 /**
  * Run CourtListener search for every Seller linked to a Property. Used by
  * the multi-vendor orchestrator after owner names are known.
+ *
+ * v1.1 Wave 1 — Class 4 hardening: takes `tenantId` explicitly. The
+ * propertyId→propertySeller join is FK-scoped, but the inner per-seller
+ * search is now tenant-scoped via the same parameter.
  */
 export async function searchCourtListenerForProperty(
   propertyId: string,
+  tenantId: string,
 ): Promise<{ sellersSearched: number; totalCases: number }> {
   const links = await db.propertySeller.findMany({
     where: { propertyId },
@@ -172,7 +181,7 @@ export async function searchCourtListenerForProperty(
   let totalCases = 0
 
   for (const link of links) {
-    const result = await searchCourtListenerForSeller(link.sellerId)
+    const result = await searchCourtListenerForSeller(link.sellerId, tenantId)
     if (!result || !result.searched) continue
     sellersSearched++
     totalCases += result.caseCount

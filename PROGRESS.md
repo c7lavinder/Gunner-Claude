@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 59 — Wave 7 (2026-04-30) — v1-finish sprint COMPLETE, handoff to v1.1
+**Current session**: 60 — v1.1 Wave 1 (2026-04-30) — Seller/Buyer additive schema shipped
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -56,6 +56,114 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 60 — v1.1 Wave 1 (2026-04-30) — Seller/Buyer additive schema shipped
+
+First wave of v1.1 Seller/Buyer redesign. PLAN-FIRST kickoff happened
+earlier in the same calendar day (commits `44edc9c` + `6775d7b`); Corey
+reviewed, locked Q1/Q2/Q3, and authorized Wave 1. This session shipped
+Wave 1 in a single commit on `main` (Railway auto-deploy).
+
+**Schema additions (additive only — NO drops):**
+
+| Table | Cols added | Notes |
+|---|---|---|
+| `sellers` | +17 | Q2 name parts (`first_name`, `middle_name`, `last_name`, `name_suffix`) + Q1/Shape A skip-trace fallback identity (`skip_traced_phone/email/mailing_address/city/state/zip`) + owner portfolio aggregates moved from Property staging (`owner_portfolio_total_equity/value/purchase`, `owner_portfolio_avg_assessed/purchase/year_built`, `owner_portfolio_json`) + Q3 person flags (`senior_owner`, `deceased_owner`, `cash_buyer_owner`) |
+| `buyers` | +5 | Q1/Shape A skip-trace fallback identity (`skip_traced_name/phone/email/company/mailing_address`) |
+| `property_buyer_stages` | +1 | `source` column (`'matched'` default) — disambiguates matched-from-buybox vs added-manually post-`Property.manualBuyerIds` strip |
+| `properties` | rename | `owner_mailing_vacant` → `mailing_address_vacant` (Q3 lock — clarifies it's a property fact, not a person fact) |
+
+Migration: `prisma/migrations/20260430120000_v1_1_wave_1_seller_buyer_additive/migration.sql`.
+
+**Class-4 helper hardening (3 helpers + 3 caller sites):**
+
+Per AGENTS.md "lib helpers that take ids must take tenantId explicitly."
+
+| Helper | File | Old signature | New signature |
+|---|---|---|---|
+| `syncSellersFromVendorResult` | `lib/enrichment/sync-seller.ts` | `(propertyId, result)` | `(propertyId, tenantId, result)` |
+| `searchCourtListenerForSeller` | `lib/enrichment/sync-seller-courtlistener.ts` | `(sellerId, opts)` | `(sellerId, tenantId, opts)` |
+| `searchCourtListenerForProperty` | `lib/enrichment/sync-seller-courtlistener.ts` | `(propertyId)` | `(propertyId, tenantId)` |
+
+Inner queries refactored: `db.seller.findUnique({ where: { id }})` →
+`db.seller.findFirst({ where: { id, tenantId }})`; trailing
+`db.seller.update({ where: { id }})` → `{ where: { id, tenantId }}`.
+
+Callers updated: `lib/enrichment/enrich-property.ts:389,397` (already had
+`tenantId` in scope) + `lib/batchdata/enrich.ts:935` (passes
+`property.tenantId` selected at line 652). Note:
+`enrichPropertyFromBatchData` itself is dead code (no callers found via
+grep) and will be deleted in Wave 5 cleanup; minimal touch this session.
+
+**Code-side rename to match Q3 column rename:**
+- `lib/batchdata/enrich.ts:154` (Prisma slice interface) — `ownerMailingVacant: boolean | null` → `mailingAddressVacant: boolean | null`
+- `lib/batchdata/enrich.ts:488` — first arg of `setIfEmpty` (Prisma column key)
+- `lib/batchdata/enrich.ts:705` (Prisma select) — `ownerMailingVacant: true` → `mailingAddressVacant: true`
+- `lib/enrichment/enrich-property.ts:193` (Prisma select) — same
+- Vendor adapter types (`lib/batchdata/client.ts:223`, `lib/propertyradar/client.ts:250`) keep `ownerMailingVacant` as the vendor concept; translation happens at the Prisma write boundary
+
+**Verification:**
+- `npx tsc --noEmit`: 0 errors.
+- Migration SQL hand-written matching past convention (timestamped dir +
+  `migration.sql`) — Railway `npm run db:migrate:prod` (= `prisma migrate
+  deploy`) applies on next deploy.
+
+**Files changed this session:**
+- `prisma/schema.prisma` — Seller/Buyer/PropertyBuyerStage/Property additions + Property rename.
+- `prisma/migrations/20260430120000_v1_1_wave_1_seller_buyer_additive/migration.sql` — new.
+- `lib/enrichment/sync-seller.ts` — `syncSellersFromVendorResult` Class-4 hardened.
+- `lib/enrichment/sync-seller-courtlistener.ts` — both CourtListener helpers Class-4 hardened.
+- `lib/enrichment/enrich-property.ts` — pass `tenantId` to both helper calls + Prisma select rename.
+- `lib/batchdata/enrich.ts` — pass `tenantId` to `syncSellersFromVendorResult` + Prisma column rename (3 sites).
+- `docs/v1.1/SELLER_BUYER_PLAN.md` — Wave 1 SHIPPED banner at top.
+- `docs/OPERATIONS.md` — schema-change log entry.
+- `PROGRESS.md` — this entry; Current Status; Next Session pointer (Wave 2).
+
+**Next Session — v1.1 Wave 2 — backfill + dual-write turn-on:**
+
+Wave 1 added the destinations; Wave 2 fills them. Three jobs:
+
+1. **Property → Seller backfill.** For every Property with `ownerPhone` /
+   `ownerEmail` / `secondOwnerName` / `ownerFirstName1` / etc. populated,
+   match to existing Seller via `Property.ghlContactId →
+   Seller.ghlContactId` (or create new Seller row + PropertySeller link
+   when no match). Fill Seller's Q1 skip-trace fallback columns +
+   Q2 name parts + Q3 person flags + portfolio aggregates from Property.
+2. **`Property.manualBuyerIds[]` → `PropertyBuyerStage` rows.** For each
+   GHL contact ID in the JSON array, find/create Buyer by `ghlContactId`,
+   insert `PropertyBuyerStage` with `stage='added'`, `source='manual'`.
+3. **Dual-write turn-on.** `lib/enrichment/sync-seller.ts:buildSellerSyncUpdate`
+   today writes legacy `name/phone/email`; expand to ALSO write
+   `firstName/lastName/skipTracedPhone/skipTracedEmail` + portfolio
+   aggregates + person flags. PropertyRadar enrichment continues writing
+   to `Property.owner*` for now (drops in Wave 5).
+
+Expected effort: 2-3 sprint days. Verifiable via diagnostic endpoint
+(`/api/diagnostics/seller-backfill?tenantId=...`) reporting per-property
+backfill coverage.
+
+**Surprises this session:**
+- The 3 Class-4 helpers were the easy targets I expected — `skipTraceSeller`
+  and `skipTraceSellersForProperty` (related helpers in the same file)
+  were already hardened in v1-finish Wave 3 Session G commit 1. This
+  session closes 3 of the remaining Class-4 vectors in the seller/buyer
+  enrichment chain. Other helpers in `lib/` may still need audit
+  (deferred to Wave 3 read-path migration).
+- `enrichPropertyFromBatchData` in `lib/batchdata/enrich.ts:645` has zero
+  callers via grep but is still kept (legacy comment said "in place for
+  any existing callers"). Its inner `db.property.update({ where: { id }})`
+  is a Class-1 leak — not fixed this session because it would expand
+  scope; flagged for Wave 5 cleanup deletion.
+- Prisma-shaped slice in `batchdata/enrich.ts:154` had `ownerMailingVacant`
+  matching the legacy column name. Vendor-result type
+  (`BatchDataPropertyResult`) at `batchdata/client.ts:223` also has
+  `ownerMailingVacant` — kept since it's the vendor concept. Translation
+  now happens at the `setIfEmpty` write boundary in `buildDenormUpdate`.
+- The kickoff prompt's framing of Class-4 audit ("3 helpers — sync-seller,
+  sync-seller-courtlistener, lib/buyers/sync") was off by one:
+  `lib/buyers/sync.ts:syncBuyerFromGHL` already takes `tenantId` (was
+  hardened pre-v1-finish). The actual targets were `syncSellersFromVendorResult`
+  + the two CourtListener helpers. Same effort, different surface.
 
 ### Session 59 — Wave 7 (2026-04-30) — v1-finish sprint COMPLETE
 
@@ -1409,46 +1517,61 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — Seller/Buyer Integration Plan (v1.1 kickoff)
+## Next Session — v1.1 Wave 2 — Backfill + Dual-Write
 
-v1-finish sprint complete (closed 2026-04-30, commit `<this commit>`).
-Next chat opens v1.1 sprint with the Seller/Buyer Contact DB redesign.
+Wave 1 shipped 2026-04-30 (this session, Session 60). Wave 2 fills the
+new destinations and turns dual-write on. Plan reference:
+[docs/v1.1/SELLER_BUYER_PLAN.md §8 Wave 2](docs/v1.1/SELLER_BUYER_PLAN.md).
 
-**CRITICAL: This is INTEGRATION PLAN FIRST.** Do not write code, do
-not modify Prisma schema, do not touch the Property model until the
-integration plan is discussed and approved with Corey.
+**Wave 2 scope:**
+1. **Property → Seller backfill script** at `scripts/v1_1_wave_2_backfill_sellers.ts`:
+   - Iterate `Property` rows with any `owner*` field populated.
+   - Match to existing `Seller` via `Property.ghlContactId → Seller.ghlContactId`,
+     or fall back to fuzzy match on (normalized phone, name parts, state),
+     or CREATE new Seller + PropertySeller link.
+   - Populate Q2 name parts (parsed from `ownerFirstName1/LastName1` or
+     fallback to splitting `Property.ownerName`/`Seller.name`).
+   - Populate Q1 skip-trace fallback (`skipTracedPhone/Email` from
+     `Property.ownerPhone/Email`).
+   - Populate Q3 person flags (`seniorOwner`, `deceasedOwner`, `cashBuyerOwner`).
+   - Populate portfolio aggregates (`ownerPortfolioTotalEquity` etc.).
+   - Idempotent — re-runnable. Logs per-property outcome to
+     `audit_logs` for spot-check.
+2. **`Property.manualBuyerIds[]` → `PropertyBuyerStage` migration**
+   at `scripts/v1_1_wave_2_migrate_manual_buyer_ids.ts`:
+   - For each Property with non-empty `manualBuyerIds`, iterate GHL contact
+     IDs, find/create Buyer by `ghlContactId`, insert `PropertyBuyerStage`
+     row with `stage='added'`, `source='manual'`. Idempotent.
+3. **Dual-write turn-on** in `lib/enrichment/sync-seller.ts`:
+   `buildSellerSyncUpdate` today writes legacy `name/phone/email`. Expand
+   to also write `firstName/middleName/lastName` (parsed via existing
+   `splitName` helper), `skipTracedPhone/Email` (mirroring legacy fields),
+   portfolio aggregates from BatchData/PropertyRadar payload, and the 3
+   person flags. Legacy fields KEEP getting written (dual-write window).
+4. **Diagnostic endpoint** `app/api/diagnostics/v1_1_seller_backfill/route.ts`:
+   bearer-token gated (PUBLIC_PATHS entry required), returns per-tenant
+   backfill coverage report — counts, sample mismatches, dual-write delta.
 
-**First task for the next session:** produce a visual integration
-plan diagram covering:
-- **Entities:** Seller, Buyer, Property (post-strip),
-  PropertySeller, BuyerProperty (or whatever the join model becomes)
-- **Page flows:** where Seller and Buyer pages live, how they relate
-  to Property
-- **GHL contact-fetch points:** which surfaces fetch live from GHL
-  vs. cache locally
-- **AI enrichment:** which AI calls populate Seller/Buyer fields
-  post-call
-- **Migration plan:** how to strip seller/buyer fields from Property
-  without breaking existing graded calls
+**Acceptance:**
+- Diagnostic returns 100% Property→Seller match coverage for the live tenant.
+- 5 spot-check properties manually verified: Seller has correct name parts,
+  skip-trace fallback values, portfolio totals, person flags.
+- Dual-write live: a fresh enrichment run writes both old AND new columns;
+  no read regressions.
 
-**Reference patterns established this sprint** (apply when designing
-Seller/Buyer):
-- 4 leak classes catalogued in AGENTS.md (Wave 3)
-- DiD-via-FK pattern: `sellers/route.ts` is canonical (Wave 3 Session G)
-- Tenant-table-boundary special case (Wave 3 Session G commit `00cb686`)
-- View As hydration race lesson: synchronous useState initializers for
-  any client component reading localStorage before first paint (Wave 6.2,
-  commit `375354b`)
-- Class 4 helper hardening: `lib/` helpers that take ids should require
-  `tenantId` explicitly — never id-only `findUnique` (Wave 3 Session G)
+**Open questions still queued (Q4-Q7 from PLAN §11):**
+- Q4 — Auto-link calls by ghlContactId (sprint-time, can defer to Wave 3).
+- Q5 — Mirror legal-distress flags (sprint-time).
+- Q6 — Seller Buy Signal (sprint-time, lands with Wave 4 AI integration).
+- Q7 — Move Buyer matchScore to PropertyBuyerStage (sprint-time, Wave 4).
 
-**Open questions queued for Corey** (not blockers for v1.1 kickoff):
+**Carry-forward decisions still queued for Corey** (not blockers for Wave 2):
 - **D-045** — KPI snapshot timestamp (createdAt vs calledAt)?
 - **D-046** — Add test framework (vitest)?
-- **P4** — When to start `/tasks/` deletion migration? (5-step plan in
-  AUDIT_PLAN.md)
+- **P4** — When to start `/tasks/` deletion migration? (5-step plan in AUDIT_PLAN.md)
 - **P5** — `assign_contact_to_user` UI flow alignment.
 - **P6** — View As cookie + server-side resolution (Shape C).
+  Recommendation per plan: land BEFORE v1.1 Wave 3 (new client components reading tenant-scoped data hit the same hydration race class as Wave 6.2).
 
 **Carry-forward bug debt** (low-priority, deferred from v1):
 - Bug #16 — DEV_BYPASS_AUTH hardcoded slugs (clean before tenant #2)

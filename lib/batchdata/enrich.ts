@@ -151,7 +151,7 @@ type PropertySlice = {
   lastMlsStatus: string | null
   lastMlsListPrice: unknown
   lastMlsSoldPrice: unknown
-  ownerMailingVacant: boolean | null
+  mailingAddressVacant: boolean | null
   // Google
   googlePlaceId: string | null
   googleVerifiedAddress: string | null
@@ -485,7 +485,7 @@ export function buildDenormUpdate(
   setIfEmpty('lastMlsStatus', result.lastMlsStatus)
   setIfEmpty('lastMlsListPrice', result.lastMlsListPrice)
   setIfEmpty('lastMlsSoldPrice', result.lastMlsSoldPrice)
-  setIfEmpty('ownerMailingVacant', result.ownerMailingVacant)
+  setIfEmpty('mailingAddressVacant', result.ownerMailingVacant)
 
   // PR detail-endpoint fields (condition/census/tax rate/legal)
   setIfEmpty('improvementCondition', result.improvementCondition)
@@ -702,7 +702,7 @@ export async function enrichPropertyFromBatchData(
       pctChangeInValue: true, cashSale: true, investorType: true,
       hoaDues: true, hoaPastDue: true, hoaName: true,
       lastMlsStatus: true, lastMlsListPrice: true, lastMlsSoldPrice: true,
-      ownerMailingVacant: true,
+      mailingAddressVacant: true,
       // PR detail-endpoint fields
       improvementCondition: true, buildingQuality: true, estimatedTaxRate: true,
       censusTract: true, censusBlock: true, carrierRoute: true,
@@ -932,7 +932,7 @@ export async function enrichPropertyFromBatchData(
   // Push owner + ownership data to any linked Sellers. Fire-and-don't-block;
   // we've already written the Property row and log any sync failure below.
   try {
-    const sync = await syncSellersFromVendorResult(propertyId, result)
+    const sync = await syncSellersFromVendorResult(propertyId, property.tenantId, result)
     if (sync.updatedCount > 0) {
       console.log(`[BatchData] Seller sync: ${sync.updatedCount} seller(s) → ${sync.fieldsTouched.length} fields (${sync.fieldsTouched.slice(0, 6).join(', ')}${sync.fieldsTouched.length > 6 ? '…' : ''})`)
     }

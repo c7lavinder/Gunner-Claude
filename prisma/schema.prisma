@@ -526,7 +526,10 @@ model Property {
   lastMlsStatus           String?  @map("last_mls_status")
   lastMlsListPrice        Decimal? @db.Decimal(12, 2) @map("last_mls_list_price")
   lastMlsSoldPrice        Decimal? @db.Decimal(12, 2) @map("last_mls_sold_price")
-  ownerMailingVacant      Boolean? @map("owner_mailing_vacant")
+  // Q3 lock (v1.1 Wave 1) — renamed from ownerMailingVacant. About a property
+  // (the owner's MAILING property, not THIS property) — kept on Property side
+  // since it's a property fact, not a person fact.
+  mailingAddressVacant    Boolean? @map("mailing_address_vacant")
 
   // ── PropertyRadar detail fields (condition + census + tax rate) ──
   improvementCondition    String?  @map("improvement_condition")
@@ -735,7 +738,18 @@ model Seller {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // ── Identity & Contact ──────────────────
+  // Legacy name column — drops in v1.1 Wave 5 cutover. UI reads decomposed
+  // parts (firstName/middleName/lastName/nameSuffix) post-cutover.
   name             String
+  // Q2 lock (v1.1 Wave 1) — decomposed name parts. CourtListener exact-name
+  // search and skip-trace match quality both need structured form.
+  firstName        String?  @map("first_name")
+  middleName       String?  @map("middle_name")
+  lastName         String?  @map("last_name")
+  nameSuffix       String?  @map("name_suffix")
+  // Legacy GHL-overlap identity columns — drop in v1.1 Wave 5 cutover.
+  // Render path post-cutover: live-fetch from GHL via ghlContactId, with
+  // skipTraced* below as fallback when ghlContactId is null.
   phone            String?
   secondaryPhone   String?  @map("secondary_phone")
   mobilePhone      String?  @map("mobile_phone")
@@ -747,6 +761,15 @@ model Seller {
   mailingZip       String?  @map("mailing_zip")
   mailingZipPlus4  String?  @map("mailing_zip_plus4")
   mailingCounty    String?  @map("mailing_county")
+  // Q1/Shape A lock (v1.1 Wave 1) — skip-trace fallback identity. Used when
+  // ghlContactId is null (skip-traced sellers not yet promoted to GHL contacts).
+  // Once promoted, these become orphan history (kept for audit).
+  skipTracedPhone           String?  @map("skip_traced_phone")
+  skipTracedEmail           String?  @map("skip_traced_email")
+  skipTracedMailingAddress  String?  @map("skip_traced_mailing_address")
+  skipTracedMailingCity     String?  @map("skip_traced_mailing_city")
+  skipTracedMailingState    String?  @map("skip_traced_mailing_state")
+  skipTracedMailingZip      String?  @map("skip_traced_mailing_zip")
   mailingValidity  String?  @map("mailing_validity")
   mailingDeliveryPoint String? @map("mailing_delivery_point")
   mailingDpvFootnotes  String? @map("mailing_dpv_footnotes")
@@ -949,6 +972,25 @@ model Seller {
   avgDaysToClose          Int?     @map("avg_days_to_close")
   lastDealClosedDate      DateTime? @map("last_deal_closed_date")
   closeRate               Float?   @map("close_rate")
+
+  // ── Owner portfolio (vendor-extracted, v1.1 Wave 1 — stripped from Property) ─
+  // PropertyRadar / BatchData ship cross-portfolio totals on the OWNER, not on
+  // any one property. These were on Property pre-v1.1 (staging-via-Property);
+  // post-v1.1 they live on Seller, where the person is the unit. Property-side
+  // duplicates drop in Wave 5 cutover.
+  ownerPortfolioTotalEquity   Decimal? @db.Decimal(14, 2) @map("owner_portfolio_total_equity")
+  ownerPortfolioTotalValue    Decimal? @db.Decimal(14, 2) @map("owner_portfolio_total_value")
+  ownerPortfolioTotalPurchase Decimal? @db.Decimal(14, 2) @map("owner_portfolio_total_purchase")
+  ownerPortfolioAvgAssessed   Decimal? @db.Decimal(14, 2) @map("owner_portfolio_avg_assessed")
+  ownerPortfolioAvgPurchase   Decimal? @db.Decimal(14, 2) @map("owner_portfolio_avg_purchase")
+  ownerPortfolioAvgYearBuilt  Int?     @map("owner_portfolio_avg_year_built")
+  ownerPortfolioJson          Json?    @map("owner_portfolio_json")
+
+  // Q3 lock (v1.1 Wave 1) — person-level flags stripped from Property.
+  // PropertyRadar reports these about the OWNER record, not the property.
+  seniorOwner             Boolean? @map("senior_owner")
+  deceasedOwner           Boolean? @map("deceased_owner")
+  cashBuyerOwner          Boolean? @map("cash_buyer_owner")
 
   // ── Relationship + comm prefs (mostly manual, some computed) ─────────
   whoReferredThem          String?  @map("who_referred_them")
@@ -1559,6 +1601,9 @@ model Buyer {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // ── Identity & Contact ──────────────────
+  // Legacy GHL-overlap identity columns — drop in v1.1 Wave 5 cutover.
+  // Render path post-cutover: live-fetch from GHL via ghlContactId, with
+  // skipTraced* below as fallback when ghlContactId is null.
   name                   String
   phone                  String?
   secondaryPhone         String?  @map("secondary_phone")
@@ -1571,6 +1616,13 @@ model Buyer {
   mailingState           String?  @map("mailing_state")
   mailingZip             String?  @map("mailing_zip")
   website                String?
+  // Q1/Shape A lock (v1.1 Wave 1) — skip-trace fallback identity. Used when
+  // ghlContactId is null (rare for buyers — most arrive with a GHL contact).
+  skipTracedName            String?  @map("skip_traced_name")
+  skipTracedPhone           String?  @map("skip_traced_phone")
+  skipTracedEmail           String?  @map("skip_traced_email")
+  skipTracedCompany         String?  @map("skip_traced_company")
+  skipTracedMailingAddress  String?  @map("skip_traced_mailing_address")
   preferredContactMethod String?  @map("preferred_contact_method") // call | text | email
   bestTimeToContact      String?  @map("best_time_to_contact")
   doNotContact           Boolean  @default(false) @map("do_not_contact")
@@ -1806,6 +1858,10 @@ model PropertyBuyerStage {
   propertyId String   @map("property_id")
   buyerId    String   @map("buyer_id")
   stage      String   @default("matched") // matched | added | responded | interested
+  // Q1 + Property.manualBuyerIds-strip (v1.1 Wave 1) — disambiguate matched-from-buybox
+  // vs added-manually. Pre-v1.1 the manual path wrote a JSON array on
+  // Property; post-v1.1 both paths land here and `source` tells them apart.
+  source     String   @default("matched") // matched | manual
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 

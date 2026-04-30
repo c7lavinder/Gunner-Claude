@@ -197,9 +197,15 @@ export function buildSellerSyncUpdate(
  * second gets owner2, rest are skipped (we can't blindly assign name).
  *
  * Returns the number of sellers updated and the union of fields touched.
+ *
+ * v1.1 Wave 1 — Class 4 hardening: takes `tenantId` explicitly per AGENTS.md.
+ * Internal `db.seller.update` is now scoped by tenantId. The propertyId →
+ * propertySeller join is FK-scoped to property, but defense-in-depth is
+ * cheap and matches the canonical Class-4-hardened helper pattern.
  */
 export async function syncSellersFromVendorResult(
   propertyId: string,
+  tenantId: string,
   result: Partial<BatchDataPropertyResult>,
 ): Promise<{ updatedCount: number; fieldsTouched: string[] }> {
   // Primary seller first (buildSellerSyncUpdate assigns owner1 to ordinal 1),
@@ -255,7 +261,7 @@ export async function syncSellersFromVendorResult(
     updatedCount++
 
     await db.seller.update({
-      where: { id: seller.id },
+      where: { id: seller.id, tenantId },
       data: { ...update, fieldSources },
     })
   }
