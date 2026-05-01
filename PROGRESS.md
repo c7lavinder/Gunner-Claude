@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 63 — v1.1 Wave 6 (2026-05-01) — **v1.1 SPRINT COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
+**Current session**: 64 — Pre-Scaling Cleanup Wave (2026-05-01) — **CLEANUP WAVE COMPLETE.** All 5 phases shipped + verified live in one session (5 commits on `main`, 6 push cycles including session-close). formatCurrency duplicate dropped (dead code, no callers); 15 inline `new Anthropic({...})` instantiations consolidated to a `config/anthropic.ts` singleton; Resend usage routed through existing `lib/email/index.ts` helper (env vars now centralized through `config/env.ts`); 11 silent catches in reliability-critical paths wired to `logFailure()` / heartbeat fallbacks (baseline 71 → 60, target ≤62 met); `/api/health` runtime field-source patch extracted to one-shot script `scripts/migrate-field-source-ai-to-api.ts` (production dry-run found 0 rows needing fix — patch had already drained the backlog); `scripts/REGISTRY.md` now catalogs all 57 scripts with idempotency / last-run / delete-after columns. Live `/api/health` post-deploy: HTTP 200, status ok. **Previous: Session 63 — v1.1 SPRINT COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -61,6 +61,136 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — 5/5 phases shipped
+
+Foundation work between v1.1 close (Session 63) and the next large
+feature sprint. Audit at end of Session 63 surfaced a small backlog
+of cleanup items that would compound into foot-guns once features
+landed faster. All 5 phases completed in one session, each phase its
+own commit + push cycle.
+
+**Phase 1 (commit `c1bcc5f`) — formatCurrency consolidation:**
+- Audit said "duplicate exports with mismatched types" — investigation
+  revealed both functions were dead code (0 callers in repo).
+- Dropped `formatCurrency` from `lib/utils.ts:13`. Kept `lib/format.ts`
+  version (`string | null` return — safer for null-coalescing).
+- 1 file changed, 12 lines removed. Typecheck clean.
+
+**Phase 2 (commit `8c78047`) — Anthropic + Resend env centralization:**
+- Audit estimated 8 inline `new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })`
+  sites; actual count was 15 across `lib/ai/`, `app/api/`, `scripts/audit.ts`.
+- New `config/anthropic.ts` exports a single client built from `env`.
+  All 15 callers refactored. `app/api/properties/[propertyId]/buyers/route.ts`
+  loses its dynamic `await import('@anthropic-ai/sdk')` shim.
+  `app/api/ai/assistant/route.ts` keeps a type-only import for
+  `Anthropic.MessageParam`.
+- Resend was wider than expected: `lib/email/index.ts` already centralized
+  the Resend SDK usage but `app/api/auth/reset-password/route.ts` duplicated
+  it inline. Rather than create a parallel `config/email.ts`, added
+  `sendPasswordReset()` to the existing helper and routed reset-password
+  through it. `lib/email/index.ts` now imports from `config/env` instead
+  of reading `process.env.RESEND_API_KEY` directly.
+- Added `RESEND_API_KEY` (optional) + `EMAIL_FROM` (default) to
+  `config/env.ts` schema.
+- 19 files changed, 58 insertions / 76 deletions. Net negative LOC.
+
+**Phase 3 (commit `3077fe4`) — top-N silent catches → logFailure:**
+- Baseline 71 silent catches (down from 79 at Session 33). Target ≤62.
+- 11 fixes across 3 reliability-critical files:
+  - `lib/grading-processor.ts` (6 catches): heartbeat audit writes →
+    `console.error` fallbacks per AGENTS.md mandate; link-backfill SQL,
+    claim-reset on grade error, and legacy-job cleanup → `logFailure()`.
+    Added `import { logFailure } from '@/lib/audit'`.
+  - `app/api/webhooks/ghl/route.ts` (3 catches): tenantId backfill +
+    success/failure outcome writes → `logFailure()` (failure-path
+    preserves `originalError` context).
+  - `lib/ghl/webhooks.ts` (2 catches): `triggerWorkflows` on
+    `task_completed` + `buyer.deactivate` on contact-delete → `logFailure()`.
+- Skipped: client-side optimistic UI catches, GHL `getContact(...).catch(() => null)`
+  batch fan-outs (null is the designed signal), script-side polling/dump
+  utilities (failure is loud at the call site), `lib/workflows/engine.ts`
+  side-effect catches.
+- Final count: 60 (down 11 from 71, target ≤62 met by 2).
+- 3 files changed, 12 insertions / 11 deletions. Typecheck clean.
+
+**Phase 4 (commit `1f5d42b`) — health-check field-source migration:**
+- `app/api/health/route.ts` was running a one-time `'ai' → 'api'`
+  field_source rename on every request via `fixOldAiSources()`. The
+  boot-flag (`sourcesFixed`) prevented a full table scan on each call,
+  but the patch was still wired in.
+- New `scripts/migrate-field-source-ai-to-api.ts` (idempotent, has
+  `--apply` flag, default mode is dry-run).
+- Production dry-run via `railway run`: **386 properties scanned, 0
+  needing fix.** The runtime patch had already drained its work; no
+  apply needed. Script preserved for the next time field_sources
+  values drift.
+- Removed `fixOldAiSources()` + `sourcesFixed` flag from health route.
+  `/api/health` is back to a pure `SELECT 1` + boot-time webhook
+  re-registration.
+- Live verification post-deploy: `GET /api/health` returns HTTP 200,
+  body `{"status":"ok","timestamp":"..."}`.
+- 2 files changed, 54 insertions / 29 deletions.
+
+**Phase 5 (commit `fa37afb`) — scripts/REGISTRY.md:**
+- 57 scripts in `scripts/` — `docs/OPERATIONS.md` already categorized
+  them but not per-script. New developers and future Claude sessions
+  couldn't tell at a glance which scripts are idempotent, when each
+  last ran, or which are deletable.
+- New `scripts/REGISTRY.md` adds per-script rows with columns:
+  `Script | Purpose | Idempotent? | Last Run | Safe to delete after`.
+  Cross-linked from `docs/OPERATIONS.md` "Operational scripts" header.
+- Sweep candidates flagged for re-evaluation **≥ 2026-06-01** if not
+  run in the next 30 days:
+  - `scripts/reset-processing.ts` — superseded by rescue sweep in
+    `lib/grading-processor.ts:69-72`.
+  - `scripts/flip-failed-to-pending.ts` — superseded by
+    `scripts/recover-stuck-calls.ts`.
+  - `scripts/check-progress.ts` — overlaps with
+    `scripts/daily-health-check.ts`.
+- 2 files changed, 134 insertions / 1 deletion.
+
+**Verification routine status:** Scheduled for 2026-05-02 ~17:00 UTC
+(after this session). Today is 2026-05-01 — routine has not fired
+yet. Carry-forward to Session 65: read its result before starting
+work. URL: https://claude.ai/code/routines/trig_01TFP5vnSKsM2RWJiCBxRxN4
+
+**Discipline gates upheld:**
+- One commit per phase (each phase reviewable + revertable independently).
+- `npx tsc --noEmit` passed before every push (pre-push hook enforced).
+- Class-4 helper rule: no new helpers added that take a record id
+  without `tenantId` — `logFailure()` (existing helper) takes
+  `tenantId` as the first positional arg already.
+- Hybrid commit pattern for Phase 4: code + diagnostic shipped first,
+  dry-run against production confirmed 0 changes needed, runtime
+  patch removed in same commit.
+
+**Reliability scorecard delta (post-cleanup, vs post-v1.1 baseline
+from Session 63):**
+
+| # | Dimension | v1.1 | Session 64 | Δ | What changed |
+|---|---|---|---|---|---|
+| 1 | Call ingestion | 9 | 9 | — | Heartbeat fallbacks for `cron.process_recording_jobs.*` audit writes are explicit (`console.error` instead of swallowed). |
+| 2 | Grading pipeline | 9 | 9 | — | Same — claim-reset failures now surface to audit_logs. |
+| 3 | Multi-tenancy | 9 | 9 | — | No change. logFailure already takes tenantId positionally. |
+| 4 | **Error visibility** | **7** | **8** | **+1** | Silent-catch baseline 71 → 60. Top-3 reliability-critical paths (grading-processor, webhook router, ghl/webhooks) audit-logged. |
+| 5 | Documentation hygiene | 9 | 9 | — | scripts/REGISTRY.md added; OPERATIONS.md cross-link added. |
+| 6 | Repo security posture | 8 | 8 | — | Resend + Anthropic env reads centralized through config/env.ts (Phase 2). |
+| 7 | Production verification discipline | 9 | 9 | — | Phase 4 dry-run + post-deploy probe followed standard ritual. |
+| 8 | Seller/Buyer contact data model | 8 | 8 | — | No change — Q4 in-flight unlinks (216) and matchScore-fallback are the v1.2 candidates. |
+
+All ≥7/10. Average **8.625/10** (vs 8.5/10 post-v1.1).
+
+**Files modified by this session (cumulative across 6 commits):**
+- `lib/utils.ts` (Phase 1)
+- `config/anthropic.ts` (new), `config/env.ts`, `lib/email/index.ts`,
+  `app/api/auth/reset-password/route.ts`, 14 Anthropic-using files (Phase 2)
+- `lib/grading-processor.ts`, `app/api/webhooks/ghl/route.ts`,
+  `lib/ghl/webhooks.ts` (Phase 3)
+- `app/api/health/route.ts`,
+  `scripts/migrate-field-source-ai-to-api.ts` (new) (Phase 4)
+- `scripts/REGISTRY.md` (new), `docs/OPERATIONS.md` (Phase 5)
+- `PROGRESS.md` (this session-close commit)
 
 ### Session 63 — v1.1 Wave 6 (2026-05-01) — sprint COMPLETE + scorecard rescore
 
@@ -1923,7 +2053,100 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — Pre-Scaling Cleanup Wave (5 phases, ~4.5h)
+## Next Session — Blocker #2: Role Assistant production verification
+
+Pre-Scaling Cleanup Wave **CLOSED** Session 64 (5 phases shipped + verified).
+Reliability scorecard dim #4 (Error visibility) moved 7 → 8/10. With cleanup
+done, the only OPEN blocker is **#2** — Role Assistant production verification
+of the 6 high-stakes action types. This has been open since v1-finish (Session
+44+) and is a real risk: the assistant ships approve→edit→confirm flows but
+has not been observed end-to-end on production for the high-stakes set.
+
+**The 6 high-stakes action types to verify:**
+1. SMS blast to >10 contacts (`lib/gates/requireApproval.ts` should fire)
+2. Bulk property status change (preview + confirm count gate)
+3. Delete any record (soft-delete first, hard-delete needs second confirm)
+4. Webhook registration / deregistration (log + confirm)
+5. Bulk GHL contact update (preview diff + confirm)
+6. `assign_contact_to_user` (Role Assistant tool — see P5)
+
+**Verification ritual per type:**
+1. Trigger the action through the Role Assistant on the live URL.
+2. Confirm the in-UI approval modal appears (preview of intended changes).
+3. Approve. Confirm the audit_log row lands (`action: 'assistant.<type>.executed'`).
+4. Confirm the side effect happened in GHL / DB (open the record, check field state).
+5. Repeat with the cancel path. Confirm the audit_log shows
+   `action: 'assistant.<type>.cancelled'` and no side effect occurred.
+6. Note results in PROGRESS.md and AGENTS.md if conventions emerge.
+
+**Why this is the right next thing:**
+- Cleanup wave removed the small foot-guns. Now the biggest open risk is
+  shipping a feature that depends on assistant high-stakes execution being
+  trustworthy — without ever having watched it work.
+- Closing Blocker #2 unblocks D-045 (KPI snapshot timing) + P4 (`/tasks/`
+  deletion) which both have assistant-action implications.
+- It's user-blocking (Corey runs the verifications via the live UI; Claude
+  prepares the test ritual + reads the audit_logs).
+
+**Pre-flight (must do before code):**
+1. `railway whoami` → confirm auth.
+2. `git log --oneline -5` → confirm last commit is the Session 64 close.
+3. Read the verification routine result if it has fired:
+     https://claude.ai/code/routines/trig_01TFP5vnSKsM2RWJiCBxRxN4
+   (one-shot scheduled 2026-05-02T17:00:00Z; if past that time, read its
+   output. If "✅ post-grade verified" — note in session log. If "⚠️ no new
+   auto-link activity in 24h" — surface to Corey.)
+4. Read `lib/gates/requireApproval.ts` to understand the approval contract.
+5. Read `app/api/ai/assistant/execute/route.ts` to see the 6 high-stakes
+   tool entry points.
+
+**Carry-forward backlog (don't lose track):**
+- 216 in-flight unlinked calls (Q4 gap from v1.1 Wave 4) — nightly retroactive
+  sweep cron is the v1.2 candidate.
+- Day Hub task auto-generation from Buy Signal (surface landed Session 61,
+  cron not wired).
+- Sweep candidates from `scripts/REGISTRY.md` re-evaluate ≥ 2026-06-01:
+  reset-processing.ts, flip-failed-to-pending.ts, check-progress.ts.
+
+**Bigger backlog (post-Blocker #2):**
+- P4 — legacy `/tasks/` deletion (5-step plan in AUDIT_PLAN.md).
+- P5 — `assign_contact_to_user` UI flow alignment.
+- P6 — View As cookie + server-side resolution (Shape C).
+- D-045 — KPI snapshot timestamp (createdAt vs calledAt) decision.
+- D-046 — Test framework (vitest)?
+- Bug #25 — one-line cleanup from Session 56.
+- 60 silent catches still in baseline (down from 71). Next 10 worth fixing
+  if a future session touches the relevant files for other reasons.
+
+---
+
+## Earlier — Pre-Scaling Cleanup Wave COMPLETE (2026-05-01, Session 64)
+
+5 phases / 6 commits / 1 session. Audit baseline → cleanup deltas:
+
+| Audit finding | Pre | Post | Status |
+|---|---|---|---|
+| Duplicate-export type-mismatch (`formatCurrency`) | 1 | 0 | ✅ Phase 1 |
+| Direct `process.env.*` outside `config/env.ts` (Anthropic) | 15 | 0 | ✅ Phase 2 |
+| Direct `process.env.*` outside `config/env.ts` (Resend) | 2 | 0 | ✅ Phase 2 |
+| Silent catches | 71 | 60 | ✅ Phase 3 (target ≤62) |
+| Runtime field-source patch in `/api/health` | 1 | 0 | ✅ Phase 4 |
+| Untracked-purpose scripts in `/scripts/` | 57 | 0 | ✅ Phase 5 (REGISTRY) |
+
+Commits (in shipping order):
+- `c1bcc5f` Phase 1 — drop duplicate formatCurrency
+- `8c78047` Phase 2 — centralize Anthropic + Resend env reads
+- `3077fe4` Phase 3 — wire logFailure into 11 high-impact silent catches
+- `1f5d42b` Phase 4 — extract health-check field-source patch to script
+- `fa37afb` Phase 5 — scripts/REGISTRY.md per-script catalog
+
+Live verification: `GET /api/health` post-Phase-4-deploy returned HTTP 200,
+`{"status":"ok"}`. No regressions reported on Anthropic-using endpoints
+(Phase 2 was a refactor of construction site only — no behavior change).
+
+---
+
+## Earlier — Pre-Scaling Cleanup Wave plan (Session 63 audit, shipped Session 64)
 
 v1.1 Seller/Buyer redesign **CLOSED** Session 63. Before kicking off
 the next large feature-build sprint, a backend audit (Session 63 end-
