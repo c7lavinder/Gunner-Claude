@@ -1923,9 +1923,169 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — v1.1 sprint COMPLETE (2026-05-01) — pick from carry-forward
+## Next Session — Pre-Scaling Cleanup Wave (5 phases, ~4.5h)
 
-v1.1 Seller/Buyer redesign **CLOSED** with Session 63 (this commit).
+v1.1 Seller/Buyer redesign **CLOSED** Session 63. Before kicking off
+the next large feature-build sprint, a backend audit (Session 63 end-
+of-session) surfaced a small cleanup wave worth doing first to reduce
+foot-guns and architectural debt while features land fast.
+
+**Audit results (verified, not assumed):**
+- ✅ 0 orphan API routes (111 total, all referenced)
+- ✅ 0 hardcoded production identifiers in code
+- ✅ 0 actual TODO/FIXME comments
+- ✅ 0 actual `any` types or `@ts-ignore`
+- ✅ 91/91 tenant routes on `withTenant`
+- 🟡 1 duplicate-export type-mismatch (`formatCurrency`)
+- 🟡 75 direct `process.env.*` reads outside `config/env.ts`
+- 🟡 72 silent catches (down from 79; top-10 worth fixing)
+- 🟡 Runtime field-source patch in `/api/health` (one-shot migration owed)
+- 🟢 3 untracked-purpose scripts in `/scripts/`
+
+**Cleanup wave — 5 phases, do in order:**
+
+### Phase 1 — `formatCurrency` consolidation (30 min)
+
+**Why first**: highest blast radius. Two functions with the same name
+return different types (`string | null` vs `string`). Callers importing
+the wrong one have silent type-mismatch.
+
+Steps:
+1. Pick `lib/format.ts` version as canonical (returns `string | null`,
+   safer for null-coalescing).
+2. Delete `formatCurrency` from `lib/utils.ts:13`.
+3. Grep callers: `grep -rn "from '@/lib/utils'" --include="*.ts" --include="*.tsx" | grep -i "formatCurrency"`.
+4. Update any `formatCurrency` callers that imported from `lib/utils`
+   to import from `lib/format`.
+5. Fix any caller that depended on the string-not-null behavior
+   (TypeScript will surface these — coalesce with `?? '—'` or `?? 'N/A'`).
+6. `npx tsc --noEmit` clean.
+
+### Phase 2 — Centralize Anthropic + Resend clients (1.5h)
+
+**Why**: 8 routes do `new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })`
+inline. CLAUDE.md says env vars go through `config/env.ts`. Pattern
+already exists for other clients.
+
+Steps:
+1. Create `config/anthropic.ts` exporting a singleton:
+   ```ts
+   // config/anthropic.ts
+   import Anthropic from '@anthropic-ai/sdk'
+   import { env } from './env'
+   export const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
+   ```
+2. Add `ANTHROPIC_API_KEY` to the env schema in `config/env.ts` if not
+   already there.
+3. Find all 8 instantiation sites:
+   `grep -rn "new Anthropic" --include="*.ts" --include="*.tsx"`.
+   Probable locations: `lib/ai/grading.ts`, `lib/ai/extract-deal-intel.ts`,
+   `lib/ai/coach.ts`, `lib/ai/scoring.ts`, `lib/ai/generate-user-profiles.ts`,
+   `lib/ai/generate-property-story.ts`, `lib/ai/enrich-property.ts`,
+   `app/api/properties/[propertyId]/buyers/route.ts`.
+4. Replace each `const anthropic = new Anthropic(...)` with `import { anthropic } from '@/config/anthropic'`.
+5. Same shape for Resend in `app/api/auth/reset-password/route.ts:10` →
+   `config/email.ts`.
+6. `npx tsc --noEmit` + verify by hitting one Anthropic-using endpoint
+   (call detail) on the live deploy after push.
+
+**Out of scope**: the other 60+ direct `process.env.*` reads. Most are
+NEXTAUTH_SECRET (NextAuth-required), NEXT_RUNTIME (instrumentation
+runtime check), NODE_ENV (dev guards). Leave those — they're at the
+runtime/framework boundary where direct reads are correct.
+
+### Phase 3 — Top-10 silent catches (2h)
+
+**Why**: 72 silent catches = 72 debugging blind spots when something
+fails in production. Not all need fixing — fire-and-forget for non-
+critical writes is fine. The top-10 are in the high-impact paths.
+
+Steps:
+1. Run `bash scripts/check-silent-catches.sh > /tmp/silent-catches.txt`.
+2. Triage the output by file. Priority paths:
+   - `lib/ai/grading.ts` — grading flow errors
+   - `lib/enrichment/sync-seller.ts` — vendor data sync errors
+   - `lib/v1_1/seller_rollup.ts` — rollup write errors
+   - `lib/v1_1/call_seller_autolink.ts` — autolink errors
+   - `app/api/webhooks/ghl/route.ts` — webhook processing errors
+   - `app/api/webhooks/ghl/register/route.ts` — webhook registration
+   - `lib/grading-processor.ts` — worker iteration errors
+   - `lib/ai/extract-deal-intel.ts` — extraction errors
+3. For each, replace `.catch(err => console.log(...))` with the
+   `logFailure()` helper from `lib/audit.ts`. Pattern documented in
+   `scripts/check-silent-catches.sh` output and AGENTS.md.
+4. Verify count drops to ≤62 via re-running the script.
+5. PROGRESS notes updated baseline.
+
+**Skip**: the ~50 remaining silent catches that are intentional fire-
+and-forget (audit log writes, telemetry pings — failure of these
+shouldn't block the request). Document the convention.
+
+### Phase 4 — Health-check field-source migration (1h)
+
+**Why**: `/api/health` runs a one-time `"ai" → "api"` field-source
+rename on every request until all Property rows are clean. Brittle
+and runs forever.
+
+Steps:
+1. Read `app/api/health/route.ts:52-71` to confirm current logic.
+2. Create `scripts/migrate-field-source-ai-to-api.ts` — a one-shot
+   that does the same rename, idempotent.
+3. Run once via `npx tsx scripts/migrate-field-source-ai-to-api.ts`
+   against production (read-only first, then apply).
+4. Remove the runtime patch from `/api/health/route.ts` — health check
+   becomes stateless again.
+5. Verify `/api/health` still returns `{ status: "ok" }` after deploy.
+
+### Phase 5 — Scripts registry (30 min)
+
+**Why**: 57 files in `/scripts/`. New devs (and future Claude) can't
+tell which are one-shot vs recurring vs deletable.
+
+Steps:
+1. Create `scripts/REGISTRY.md` with columns:
+   `Script | Purpose | Idempotent? | Last Run | Safe to delete after`.
+2. Cross-reference with `docs/OPERATIONS.md` "Operational scripts"
+   section (already partially categorizes them).
+3. Mark `scripts/reset-processing.ts`, `scripts/flip-failed-to-pending.ts`,
+   `scripts/check-progress.ts` as deletable-after-date if not used
+   in 30 days.
+
+---
+
+**Discipline gates carry-forward from v1.1**:
+- `npx tsc --noEmit` clean before every push (pre-push hook enforces).
+- Class-4 helper rule: any new `lib` helper that takes a record id
+  takes `tenantId` explicitly. Reference: AGENTS.md end-of-Wave-3.
+- Hybrid commit pattern for any backfill / data migration: commit code +
+  diagnostic, run dry-run, review, then apply.
+
+**Hot threads from v1.1 (don't lose track)**:
+- Verification routine fires 2026-05-02 ~17:00 UTC and reports back
+  on whether runtime auto-link / Seller rollup is firing on freshly
+  graded calls. Check `https://claude.ai/code/routines/trig_01TFP5vnSKsM2RWJiCBxRxN4`
+  next session start.
+- 216 in-flight unlinked calls (Q4 gap — new leads where Seller
+  hadn't been backfilled when call landed). Candidate for a nightly
+  retroactive sweep cron in a follow-up wave.
+- Day Hub task auto-generation from Buy Signal (surface landed
+  Session 61, cron not wired).
+
+**Bigger backlog (post-cleanup wave)**:
+- Blocker #2 — Role Assistant production verification of the 6 high-
+  stakes action types. Real risk; been open since v1-finish.
+- P4 — legacy `/tasks/` deletion (5-step plan in AUDIT_PLAN.md).
+- P5 — `assign_contact_to_user` UI flow alignment.
+- P6 — View As cookie + server-side resolution (Shape C).
+- D-045 — KPI snapshot timestamp (createdAt vs calledAt) decision.
+- D-046 — Test framework (vitest)?
+- Bug #25 — one-line cleanup from Session 56.
+
+---
+
+## Earlier — v1.1 sprint COMPLETE (2026-05-01)
+
+v1.1 Seller/Buyer redesign **CLOSED** with Session 63 (commit `fd569e3`).
 All 6 waves shipped + applied + verified. Reliability scorecard dim #8
 moved 4 → 8/10 (target met).
 
