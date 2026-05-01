@@ -229,7 +229,9 @@ verification path is honest.
 
 ## Operational scripts
 
-57 scripts in `scripts/`. Categorized:
+57 scripts in `scripts/`. Per-script catalog (idempotency, last run,
+delete-after) lives in [`scripts/REGISTRY.md`](../scripts/REGISTRY.md) — keep that
+file updated alongside this section when scripts land or rot. Categorized:
 
 ### Recurring crons (referenced by `railway.toml`)
 - `poll-calls.ts`, `audit.ts`, `kpi-snapshot.ts`, `generate-profiles.ts`, `regenerate-stories.ts`, `compute-aggregates.ts`
