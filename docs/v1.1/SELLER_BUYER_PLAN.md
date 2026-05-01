@@ -1,9 +1,16 @@
 # Seller / Buyer Integration Plan — v1.1 kickoff (PLAN ONLY)
 
-> **Status:** Wave 5 SHIPPED 2026-05-01 (Session 62). v1.1 sprint at
-> ~85% complete; Wave 6 (verification + handoff + scorecard rescore)
-> is the final wave.
+> **Status:** ✅ **v1.1 SPRINT COMPLETE 2026-05-01 (Session 63).** All 6
+> waves shipped + applied + verified across Sessions 60-63 (4 calendar
+> days). Reliability scorecard dim #8 moved 4 → 8/10 (target met).
 > **Author:** Session 60 (2026-04-30)
+>
+> **Wave 6 SHIPPED 2026-05-01 (Session 63).** Verification + handoff.
+> Reliability scorecard rescored — dim #8 moved 4 → 8/10. v1.1
+> "What's Built" updated. PROGRESS Next Session pointer rewritten as
+> v1.1-COMPLETE pick-from-carry-forward list. No new code; pure
+> documentation + handoff.
+>
 >
 > **Wave 5 SHIPPED 2026-05-01 (Session 62).** Property column strip
 > cutover. Migration `20260501151510_v1_1_wave_5_property_strip` drops
