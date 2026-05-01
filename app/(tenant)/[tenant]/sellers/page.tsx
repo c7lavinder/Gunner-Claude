@@ -88,11 +88,26 @@ export default async function SellersListPage({
     take: 500,
   })
 
+  // v1.1 Wave 4 Q6 — Seller Buy Signal. Parallel of Property TCP × low team
+  // engagement: high likelihoodToSellScore + stale-or-no contact = priority
+  // sellers the team should call now. Suppress DNC + deceased so the
+  // signal stays actionable.
+  const BUY_SIGNAL_SCORE_FLOOR = 0.5
+  const BUY_SIGNAL_STALE_DAYS = 5
+  function isBuySignal(s: typeof sellers[number]): boolean {
+    if (s.doNotContact || s.isDeceased) return false
+    if (s.likelihoodToSellScore == null || s.likelihoodToSellScore < BUY_SIGNAL_SCORE_FLOOR) return false
+    if (!s.lastContactDate) return true // never called + has score = strong signal
+    const daysSince = (Date.now() - s.lastContactDate.getTime()) / (1000 * 60 * 60 * 24)
+    return daysSince >= BUY_SIGNAL_STALE_DAYS
+  }
+
   const totalSellers = sellers.length
   const withMotivation = sellers.filter(s => s.likelihoodToSellScore != null).length
   const seniorCount = sellers.filter(s => s.seniorOwner === true).length
   const deceasedCount = sellers.filter(s => s.deceasedOwner === true).length
   const cashBuyerCount = sellers.filter(s => s.cashBuyerOwner === true).length
+  const buySignalCount = sellers.filter(isBuySignal).length
 
   function displayName(s: typeof sellers[number]): string {
     const parts = [s.firstName, s.middleName, s.lastName, s.nameSuffix]
@@ -136,8 +151,9 @@ export default async function SellersListPage({
         </div>
 
         {/* Quick stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
           <Stat label="Total" value={totalSellers.toString()} />
+          <Stat label="Buy Signal" value={buySignalCount.toString()} tone={buySignalCount > 0 ? 'green' : undefined} hint={`score ≥ ${BUY_SIGNAL_SCORE_FLOOR} • stale ≥ ${BUY_SIGNAL_STALE_DAYS}d`} />
           <Stat label="With motivation score" value={`${withMotivation}/${totalSellers}`} />
           <Stat label="Senior owner" value={seniorCount.toString()} tone={seniorCount > 0 ? 'blue' : undefined} />
           <Stat label="Deceased owner" value={deceasedCount.toString()} tone={deceasedCount > 0 ? 'red' : undefined} />
@@ -177,12 +193,14 @@ export default async function SellersListPage({
                     const email = s.email ?? s.skipTracedEmail
                     const linkedCount = s.properties.length
                     const firstAddr = s.properties[0]?.property
+                    const buySignal = isBuySignal(s)
                     return (
                       <tr key={s.id} className="border-t hover:bg-surface-secondary/50 transition-colors" style={{ borderColor: 'var(--border-light)' }}>
                         <td className="px-4 py-3">
                           <Link href={`/${params.tenant}/sellers/${s.id}`} className="font-medium text-txt-primary hover:text-gunner-red">
                             {displayName(s)}
                           </Link>
+                          {buySignal && <span className="ml-2 text-xs font-medium text-green-700" title={`Buy Signal: likelihood ≥ ${Math.round(BUY_SIGNAL_SCORE_FLOOR * 100)}% and not contacted in ${BUY_SIGNAL_STALE_DAYS}+ days`}>🔥 Buy Signal</span>}
                           {s.doNotContact && <span className="ml-2 text-xs text-red-600">DNC</span>}
                           {s.isDeceased && <span className="ml-2 text-xs text-gray-500">deceased</span>}
                         </td>
@@ -248,17 +266,20 @@ function Stat({
   label,
   value,
   tone,
+  hint,
 }: {
   label: string
   value: string
-  tone?: 'red' | 'blue'
+  tone?: 'red' | 'blue' | 'green'
+  hint?: string
 }) {
   const accent =
     tone === 'red' ? 'text-red-600' :
     tone === 'blue' ? 'text-blue-600' :
+    tone === 'green' ? 'text-green-700' :
     'text-txt-primary'
   return (
-    <div className="bg-surface-primary border rounded-[10px] px-3 py-2" style={{ borderColor: 'var(--border-light)' }}>
+    <div className="bg-surface-primary border rounded-[10px] px-3 py-2" style={{ borderColor: 'var(--border-light)' }} title={hint}>
       <div className="text-[10px] uppercase tracking-wide text-txt-secondary">{label}</div>
       <div className={`text-lg font-semibold ${accent}`}>{value}</div>
     </div>

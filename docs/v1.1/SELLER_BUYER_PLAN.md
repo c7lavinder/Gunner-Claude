@@ -941,14 +941,20 @@ boolean: target=property + field=`in*` AND target=seller + field=`is*`.
   call's linked Seller row (defense-in-depth: tenant-scoped findFirst
   guard before write).
 
-### Q6 — Seller Buy Signal? (Section 7)
+### Q6 — Seller Buy Signal? (Section 7) **✅ RESOLVED 2026-04-30 (Session 61)**
 
-Property has Buy Signal = high TCP × low team engagement. Should Seller
-have a parallel signal = high `likelihoodToSellScore` × `daysSinceLastContact`?
+Locked: **yes**. Implemented in `app/(tenant)/[tenant]/sellers/page.tsx`.
+Definition:
+- `likelihoodToSellScore >= 0.5`
+- AND (`lastContactDate IS NULL` OR `daysSinceLastContact >= 5`)
+- AND `doNotContact === false` AND `isDeceased === false` (suppress
+  unactionable sellers — keeps the signal honest).
 
-**Recommendation: yes.** Surfaces on `/sellers/` list as an icon. Day Hub
-can pick up "high-motivation sellers we haven't called in N days" tasks
-automatically.
+Surfaces on `/sellers/` list as a green "🔥 Buy Signal" pill next to
+the seller name + a Buy Signal stat tile in the header. Day Hub task
+generation deferred to a future cleanup pass — the list-view surface
+makes the data discoverable today, which is what closes Q6's user-
+facing requirement.
 
 ### Q7 — Buyer matchScore: per-property table or computed at query time? (Section 7) **✅ RESOLVED 2026-04-30 (Session 61)**
 
