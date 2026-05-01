@@ -32,13 +32,8 @@ type PropertySlice = {
   fips: string | null
   subdivision: string | null
   absenteeOwner: boolean | null
-  ownerPhone: string | null
-  ownerEmail: string | null
-  ownerType: string | null
-  ownershipLengthYears: number | null
-  secondOwnerName: string | null
-  secondOwnerPhone: string | null
-  secondOwnerEmail: string | null
+  // v1.1 Wave 5 — Property.ownerPhone/ownerEmail/ownerType/ownershipLengthYears/
+  // secondOwner* stripped. Vendor data flows to Seller via lib/enrichment/sync-seller.ts.
   mortgageAmount: unknown
   mortgageDate: Date | null
   mortgageLender: string | null
@@ -138,10 +133,9 @@ type PropertySlice = {
   schoolPrimaryRating: number | null
   schoolsJson: unknown
   // PropertyRadar subscription extras
-  ownerFirstName1: string | null
-  ownerLastName1: string | null
-  ownerFirstName2: string | null
-  ownerLastName2: string | null
+  // v1.1 Wave 5 — ownerFirstName1/2 + ownerLastName1/2 stripped from Property.
+  // Vendor parsing still extracts these (see vendor adapter `BatchDataPropertyResult`)
+  // and sync-seller.ts writes them to Seller.firstName / lastName per-ordinal.
   pctChangeInValue: unknown
   cashSale: boolean | null
   investorType: string | null
@@ -196,23 +190,17 @@ type PropertySlice = {
   foreclosureTrusteePhone: string | null
   foreclosureTrusteeAddress: string | null
   foreclosureTrusteeSaleNum: string | null
-  ownerPortfolioCount: number | null
-  ownerPortfolioTotalEquity: unknown
-  ownerPortfolioTotalValue: unknown
-  ownerPortfolioTotalPurchase: unknown
-  ownerPortfolioAvgAssessed: unknown
-  ownerPortfolioAvgPurchase: unknown
-  ownerPortfolioAvgYearBuilt: number | null
+  // v1.1 Wave 5 — ownerPortfolio* + seniorOwner stripped from Property
+  // (moved to Seller). absenteeOwnerInState + samePropertyMailing stay
+  // (Q3 lock — property facts).
   absenteeOwnerInState: boolean | null
-  seniorOwner: boolean | null
   samePropertyMailing: boolean | null
   valuationAsOfDate: Date | null
   valuationConfidence: number | null
   valuationStdDeviation: unknown
   advancedPropertyType: string | null
   lotDepthFootage: number | null
-  cashBuyerOwner: boolean | null
-  deceasedOwner: boolean | null
+  // v1.1 Wave 5 — cashBuyerOwner + deceasedOwner stripped from Property (moved to Seller).
   hasOpenLiens: boolean | null
   hasOpenPersonLiens: boolean | null
   sameMailingOrExempt: boolean | null
@@ -223,7 +211,7 @@ type PropertySlice = {
   mortgageHistoryJson: unknown
   liensJson: unknown
   foreclosureDetailJson: unknown
-  ownerPortfolioJson: unknown
+  // v1.1 Wave 5 — ownerPortfolioJson stripped from Property (moved to Seller).
   valuationJson: unknown
   quickListsJson: unknown
 }
@@ -311,13 +299,9 @@ export function buildDenormUpdate(
 
   // Owner
   setIfEmpty('absenteeOwner', result.absenteeOwner)
-  setIfEmpty('ownerPhone', result.ownerPhone)
-  setIfEmpty('ownerEmail', result.ownerEmail)
-  setIfEmpty('ownerType', result.ownerType)
-  setIfEmpty('ownershipLengthYears', result.ownershipLength)
-  setIfEmpty('secondOwnerName', result.secondOwnerName)
-  setIfEmpty('secondOwnerPhone', result.secondOwnerPhone)
-  setIfEmpty('secondOwnerEmail', result.secondOwnerEmail)
+  // v1.1 Wave 5 — ownerPhone/ownerEmail/ownerType/ownershipLengthYears/
+  // secondOwner* writes removed. Vendor data flows to Seller via
+  // lib/enrichment/sync-seller.ts.
 
   // Primary mortgage
   setIfEmpty('mortgageAmount', result.mortgageAmount)
@@ -472,10 +456,8 @@ export function buildDenormUpdate(
   }
 
   // PropertyRadar subscription extras
-  setIfEmpty('ownerFirstName1', result.ownerFirstName1)
-  setIfEmpty('ownerLastName1', result.ownerLastName1)
-  setIfEmpty('ownerFirstName2', result.ownerFirstName2)
-  setIfEmpty('ownerLastName2', result.ownerLastName2)
+  // v1.1 Wave 5 — ownerFirstName1/2 + ownerLastName1/2 writes removed
+  // (moved to Seller.firstName/lastName via sync-seller.ts per ordinal).
   setIfEmpty('pctChangeInValue', result.pctChangeInValue)
   setIfEmpty('cashSale', result.cashSale)
   setIfEmpty('investorType', result.investorType)
@@ -530,18 +512,11 @@ export function buildDenormUpdate(
   setIfEmpty('foreclosureTrusteeAddress', result.foreclosureTrusteeAddress)
   setIfEmpty('foreclosureTrusteeSaleNum', result.foreclosureTrusteeSaleNum)
 
-  // Owner portfolio
-  setIfEmpty('ownerPortfolioCount', result.ownerPortfolioCount)
-  setIfEmpty('ownerPortfolioTotalEquity', result.ownerPortfolioTotalEquity)
-  setIfEmpty('ownerPortfolioTotalValue', result.ownerPortfolioTotalValue)
-  setIfEmpty('ownerPortfolioTotalPurchase', result.ownerPortfolioTotalPurchase)
-  setIfEmpty('ownerPortfolioAvgAssessed', result.ownerPortfolioAvgAssessed)
-  setIfEmpty('ownerPortfolioAvgPurchase', result.ownerPortfolioAvgPurchase)
-  setIfEmpty('ownerPortfolioAvgYearBuilt', result.ownerPortfolioAvgYearBuilt)
+  // v1.1 Wave 5 — ownerPortfolio* writes removed (moved to Seller via sync-seller.ts).
 
-  // QuickLists extras
+  // QuickLists extras (Q3 lock — absenteeOwnerInState + samePropertyMailing
+  // stay on Property as property facts; seniorOwner moved to Seller).
   setIfEmpty('absenteeOwnerInState', result.absenteeOwnerInState)
-  setIfEmpty('seniorOwner', result.seniorOwner)
   setIfEmpty('samePropertyMailing', result.samePropertyMailing)
 
   // Valuation detail
@@ -549,11 +524,9 @@ export function buildDenormUpdate(
   setIfEmpty('valuationConfidence', result.valuationConfidence)
   setIfEmpty('valuationStdDeviation', result.valuationStdDeviation)
 
-  // PropertyRadar flags (new)
+  // PropertyRadar flags (cashBuyerOwner + deceasedOwner moved to Seller).
   setIfEmpty('advancedPropertyType', result.advancedPropertyType)
   setIfEmpty('lotDepthFootage', result.lotDepthFootage)
-  setIfEmpty('cashBuyerOwner', result.cashBuyerOwner)
-  setIfEmpty('deceasedOwner', result.deceasedOwner)
   setIfEmpty('hasOpenLiens', result.hasOpenLiens)
   setIfEmpty('hasOpenPersonLiens', result.hasOpenPersonLiens)
   setIfEmpty('sameMailingOrExempt', result.sameMailingOrExempt)
@@ -567,7 +540,7 @@ export function buildDenormUpdate(
   if (result.mortgageHistoryJson) out.mortgageHistoryJson = result.mortgageHistoryJson
   if (result.liensJson) out.liensJson = result.liensJson
   if (result.foreclosureDetailJson) out.foreclosureDetailJson = result.foreclosureDetailJson
-  if (result.ownerPortfolioJson) out.ownerPortfolioJson = result.ownerPortfolioJson
+  // v1.1 Wave 5 — ownerPortfolioJson moved to Seller (sync-seller.ts).
   if (result.valuationJson) out.valuationJson = result.valuationJson
   if (result.quickListsJson) out.quickListsJson = result.quickListsJson
 
@@ -659,9 +632,8 @@ export async function enrichPropertyFromBatchData(
       // Tier 1+2 promoted columns — only backfill when empty
       county: true, latitude: true, longitude: true, apn: true,
       fips: true, subdivision: true,
-      absenteeOwner: true, ownerPhone: true, ownerEmail: true,
-      ownerType: true, ownershipLengthYears: true,
-      secondOwnerName: true, secondOwnerPhone: true, secondOwnerEmail: true,
+      absenteeOwner: true,
+      // v1.1 Wave 5 — ownerPhone/Email/Type/ownershipLengthYears/secondOwner* removed (moved to Seller).
       mortgageAmount: true, mortgageDate: true, mortgageLender: true,
       mortgageType: true, mortgageRate: true,
       secondMortgageAmount: true, secondMortgageDate: true, secondMortgageLender: true,
@@ -697,8 +669,7 @@ export async function enrichPropertyFromBatchData(
       fmrThreeBedroom: true, fmrFourBedroom: true,
       schoolPrimaryName: true, schoolPrimaryRating: true, schoolsJson: true,
       // PropertyRadar subscription extras
-      ownerFirstName1: true, ownerLastName1: true,
-      ownerFirstName2: true, ownerLastName2: true,
+      // v1.1 Wave 5 — ownerFirstName1/2 + ownerLastName1/2 removed (moved to Seller).
       pctChangeInValue: true, cashSale: true, investorType: true,
       hoaDues: true, hoaPastDue: true, hoaName: true,
       lastMlsStatus: true, lastMlsListPrice: true, lastMlsSoldPrice: true,
@@ -719,19 +690,16 @@ export async function enrichPropertyFromBatchData(
       foreclosureFilingDate: true, foreclosureRecordingDate: true,
       foreclosureTrusteeName: true, foreclosureTrusteePhone: true,
       foreclosureTrusteeAddress: true, foreclosureTrusteeSaleNum: true,
-      ownerPortfolioCount: true, ownerPortfolioTotalEquity: true,
-      ownerPortfolioTotalValue: true, ownerPortfolioTotalPurchase: true,
-      ownerPortfolioAvgAssessed: true, ownerPortfolioAvgPurchase: true,
-      ownerPortfolioAvgYearBuilt: true,
-      absenteeOwnerInState: true, seniorOwner: true, samePropertyMailing: true,
+      // v1.1 Wave 5 — ownerPortfolio* + seniorOwner + cashBuyerOwner +
+      // deceasedOwner + ownerPortfolioJson all moved to Seller.
+      absenteeOwnerInState: true, samePropertyMailing: true,
       valuationAsOfDate: true, valuationConfidence: true, valuationStdDeviation: true,
       advancedPropertyType: true, lotDepthFootage: true,
-      cashBuyerOwner: true, deceasedOwner: true,
       hasOpenLiens: true, hasOpenPersonLiens: true,
       sameMailingOrExempt: true, sameMailing: true,
       underwater: true, expiredListing: true,
       deedHistoryJson: true, mortgageHistoryJson: true, liensJson: true,
-      foreclosureDetailJson: true, ownerPortfolioJson: true,
+      foreclosureDetailJson: true,
       valuationJson: true, quickListsJson: true,
       // Google
       googlePlaceId: true, googleVerifiedAddress: true,

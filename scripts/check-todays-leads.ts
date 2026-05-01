@@ -42,10 +42,12 @@ async function main() {
       // Vendor data markers
       latitude: true, apn: true, county: true,
       estimatedEquity: true, availableEquity: true,
-      distressScore: true, ownerPhone: true,
+      distressScore: true,
+      // v1.1 Wave 5 — ownerPhone removed (Seller.phone / Seller.skipTracedPhone now).
       // New vendor-capture columns (migration 20260423060000)
       salePropensity: true, advancedPropertyType: true,
-      ownerPortfolioCount: true, addressValidity: true,
+      // v1.1 Wave 5 — ownerPortfolioCount removed (Seller.totalPropertiesOwned now).
+      addressValidity: true,
       lotDepthFootage: true, samePropertyMailing: true,
       listingStatus: true,
       // Google
@@ -100,13 +102,11 @@ async function main() {
     console.log(`    county:        ${l.county ?? '—'}`)
     console.log(`    estimatedEquity:${l.estimatedEquity ? '$' + Number(l.estimatedEquity).toLocaleString() : '—'}`)
     console.log(`    distressScore: ${l.distressScore ?? '—'}`)
-    console.log(`    ownerPhone:    ${l.ownerPhone ?? '—'}`)
     console.log(`    googlePlaceId: ${l.googlePlaceId ?? '—'}`)
 
     console.log(`  NEW vendor-capture fields:`)
     console.log(`    salePropensity:        ${l.salePropensity ?? '—'}`)
     console.log(`    advancedPropertyType:  ${l.advancedPropertyType ?? '—'}`)
-    console.log(`    ownerPortfolioCount:   ${l.ownerPortfolioCount ?? '—'}`)
     console.log(`    addressValidity:       ${l.addressValidity ?? '—'}`)
     console.log(`    lotDepthFootage:       ${l.lotDepthFootage ?? '—'}`)
     console.log(`    samePropertyMailing:   ${l.samePropertyMailing == null ? '—' : l.samePropertyMailing ? '✓' : '✗'}`)

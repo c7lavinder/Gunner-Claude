@@ -33,7 +33,8 @@ async function main() {
       leadSource: true, ghlContactId: true,
       zillowData: true, googlePlaceId: true,
       distressScore: true, advancedPropertyType: true, apn: true,
-      salePropensity: true, ownerPortfolioCount: true,
+      salePropensity: true,
+      // v1.1 Wave 5 — ownerPortfolioCount removed from Property (moved to Seller.totalPropertiesOwned).
       tenant: { select: { slug: true } },
     },
     orderBy: { createdAt: 'desc' },

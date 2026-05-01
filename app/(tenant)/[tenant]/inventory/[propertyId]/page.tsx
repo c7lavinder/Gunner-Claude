@@ -46,7 +46,9 @@ export default async function PropertyDetailPage({
         deedDate: true, aiEnrichmentStatus: true, aiEnrichmentError: true,
         dealBlastAskingOverride: true, dealBlastArvOverride: true,
         dealBlastContractOverride: true, dealBlastAssignmentFeeOverride: true,
-        customFields: true, marketId: true, manualBuyerIds: true,
+        customFields: true, marketId: true,
+        // v1.1 Wave 5 — manualBuyerIds dropped. Manual buyers live as
+        // PropertyBuyerStage rows with source='manual'.
         tcpScore: true, tcpFactors: true, tcpUpdatedAt: true,
         competingOfferCount: true, dealHealthScore: true,
         zillowData: true, countyData: true, constructionEstimate: true,
@@ -80,12 +82,13 @@ export default async function PropertyDetailPage({
         foreclosureFilingDate: true, foreclosureRecordingDate: true,
         foreclosureTrusteeName: true, foreclosureTrusteePhone: true,
         foreclosureTrusteeAddress: true, foreclosureTrusteeSaleNum: true,
-        ownerPortfolioCount: true, ownerPortfolioTotalEquity: true,
-        ownerPortfolioTotalValue: true, ownerPortfolioAvgYearBuilt: true,
-        absenteeOwnerInState: true, seniorOwner: true, samePropertyMailing: true,
+        // v1.1 Wave 5 — Property.ownerPortfolio* / seniorOwner / deceasedOwner /
+        // cashBuyerOwner stripped to Seller. Render-side now reads from
+        // primarySeller (property.sellers[0]). absenteeOwnerInState +
+        // samePropertyMailing stay on Property (Q3 lock — property facts).
+        absenteeOwnerInState: true, samePropertyMailing: true,
         valuationAsOfDate: true, valuationConfidence: true,
         advancedPropertyType: true, lotDepthFootage: true,
-        cashBuyerOwner: true, deceasedOwner: true,
         hasOpenLiens: true, hasOpenPersonLiens: true,
         underwater: true, expiredListing: true,
         deedHistoryJson: true, mortgageHistoryJson: true, liensJson: true,
@@ -360,19 +363,15 @@ export default async function PropertyDetailPage({
         foreclosureTrusteePhone: property.foreclosureTrusteePhone,
         foreclosureTrusteeAddress: property.foreclosureTrusteeAddress,
         foreclosureTrusteeSaleNum: property.foreclosureTrusteeSaleNum,
-        ownerPortfolioCount: property.ownerPortfolioCount,
-        ownerPortfolioTotalEquity: property.ownerPortfolioTotalEquity?.toString() ?? null,
-        ownerPortfolioTotalValue: property.ownerPortfolioTotalValue?.toString() ?? null,
-        ownerPortfolioAvgYearBuilt: property.ownerPortfolioAvgYearBuilt,
+        // v1.1 Wave 5 — ownerPortfolio* / seniorOwner / deceasedOwner /
+        // cashBuyerOwner serialization moved to per-seller below; client
+        // reads from primarySeller (property.sellers[0]).
         absenteeOwnerInState: property.absenteeOwnerInState,
-        seniorOwner: property.seniorOwner,
         samePropertyMailing: property.samePropertyMailing,
         valuationAsOfDate: property.valuationAsOfDate?.toISOString() ?? null,
         valuationConfidence: property.valuationConfidence,
         advancedPropertyType: property.advancedPropertyType,
         lotDepthFootage: property.lotDepthFootage,
-        cashBuyerOwner: property.cashBuyerOwner,
-        deceasedOwner: property.deceasedOwner,
         hasOpenLiens: property.hasOpenLiens,
         hasOpenPersonLiens: property.hasOpenPersonLiens,
         underwater: property.underwater,

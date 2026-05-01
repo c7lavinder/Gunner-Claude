@@ -150,9 +150,8 @@ export async function enrichProperty(
       // Tier 1+
       county: true, latitude: true, longitude: true, apn: true,
       fips: true, subdivision: true,
-      absenteeOwner: true, ownerPhone: true, ownerEmail: true,
-      ownerType: true, ownershipLengthYears: true,
-      secondOwnerName: true, secondOwnerPhone: true, secondOwnerEmail: true,
+      absenteeOwner: true,
+      // v1.1 Wave 5 — ownerPhone/Email/Type/ownershipLengthYears/secondOwner* removed (moved to Seller).
       mortgageAmount: true, mortgageDate: true, mortgageLender: true,
       mortgageType: true, mortgageRate: true,
       secondMortgageAmount: true, secondMortgageDate: true, secondMortgageLender: true,
@@ -186,7 +185,7 @@ export async function enrichProperty(
       fmrYear: true, fmrEfficiency: true, fmrOneBedroom: true, fmrTwoBedroom: true,
       fmrThreeBedroom: true, fmrFourBedroom: true,
       schoolPrimaryName: true, schoolPrimaryRating: true, schoolsJson: true,
-      ownerFirstName1: true, ownerLastName1: true, ownerFirstName2: true, ownerLastName2: true,
+      // v1.1 Wave 5 — ownerFirstName1/2 + ownerLastName1/2 removed (moved to Seller).
       pctChangeInValue: true, cashSale: true, investorType: true,
       hoaDues: true, hoaPastDue: true, hoaName: true,
       lastMlsStatus: true, lastMlsListPrice: true, lastMlsSoldPrice: true,
@@ -211,19 +210,16 @@ export async function enrichProperty(
       foreclosureFilingDate: true, foreclosureRecordingDate: true,
       foreclosureTrusteeName: true, foreclosureTrusteePhone: true,
       foreclosureTrusteeAddress: true, foreclosureTrusteeSaleNum: true,
-      ownerPortfolioCount: true, ownerPortfolioTotalEquity: true,
-      ownerPortfolioTotalValue: true, ownerPortfolioTotalPurchase: true,
-      ownerPortfolioAvgAssessed: true, ownerPortfolioAvgPurchase: true,
-      ownerPortfolioAvgYearBuilt: true,
-      absenteeOwnerInState: true, seniorOwner: true, samePropertyMailing: true,
+      // v1.1 Wave 5 — ownerPortfolio* + seniorOwner + cashBuyerOwner +
+      // deceasedOwner + ownerPortfolioJson all moved to Seller.
+      absenteeOwnerInState: true, samePropertyMailing: true,
       valuationAsOfDate: true, valuationConfidence: true, valuationStdDeviation: true,
       advancedPropertyType: true, lotDepthFootage: true,
-      cashBuyerOwner: true, deceasedOwner: true,
       hasOpenLiens: true, hasOpenPersonLiens: true,
       sameMailingOrExempt: true, sameMailing: true,
       underwater: true, expiredListing: true,
       deedHistoryJson: true, mortgageHistoryJson: true, liensJson: true,
-      foreclosureDetailJson: true, ownerPortfolioJson: true,
+      foreclosureDetailJson: true,
       valuationJson: true, quickListsJson: true,
     },
   })

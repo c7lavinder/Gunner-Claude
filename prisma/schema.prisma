@@ -277,7 +277,8 @@ model Property {
   marketId String? @map("market_id")
   market   Market? @relation(fields: [marketId], references: [id])
   propertyMarkets  Json @default("[]") @map("property_markets") // ["Nashville", "Hot Springs", "Arkansas"]
-  manualBuyerIds   Json @default("[]") @map("manual_buyer_ids") // GHL contact IDs added manually for this property
+  // v1.1 Wave 5 — manualBuyerIds dropped. Manual-add buyers now live as
+  // PropertyBuyerStage rows with source='manual', stage='added'.
 
   // Enrichment (Phase 2 — Zillow, county records)
   zillowData   Json? @map("zillow_data")
@@ -364,13 +365,9 @@ model Property {
 
   // Owner
   absenteeOwner           Boolean? @map("absentee_owner")
-  ownerPhone              String?  @map("owner_phone")
-  ownerEmail              String?  @map("owner_email")
-  ownerType               String?  @map("owner_type")
-  ownershipLengthYears    Int?     @map("ownership_length_years")
-  secondOwnerName         String?  @map("second_owner_name")
-  secondOwnerPhone        String?  @map("second_owner_phone")
-  secondOwnerEmail        String?  @map("second_owner_email")
+  // v1.1 Wave 5 — ownerPhone, ownerEmail, ownerType, ownershipLengthYears,
+  // secondOwnerName, secondOwnerPhone, secondOwnerEmail dropped (moved to
+  // Seller — see migration 20260501XXXXXX_v1_1_wave_5_property_strip).
 
   // Primary mortgage
   mortgageAmount          Decimal? @db.Decimal(12, 2) @map("mortgage_amount")
@@ -513,10 +510,8 @@ model Property {
 
   // ── PropertyRadar subscription extras ──
   // Structured name parts (CourtListener + skip-trace both want these)
-  ownerFirstName1         String?  @map("owner_first_name_1")
-  ownerLastName1          String?  @map("owner_last_name_1")
-  ownerFirstName2         String?  @map("owner_first_name_2")
-  ownerLastName2          String?  @map("owner_last_name_2")
+  // v1.1 Wave 5 — ownerFirstName1/2 + ownerLastName1/2 dropped
+  // (moved to Seller.firstName / Seller.lastName per ordinal).
   pctChangeInValue        Decimal? @db.Decimal(6, 2)  @map("pct_change_in_value")
   cashSale                Boolean? @map("cash_sale")
   investorType            String?  @map("investor_type")
@@ -575,17 +570,12 @@ model Property {
   foreclosureTrusteeSaleNum String?  @map("foreclosure_trustee_sale_num")
 
   // Owner portfolio (BatchData propertyOwnerProfile)
-  ownerPortfolioCount          Int?     @map("owner_portfolio_count")
-  ownerPortfolioTotalEquity    Decimal? @db.Decimal(14,2) @map("owner_portfolio_total_equity")
-  ownerPortfolioTotalValue     Decimal? @db.Decimal(14,2) @map("owner_portfolio_total_value")
-  ownerPortfolioTotalPurchase  Decimal? @db.Decimal(14,2) @map("owner_portfolio_total_purchase")
-  ownerPortfolioAvgAssessed    Decimal? @db.Decimal(14,2) @map("owner_portfolio_avg_assessed")
-  ownerPortfolioAvgPurchase    Decimal? @db.Decimal(14,2) @map("owner_portfolio_avg_purchase")
-  ownerPortfolioAvgYearBuilt   Int?     @map("owner_portfolio_avg_year_built")
+  // v1.1 Wave 5 — ownerPortfolioCount + ownerPortfolioTotal* +
+  // ownerPortfolioAvg* dropped from Property (moved to Seller).
 
   // QuickLists flags (BatchData)
   absenteeOwnerInState     Boolean? @map("absentee_owner_in_state")
-  seniorOwner              Boolean? @map("senior_owner")
+  // v1.1 Wave 5 — seniorOwner dropped from Property (moved to Seller).
   samePropertyMailing      Boolean? @map("same_property_mailing")
 
   // Valuation detail (BatchData valuation block)
@@ -596,8 +586,7 @@ model Property {
   // PropertyRadar scalar flags + detail
   advancedPropertyType     String?  @map("advanced_property_type")
   lotDepthFootage          Int?     @map("lot_depth_footage")
-  cashBuyerOwner           Boolean? @map("cash_buyer_owner")
-  deceasedOwner            Boolean? @map("deceased_owner")
+  // v1.1 Wave 5 — cashBuyerOwner + deceasedOwner dropped (moved to Seller).
   hasOpenLiens             Boolean? @map("has_open_liens")
   hasOpenPersonLiens       Boolean? @map("has_open_person_liens")
   sameMailingOrExempt      Boolean? @map("same_mailing_or_exempt")
@@ -610,7 +599,7 @@ model Property {
   mortgageHistoryJson      Json? @map("mortgage_history_json")
   liensJson                Json? @map("liens_json")
   foreclosureDetailJson    Json? @map("foreclosure_detail_json")
-  ownerPortfolioJson       Json? @map("owner_portfolio_json")
+  // v1.1 Wave 5 — ownerPortfolioJson dropped (moved to Seller).
   valuationJson            Json? @map("valuation_json")
   quickListsJson           Json? @map("quicklists_json")
 
@@ -655,8 +644,8 @@ model Property {
   @@index([improvementCondition])
   @@index([buildingQuality])
   @@index([advancedPropertyType])
-  @@index([seniorOwner])
-  @@index([deceasedOwner])
+  // v1.1 Wave 5 — @@index([seniorOwner]) + @@index([deceasedOwner]) dropped
+  // alongside the columns. Filter the Sellers list directly for these flags.
   @@index([hasOpenLiens])
   @@index([salePropensity])
   @@map("properties")
@@ -1755,7 +1744,9 @@ model Buyer {
 
   // ── AI Enriched ─────────────────────────
   buyerScore             Float?   @map("buyer_score")
-  matchLikelihoodScore   Float?   @map("match_likelihood_score")
+  // v1.1 Wave 5 — matchLikelihoodScore dropped. Per-property fit lives on
+  // PropertyBuyerStage.matchScore (Q7 lock). buyerScore stays as cross-
+  // portfolio reliability score.
   reliabilityPrediction  Float?   @map("reliability_prediction")
   communicationStyleAi   String?  @map("communication_style_ai")
   negotiationStyle       String?  @map("negotiation_style")

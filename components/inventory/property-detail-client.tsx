@@ -165,19 +165,15 @@ interface PropertyDetail {
   foreclosureTrusteePhone: string | null
   foreclosureTrusteeAddress: string | null
   foreclosureTrusteeSaleNum: string | null
-  ownerPortfolioCount: number | null
-  ownerPortfolioTotalEquity: string | null
-  ownerPortfolioTotalValue: string | null
-  ownerPortfolioAvgYearBuilt: number | null
+  // v1.1 Wave 5 — ownerPortfolio* / seniorOwner / deceasedOwner /
+  // cashBuyerOwner stripped from Property; render-side reads come from
+  // property.sellers[0]'s seller copy of these (the canonical home).
   absenteeOwnerInState: boolean | null
-  seniorOwner: boolean | null
   samePropertyMailing: boolean | null
   valuationAsOfDate: string | null
   valuationConfidence: number | null
   advancedPropertyType: string | null
   lotDepthFootage: number | null
-  cashBuyerOwner: boolean | null
-  deceasedOwner: boolean | null
   hasOpenLiens: boolean | null
   hasOpenPersonLiens: boolean | null
   underwater: boolean | null
@@ -3656,18 +3652,21 @@ function MlsStat({ label, value }: { label: string; value: string }) {
 // contact, owner flags. Renders only sections that have data.
 
 function VendorIntelPanel({ property }: { property: PropertyDetail }) {
+  // v1.1 Wave 5 — owner-side flags + portfolio aggregates moved to Seller.
+  // primarySeller (or first seller) carries the canonical values now.
+  const primarySeller = property.sellers.find(s => s.isPrimary) ?? property.sellers[0]
   const hasMotivation = property.salePropensity != null || property.salePropensityCategory
-  const hasPortfolio = (property.ownerPortfolioCount ?? 0) > 1
-    || property.ownerPortfolioTotalValue != null
-  const hasFlags = property.seniorOwner === true
-    || property.deceasedOwner === true
+  const hasPortfolio = (primarySeller?.totalPropertiesOwned ?? 0) > 1
+    || primarySeller?.ownerPortfolioTotalValue != null
+  const hasFlags = primarySeller?.seniorOwner === true
+    || primarySeller?.deceasedOwner === true
     || property.absenteeOwnerInState === true
     || property.samePropertyMailing === true
     || property.hasOpenLiens === true
     || property.hasOpenPersonLiens === true
     || property.underwater === true
     || property.expiredListing === true
-    || property.cashBuyerOwner === true
+    || primarySeller?.cashBuyerOwner === true
   const hasForeclosureDetail = property.foreclosureTrusteeName
     || property.foreclosureAuctionCity
     || property.foreclosureFilingDate
@@ -3685,13 +3684,13 @@ function VendorIntelPanel({ property }: { property: PropertyDetail }) {
   const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleDateString() : '—'
 
   const flagPills: Array<{ label: string; tone: 'red' | 'amber' | 'blue' | 'slate' }> = []
-  if (property.deceasedOwner === true) flagPills.push({ label: 'Deceased owner', tone: 'red' })
+  if (primarySeller?.deceasedOwner === true) flagPills.push({ label: 'Deceased owner', tone: 'red' })
   if (property.expiredListing === true) flagPills.push({ label: 'Expired listing', tone: 'amber' })
   if (property.underwater === true) flagPills.push({ label: 'Underwater', tone: 'red' })
   if (property.hasOpenLiens === true) flagPills.push({ label: 'Open liens', tone: 'amber' })
   if (property.hasOpenPersonLiens === true) flagPills.push({ label: 'Personal liens', tone: 'amber' })
-  if (property.seniorOwner === true) flagPills.push({ label: 'Senior owner', tone: 'blue' })
-  if (property.cashBuyerOwner === true) flagPills.push({ label: 'Cash buyer owner', tone: 'blue' })
+  if (primarySeller?.seniorOwner === true) flagPills.push({ label: 'Senior owner', tone: 'blue' })
+  if (primarySeller?.cashBuyerOwner === true) flagPills.push({ label: 'Cash buyer owner', tone: 'blue' })
   if (property.absenteeOwnerInState === true) flagPills.push({ label: 'Absentee (in-state)', tone: 'slate' })
   if (property.samePropertyMailing === true) flagPills.push({ label: 'Mailing = property', tone: 'slate' })
 
@@ -3752,10 +3751,10 @@ function VendorIntelPanel({ property }: { property: PropertyDetail }) {
           <div>
             <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Owner Portfolio</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <MlsStat label="Properties" value={property.ownerPortfolioCount != null ? String(property.ownerPortfolioCount) : '—'} />
-              <MlsStat label="Total Equity" value={fmtMoney(property.ownerPortfolioTotalEquity)} />
-              <MlsStat label="Total Value" value={fmtMoney(property.ownerPortfolioTotalValue)} />
-              <MlsStat label="Avg Year Built" value={property.ownerPortfolioAvgYearBuilt != null ? String(property.ownerPortfolioAvgYearBuilt) : '—'} />
+              <MlsStat label="Properties" value={primarySeller?.totalPropertiesOwned != null && primarySeller.totalPropertiesOwned > 0 ? String(primarySeller.totalPropertiesOwned) : '—'} />
+              <MlsStat label="Total Equity" value={fmtMoney(primarySeller?.ownerPortfolioTotalEquity ?? null)} />
+              <MlsStat label="Total Value" value={fmtMoney(primarySeller?.ownerPortfolioTotalValue ?? null)} />
+              <MlsStat label="Avg Year Built" value={primarySeller?.ownerPortfolioAvgYearBuilt != null ? String(primarySeller.ownerPortfolioAvgYearBuilt) : '—'} />
             </div>
           </div>
         )}

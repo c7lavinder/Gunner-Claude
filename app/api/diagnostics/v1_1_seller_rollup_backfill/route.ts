@@ -30,8 +30,13 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { backfillTenantSellerRollups } from '@/lib/v1_1/seller_rollup'
-import { backfillBuyerMatchScores } from '@/lib/v1_1/wave_4_backfill'
 import { backfillCallSellerLinks } from '@/lib/v1_1/call_seller_autolink'
+
+// v1.1 Wave 5 cutover — Buyer.matchLikelihoodScore was dropped, so the
+// matchScore-copy backfill (lib/v1_1/wave_4_backfill.ts) is gone. The
+// matchScore column on PropertyBuyerStage stays — it's now populated
+// live via the buyers/route.ts GET handler (no backfill source column
+// to copy from anymore).
 
 function checkAuth(req: Request): NextResponse | null {
   const token = process.env.DIAGNOSTIC_TOKEN
@@ -81,10 +86,10 @@ async function runBackfill(req: Request, dryRun: boolean) {
   // Run sequentially — order matters: auto-link FIRST so the rollup
   // pass has data to roll up. (Without auto-link, historical calls have
   // sellerId=null, so the Seller→calls FK returns 0 and the rollup is
-  // a no-op.) matchScore is independent and runs at the end.
+  // a no-op.) Wave 5 dropped Buyer.matchLikelihoodScore — the matchScore
+  // copy backfill that used to run here is gone.
   const autolinkReport = await backfillCallSellerLinks(tenantId, { dryRun, limit, sampleSize: 10 })
   const rollupReport = await backfillTenantSellerRollups(tenantId, { dryRun, limit, sampleSize: 10 })
-  const matchScoreReport = await backfillBuyerMatchScores(tenantId, { dryRun, limit, sampleSize: 10 })
 
   const durationMs = Date.now() - startedAt
 
@@ -112,11 +117,6 @@ async function runBackfill(req: Request, dryRun: boolean) {
           rollupNoCalls: rollupReport.noCalls,
           rollupErrors: rollupReport.errors,
           rollupFieldsTouched: rollupReport.fieldsTouched,
-          matchScoreScanned: matchScoreReport.scanned,
-          matchScoreUpdated: matchScoreReport.wouldUpdate,
-          matchScoreAlreadyHasScore: matchScoreReport.alreadyHasScore,
-          matchScoreBuyerHasNoSourceScore: matchScoreReport.buyerHasNoSourceScore,
-          matchScoreErrors: matchScoreReport.errors.length,
         },
       },
     }).catch(err => console.error('[v1_1 wave 4 backfill] audit log failed:', err))
@@ -128,15 +128,13 @@ async function runBackfill(req: Request, dryRun: boolean) {
     durationMs,
     callSellerAutolink: autolinkReport,
     sellerRollupBackfill: rollupReport,
-    buyerMatchScoreBackfill: matchScoreReport,
     sources: {
       callSellerAutolink: 'lib/v1_1/call_seller_autolink.ts → backfillCallSellerLinks',
       sellerRollupBackfill: 'lib/v1_1/seller_rollup.ts → backfillTenantSellerRollups',
-      buyerMatchScoreBackfill: 'lib/v1_1/wave_4_backfill.ts → backfillBuyerMatchScores',
     },
     notes: dryRun
-      ? 'Dry-run only — no writes. Counts and samples reflect what an APPLY would do. Run order on apply: auto-link → rollup → matchScore (auto-link must precede rollup so the rollup has linked-call data to read).'
-      : 'Applied. Idempotent — re-running is safe and a no-op for already-linked calls, already-rolled-up sellers, and already-populated matchScores.',
+      ? 'Dry-run only — no writes. Counts and samples reflect what an APPLY would do. Run order on apply: auto-link → rollup (auto-link must precede rollup so the rollup has linked-call data to read).'
+      : 'Applied. Idempotent — re-running is safe and a no-op for already-linked calls and already-rolled-up sellers.',
   })
 }
 

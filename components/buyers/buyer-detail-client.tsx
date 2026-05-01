@@ -163,8 +163,10 @@ interface BuyerData {
   creativeFinanceInterest: boolean
   isSubjectToBuyer: boolean
   // AI
+  // v1.1 Wave 5 — matchLikelihoodScore stripped from Buyer (per-buyer was
+  // wrong unit). Per-property fit lives on PropertyBuyerStage.matchScore;
+  // surface that wherever the buyer-property pair is rendered, not here.
   buyerScore: number | null
-  matchLikelihoodScore: number | null
   reliabilityPrediction: number | null
   communicationStyleAi: string | null
   negotiationStyle: string | null
@@ -673,7 +675,6 @@ export function BuyerDetailClient({ buyer, tenantSlug }: BuyerDetailClientProps)
           <>
             <SectionCard title="AI Scores">
               <FieldRow label="Buyer Score" fieldKey="buyerScore" value={data.buyerScore !== null ? data.buyerScore.toFixed(2) : '\u2014'} sources={sources} onSave={saveField} />
-              <FieldRow label="Match Likelihood" fieldKey="matchLikelihoodScore" value={data.matchLikelihoodScore !== null ? data.matchLikelihoodScore.toFixed(2) : '\u2014'} sources={sources} onSave={saveField} />
               <FieldRow label="Reliability Prediction" fieldKey="reliabilityPrediction" value={data.reliabilityPrediction !== null ? data.reliabilityPrediction.toFixed(2) : '\u2014'} sources={sources} onSave={saveField} />
               <FieldRow label="Ghost Risk" fieldKey="ghostRiskScore" value={data.ghostRiskScore !== null ? data.ghostRiskScore.toFixed(2) : '\u2014'} sources={sources} onSave={saveField} />
               <FieldRow label="Upsell Potential" fieldKey="upsellPotential" value={data.upsellPotential !== null ? data.upsellPotential.toFixed(2) : '\u2014'} sources={sources} onSave={saveField} />
