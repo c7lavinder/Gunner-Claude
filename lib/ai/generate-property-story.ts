@@ -14,12 +14,10 @@
 // Output: single ~180-260 word paragraph in `property.story`.
 // Cost target: ~$0.01–0.02 per regeneration with Sonnet.
 
-import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import type { Prisma } from '@prisma/client'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic } from '@/config/anthropic'
 const STORY_MODEL = 'claude-sonnet-4-6'
 const MAX_CALLS_IN_CONTEXT = 10
 const MAX_TOKENS = 700

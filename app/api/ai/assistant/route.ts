@@ -3,12 +3,11 @@
 import { NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '@/config/anthropic'
+import type Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { ASSISTANT_TOOLS } from '@/lib/ai/assistant-tools'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 export const POST = withTenant(async (request, ctx) => {
   const { message, pageContext } = await request.json()

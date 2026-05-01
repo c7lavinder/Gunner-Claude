@@ -4,14 +4,10 @@
 // API ENDPOINT: called directly from POST /api/properties and POST /api/properties/[propertyId]/re-enrich
 // READ BY: property detail page via server component select
 
-import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+import { anthropic } from '@/config/anthropic'
 
 export async function enrichPropertyWithAI(propertyId: string, tenantId: string) {
   try {

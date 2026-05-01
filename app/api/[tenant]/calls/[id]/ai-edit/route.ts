@@ -2,7 +2,7 @@
 // Uses Claude to edit a next step based on user instruction
 import { NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
 export const POST = withTenant<{ tenant: string; id: string }>(async (req, ctx, params) => {
@@ -12,7 +12,6 @@ export const POST = withTenant<{ tenant: string; id: string }>(async (req, ctx, 
   }
 
   try {
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
     const timer = startTimer()
     const res = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',

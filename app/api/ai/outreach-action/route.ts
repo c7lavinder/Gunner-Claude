@@ -1,11 +1,9 @@
 // POST /api/ai/outreach-action — LLM parses natural language into structured outreach action
 import { NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 export const POST = withTenant(async (request, ctx) => {
   const { message, propertyId } = await request.json()

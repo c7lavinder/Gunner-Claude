@@ -10,7 +10,7 @@
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
 export async function POST(req: Request) {
@@ -55,9 +55,8 @@ export async function POST(req: Request) {
     })
 
     // AI classification of buyer intent
-    if (message && process.env.ANTHROPIC_API_KEY) {
+    if (message) {
       try {
-        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
         const timer = startTimer()
         const res = await anthropic.messages.create({
           model: 'claude-haiku-4-5-20251001',

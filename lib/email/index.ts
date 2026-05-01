@@ -1,11 +1,12 @@
 // lib/email/index.ts
 // Transactional email via Resend (resend.com)
-// Add to package.json: "resend": "^3.0.0"
-// Set RESEND_API_KEY in .env.local
+// Set RESEND_API_KEY in .env.local (when unset, sends are logged to console)
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY
-const FROM_EMAIL = process.env.EMAIL_FROM ?? 'Gunner AI <noreply@gunnerai.com>'
-const APP_URL = process.env.NEXTAUTH_URL ?? 'https://gunnerai.com'
+import { env } from '@/config/env'
+
+const RESEND_API_KEY = env.RESEND_API_KEY
+const FROM_EMAIL = env.EMAIL_FROM
+const APP_URL = env.NEXTAUTH_URL ?? 'https://gunnerai.com'
 
 interface SendResult {
   success: boolean
@@ -159,4 +160,23 @@ export async function sendCallGradedNotification({
 </html>`
 
   return sendEmail(toEmail, `Your call score: ${score}/100 — ${scoreLabel}`, html)
+}
+
+// ─── Password reset email ─────────────────────────────────────────────────────
+
+export async function sendPasswordReset({
+  toEmail,
+  tempPassword,
+}: {
+  toEmail: string
+  tempPassword: string
+}): Promise<SendResult> {
+  const html = `<div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:40px 20px;background:#0f1117;color:white">
+    <h2 style="margin:0 0 16px">Password Reset</h2>
+    <p style="color:#9ca3af;font-size:14px">Your temporary password is:</p>
+    <p style="font-size:24px;font-weight:bold;color:#f97316;font-family:monospace;letter-spacing:2px;margin:16px 0">${tempPassword}</p>
+    <p style="color:#6b7280;font-size:12px">Log in and change your password in Settings.</p>
+  </div>`
+
+  return sendEmail(toEmail, 'Your Gunner AI password has been reset', html)
 }

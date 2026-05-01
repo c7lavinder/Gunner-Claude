@@ -7,9 +7,7 @@
 import { execSync } from 'child_process'
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
-import Anthropic from '@anthropic-ai/sdk'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic } from '@/config/anthropic'
 
 const ROOT = process.cwd()
 

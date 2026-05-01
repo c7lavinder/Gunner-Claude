@@ -3,13 +3,11 @@
 // Runs after call grading. Receives current property data + existing dealIntel
 // so it can UPDATE rather than replace — cumulative intelligence across all calls.
 
-import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import type { DealIntel, ProposedDealIntelChange, DealIntelCategory } from '@/lib/types/deal-intel'
 import { FIELD_LABELS, FIELD_CATEGORY } from '@/lib/types/deal-intel'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic } from '@/config/anthropic'
 
 export async function extractDealIntel(callId: string): Promise<void> {
   const call = await db.call.findUnique({

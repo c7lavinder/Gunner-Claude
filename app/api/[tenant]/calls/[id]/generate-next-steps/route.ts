@@ -2,10 +2,8 @@
 import { NextResponse } from 'next/server'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 export const POST = withTenant<{ tenant: string; id: string }>(async (request, ctx, params) => {
   const body = await request.json().catch(() => ({}))

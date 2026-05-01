@@ -3,7 +3,6 @@
 // Duration routing: <30s skip, 30-60s summary only, 60s+ full grading
 // Transcribes via Deepgram when recording URL available
 
-import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
@@ -13,10 +12,7 @@ import { INDUSTRY_KNOWLEDGE } from '@/lib/ai/industry-knowledge'
 import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+import { anthropic } from '@/config/anthropic'
 
 // ─── Main grading function ──────────────────────────────────────────────────
 

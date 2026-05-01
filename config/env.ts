@@ -30,6 +30,10 @@ const envSchema = z.object({
 
   // Audit schedule (optional)
   AUDIT_SCHEDULE: z.string().default('0 2 * * *'),
+
+  // Email (optional — when unset, transactional email logs to console in dev)
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('Gunner AI <noreply@gunnerai.com>'),
 })
 
 const parsed = envSchema.safeParse(process.env)

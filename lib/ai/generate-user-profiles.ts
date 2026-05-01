@@ -7,12 +7,10 @@
 // WRITES TO: user_profiles table (upsert per user)
 // READ BY: context-builder.ts → grading, assistant, coach
 
-import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic } from '@/config/anthropic'
 
 interface ProfileAnalysis {
   strengths: string[]

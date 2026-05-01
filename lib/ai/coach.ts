@@ -2,15 +2,13 @@
 // AI Coach v2 — conversation engine with proactive insights and session history
 // Has full context: user's recent calls, scores, XP, badges, trends
 
-import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import type { UserRole } from '@/types/roles'
 import { subDays, startOfWeek } from 'date-fns'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic } from '@/config/anthropic'
 
 export interface CoachMessage {
   role: 'user' | 'assistant'

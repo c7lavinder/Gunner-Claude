@@ -4,6 +4,7 @@ import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { CONTACT_FIELDS, TIER_MAP, getMarketsForZip } from '@/lib/config/crm.config'
+import { anthropic } from '@/config/anthropic'
 import { z } from 'zod'
 
 // GHL custom field ID → field name mapping (from live GHL location)
@@ -182,9 +183,6 @@ async function llmScoreBuyers(
 
   // LLM scoring in batches of 50
   try {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
     for (let i = 0; i < buyers.length; i += BATCH_SIZE) {
       const batch = buyers.slice(i, i + BATCH_SIZE)
       const buyerSummaries = batch.map(b =>
