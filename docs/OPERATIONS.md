@@ -208,6 +208,7 @@ var is a no-op rather than an open door. Set on Railway dashboard.
 |---|---|---|
 | `GET /api/diagnostics/dial-counts?tenant=<slug>[&date=YYYY-MM-DD]` | `lib/kpis/dial-counts.ts countDialsInRange` | Reconciling Day Hub / Calls page dial counts vs SQL (Wave 2 verification) |
 | `GET\|POST /api/diagnostics/v1_1_seller_backfill?tenant=<slug>[&limit=<n>]` | `lib/v1_1/wave_2_backfill.ts` (`backfillSellersFromProperty` + `migrateManualBuyerIdsForTenant`) | v1.1 Wave 2: GET = dry-run report (counts + samples), POST = apply backfill. Idempotent. Apply runs write audit_logs row `v1_1_wave_2_backfill.applied`. |
+| `GET\|POST /api/diagnostics/v1_1_seller_rollup_backfill?tenant=<slug>[&limit=<n>]` | `lib/v1_1/call_seller_autolink.ts:backfillCallSellerLinks` + `lib/v1_1/seller_rollup.ts:backfillTenantSellerRollups` + `lib/v1_1/wave_4_backfill.ts:backfillBuyerMatchScores` | v1.1 Wave 4: combined three-phase backfill. GET = dry-run, POST = apply (sequence: auto-link → seller rollup → matchScore copy). Idempotent. Apply runs write audit_logs row `v1_1_wave_4_rollup_backfill.applied`. **Long-running** — auto-link phase scans every unlinked call (5+ min on tenants with 7K+ calls). Railway edge proxy first-byte timeout is ~6 min; the Node process keeps writing past timeout but the HTTP client gets a `first byte timeout` error. Re-run the GET to see actual DB state if a POST appears to fail; the work usually completed server-side. |
 
 Example:
 
@@ -316,6 +317,7 @@ Plus 5 priority items in AUDIT_PLAN: P3 (model fragmentation), P4 (`/tasks/` del
 | 2026-04-24 | `20260424000000_add_bug_reports` | `BugReport` model |
 | 2026-04-27 | `20260427000000_add_bug_screenshot` | Screenshot field on `BugReport` (base64 data URL) |
 | 2026-04-30 | `20260430120000_v1_1_wave_1_seller_buyer_additive` | v1.1 Wave 1 — additive Seller/Buyer columns: name decomposition (firstName/middleName/lastName/nameSuffix) + skip-trace fallback identity (Seller +6, Buyer +5) + owner portfolio aggregates moved from Property staging (Seller +7) + Q3 person flags (seniorOwner / deceasedOwner / cashBuyerOwner) + PropertyBuyerStage.source. Property.ownerMailingVacant renamed to mailingAddressVacant. NO drops — those land in Wave 5 cutover. |
+| 2026-04-30 | `20260430130000_v1_1_wave_4_property_buyer_stage_match_score` | v1.1 Wave 4 Q7 lock — `PropertyBuyerStage.matchScore (Float?)` + `matchScoreUpdatedAt (DateTime?)`. Per-property buyer fit score; replaces `Buyer.matchLikelihoodScore` (drops Wave 5). Live persistence in `app/api/properties/[propertyId]/buyers/route.ts` GET; backfill via `lib/v1_1/wave_4_backfill.ts:backfillBuyerMatchScores`. |
 
 ---
 

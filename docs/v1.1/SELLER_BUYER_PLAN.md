@@ -1,10 +1,56 @@
 # Seller / Buyer Integration Plan — v1.1 kickoff (PLAN ONLY)
 
-> **Status:** Draft for Corey review. PLAN ONLY — no code, no schema changes,
-> no migrations. Wave 1 does NOT begin until Corey explicitly approves.
+> **Status:** Wave 4 SHIPPED + APPLIED 2026-04-30 (Session 61). Wave 5
+> next (destructive cutover — schema strip).
 > **Author:** Session 60 (2026-04-30)
 > **Sprint pre-state:** v1-finish closed at commit `1d41d50`. Reliability scorecard
 > dimension #8 (Seller/Buyer contact data model) = 4/10 — the explicit redesign target.
+>
+> **Wave 4 SHIPPED + APPLIED 2026-04-30 (Session 61).** Five commits on
+> `main` (`5e39ceb`, `eb825f2`, `b2b2056`, `b7ae6b0`, plus the doc
+> commit). New columns `PropertyBuyerStage.matchScore` +
+> `matchScoreUpdatedAt` (migration
+> `20260430130000_v1_1_wave_4_property_buyer_stage_match_score`).
+> `lib/v1_1/seller_rollup.ts` (post-grade rollup helper + backfill
+> orchestration), `lib/v1_1/wave_4_backfill.ts` (matchScore copy),
+> `lib/v1_1/call_seller_autolink.ts` (Q4 closure). `extract-deal-intel.ts`
+> system prompt extended with seller-targeted `target` field + Q5
+> mirror-write (probate/divorce/bankruptcy emit two proposals). PATCH
+> handler at `app/api/[tenant]/calls/[id]/deal-intel/` dispatches
+> `target='seller'` to typed Seller columns. `calculateTCP` Class-4
+> hardened + fan-fires Seller rollup. Live persistence in
+> `app/api/properties/[propertyId]/buyers/route.ts`. Bearer-gated
+> diagnostic at `/api/diagnostics/v1_1_seller_rollup_backfill`.
+>
+> **Apply landed:** 3,244 calls auto-linked + 289 sellers got rollup
+> writes (117 with `motivationScore` + `likelihoodToSellScore`, 77
+> with `objectionProfile`, 131 with `redFlags`, 128 with
+> `positiveSignals`, all 289 with `totalCallCount` + `lastContactDate`).
+> matchScore backfill was a no-op for this tenant (no source data).
+> Audit log: `v1_1_wave_4_rollup_backfill.applied` written. Idempotency
+> verified: post-apply dry-run shows `wouldUpdate=0/300`.
+>
+> **Q4 ✅ RESOLVED 2026-04-30 (Session 61).** Auto-link via unique
+> `(propertyId, ghlContactId)` PropertySeller match. Wave 4 acceptance
+> criteria depended on this — Wave 2 created Sellers AFTER calls had
+> landed, so no historical `Call.sellerId` was set. Closing Q4 mid-
+> session unblocked the rollup. 0 ambiguous, 0 errors across 7,577
+> calls scanned.
+>
+> **Q5 ✅ RESOLVED 2026-04-30 (Session 61).** Mirror-write for legal-
+> distress flags. The AI prompt emits TWO proposals per call mention
+> (target=property + target=seller). Foreclosure is Seller-only;
+> hasRecentEviction is Property-only. Once true, never auto-flips
+> false. Inventory legal-distress filter keeps working — PATCH handler
+> writes typed `Property.in*` columns alongside the dealIntel JSON.
+>
+> **Q7 ✅ RESOLVED 2026-04-30 (Session 61).** `PropertyBuyerStage.matchScore`
+> is the new home for per-property buyer fit. `Buyer.matchLikelihoodScore`
+> drops in Wave 5. `Buyer.buyerScore` unchanged (cross-portfolio
+> reliability).
+>
+> **Q6 still open** (Seller Buy Signal — high score × low engagement).
+> Recommend yes per plan §11; can land in Wave 5 or Wave 6 cleanup.
 >
 > **Wave 1 SHIPPED 2026-04-30 (Session 60).** Additive schema migration
 > `20260430120000_v1_1_wave_1_seller_buyer_additive` applied: Seller +17 cols
@@ -865,24 +911,35 @@ Locked per recommendations:
 - `cashBuyerOwner` — STRIP-TO-SELLER (person fact, cross-side flag)
 - `ownerMailingVacant` — STAY ON PROPERTY, rename to `mailingAddressVacant`
 
-### Q4 — Auto-link calls to sellers by ghlContactId? (Section 6)
+### Q4 — Auto-link calls to sellers by ghlContactId? (Section 6) **✅ RESOLVED 2026-04-30 (Session 61)**
 
-When a Call lands with `propertyId` set but `sellerId NULL`, should the
-grading worker auto-link by matching `call.ghlContactId →
-PropertySeller.seller.ghlContactId` if the pair has a unique match?
+Locked: **yes, when exactly one PropertySeller match exists for the
+call's `(propertyId, ghlContactId)` pair**. 0 / 2+ matches stay null +
+audit-logged (`v1_1_call_seller_autolink.ambiguous`). Implemented in
+`lib/v1_1/call_seller_autolink.ts`:
+- `autolinkCallSeller(tenantId, callId)` — single-call. Wired into
+  `lib/ai/grading.ts` post-grade BEFORE extract/rollup.
+- `backfillCallSellerLinks(tenantId, opts)` — retroactive pass.
+  Applied 2026-04-30: 3,244 calls linked (of 3,442 candidates), 0
+  ambiguous, 0 errors.
 
-**Recommendation: yes.** Logged audit row when auto-link fires; manual queue
-when match is ambiguous.
+### Q5 — Mirror legal-distress flags or move them outright? (Section 5) **✅ RESOLVED 2026-04-30 (Session 61)**
 
-### Q5 — Mirror legal-distress flags or move them outright? (Section 5)
-
-`Property.inBankruptcy` / `inProbate` / `inDivorce` / `hasRecentEviction`
-are person-level facts but PropertyRadar reports them per-property record.
-
-**Recommendation: mirror-write.** Keep them on Property for filtering
-inventory list ("show me probate properties") AND write to Seller for
-person-level views. Same field name on both. Conflicts: latest enrichment
-run wins on both sides.
+Locked: **mirror-write, latest-call-wins, never auto-flips false**.
+Implemented in the Wave 4 system prompt extension
+(`lib/ai/extract-deal-intel.ts`). When a call mentions probate /
+divorce / bankruptcy, the AI emits TWO proposedChanges with the same
+boolean: target=property + field=`in*` AND target=seller + field=`is*`.
+- Property side: `inProbate`, `inDivorce`, `inBankruptcy`,
+  `hasRecentEviction` (no Seller mirror — property fact).
+- Seller side: `isProbate`, `isDivorce`, `isBankruptcy`, `isForeclosure`
+  (no Property mirror — Seller-only).
+- The PATCH handler at `app/api/[tenant]/calls/[id]/deal-intel/` writes
+  the typed `Property.in*` column on approve (alongside the dealIntel
+  JSON) so the existing inventory legal-distress filter keeps working.
+  `target='seller'` proposals write to the typed Seller column on the
+  call's linked Seller row (defense-in-depth: tenant-scoped findFirst
+  guard before write).
 
 ### Q6 — Seller Buy Signal? (Section 7)
 
@@ -893,14 +950,19 @@ have a parallel signal = high `likelihoodToSellScore` × `daysSinceLastContact`?
 can pick up "high-motivation sellers we haven't called in N days" tasks
 automatically.
 
-### Q7 — Buyer matchScore: per-property table or computed at query time? (Section 7)
+### Q7 — Buyer matchScore: per-property table or computed at query time? (Section 7) **✅ RESOLVED 2026-04-30 (Session 61)**
 
-Today `Buyer.matchLikelihoodScore` is a single column on Buyer (per-Buyer,
-not per-property). Move to `PropertyBuyerStage.matchScore` (computed at
-match time)?
-
-**Recommendation: yes, move it.** Per-property fit is the meaningful unit;
-buyer-level "match likelihood" is meaningless without a property.
+Locked: **moved to `PropertyBuyerStage.matchScore`**. New columns
+`matchScore (Float?)` + `matchScoreUpdatedAt (DateTime?)` on
+`property_buyer_stages` (migration
+`20260430130000_v1_1_wave_4_property_buyer_stage_match_score`). Live
+persistence wired in `app/api/properties/[propertyId]/buyers/route.ts`
+GET — fire-and-forget update on existing PropertyBuyerStage rows after
+`llmScoreBuyers` runs (does NOT auto-create rows; that would scale
+poorly). Backfill in `lib/v1_1/wave_4_backfill.ts` copies from
+`Buyer.matchLikelihoodScore` for existing rows. `Buyer.buyerScore`
+stays as cross-portfolio reliability score.
+`Buyer.matchLikelihoodScore` drops in Wave 5 cutover.
 
 ### Q8 — D-045, D-046, P4, P5, P6 carry-forward (from PROGRESS Next Session)
 

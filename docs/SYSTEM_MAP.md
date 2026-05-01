@@ -127,6 +127,25 @@ call graded, pipeline stage change, task completed, appointment set/no-show.
 
 The Buy Signal: high TCP + low team engagement = priority lead.
 
+**v1.1 Wave 4 — Seller-side scoring.** `Seller.likelihoodToSellScore`
+(0.0–1.0) lives next to Property TCP — different question, different
+formula. Property TCP answers "Will THIS deal close?" combining
+property facts + seller motivation + market signals. Seller score
+answers "Will THIS person sell SOMETHING?" — cross-portfolio
+motivation × urgency-recency × sentiment-trend with hardship
+modifier. Computed by `lib/v1_1/seller_rollup.ts:rollupSellerFromCalls`
+(Class-4 hardened, idempotent) on every call grade where
+`call.sellerId` is set, plus on every Property TCP recalc trigger via
+fan-out from `calculateTCP` (so stage-change / task-completion keep
+seller scores fresh even when no new call has landed). EMA over the
+last 5 calls' `Call.sellerMotivation`.
+
+Per-property buyer fit also moved off the Buyer table: persisted on
+`PropertyBuyerStage.matchScore` (per-property) instead of
+`Buyer.matchLikelihoodScore` (per-buyer — wrong unit).
+`Buyer.buyerScore` stays as cross-portfolio reliability score
+(`closeRate × communicationScore × ghostRiskScore`).
+
 ### Worker agent architecture (CLAUDE.md Rule 4)
 
 Workers, not chatbots. `stop_reason: "end_turn"` is the only valid completion
@@ -283,7 +302,7 @@ calls. Everything is AI-assisted — propose, edit, approve.
 | Module | Model | Notes |
 |---|---|---|
 | Grading (`lib/ai/grading.ts:207`) | `claude-opus-4-6` | Extended thinking 16k budget, max_tokens 32k, streaming (SDK v0.90 preflight). 7-layer context: tenant playbook, role profile, prior 50 calls, 50 calibration examples, industry knowledge, scripts, in-context corrections. |
-| Deal intel (`lib/ai/extract-deal-intel.ts:55`) | `claude-opus-4-6` | Extended thinking 8k budget, max_tokens 16k. Receives current property data + existing dealIntel — UPDATES rather than replaces (cumulative across calls). 100+ fields, 9 categories. |
+| Deal intel (`lib/ai/extract-deal-intel.ts:55`) | `claude-opus-4-6` | Extended thinking 8k budget, max_tokens 16k. Receives current property data + existing dealIntel — UPDATES rather than replaces (cumulative across calls). 100+ fields, 9 categories. v1.1 Wave 4 added `target` field on every proposedChange (`property` \| `seller`) so the apply layer dispatches seller-targeted facts (motivation, hardship, person flags, additive lists) to typed Seller columns instead of the Property dealIntel JSON blob. Q5 mirror-write: legal-distress flags emit two proposals (Property `in*` + Seller `is*`). |
 | Next-steps (`lib/ai/grading.ts:1092`) | `claude-opus-4-6` | max_tokens 16k. Receives full transcript. Bracket-aware JSON array extraction. |
 | Coach (`lib/ai/coach.ts:258`) | `claude-sonnet-4-6` | Conversational coaching, AI-coach chat. |
 | User profile generator (`lib/ai/generate-user-profiles.ts:168`) | `claude-sonnet-4-6` | Weekly cron, auto-generated coaching profiles per rep. |

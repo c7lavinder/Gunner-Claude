@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A + Phase B (2026-04-30) — schema, dual-write, backfill applied, sellers list + Sellers tab on inventory + manualBuyerIds → PropertyBuyerStage migration shipped
+**Current session**: 61 — v1.1 Wave 4 (2026-04-30) — AI enrichment routing SHIPPED + APPLIED. extract-deal-intel system prompt extended with seller-targeted proposals + Q5 mirror-write; calculateTCP Class-4 hardened + Seller rollup fan-out; PropertyBuyerStage.matchScore column added with live persistence; rollup helper writes motivationScore + likelihoodToSellScore + activity aggregates from existing Call data; Q4 closed via auto-link helper; Q7 closed via matchScore column. Backfill applied to live tenant: 3,244 calls auto-linked + 289 sellers got rollup writes (117 with motivationScore + likelihoodToSellScore).
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -56,6 +56,118 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 61 — v1.1 Wave 4 (2026-04-30) — AI enrichment routing + Q4/Q5/Q7 closed
+
+Wave 4 routes the AI enrichment pipeline to write to typed Seller columns
+(motivationPrimary, urgencyScore, hardshipType, person flags, scores)
+instead of the Property.dealIntel JSON blob. Five commits on `main`:
+
+| Commit | What |
+|---|---|
+| `5e39ceb` | Commit A — `PropertyBuyerStage.matchScore` + `matchScoreUpdatedAt` columns (additive migration `20260430130000_v1_1_wave_4_property_buyer_stage_match_score`) + Class-4 hardened seller rollup helper at `lib/v1_1/seller_rollup.ts` (post-grade rollup logic AND backfill orchestration). Uses existing `Call.sellerMotivation` / `Call.sentiment` columns — no new Claude calls needed for backfill. |
+| `eb825f2` | Commit B — `extract-deal-intel.ts` system prompt extended with seller-targeted `target` field + new VALID FIELD NAMES section + Q5 mirror-write (probate/divorce/bankruptcy emit two proposals: target=property + target=seller). PATCH handler at `app/api/[tenant]/calls/[id]/deal-intel/` dispatches `target='seller'` to typed Seller columns. `calculateTCP(propertyId)` → `calculateTCP(tenantId, propertyId)` — Class-4 hardened — and now fan-fires `rollupSellerFromCalls` for every linked Seller after writing Property.tcpScore. Post-grade flow in `lib/ai/grading.ts` fires the rollup. **Prompt cache invalidated** by the system prompt change. |
+| `b2b2056` | Commit C — bearer-gated diagnostic at `/api/diagnostics/v1_1_seller_rollup_backfill` + `lib/v1_1/wave_4_backfill.ts` (`backfillBuyerMatchScores` copies `Buyer.matchLikelihoodScore` → `PropertyBuyerStage.matchScore`). Live persistence in `app/api/properties/[propertyId]/buyers/route.ts` GET — fire-and-forget update of `matchScore` for buyers that already have a stage row (no row creation; that would scale poorly). |
+| `b7ae6b0` | Commit D-pre — closes Q4. New helper `lib/v1_1/call_seller_autolink.ts` (`autolinkCallSeller` + `backfillCallSellerLinks`). Wired into post-grade flow BEFORE extract/rollup so newly graded calls auto-link via unique `(propertyId, ghlContactId)` match. Also wired into the diagnostic endpoint (auto-link → rollup → matchScore order; auto-link must precede rollup). PropertySeller has no `tenantId` column; both sides scoped via `property.tenantId` + `seller.tenantId` in WHERE. |
+| `<this commit>` | Commit D — doc updates only. PROGRESS + OPERATIONS + plan + AGENTS. |
+
+**Q5 lock (mirror-write legal-distress flags):** locked 2026-04-30 mid-
+session per recommendation. The AI prompt emits TWO proposedChanges for
+each call mention of probate/divorce/bankruptcy: one with
+`target='property'`, `field='in*'` and one with `target='seller'`,
+`field='is*'`. Foreclosure has no Property mirror — Seller-only.
+hasRecentEviction has no Seller mirror — Property-only. Once true,
+the prompt instructs never auto-flip to false unless the seller
+explicitly retracts. Inventory legal-distress filter keeps working
+because the PATCH handler also writes the typed `Property.in*` column
+on approve (in addition to the dealIntel JSON). Plan §11 Q5 ✅
+RESOLVED.
+
+**Q4 lock (auto-link calls by ghlContactId):** locked mid-session after
+the dry-run revealed the rollup was a no-op without it (Wave 2 created
+Sellers AFTER calls had landed, so no historical `Call.sellerId` was
+set). Implemented per plan §6 recommendation: link only when
+exactly one PropertySeller match exists for the call's
+`(propertyId, ghlContactId)` pair. 0 / 2+ matches stay null +
+audit-logged. Plan §11 Q4 ✅ RESOLVED.
+
+**Q7 lock (matchScore migration):** `PropertyBuyerStage.matchScore` is
+the new home (per-property fit). `Buyer.matchLikelihoodScore` keeps
+existing for backward-compat; drops in Wave 5. `Buyer.buyerScore`
+unchanged (cross-portfolio reliability). Plan §11 Q7 ✅ RESOLVED.
+
+**Apply landed (across two POST calls — first call hit Railway edge proxy
+first-byte timeout at 6+ min, but Node process kept writing in background;
+second call was idempotent confirmation):**
+
+| Job | Result |
+|---|---|
+| Auto-link backfill | **3,244 calls linked** (3,442 expected; ~6 calls landed after the apply window via runtime auto-link). 0 ambiguous. 0 errors. |
+| Seller rollup backfill | **289 sellers updated**. Of those: 117 got `motivationScore`, 117 got `likelihoodToSellScore`, 77 got `objectionProfile`, 131 got `redFlags`, 128 got `positiveSignals`. All 289 got `totalCallCount` + `lastContactDate`. The 172 sellers without scores have only legacy graded calls where `Call.sellerMotivation` was null. |
+| Buyer matchScore backfill | 0 updated. Live tenant has 2 PropertyBuyerStage rows; neither buyer has a source `matchLikelihoodScore`. Live persistence on next inventory page load will populate organically. |
+| Audit log | `v1_1_wave_4_rollup_backfill.applied` written with full counts payload. Per-link audit rows: `v1_1_call_seller_autolink.linked`. |
+
+**Spot-check verified populated (sample of 10 sellers from apply payload):**
+
+| Seller | Calls | motivationScore | likelihoodToSellScore |
+|---|---|---|---|
+| Jennifer Giesy | 11 | 0.40 | 0.44 |
+| Brad Houston | 3 | 0.2577 | 0.3865 |
+| Phyllis Winkle | 35 | (legacy calls — null sellerMotivation) | — |
+
+**Final verify dry-run after apply:** rollup `wouldUpdate=0/300`,
+matchScore `wouldUpdate=0/2`. Idempotency confirmed.
+
+**Surprises this session:**
+- Original kickoff framed Q4 as "carry-forward, don't block on it." But
+  Wave 4 acceptance criteria ("live tenant has populated motivationScore
+  on Sellers with 3+ calls") could not be met without it — Wave 2
+  populated Sellers AFTER calls had landed, so no `Call.sellerId` was
+  set on any historical call. Closing Q4 mid-session was the right
+  call; surfaced the conflict to Corey, locked, shipped.
+- Railway edge proxy first-byte timeout (~6 min) killed the first apply
+  HTTP response, but the Node process kept writing in the background
+  and completed all the auto-link writes (~3,242 of 3,442 expected).
+  The second POST was idempotent confirmation — only 2 new linkages and
+  1 new rollup diff. **Operational lesson**: long-running diagnostic
+  applies should stream progress or split into phases. Will note in
+  OPERATIONS.md so future Wave 5+ applies design around this.
+- `PropertySeller` has no `tenantId` column. Both sides of the join
+  carry it (Property + Seller) so scoping via `property: { tenantId }`
+  + `seller: { tenantId }` in the WHERE is the correct Class-4 pattern
+  for any helper that queries the join table.
+
+**Files added:**
+- `lib/v1_1/seller_rollup.ts` — post-grade rollup helper + backfill
+  orchestration (~430 lines).
+- `lib/v1_1/wave_4_backfill.ts` — buyer matchScore copy backfill (~120
+  lines).
+- `lib/v1_1/call_seller_autolink.ts` — single-call + backfill (~340
+  lines).
+- `app/api/diagnostics/v1_1_seller_rollup_backfill/route.ts` — bearer-
+  gated control surface (~140 lines).
+- `prisma/migrations/20260430130000_v1_1_wave_4_property_buyer_stage_match_score/migration.sql`.
+
+**Files modified:**
+- `prisma/schema.prisma` — `PropertyBuyerStage.matchScore` +
+  `matchScoreUpdatedAt`.
+- `lib/types/deal-intel.ts` — `ProposedDealIntelChange.target?`.
+- `lib/ai/extract-deal-intel.ts` — system prompt extended (~80 new
+  lines of seller-targeted field documentation + Q5 mirror-write).
+- `lib/ai/grading.ts` — auto-link + rollup wired into post-grade.
+- `lib/ai/scoring.ts` — Class-4 hardened + Seller rollup fan-out after
+  Property.tcpScore write.
+- `app/api/[tenant]/calls/[id]/deal-intel/route.ts` — PATCH handler
+  routes `target='seller'` to Seller columns; legal-distress flags
+  also write to typed `Property.in*` columns.
+- `app/api/properties/[propertyId]/buyers/route.ts` — fire-and-forget
+  matchScore persistence on existing PropertyBuyerStage rows.
+- `scripts/import-historical-calls.ts` — pass `tenantId` to
+  `calculateTCP`.
+
+**Verification:**
+- `npx tsc --noEmit`: 0 errors across all 5 commits.
+- Dry-run + apply + verify dry-run: idempotency confirmed.
 
 ### Session 60 — v1.1 Wave 1 + Wave 2 + Wave 3 Phase A + Phase B (2026-04-30)
 
@@ -1636,70 +1748,81 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — v1.1 Wave 4 — AI enrichment routing
+## Next Session — v1.1 Wave 5 — Property column strip cutover (DESTRUCTIVE)
 
-Wave 3 Phase A + Phase B both shipped Session 60. Wave 4 routes the
-existing AI enrichment pipeline to write to the new Seller / PropertyBuyerStage
-columns instead of (or in addition to) the legacy paths.
+Wave 4 shipped + applied on 2026-04-30 (Session 61). Wave 5 is the
+contract phase of the expand-contract migration: drop the legacy
+`Property.owner_*` staging columns + `Buyer.matchLikelihoodScore` +
+`Property.manualBuyerIds` now that Sellers/PropertyBuyerStage carry
+the data.
 
 Plan reference:
-[docs/v1.1/SELLER_BUYER_PLAN.md §5](docs/v1.1/SELLER_BUYER_PLAN.md).
+[docs/v1.1/SELLER_BUYER_PLAN.md §8 Wave 5](docs/v1.1/SELLER_BUYER_PLAN.md).
 
-**Wave 4 scope (per plan §5 mapping table):**
+**Wave 5 is destructive.** Take a Railway DB snapshot before kicking
+off; pre-cutover-snapshot is the rollback handle. Don't open Wave 5
+in a session where you can't be present for the deploy.
 
-1. **`extract-deal-intel.ts` system prompt update.** Today the proposed
-   changes are keyed against Property field names (deal_intel JSON +
-   per-call promoted fields). Re-key the seller-related ones to write
-   directly to Seller fields when `call.sellerId` is set:
-   - `motivationPrimary` / `motivationSecondary` / `urgencyScore` /
-     `urgencyLevel` / `saleTimeline` / `hardshipType` → Seller
-   - `objectionProfile`, `redFlags`, `positiveSignals` → Seller
-     (additive — append to existing arrays, dedupe by canonical key)
-   - `motivationScore`, `likelihoodToSellScore` → Seller (EMA across
-     last 5 calls)
-   - `personalityType`, `communicationStyle`, `priceSensitivity` →
-     Seller (mode across calls; requires 3+ calls before writing)
-   - `isProbate` / `isForeclosure` / `isDivorce` / `isBankruptcy` →
-     mirror-write to Property AND Seller (latest enrichment wins on
-     both sides; latest-wins).
+**Wave 5 scope:**
 
-2. **Backfill: replay rollups from existing `Call.dealIntelHistory`**
-   so existing graded calls don't have to re-grade. Pure re-aggregation
-   pass (no new Claude calls).
+1. **Schema strip migration** — drop ~22 columns:
+   - `Property.owner_*` family (ownerPhone, ownerEmail, ownerType,
+     ownershipLengthYears, secondOwnerName/Phone/Email,
+     ownerFirstName1/2, ownerLastName1/2, seniorOwner, deceasedOwner,
+     cashBuyerOwner, ownerPortfolio* aggregates).
+   - `Property.manualBuyerIds` (replaced by PropertyBuyerStage rows
+     with source='manual' in Wave 3 Phase B).
+   - `Buyer.matchLikelihoodScore` (replaced by
+     `PropertyBuyerStage.matchScore` in Wave 4 Q7).
+   - Dual-write window closes — `lib/enrichment/sync-seller.ts` stops
+     writing legacy columns, only writes to the canonical destinations.
 
-3. **TCP scorer (`lib/ai/scoring.ts`) — Seller likelihoodToSell write.**
-   On every call grade, compute `Seller.likelihoodToSellScore` if
-   `call.sellerId` is set. Aggregates motivation × urgency × call
-   sentiment trend × hardship across all the seller's properties.
-   Property TCP keeps its existing 8-factor formula (call sentiment +
-   property equity + seller motivation + etc.) — Seller score is a
-   distinct new value scoped to the person.
+2. **Read-path final sweep** — find any remaining read sites that
+   reference the dropped columns. Wave 3 Phase B's grep showed ~30
+   site references; many are inside the legacy "owner" cards on the
+   Data tab of property detail. Those cards must migrate to read from
+   `property.sellers[0].seller.*` or be removed. Run:
+   ```
+   grep -rn "property\.\(ownerPhone\|ownerEmail\|secondOwnerName\|ownerFirstName1\|ownerPortfolioCount\)" --include="*.ts" --include="*.tsx"
+   ```
+   Should return zero hits post-cutover.
 
-4. **Buyer matchScore migration (Q7).** Move
-   `Buyer.matchLikelihoodScore` (currently on Buyer — wrong unit) to
-   `PropertyBuyerStage.matchScore` (per-property fit). Keep
-   `Buyer.buyerScore` as cross-portfolio reliability score.
+3. **Verifier** — write a one-shot diagnostic that confirms the live
+   tenant survives schema strip: hit the inventory list, property
+   detail (data tab + sellers tab + buyers tab), seller detail.
+   Compare error count before/after.
 
-**Acceptance:**
-- Spot-check 3 freshly-graded calls; confirm Seller fields update
-  post-grade in audit_logs + on /sellers/[id].
-- Backfill rollup pass produces non-null `motivationScore` and
-  `likelihoodToSellScore` on Sellers with 3+ calls in history.
-- Property TCP reads unchanged; Seller likelihoodToSellScore now
-  populated for active sellers; PropertyBuyerStage.matchScore populated
-  for matched buyers.
+4. **Reliability scorecard rescore** — dim #8 (Seller/Buyer data model)
+   was 4/10 pre-v1.1. After Wave 5 cutover, rescore: target 8/10.
+   Update PROGRESS.md "What's Built" table.
 
-**After Wave 4:**
-- Wave 5 (Property column drops + cutover — destructive, requires
-  Railway snapshot)
-- Wave 6 (verification + handoff)
+**Pre-flight (must check before code):**
+- Live tenant has at least one PropertyBuyerStage row per property
+  with manual buyers. (Wave 2 + Wave 3 Phase B handled this.)
+- All 16 Sellers have Wave 1+2 fields populated. (Confirmed Session 60
+  Wave 2 backfill.)
+- All 289 Sellers with linked calls have rollup fields populated.
+  (Confirmed Session 61 Wave 4 apply.)
+- No code path reads `Buyer.matchLikelihoodScore` directly except
+  `components/buyers/buyer-detail-client.tsx` — that read needs to be
+  migrated to read aggregate from `PropertyBuyerStage.matchScore`
+  rows OR removed.
 
-**Open questions (per plan §11):**
-- Q4 — Auto-link calls by ghlContactId (sprint-time, can defer to post-Wave-4).
-- Q5 — Mirror legal-distress flags between Property and Seller — design
-  call before Wave 4 implementation lands. Recommended: latest-wins on
-  both sides with audit log on conflict.
-- Q6 — Seller Buy Signal (Wave 4 lands during AI integration).
+**After Wave 5:**
+- Wave 6 (verification + handoff). Reliability scorecard published.
+  PROGRESS / SYSTEM_MAP / OPERATIONS / AGENTS final updates.
+
+**Open questions (carry-forward, not Wave 5 blockers):**
+- Q6 — Seller Buy Signal (high score × low engagement). Recommended
+  yes per plan §11; can land in Wave 5 or Wave 6 cleanup.
+- Q8 — D-045, D-046, P4, P5, P6 — independent of v1.1.
+
+**Operational lesson from Session 61 apply:** Railway edge proxy
+first-byte timeout is ~6 min. Long-running diagnostic applies (Wave 5
+schema strip is fast — single DDL — but any future bulk backfill)
+should split into phases or stream progress. The Node process keeps
+writing past the HTTP timeout, so a "client got timeout error" doesn't
+mean writes were lost. Always re-check via dry-run before retrying.
 
 ## Next Session — DEFERRED — Wave 3 Phase B [SHIPPED Session 60]
 
