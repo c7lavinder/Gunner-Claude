@@ -118,6 +118,32 @@ second call was idempotent confirmation):**
 **Final verify dry-run after apply:** rollup `wouldUpdate=0/300`,
 matchScore `wouldUpdate=0/2`. Idempotency confirmed.
 
+**Reliability scorecard delta — dim #8 (Seller/Buyer data model)**:
+suggested **4 → 6/10 after Wave 4**. Movement attributable to:
+
+| Contribution | Source |
+|---|---|
+| 117 active sellers now have populated motivation + likelihood scores (from 0 pre-Wave-4) | Apply landed |
+| 3,244 calls auto-linked to Sellers (from 0 historical links) | Q4 closure |
+| Per-call AI extraction writes to typed Seller columns (was JSON blob) | Commit B prompt extension |
+| `PropertyBuyerStage.matchScore` is the canonical per-property fit (was `Buyer.matchLikelihoodScore` — wrong unit) | Commit A schema |
+| Buy Signal surfaced on /sellers/ list (high motivation × stale contact) | Q6 closure |
+
+What still keeps dim #8 under 8/10 (the Wave 5+6 target):
+- Schema dual-representation (Property.owner_* + Seller fields both
+  populated) — Wave 5 strip closes this.
+- 4,135 historical calls cannot be auto-linked because they have no
+  `propertyId`. A name-matching fallback could pick up some of these
+  but is out of v1.1 scope.
+- Day Hub task auto-generation from Buy Signal — surfaced manually
+  today; needs cron integration.
+- Post-grade rollup live-verified on a freshly graded call — the code
+  path is shipped + the backfill proves the helpers work; awaiting
+  next real graded call to write the audit-log evidence.
+
+Formal rescore happens in Wave 6 verification; this is the suggested
+delta until then.
+
 **Surprises this session:**
 - Original kickoff framed Q4 as "carry-forward, don't block on it." But
   Wave 4 acceptance criteria ("live tenant has populated motivationScore
