@@ -8,6 +8,7 @@ import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { fetchCallRecording, fetchAndStoreRecording } from '@/lib/ghl/fetch-recording'
 import { gradeCall } from '@/lib/ai/grading'
+import { logFailure } from '@/lib/audit'
 
 const BATCH_SIZE = 50
 const MIN_AGE_MS = 30 * 1000
@@ -37,7 +38,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
       source: 'SYSTEM',
       severity: 'INFO',
     },
-  }).catch(() => {})
+  }).catch(err => console.error('[heartbeat] audit write failed:', err))
 
   try {
     // Step 0: Link unlinked calls to properties before grading
@@ -47,7 +48,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
       WHERE calls.ghl_contact_id = p.ghl_contact_id
       AND calls.property_id IS NULL
       AND calls.ghl_contact_id IS NOT NULL
-    `.catch(() => {})
+    `.catch(err => logFailure(null, 'cron.process_recording_jobs.link_backfill_failed', 'calls', err))
 
     // Step 1: Process PENDING calls
     const pendingCalls = await db.call.findMany({
@@ -143,7 +144,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
         await db.call.update({
           where: { id: call.id },
           data: { gradingStatus: 'PENDING' },
-        }).catch(() => {})
+        }).catch(resetErr => logFailure(call.tenantId, 'cron.process_recording_jobs.claim_reset_failed', `call:${call.id}`, resetErr, { originalError: err instanceof Error ? err.message : String(err) }))
         stats.errors++
         console.error(`[call-processor] Error processing call ${call.id}:`, err instanceof Error ? err.message : err)
       }
@@ -187,7 +188,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
 
     await db.recordingFetchJob.deleteMany({
       where: { status: 'DONE', updatedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-    }).catch(() => {})
+    }).catch(err => logFailure(null, 'cron.process_recording_jobs.legacy_job_cleanup_failed', 'recording_fetch_job', err))
 
     // Step 3: Catch-up deal intel extraction — one per tick so Opus doesn't
     // block the 60s cadence. Backlog still drains (one/minute), and each tick
@@ -236,7 +237,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
         severity: 'INFO',
         payload: { ...stats } as unknown as Prisma.InputJsonValue,
       },
-    }).catch(() => {})
+    }).catch(err => console.error('[heartbeat] audit write failed:', err))
 
     return stats
   } catch (err) {
@@ -250,7 +251,7 @@ export async function runGradingProcessor(): Promise<ProcessorStats> {
         severity: 'ERROR',
         payload: { error: err instanceof Error ? err.message : String(err) } as unknown as Prisma.InputJsonValue,
       },
-    }).catch(() => {})
+    }).catch(writeErr => console.error('[heartbeat] audit write failed:', writeErr))
     stats.durationMs = Date.now() - startedAt
     return stats
   }

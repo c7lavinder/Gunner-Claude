@@ -764,7 +764,7 @@ async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
     })
   }
 
-  triggerWorkflows(tenantId, 'task_completed', { taskId: updated?.id }).catch(() => {})
+  triggerWorkflows(tenantId, 'task_completed', { taskId: updated?.id }).catch(err => logFailure(tenantId, 'workflow.trigger_failed', 'task', err, { event: 'task_completed', taskId: updated?.id }))
 }
 
 // ─── Appointment Created → Log it ──────────────────────────────────────────
@@ -797,7 +797,7 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
     await db.buyer.updateMany({
       where: { ghlContactId: contactId, tenantId },
       data: { isActive: false },
-    }).catch(() => {})
+    }).catch(err => logFailure(tenantId, 'buyer.deactivate_failed', `buyer:${contactId}`, err, { reason: 'ghl_contact_deleted' }))
     console.log(`[GHL Webhook] Buyer deactivated: ${contactId}`)
     return
   }

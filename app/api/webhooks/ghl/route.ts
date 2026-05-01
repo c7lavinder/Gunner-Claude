@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       db.webhookLog.update({
         where: { id: webhookLogId },
         data: { tenantId },
-      }).catch(() => {}) // non-blocking
+      }).catch(err => logFailure(tenantId, 'webhook.tenant_id_backfill_failed', 'webhook_log', err, { webhookLogId })) // non-blocking
     }
 
     // Process — outcome written to WebhookLog async (never blocks the response)
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
           await db.webhookLog.update({
             where: { id: webhookLogId },
             data: { status: 'success', processed: true, processedAt: new Date() },
-          }).catch(() => {}) // silent — never block on outcome write
+          }).catch(err => logFailure(tenantId, 'webhook.outcome_write_success_failed', 'webhook_log', err, { webhookLogId }))
         }
       })
       .catch(async (err) => {
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
               processedAt: new Date(),
               errorReason: err instanceof Error ? err.message : 'Unknown error',
             },
-          }).catch(() => {}) // silent — never block on outcome write
+          }).catch(writeErr => logFailure(tenantId, 'webhook.outcome_write_failure_failed', 'webhook_log', writeErr, { webhookLogId, originalError: err instanceof Error ? err.message : String(err) }))
         }
       })
 
