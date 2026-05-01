@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 61 — v1.1 Wave 4 (2026-04-30) — AI enrichment routing SHIPPED + APPLIED. extract-deal-intel system prompt extended with seller-targeted proposals + Q5 mirror-write; calculateTCP Class-4 hardened + Seller rollup fan-out; PropertyBuyerStage.matchScore column added with live persistence; rollup helper writes motivationScore + likelihoodToSellScore + activity aggregates from existing Call data; Q4 closed via auto-link helper; Q7 closed via matchScore column. Backfill applied to live tenant: 3,244 calls auto-linked + 289 sellers got rollup writes (117 with motivationScore + likelihoodToSellScore).
+**Current session**: 62 — v1.1 Wave 5 (2026-05-01) — Property column strip cutover SHIPPED. 24 columns + 2 indexes dropped across Property + Buyer (migration `20260501151510_v1_1_wave_5_property_strip`). Pre-cutover DB snapshot taken via pg_dump (160MB, /tmp/gunner-pre-wave5-20260501T153612Z.sql). Read-path migration: VendorIntelPanel reads `primarySeller` instead of `property.owner_*`. Dual-write turn-off: `lib/batchdata/enrich.ts` no longer writes legacy columns. Dead-code removal: `lib/v1_1/wave_2_backfill.ts` + `lib/v1_1/wave_4_backfill.ts` + `app/api/diagnostics/v1_1_seller_backfill/` deleted (one-time backfills, applied + dropped source columns). Q3 keeps absenteeOwner + absenteeOwnerInState + samePropertyMailing on Property as property facts.
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -56,6 +56,85 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 62 — v1.1 Wave 5 (2026-05-01) — Property strip cutover SHIPPED
+
+The contract phase of the expand-contract migration. Drops the legacy
+staging columns now that Wave 1+2 backfill, Wave 3 read-path migration,
+and Wave 4 AI write-path are all live + applied + verified.
+
+**Pre-cutover protocol followed:**
+- `pg_dump` snapshot taken via Railway CLI on `DIRECT_URL` →
+  `/tmp/gunner-pre-wave5-20260501T153612Z.sql` (160 MB, 71 tables,
+  validated header + tail). Rollback handle if anything breaks:
+  `railway run --service Gunner-Claude bash -c 'psql "$DIRECT_URL" < /tmp/gunner-pre-wave5-20260501T153612Z.sql'`
+- Read-path migration shipped in the same commit (no UI references the
+  dropped columns post-cutover; post-cutover grep returned 0 hits).
+- Dual-write window closed BEFORE the schema strip — the destructive
+  migration runs against a quiet write surface.
+
+**DROP set (24 columns + 2 indexes across 3 tables):**
+
+| Table | Columns dropped |
+|---|---|
+| `properties` | `owner_phone`, `owner_email`, `owner_type`, `ownership_length_years`, `second_owner_name`, `second_owner_phone`, `second_owner_email`, `owner_first_name_1`, `owner_last_name_1`, `owner_first_name_2`, `owner_last_name_2`, `owner_portfolio_count`, `owner_portfolio_total_equity`, `owner_portfolio_total_value`, `owner_portfolio_total_purchase`, `owner_portfolio_avg_assessed`, `owner_portfolio_avg_purchase`, `owner_portfolio_avg_year_built`, `owner_portfolio_json`, `senior_owner`, `deceased_owner`, `cash_buyer_owner`, `manual_buyer_ids` |
+| `properties` indexes | `@@index([senior_owner])`, `@@index([deceased_owner])` (auto-removed by Postgres alongside their columns) |
+| `buyers` | `match_likelihood_score` (Q7 lock — replaced by `PropertyBuyerStage.matchScore`) |
+
+**Q3 keeps on Property** (property facts, not person facts):
+`absenteeOwner`, `absenteeOwnerInState`, `samePropertyMailing`,
+`mailingAddressVacant`.
+
+**Read-path migration (5 files):**
+- `components/inventory/property-detail-client.tsx` — `VendorIntelPanel`
+  now computes `const primarySeller = property.sellers.find(s => s.isPrimary) ?? property.sellers[0]`
+  and reads owner-side flags + portfolio aggregates from `primarySeller.*`
+  instead of `property.*`. PropertyDetail interface trimmed of 8 fields.
+- `app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx` — server-component
+  Prisma select clause + serialization stripped of the dropped fields.
+  The Sellers tab (Wave 3 Phase B) is the canonical surface.
+- `components/buyers/buyer-detail-client.tsx` — dropped the per-buyer
+  Match Likelihood field row. (Per-property fit lives on
+  `PropertyBuyerStage.matchScore`, surfaced wherever the property-buyer
+  pair is rendered.)
+- `scripts/enrichment-gaps.ts`, `scripts/check-todays-leads.ts` — Prisma
+  selects on dropped fields cleaned up.
+
+**Dual-write turn-off (2 files):**
+- `lib/batchdata/enrich.ts` — removed all `setIfEmpty` calls for the
+  dropped Property.owner_* columns. Vendor data flows to Seller via
+  `lib/enrichment/sync-seller.ts` (the canonical write path, kept).
+  Type interface fields trimmed.
+- `lib/enrichment/enrich-property.ts` — Prisma select clauses pruned.
+
+**Dead-code removal (3 deletions):**
+- `lib/v1_1/wave_2_backfill.ts` (Wave 2 Property→Seller backfill;
+  applied 2026-04-30; source columns dropped this wave so the file
+  was uncompilable.)
+- `lib/v1_1/wave_4_backfill.ts` (Wave 4 Buyer.matchLikelihoodScore →
+  PropertyBuyerStage.matchScore copy; applied 2026-04-30 as a no-op
+  — no source data existed; source column dropped this wave.)
+- `app/api/diagnostics/v1_1_seller_backfill/route.ts` (Wave 2
+  diagnostic endpoint; depended on the deleted lib above).
+
+**Diagnostic endpoint trimmed:**
+- `app/api/diagnostics/v1_1_seller_rollup_backfill/route.ts` no longer
+  invokes the matchScore copy job. The auto-link + seller-rollup phases
+  remain, supporting any future recovery scenarios.
+
+**Verification (pre-push):**
+- `npx tsc --noEmit`: 0 errors
+- Post-cutover grep `property\.\(ownerPhone\|ownerEmail\|...\)`: **0 hits**
+- DB snapshot completed before push (160 MB, valid PostgreSQL dump)
+
+**Post-deploy verification:**
+- (filled in after deploy completes)
+
+**What's left for Wave 6 (verification + handoff):**
+- Reliability scorecard rescore — dim #8 target 8/10 (was 4/10 pre-v1.1, 6/10 after Wave 4)
+- Final SYSTEM_MAP / OPERATIONS / AGENTS sweep
+- Q6 Seller Buy Signal Day Hub task auto-generation (deferred; surface-only landed Session 61)
+- Optional name-match auto-link fallback for the 4,135 calls without propertyId (v1.2 candidate)
 
 ### Session 61 — v1.1 Wave 4 (2026-04-30) — AI enrichment routing + Q4/Q5/Q7 closed
 

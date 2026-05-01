@@ -1,8 +1,22 @@
 # Seller / Buyer Integration Plan — v1.1 kickoff (PLAN ONLY)
 
-> **Status:** Wave 4 SHIPPED + APPLIED 2026-04-30 (Session 61). Wave 5
-> next (destructive cutover — schema strip).
+> **Status:** Wave 5 SHIPPED 2026-05-01 (Session 62). v1.1 sprint at
+> ~85% complete; Wave 6 (verification + handoff + scorecard rescore)
+> is the final wave.
 > **Author:** Session 60 (2026-04-30)
+>
+> **Wave 5 SHIPPED 2026-05-01 (Session 62).** Property column strip
+> cutover. Migration `20260501151510_v1_1_wave_5_property_strip` drops
+> 24 columns + 2 indexes (Property × 22 + Property indexes × 2 + Buyer
+> × 1). Pre-cutover `pg_dump` snapshot taken via Railway CLI (160 MB,
+> 71 tables, validated). Read-path migration shipped in same commit:
+> VendorIntelPanel now reads `primarySeller` instead of `property.owner_*`;
+> dual-write turn-off in `lib/batchdata/enrich.ts`; one-time backfill
+> code deleted (`wave_2_backfill.ts`, `wave_4_backfill.ts`). Q3 keeps
+> `absenteeOwner` + `absenteeOwnerInState` + `samePropertyMailing` +
+> `mailingAddressVacant` on Property as property facts. Post-cutover
+> grep `property\.\(owner|seniorOwner|...\)` returned 0 hits.
+>
 > **Sprint pre-state:** v1-finish closed at commit `1d41d50`. Reliability scorecard
 > dimension #8 (Seller/Buyer contact data model) = 4/10 — the explicit redesign target.
 >
