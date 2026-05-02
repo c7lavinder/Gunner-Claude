@@ -38,10 +38,22 @@ const envSchema = z.object({
 
 const parsed = envSchema.safeParse(process.env)
 
+// During Next.js build (`next build` page-data collection), Railway's build
+// environment is intentionally minimal — it does NOT have access to runtime
+// secrets like GHL_WEBHOOK_SECRET. Strict env validation must skip
+// process.exit() in this phase, otherwise the build worker dies and Railway
+// reports "build failed" for what is actually a deploy-environment-shape
+// issue, not a code defect. Strict validation still applies at dev startup
+// and at production runtime (instrumentation.ts boot path).
+//
+// Reference: NEXT_PHASE='phase-production-build' is set by Next.js during
+// `next build` only. https://nextjs.org/docs/app/api-reference/next-config-js
+const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
+
 if (!parsed.success) {
   console.error('❌ Missing or invalid environment variables:')
   console.error(parsed.error.flatten().fieldErrors)
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' && !isBuildPhase) {
     process.exit(1)
   }
 }
