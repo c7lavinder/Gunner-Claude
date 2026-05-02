@@ -18,7 +18,7 @@ const envSchema = z.object({
   GHL_CLIENT_ID: z.string(),
   GHL_CLIENT_SECRET: z.string(),
   GHL_REDIRECT_URI: z.string().url(),
-  GHL_WEBHOOK_SECRET: z.string(),
+  GHL_WEBHOOK_SECRET: z.string().optional(),
 
   // Anthropic
   ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-'),
