@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 64 — Pre-Scaling Cleanup Wave (2026-05-01) — **CLEANUP WAVE COMPLETE.** All 5 phases shipped + verified live in one session (5 commits on `main`, 6 push cycles including session-close). formatCurrency duplicate dropped (dead code, no callers); 15 inline `new Anthropic({...})` instantiations consolidated to a `config/anthropic.ts` singleton; Resend usage routed through existing `lib/email/index.ts` helper (env vars now centralized through `config/env.ts`); 11 silent catches in reliability-critical paths wired to `logFailure()` / heartbeat fallbacks (baseline 71 → 60, target ≤62 met); `/api/health` runtime field-source patch extracted to one-shot script `scripts/migrate-field-source-ai-to-api.ts` (production dry-run found 0 rows needing fix — patch had already drained the backlog); `scripts/REGISTRY.md` now catalogs all 57 scripts with idempotency / last-run / delete-after columns. Live `/api/health` post-deploy: HTTP 200, status ok. **Previous: Session 63 — v1.1 SPRINT COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
+**Current session**: 65 — Blocker #2 verification infra (2026-05-02) — **HIGH-STAKES AUDIT ENDPOINT SHIPPED + DEPLOY-FAILURE INCIDENT CLOSED.** Plan was to build the verification surface for Blocker #2 (Role Assistant production verification of 6 high-stakes action types) — diagnostic endpoint, ritual doc. While verifying the deploy live, discovered Railway had been silently FAILING all deploys since 2026-05-01 18:56 (the Phase 4 success): Phase 5, Session-64 close, AND today's high-stakes-audit endpoint never made it to production. Root cause: `config/env.ts` strict validation killed `next build` because Railway's build env lacks `GHL_WEBHOOK_SECRET` (and the var was never in runtime env either — schema/use-site mismatch since the use site at `app/api/webhooks/ghl/route.ts:15-19` already treats it as optional). Two fixes: (1) skip `process.exit(1)` during `NEXT_PHASE='phase-production-build'`, (2) make `GHL_WEBHOOK_SECRET` schema optional. Commits: `0c6eb89` (high-stakes-audit endpoint + AUDIT_PLAN.md ritual + OPERATIONS.md cross-link), `3433c21` (env build-phase fix), `7ac5ee7` (env schema fix). Final deploy SUCCESS at 2026-05-02 15:58 UTC; high-stakes-audit endpoint verified live with proper JSON shape. The 4 commits that had been stuck on yesterday's build (Phase 5, session-close, high-stakes-audit, env-build-fix) are now all in production. **Previous: Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — CLEANUP WAVE COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -61,6 +61,136 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 65 — Blocker #2 verification infra + Railway deploy-failure incident (2026-05-02)
+
+Plan was clean: build the verification surface for Blocker #2 (Role
+Assistant production verification of 6 high-stakes action types). The
+audit revealed all 3 code-side fixes from the original 4-step blocker
+plan are already shipped (webhook silent catch closed, requireApproval
+on deal-blast wired, editedInput contract complete in coach-sidebar +
+execute route). What was missing: a single surface to verify the
+evidence trail in one read. So this session shipped:
+
+1. **`/api/diagnostics/high-stakes-audit`** (commit `0c6eb89`) — token-gated
+   diagnostic at `app/api/diagnostics/high-stakes-audit/route.ts`. Returns
+   per-tool counts (24h / 7d / 30d / failures24h) + last 5 success +
+   last 5 failure rows for each of 6 high-stakes Role Assistant tools
+   (`send_sms_blast`, `send_email_blast`, `bulk_tag_contacts`,
+   `remove_contact_from_property`, `remove_team_member`,
+   `change_property_status`). Plus per-gate counts (`gate.<action>.pending` +
+   `gate.approved`) for the underlying `requireApproval` flow at
+   `lib/gates/requireApproval.ts`. Plus universal totals + failure-rate.
+   Source refs in the response `notes` field.
+
+2. **AUDIT_PLAN.md Blocker #2 rewrite** (same commit) — status changed
+   from "IN PROGRESS" to "CODE SHIPPED, VERIFICATION OWED" with cross-
+   references to the now-shipped fixes (file:line citations so the
+   verifier can sanity-check before running the ritual). New "Blocker #2
+   verification ritual" section with exact UI click-paths for all 6 tools,
+   expected `audit_log` evidence per tool, and acceptance criteria for
+   closing the blocker. Includes cancel-path checks (the Reject button
+   should leave no `assistant.action.<tool>` row — half the value).
+
+3. **OPERATIONS.md "Diagnostic endpoints" table extended** (same commit)
+   with the new endpoint per Living Map discipline (Rule 8).
+
+**Then the incident.** Pre-flight live verification of the new endpoint
+returned HTTP 404. Root-cause investigation surfaced that **Railway had
+been silently FAILING all deploys since 2026-05-01 18:56** (last
+successful deploy was Phase 4 of Session 64). 6 deploys had failed:
+Phase 5 (REGISTRY.md), Session-64 close, and today's high-stakes-audit
+endpoint were ALL stuck on yesterday's build.
+
+`railway deployment list --service Gunner-Claude` showed the truth:
+
+| Time | SHA | State |
+|---|---|---|
+| 2026-05-01 18:56 | `1f5d42b` (Phase 4) | ✅ SUCCESS |
+| 2026-05-01 19:01-19:11 | various | ❌ FAILED ×5 |
+| 2026-05-02 15:34 | `0c6eb89` (high-stakes-audit) | ❌ FAILED |
+
+Build logs revealed the failure mode:
+```
+❌ Missing or invalid environment variables:
+{ GHL_WEBHOOK_SECRET: [ 'Required' ] }
+ ⨯ Next.js build worker exited with code: 1
+```
+
+`config/env.ts` strict validation was killing `next build` page-data
+collection because Railway's build env doesn't have `GHL_WEBHOOK_SECRET`.
+And per `railway variables --service Gunner-Claude --kv | cut -d= -f1`,
+the var is **not in runtime env either** — it has never been set.
+
+But the worker has been running for weeks. How? **The previous container
+from the 18:56 deploy was still running on yesterday's image; subsequent
+restarts (had any happened) would have crashed at startup with
+`process.exit(1)` because `NODE_ENV=production` + missing required env.**
+A restart would have caused full production outage. We were sitting on
+a landmine.
+
+`GHL_WEBHOOK_SECRET` is read in exactly one place
+(`app/api/webhooks/ghl/route.ts:15-19`), and the comment at that site
+literally says "optional — only when GHL_WEBHOOK_SECRET is set". Schema
+was just out of sync with the use site — the same class of fix as
+making `RESEND_API_KEY` optional in Phase 2.
+
+**Two fixes shipped:**
+
+- **`3433c21` (`fix(env): allow build phase to skip process.exit`)** —
+  `config/env.ts` now skips `process.exit(1)` during
+  `NEXT_PHASE='phase-production-build'`. Strict validation still applies
+  at dev startup + production runtime. Build no longer dies on
+  build-time-only env shape issues.
+- **`7ac5ee7` (`fix(env): GHL_WEBHOOK_SECRET schema → optional`)** —
+  matches the use-site comment. Use site's fail-open behavior
+  (skip-signature-verification log) is preserved. Re-tightening is one
+  line away if Corey ever sets the var on Railway.
+
+Final deploy `c1bfb74...` SUCCESS at 2026-05-02 15:58:29 UTC. Container
+came up clean. Smoke test of high-stakes-audit endpoint via
+`curl -H "Authorization: Bearer $DIAGNOSTIC_TOKEN" "https://[PRODUCTION_URL]/api/diagnostics/high-stakes-audit?tenant=new-again-houses"`
+returned HTTP 200 with the right JSON shape (6 tools listed, 4 gates
+listed, all counts at 0 — expected since no high-stakes activity has
+been triggered in the last 30d, which is exactly the gap Blocker #2
+verification needs to fill).
+
+**Side-finding (deferred):** `/api/health` returns the same timestamp
+on every call (Next.js statically renders it because the route handler
+takes no `request` parameter). Not blocking — just means health checks
+don't actually probe DB connectivity per request. Would need
+`export const dynamic = 'force-dynamic'` to fix. Adding to bigger
+backlog as a one-liner cleanup candidate.
+
+**Next session can now actually run the verification ritual.** Corey
+drives the live UI through the 6 tools per the `AUDIT_PLAN.md` "Blocker
+#2 verification ritual" click-paths; Claude reads
+`/api/diagnostics/high-stakes-audit` periodically and confirms each
+tool's count increments. Acceptance criteria already documented in the
+ritual section.
+
+**Files modified by this session (4 commits):**
+- `app/api/diagnostics/high-stakes-audit/route.ts` (new)
+- `docs/AUDIT_PLAN.md` (Blocker #2 section rewrite + ritual)
+- `docs/OPERATIONS.md` (diagnostic endpoint cross-link)
+- `config/env.ts` (build-phase guard + GHL_WEBHOOK_SECRET optional)
+- `PROGRESS.md` (this entry)
+
+**Reliability scorecard delta (post-incident, vs Session 64):**
+
+| # | Dimension | S64 | S65 | Δ | What changed |
+|---|---|---|---|---|---|
+| 1 | Call ingestion | 9 | 9 | — | No regression. |
+| 2 | Grading pipeline | 9 | 9 | — | No regression. |
+| 3 | Multi-tenancy | 9 | 9 | — | New diagnostic endpoint takes `?tenant=<slug>` and scopes all queries by `tenantId`. |
+| 4 | Error visibility | 8 | 8 | — | High-stakes-audit endpoint surfaces evidence; doesn't change generation. |
+| 5 | Documentation hygiene | 9 | 9 | — | AUDIT_PLAN ritual + OPERATIONS cross-link. |
+| 6 | Repo security posture | 8 | 8 | — | No identifier leaks in commits (twice slipped values into shell output during this session — flagged at the time, never committed). |
+| 7 | **Production verification discipline** | **9** | **9** | — | Caught the silent-deploy-failure latent landmine. Without that catch, the next container restart would have hit `process.exit(1)` on missing env. Worth a +1 in spirit, but didn't change the rubric. |
+| 8 | Seller/Buyer contact data model | 8 | 8 | — | No change. |
+
+Average **8.625/10** (unchanged). Blocker #2 is now positioned to close
+in the next session via the ritual.
 
 ### Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — 5/5 phases shipped
 
@@ -2053,52 +2183,57 @@ All other bugs from sessions 1-32 are resolved.
 
 ---
 
-## Next Session — Blocker #2: Role Assistant production verification
+## Next Session — Blocker #2: run the verification ritual on live UI
 
-Pre-Scaling Cleanup Wave **CLOSED** Session 64 (5 phases shipped + verified).
-Reliability scorecard dim #4 (Error visibility) moved 7 → 8/10. With cleanup
-done, the only OPEN blocker is **#2** — Role Assistant production verification
-of the 6 high-stakes action types. This has been open since v1-finish (Session
-44+) and is a real risk: the assistant ships approve→edit→confirm flows but
-has not been observed end-to-end on production for the high-stakes set.
+Verification infrastructure is now SHIPPED + DEPLOYED (Session 65,
+commits `0c6eb89` + `3433c21` + `7ac5ee7`). The diagnostic endpoint
+`/api/diagnostics/high-stakes-audit?tenant=new-again-houses` returns
+the per-tool audit-row evidence in one curl. The ritual click-paths
+are documented in `docs/AUDIT_PLAN.md` "Blocker #2 verification ritual".
 
-**The 6 high-stakes action types to verify:**
-1. SMS blast to >10 contacts (`lib/gates/requireApproval.ts` should fire)
-2. Bulk property status change (preview + confirm count gate)
-3. Delete any record (soft-delete first, hard-delete needs second confirm)
-4. Webhook registration / deregistration (log + confirm)
-5. Bulk GHL contact update (preview diff + confirm)
-6. `assign_contact_to_user` (Role Assistant tool — see P5)
+**What you (Corey) do next session:**
+Drive the live UI through the 6 high-stakes Role Assistant tools per
+the ritual in AUDIT_PLAN.md. Each tool gets:
+- 1 approve trial (verify side effect lands + audit row lands)
+- 1 reject trial (verify NO side effect + actionLog row with `wasRejected: true`)
 
-**Verification ritual per type:**
-1. Trigger the action through the Role Assistant on the live URL.
-2. Confirm the in-UI approval modal appears (preview of intended changes).
-3. Approve. Confirm the audit_log row lands (`action: 'assistant.<type>.executed'`).
-4. Confirm the side effect happened in GHL / DB (open the record, check field state).
-5. Repeat with the cancel path. Confirm the audit_log shows
-   `action: 'assistant.<type>.cancelled'` and no side effect occurred.
-6. Note results in PROGRESS.md and AGENTS.md if conventions emerge.
+The 6 tools:
+1. `send_sms_blast` — ask assistant to SMS-blast priority buyers; approve via two-stage gate at /disposition.
+2. `send_email_blast` — same flow, email.
+3. `bulk_tag_contacts` — currently a stub (verify proposal flow only).
+4. `remove_contact_from_property` — on a property, ask assistant to remove a seller.
+5. `remove_team_member` — on a property, ask assistant to remove a team member.
+6. `change_property_status` — on a property, ask assistant to flip status.
+
+**What Claude does next session:**
+1. Run the diagnostic endpoint pre-ritual to get baseline counts:
+   ```bash
+   curl -H "Authorization: Bearer $DIAGNOSTIC_TOKEN" \
+     "[PRODUCTION_URL]/api/diagnostics/high-stakes-audit?tenant=new-again-houses"
+   ```
+2. Track each tool's count increment as Corey runs through.
+3. After the ritual, update PROGRESS.md "Active blockers" to remove #2,
+   and AUDIT_PLAN.md "Audits completed" with the verification timestamps.
+
+**Pre-flight (must do before ritual):**
+1. `railway whoami` → confirm auth.
+2. `git log --oneline -3` → confirm last commit is Session 65 close.
+3. `railway deployment list --service Gunner-Claude | head -3` →
+   confirm last deploy is SUCCESS (after Session 65, this should always
+   be the case unless a new failure surfaces).
+4. Smoke-test the diagnostic endpoint returns HTTP 200 with the right
+   shape before starting (use the curl above).
+5. Read `docs/AUDIT_PLAN.md` "Blocker #2 verification ritual" — this
+   is the canonical click-path doc.
 
 **Why this is the right next thing:**
-- Cleanup wave removed the small foot-guns. Now the biggest open risk is
-  shipping a feature that depends on assistant high-stakes execution being
-  trustworthy — without ever having watched it work.
+- All code-side work for Blocker #2 is shipped (verified Session 65).
+  The only thing standing between us and closing the blocker is running
+  the ritual.
 - Closing Blocker #2 unblocks D-045 (KPI snapshot timing) + P4 (`/tasks/`
   deletion) which both have assistant-action implications.
-- It's user-blocking (Corey runs the verifications via the live UI; Claude
-  prepares the test ritual + reads the audit_logs).
-
-**Pre-flight (must do before code):**
-1. `railway whoami` → confirm auth.
-2. `git log --oneline -5` → confirm last commit is the Session 64 close.
-3. Read the verification routine result if it has fired:
-     https://claude.ai/code/routines/trig_01TFP5vnSKsM2RWJiCBxRxN4
-   (one-shot scheduled 2026-05-02T17:00:00Z; if past that time, read its
-   output. If "✅ post-grade verified" — note in session log. If "⚠️ no new
-   auto-link activity in 24h" — surface to Corey.)
-4. Read `lib/gates/requireApproval.ts` to understand the approval contract.
-5. Read `app/api/ai/assistant/execute/route.ts` to see the 6 high-stakes
-   tool entry points.
+- The diagnostic endpoint also serves as ongoing health check — once
+  the blocker is closed, periodic curls verify no regression.
 
 **Carry-forward backlog (don't lose track):**
 - 216 in-flight unlinked calls (Q4 gap from v1.1 Wave 4) — nightly retroactive
