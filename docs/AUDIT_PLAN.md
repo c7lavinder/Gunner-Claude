@@ -21,43 +21,115 @@ Proof: `scripts/verify-calls-pipeline.ts` runs bidirectionally:
 See PROGRESS.md Session 37 for the four-commit build history
 (`4921397` → `c013ffe`).
 
-### Blocker #2 — Action execution discipline · IN PROGRESS
+### Blocker #2 — Action execution discipline · CODE SHIPPED, VERIFICATION OWED
 
 Evidence base: [docs/audits/ACTION_EXECUTION_AUDIT.md](audits/ACTION_EXECUTION_AUDIT.md)
 
-22 GHL write call sites inventoried and scored on UX compliance,
-Reliability, Safety, and Observability. Three hard blockers:
+22 GHL write call sites inventoried originally; three hard blockers
+flagged. **All three are now closed in code** — the remaining work is
+production verification of the 6 high-stakes Role Assistant action types
+on the live URL with real data. Without that evidence, Blocker #2 stays
+"IN PROGRESS" per CLAUDE.md ("No phase is complete until every feature
+is verified end-to-end on production").
 
-1. **Assistant Edit button is a dead UI element.** `coach-sidebar.tsx:301-303` —
-   no `onClick`, fields rendered as read-only `<span>`, server only accepts
-   `{ toolCallId, pageContext, rejected? }`. All 7 AI-assistant action types
-   execute whatever the AI proposed, verbatim. Violates the propose → edit →
-   confirm spec. Highest-leverage single fix in the audit.
-2. **Deal blast missing `requireApproval`.** `/properties/[propertyId]/blast`
-   sends SMS/email to N buyers with no approval gate — direct violation of
-   AGENTS.md rule on bulk SMS to >10 contacts.
-3. **Webhook register silent catch.** `deleteWebhook.catch(() => {})` in
-   `lib/ghl/webhook-register.ts:25` swallows errors with no audit trail.
-   Likely explains why PROGRESS.md bug #10 (webhook registration 404) has
-   persisted undiagnosed.
+Closed code-side fixes (cross-reference):
 
-Plus 12 non-blocking ⚠️ rows and a systemic observability gap (17 of 22 GHL
-writes skip `audit_logs` entirely).
+1. ✅ **Assistant Edit button + editedInput contract.** `components/ui/coach-sidebar.tsx`
+   lines 146-362 — `editingToolCallId` state, `patchEdit()`, `toggleEdit()`.
+   Server accepts `editedInput` at `app/api/ai/assistant/execute/route.ts:27,34,61-63`;
+   merges with `originalInput` and stores both in `actionLog` (line 957-969)
+   + universal success audit row (line 976-994).
+2. ✅ **Deal blast `requireApproval` gate.** `app/api/properties/[propertyId]/blast/route.ts:7,269`
+   imports `approveAction` from `@/lib/gates/requireApproval` and calls it
+   on the approval path (POST with `gateId`). Stricter than the built-in
+   >10 threshold per the route's per-tier policy.
+3. ✅ **Webhook register silent catch.** `lib/ghl/webhook-register.ts:26-28`
+   replaced `.catch(() => {})` with `logFailure(tenantId, 'webhook.deregister_failed', ...)`.
 
-### Proposed fix sequence for Blocker #2
+Item 4 ("logGhlAction helper") was supplanted by the universal success +
+failure audit rows in `app/api/ai/assistant/execute/route.ts:976-994` and
+`:1010-1031`, which write `assistant.action.<tool>` (success) and
+`assistant.action.failed` (failure) for every tool call. The systemic
+observability gap is closed at the route level rather than per-call-site.
 
-1. **2-line fix:** replace `deleteWebhook.catch(() => {})` with `logFailure`
-   in `lib/ghl/webhook-register.ts`. Surfaces bug #10.
-2. **One import:** add `requireApproval` gate to the deal-blast route.
-   Closes the AGENTS.md rule violation.
-3. **Biggest lift:** wire the Edit button in `coach-sidebar.tsx` + accept
-   `editedInput` server-side in `/api/ai/assistant/execute`. Unblocks the 7
-   assistant action types.
-4. **Sprint-scale cleanup:** add a `logGhlAction(...)` helper and call it
-   from every GHL-write endpoint (success + failure) to close the systemic
-   audit gap.
+### Blocker #2 verification ritual — production click-paths
 
-Items 1-3 clear the hard blockers. Item 4 is ongoing hygiene.
+The 6 high-stakes Role Assistant action types from AGENTS.md "High-Stakes
+Action Gates" + the execute-route case names that map to them. To close
+Blocker #2, you (Corey) drive the live UI; Claude reads the audit_logs.
+
+**Pre-flight (Claude does these):**
+1. Confirm the diagnostic endpoint is live:
+   ```bash
+   curl -H "Authorization: Bearer $DIAGNOSTIC_TOKEN" \
+     "[PRODUCTION_URL]/api/diagnostics/high-stakes-audit?tenant=new-again-houses"
+   ```
+   Expect `tools[]` with 6 entries, `gates[]` with 4 entries. Take the
+   pre-ritual baseline counts.
+2. Note the current UTC timestamp. Every audit row written during the
+   ritual must be `>= ` this timestamp.
+
+**Ritual steps — repeat per type:**
+
+For each of the 6 types below:
+
+1. Trigger the action via the Role Assistant chat on the live URL.
+   The assistant should respond with a `toolCalls` block + a confirmation
+   prompt ("Please review and approve").
+2. Confirm the in-UI confirmation surface renders (`coach-sidebar.tsx`
+   shows the proposed action with Edit / Approve / Reject buttons).
+3. **Cancel path first:** click Reject. Confirm the assistant logs a
+   rejection (`actionLog.wasRejected = true`); no side effect should
+   land. Re-run the diagnostic curl — `assistant.action.<tool>` count
+   must NOT increment.
+4. **Approve path:** trigger the same action again. Click Approve
+   (optionally Edit a field first to test the editedInput contract).
+   Confirm the side effect:
+   - For SMS/email blasts: navigate to the property's Disposition page
+     to actually fire (two-stage gate). Verify `gate.sms_blast.pending`
+     row lands, then `gate.approved` after the second confirm.
+   - For destructive tools (`remove_team_member`, `remove_contact_from_property`):
+     verify the row is gone in the UI + `assistant.action.<tool>` row
+     lands with severity INFO.
+   - For status changes: verify the new status sticks in the UI +
+     audit row lands.
+5. Re-run the diagnostic curl. The relevant tool's 24h count should
+   increment by 1; failure count should be 0.
+
+**The 6 types to verify:**
+
+| # | Tool name | UI trigger | Expected audit evidence |
+|---|---|---|---|
+| 1 | `send_sms_blast` | Ask assistant: "Send SMS blast to priority buyers for [property]" → approve in chat → continue at /disposition | `assistant.action.send_sms_blast` (proposal) → `gate.sms_blast.pending` (dispo gate) → `gate.approved` |
+| 2 | `send_email_blast` | Ask assistant: "Send email blast to qualified buyers for [property]" → approve → /disposition | `assistant.action.send_email_blast` → `gate.email_blast.pending` → `gate.approved` |
+| 3 | `bulk_tag_contacts` | Ask assistant: "Tag the last 5 contacts I called as 'follow_up'" → approve | `assistant.action.bulk_tag_contacts` (currently a stub — execute route line 773-776 returns a message, no actual tag fire). Verifies the proposal flow only. |
+| 4 | `remove_contact_from_property` | On a property page, ask assistant: "Remove [seller name] from this property" → approve | `assistant.action.remove_contact_from_property` + the PropertySeller row is gone |
+| 5 | `remove_team_member` | On a property page, ask assistant: "Remove [team member] from this property's team" → approve | `assistant.action.remove_team_member` + the PropertyTeamMember row is gone |
+| 6 | `change_property_status` | On a property page, ask assistant: "Move this property to 'Under Contract'" → approve | `assistant.action.change_property_status` + the Property.status field updated |
+
+**Cancel-path checks** (also do these — half the value of the ritual):
+
+For each of types 4, 5, 6 above, run a parallel "Reject" trial: trigger
+the same action, but click Reject in the modal. Verify:
+- `actionLog` row written with `wasRejected: true, executed: null`.
+- NO `assistant.action.<tool>` row written.
+- The underlying record is unchanged (UI confirms).
+
+**Acceptance criteria for closing Blocker #2:**
+
+- All 6 types: at least 1 successful approve trial logged in
+  `assistant.action.<tool>` with severity INFO, plus the side effect
+  visible in the UI/DB.
+- Types 4, 5, 6: at least 1 rejection trial logged in `actionLog`
+  with `wasRejected: true`, with no `assistant.action.<tool>` row.
+- Types 1, 2: at least 1 dispo-gate trial reaching `gate.approved`
+  for the underlying blast action.
+- Diagnostic endpoint failure count for each tool: 0 over the ritual
+  window. (If failures > 0, debug before closing.)
+
+Once closed, update PROGRESS.md "Active blockers" to remove #2 and add
+the verification timestamps + commit SHA to AUDIT_PLAN.md "Audits
+completed" below.
 
 ### Blocker #3 — Dual grading worker · ✅ CLOSED (2026-04-27, Wave 1 of v1-finish sprint)
 
