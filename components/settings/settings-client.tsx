@@ -484,7 +484,7 @@ export function SettingsClient({
                           onClick={() => {
                             localStorage.setItem('gunner_view_as_user', member.name)
                             localStorage.setItem('gunner_view_as_user_id', member.id)
-                            router.push(`/${tenant.slug}/tasks`)
+                            router.push(`/${tenant.slug}/day-hub`)
                           }}
                           className="text-ds-fine font-medium text-txt-muted hover:text-semantic-blue hover:bg-semantic-blue-bg px-2 py-1 rounded-[8px] transition-colors flex items-center gap-1"
                           title={`View Day Hub as ${member.name}`}

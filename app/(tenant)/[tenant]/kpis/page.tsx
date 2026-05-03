@@ -15,7 +15,7 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
   const role = session.role as UserRole
 
   // KPI page is admin/owner only — team members see their KPIs on Day Hub
-  if (!isRoleAtLeast(role, 'ADMIN')) redirect(`/${params.tenant}/tasks`)
+  if (!isRoleAtLeast(role, 'ADMIN')) redirect(`/${params.tenant}/day-hub`)
 
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },

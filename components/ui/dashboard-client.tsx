@@ -273,7 +273,7 @@ export function DashboardClient({ data, tenantSlug }: { data: DashboardData; ten
               <CheckSquare size={14} className="text-semantic-blue" />
               Today&#39;s tasks
             </h2>
-            <Link href={`/${tenantSlug}/tasks`} className="text-ds-fine text-gunner-red hover:text-gunner-red-dark flex items-center gap-1">
+            <Link href={`/${tenantSlug}/day-hub`} className="text-ds-fine text-gunner-red hover:text-gunner-red-dark flex items-center gap-1">
               All <ArrowUpRight size={11} />
             </Link>
           </div>

@@ -34,6 +34,13 @@ const envSchema = z.object({
   // Email (optional — when unset, transactional email logs to console in dev)
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('Gunner AI <noreply@gunnerai.com>'),
+
+  // Property-data enrichment vendor allowlist (optional). Comma-separated.
+  // When unset, defaults to 'propertyradar,google' (Session 66 simplification —
+  // PR is primary + Google supplies Inventory page Street View images).
+  // Recognized: propertyradar, google, batchdata, courtlistener, rentcast,
+  // realestateapi. Read by lib/enrichment/vendor-flags.ts.
+  ENRICHMENT_VENDORS_ENABLED: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)

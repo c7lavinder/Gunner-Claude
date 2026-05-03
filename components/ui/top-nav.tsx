@@ -63,7 +63,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
   const base = `/${tenantSlug}`
 
   const navItems: Array<{ href: string; label: string; permission?: typeof undefined; always?: boolean; adminOnly?: boolean }> = [
-    { href: `${base}/tasks`, label: 'Day Hub', always: true },
+    { href: `${base}/day-hub`, label: 'Day Hub', always: true },
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as never },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
     // v1.1 Wave 3 Phase A — surface Sellers list + Buyers (was hidden from nav).
@@ -93,7 +93,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
         </button>
 
         {/* Logo */}
-        <Link href={`${base}/tasks`} className="flex items-center gap-2 shrink-0">
+        <Link href={`${base}/day-hub`} className="flex items-center gap-2 shrink-0">
           <div className="w-6 h-6 rounded-md bg-gunner-red flex items-center justify-center">
             <span className="text-white font-semibold text-[11px]">G</span>
           </div>

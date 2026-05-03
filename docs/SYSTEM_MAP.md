@@ -48,7 +48,7 @@ in `docs/archive/` (after sprint Commit #5).
 | Embeddings | OpenAI `text-embedding-3-small` | `lib/ai/embeddings.ts` |
 | Transcription | Deepgram | `lib/ai/transcribe.ts` |
 | CRM | Go High Level OAuth Marketplace App | `lib/ghl/client.ts` |
-| Property data vendors | PropertyRadar (primary) → BatchData (gap fill) → CourtListener V4 (court records) → RentCast (rentals) → RealEstateAPI (fallback) → Google + Supabase storage (imagery) | `lib/enrichment/`, `lib/propertyradar/`, `lib/batchdata/`, `lib/courtlistener/`, `lib/rentcast/`, `lib/realestateapi/`, `lib/google/`, `lib/storage/` |
+| Property data vendors | PropertyRadar (primary) + Google Street View (Inventory images) — default. BatchData / CourtListener / RentCast / RealEstateAPI gated off by env allowlist `ENRICHMENT_VENDORS_ENABLED` (Session 66, 2026-05-03). Set the env var to re-enable any subset; see `lib/enrichment/vendor-flags.ts`. | `lib/enrichment/`, `lib/propertyradar/`, `lib/batchdata/`, `lib/courtlistener/`, `lib/rentcast/`, `lib/realestateapi/`, `lib/google/`, `lib/storage/` |
 | Lead Scoring | TCP — 8-factor weighted ensemble | `lib/ai/scoring.ts` |
 | Billing | Stripe (built, gated by env vars) | `lib/stripe/index.ts` |
 | Styling | Tailwind CSS | `tailwind.config.ts` |
@@ -204,13 +204,17 @@ Library code lives in `lib/`. App routes live in `app/`. Components in
 
 See "AI Layer" section below. Lives in `lib/ai/`.
 
-### Multi-vendor enrichment (Sessions 41-42)
+### Multi-vendor enrichment (Sessions 41-42; flag-gated since Session 66)
 
 - `lib/enrichment/enrich-property.ts` — orchestrator. Routes property by
-  PropertyRadar motivation signals to BatchData/RentCast/etc.
-- `lib/enrichment/sync-seller.ts` — seller-side enrichment (court records,
-  portfolio, voice analytics).
+  PropertyRadar motivation signals to BatchData/RentCast/etc. Each vendor
+  call is wrapped by both the legacy `opts.skip*` testing flag AND the
+  env allowlist (Session 66 — see vendor-flags below).
+- `lib/enrichment/sync-seller.ts` — seller-side enrichment. `skipTraceSeller`
+  also gated by `isVendorEnabled('batchdata')`; returns no-op when disabled.
 - `lib/enrichment/sync-seller-courtlistener.ts` — court-records subroutine.
+- `lib/enrichment/vendor-flags.ts` — single source of truth for the
+  `ENRICHMENT_VENDORS_ENABLED` env allowlist. Default = `propertyradar,google`.
 - Per-vendor clients:
   - `lib/propertyradar/client.ts` — primary (full property + ownership +
     valuation + skip-traced contact + `/persons` fetch).

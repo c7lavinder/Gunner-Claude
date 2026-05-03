@@ -66,8 +66,8 @@ loop) has heartbeats today.
 
 | Path | Purpose | Status |
 |---|---|---|
-| `/{tenant}/day-hub` | Morning planner — tasks, appointments, inbox, KPIs. **Canonical Tasks/Day Hub surface per CLAUDE.md Rule 3 § 7.** In-app GHL action modals (Add Note, Create Apt, Workflow, Update Task — Session 42 commit `f9d4590`) write directly to GHL. | Live, primary |
-| `/{tenant}/tasks` | Older Tasks page kept around because Chris has it bookmarked. **P4 deletion candidate in AUDIT_PLAN.** | Legacy |
+| `/{tenant}/day-hub` | Morning planner — fetches GHL tasks live, classifies + scores them, AM/PM dial pills, KPI Ledger modal, in-app GHL action modals (Add Note, Create Apt, Workflow, Update Task). **Canonical Tasks/Day Hub surface per CLAUDE.md Rule 3 § 7.** Consolidated from `/tasks` in Session 66 (2026-05-03) — the richer page logic moved here, old `/day-hub` simpler variant overwritten. | Live, primary |
+| `/{tenant}/tasks` | Redirect stub → `/{tenant}/day-hub`. Preserves Chris's bookmark and any external links. Single `redirect()` call, no UI. | Legacy redirect |
 | `/{tenant}/dashboard` | Overview dashboard. | Live |
 | `/{tenant}/calls` + `/{tenant}/calls/[callId]` | Calls list + call detail (5-tab: coaching, transcript, next steps, property tabs, manual upload). | Live |
 | `/{tenant}/inventory` + `/{tenant}/inventory/[propertyId]` + `/{tenant}/inventory/new` + `/{tenant}/inventory/[propertyId]/edit` | Property list + detail (200+ fields, vendor intel surfacing, deal intel research tab) + manual create + edit forms. Cash-hero matrix + 3-col Numbers panel + persistent cross-tab side panel (Session 39-40 redesign). | Live |

@@ -15,7 +15,7 @@ export default async function AiLogsPage({ params }: { params: { tenant: string 
   })
 
   if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
-    redirect(`/${params.tenant}/tasks`)
+    redirect(`/${params.tenant}/day-hub`)
   }
 
   return <AiLogsClient tenantSlug={params.tenant} />

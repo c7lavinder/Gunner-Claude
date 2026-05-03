@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 65 — Blocker #2 verification infra (2026-05-02) — **HIGH-STAKES AUDIT ENDPOINT SHIPPED + DEPLOY-FAILURE INCIDENT CLOSED.** Plan was to build the verification surface for Blocker #2 (Role Assistant production verification of 6 high-stakes action types) — diagnostic endpoint, ritual doc. While verifying the deploy live, discovered Railway had been silently FAILING all deploys since 2026-05-01 18:56 (the Phase 4 success): Phase 5, Session-64 close, AND today's high-stakes-audit endpoint never made it to production. Root cause: `config/env.ts` strict validation killed `next build` because Railway's build env lacks `GHL_WEBHOOK_SECRET` (and the var was never in runtime env either — schema/use-site mismatch since the use site at `app/api/webhooks/ghl/route.ts:15-19` already treats it as optional). Two fixes: (1) skip `process.exit(1)` during `NEXT_PHASE='phase-production-build'`, (2) make `GHL_WEBHOOK_SECRET` schema optional. Commits: `0c6eb89` (high-stakes-audit endpoint + AUDIT_PLAN.md ritual + OPERATIONS.md cross-link), `3433c21` (env build-phase fix), `7ac5ee7` (env schema fix). Final deploy SUCCESS at 2026-05-02 15:58 UTC; high-stakes-audit endpoint verified live with proper JSON shape. The 4 commits that had been stuck on yesterday's build (Phase 5, session-close, high-stakes-audit, env-build-fix) are now all in production. **Previous: Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — CLEANUP WAVE COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
+**Current session**: 66 — Day Hub consolidation + vendor flag-gating (2026-05-03) — **TWO SIMPLIFICATIONS SHIPPED.** (1) `/{tenant}/tasks` and `/{tenant}/day-hub` were dual surfaces; nav pointed at `/tasks` (the richer page) while docs claimed `/day-hub` was canonical. Consolidated by moving the 3 files (`page.tsx`, `day-hub-client.tsx`, `KpiLedgerModal.tsx`) from `/tasks/` to `/day-hub/` (overwriting the simpler /day-hub variant) and replacing `/tasks/page.tsx` with a tiny `redirect()` stub for Chris's bookmark. Updated 7 internal links across top-nav, dashboard, settings, and 4 admin-only redirect targets to point at `/day-hub` directly. (2) Property-data vendor sprawl gated behind `ENRICHMENT_VENDORS_ENABLED` env allowlist. New `lib/enrichment/vendor-flags.ts` is the single source of truth. Default = `propertyradar,google` (PR primary + Google for Inventory Street View images). The 4 other vendors (BatchData, CourtListener, RentCast, RealEstateAPI) are gated off by default. Setting `ENRICHMENT_VENDORS_ENABLED=propertyradar,google,batchdata,courtlistener` restores pre-Session-66 behavior; `ENRICHMENT_VENDORS_ENABLED=propertyradar` drops Google too (no images on new properties — existing photos remain in DB). Code paths preserved for instant reversibility — schema columns untouched. `npx tsc --noEmit` clean. **Previous: Session 65 — Blocker #2 verification infra (2026-05-02) — HIGH-STAKES AUDIT ENDPOINT SHIPPED + DEPLOY-FAILURE INCIDENT CLOSED.** Plan was to build the verification surface for Blocker #2 (Role Assistant production verification of 6 high-stakes action types) — diagnostic endpoint, ritual doc. While verifying the deploy live, discovered Railway had been silently FAILING all deploys since 2026-05-01 18:56 (the Phase 4 success): Phase 5, Session-64 close, AND today's high-stakes-audit endpoint never made it to production. Root cause: `config/env.ts` strict validation killed `next build` because Railway's build env lacks `GHL_WEBHOOK_SECRET` (and the var was never in runtime env either — schema/use-site mismatch since the use site at `app/api/webhooks/ghl/route.ts:15-19` already treats it as optional). Two fixes: (1) skip `process.exit(1)` during `NEXT_PHASE='phase-production-build'`, (2) make `GHL_WEBHOOK_SECRET` schema optional. Commits: `0c6eb89` (high-stakes-audit endpoint + AUDIT_PLAN.md ritual + OPERATIONS.md cross-link), `3433c21` (env build-phase fix), `7ac5ee7` (env schema fix). Final deploy SUCCESS at 2026-05-02 15:58 UTC; high-stakes-audit endpoint verified live with proper JSON shape. The 4 commits that had been stuck on yesterday's build (Phase 5, session-close, high-stakes-audit, env-build-fix) are now all in production. **Previous: Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — CLEANUP WAVE COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -61,6 +61,98 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 66 — Day Hub consolidation + vendor flag-gating (2026-05-03)
+
+Two independent simplifications shipped after a "where are we, is it
+over-complicated, what should we cut" audit conversation with Corey.
+
+**Audit findings that drove this session:**
+
+- The nav showed "Day Hub" pointing at `/{tenant}/tasks`
+  ([components/ui/top-nav.tsx:66](components/ui/top-nav.tsx#L66)). Docs
+  claimed `/{tenant}/day-hub` was canonical. They were two different
+  pages — `/tasks/page.tsx` (358 lines) had richer logic (GHL live fetch,
+  classification, AM/PM dial pills, KpiLedgerModal). `/day-hub/page.tsx`
+  (201 lines) was the simpler DB-only variant. The "consolidation"
+  documented in CLAUDE.md Rule 3 § 7 had never actually happened.
+- Property-data enrichment ran 6 vendors (PropertyRadar, BatchData,
+  CourtListener, RentCast, RealEstateAPI, Google). RentCast +
+  RealEstateAPI were dead code (only callers in
+  `scripts/vendor-comparison.ts`). The other 4 had real call sites in
+  `lib/enrichment/`. PR is the primary; the rest fill gaps. Corey asked
+  whether going pure-PR would simplify operations.
+
+**Phase 1 — Day Hub consolidation:**
+
+1. `mv app/(tenant)/[tenant]/tasks/{page,day-hub-client,KpiLedgerModal}.tsx
+   → app/(tenant)/[tenant]/day-hub/` — overwrites the simpler `/day-hub`
+   variant. Atomic, no ambiguity about which was the source of truth.
+2. New `app/(tenant)/[tenant]/tasks/page.tsx` is a 4-line stub:
+   `redirect(/${params.tenant}/day-hub)`. Preserves Chris's bookmark and
+   any external `/tasks` links without keeping a parallel page alive.
+3. Updated 7 internal references from `/tasks` → `/day-hub`:
+   - `components/ui/top-nav.tsx` (×2 — nav link + logo `<Link>`)
+   - `components/ui/dashboard-client.tsx:276` ("All →" link from
+     dashboard tasks card)
+   - `components/settings/settings-client.tsx:487` (View-As redirect
+     after picking a teammate)
+   - `app/(tenant)/[tenant]/{bugs,ai-logs,health,kpis}/page.tsx`
+     (4 admin-only role-gate redirects for non-admins)
+4. Updated header comments in moved files to reflect the new path.
+
+**Phase 2 — Property-vendor flag-gating:**
+
+1. New `lib/enrichment/vendor-flags.ts` — single source of truth for
+   `isVendorEnabled(name)` reading the `ENRICHMENT_VENDORS_ENABLED`
+   env allowlist. Default = `propertyradar,google`.
+2. `config/env.ts` — added optional `ENRICHMENT_VENDORS_ENABLED` schema
+   entry with documentation block above it.
+3. `lib/enrichment/enrich-property.ts` — gated the 4 vendor calls (PR,
+   Google, BatchData, CourtListener) behind `isVendorEnabled(...)` AND
+   the existing `opts.skip*` testing flags. Either gate disables the
+   call. Result-shape unchanged; disabled vendors emit
+   `result.batchdata.skipped = 'env_disabled'` so the orchestrator log
+   line still tells the truth.
+4. `lib/enrichment/sync-seller.ts:skipTraceSeller` — gated by
+   `isVendorEnabled('batchdata')`. Returns
+   `{ fieldsTouched: [], traced: false }` when disabled (the existing
+   no-op shape, which `app/api/sellers/[sellerId]/skip-trace/route.ts`
+   already returns as `200 { traced: false }`).
+
+**What's reversible vs irreversible:**
+
+- All 5 vendor modules + their schema columns are untouched. Setting
+  `ENRICHMENT_VENDORS_ENABLED=propertyradar,google,batchdata,courtlistener`
+  on Railway restores pre-session behavior with zero code change.
+- The `/tasks` page now permanently redirects to `/day-hub`. Chris's
+  bookmark still works.
+
+**Files modified by this session (Session 66, single push):**
+
+- Renamed: 3 files moved `app/(tenant)/[tenant]/tasks/*` →
+  `app/(tenant)/[tenant]/day-hub/*` (overwrites prior `/day-hub` files)
+- New: `app/(tenant)/[tenant]/tasks/page.tsx` (redirect stub),
+  `lib/enrichment/vendor-flags.ts`
+- Edited: `config/env.ts`, `lib/enrichment/enrich-property.ts`,
+  `lib/enrichment/sync-seller.ts`, `components/ui/top-nav.tsx`,
+  `components/ui/dashboard-client.tsx`, `components/settings/settings-client.tsx`,
+  `app/(tenant)/[tenant]/bugs/page.tsx`,
+  `app/(tenant)/[tenant]/ai-logs/page.tsx`,
+  `app/(tenant)/[tenant]/health/page.tsx`,
+  `app/(tenant)/[tenant]/kpis/page.tsx`,
+  `docs/SYSTEM_MAP.md`, `docs/OPERATIONS.md`, `PROGRESS.md` (this entry)
+
+**Verification:** `npx tsc --noEmit` exit 0.
+
+**Next session:** Run the Blocker #2 verification ritual (still pending
+from Session 65). Corey drives the live UI through the 6 high-stakes
+Role Assistant tools per `docs/AUDIT_PLAN.md`; Claude reads
+`/api/diagnostics/high-stakes-audit` to confirm each tool's count
+increments. Then either (a) decide on the 3 still-built-but-hidden
+pages — Disposition Hub (Buyers), Lead Source ROI, Training Hub —
+ship them or delete them, or (b) start the property-photo backfill
+question if Corey wants to drop Google too.
 
 ### Session 65 — Blocker #2 verification infra + Railway deploy-failure incident (2026-05-02)
 

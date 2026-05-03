@@ -15,7 +15,7 @@ export default async function BugsPage({ params }: { params: { tenant: string } 
   })
 
   if (!user || !['OWNER', 'ADMIN'].includes(user.role)) {
-    redirect(`/${params.tenant}/tasks`)
+    redirect(`/${params.tenant}/day-hub`)
   }
 
   return <BugsClient />

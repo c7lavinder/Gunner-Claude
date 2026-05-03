@@ -33,6 +33,7 @@ import {
   skipTraceSellersForProperty,
 } from '@/lib/enrichment/sync-seller'
 import { searchCourtListenerForProperty } from '@/lib/enrichment/sync-seller-courtlistener'
+import { isVendorEnabled } from '@/lib/enrichment/vendor-flags'
 
 export interface MultiVendorEnrichOptions {
   skipTrace?: boolean      // after base enrich, skip-trace each seller missing phone/email (~$0.07/seller)
@@ -235,13 +236,16 @@ export async function enrichProperty(
   // ── Step 1a: PropertyRadar + Google in parallel (primary source) ────
   // PR is flat-rate (subscription), Google is ~$0.017/call. Both cheap.
   // PR is the primary data source — wins conflicts in the merge below.
+  // Each vendor gated by both opts (testing) AND env allowlist (Session 66).
+  const prEnabled = !opts.skipPropertyRadar && isVendorEnabled('propertyradar')
+  const googleEnabled = !opts.skipGoogle && isVendorEnabled('google')
   const [prRes, googleRes] = await Promise.all([
-    opts.skipPropertyRadar
-      ? Promise.resolve(null)
-      : runWith('propertyRadar', result.propertyRadar, () => lookupPropertyRadar(address, city, state, zip, { purchase: true })),
-    opts.skipGoogle
-      ? Promise.resolve(null)
-      : runWith('google', result.google, () => lookupGoogle(address, city, state, zip)),
+    prEnabled
+      ? runWith('propertyRadar', result.propertyRadar, () => lookupPropertyRadar(address, city, state, zip, { purchase: true }))
+      : Promise.resolve(null),
+    googleEnabled
+      ? runWith('google', result.google, () => lookupGoogle(address, city, state, zip))
+      : Promise.resolve(null),
   ])
 
   // ── Step 1b: BatchData — fills gaps + adds BD-only fields ───────────
@@ -261,6 +265,8 @@ export async function enrichProperty(
   let bdRes: Partial<BatchDataPropertyResult> | null = null
   if (opts.skipBatchData) {
     result.batchdata.skipped = 'flag_skip_batchdata'
+  } else if (!isVendorEnabled('batchdata')) {
+    result.batchdata.skipped = 'env_disabled'
   } else {
     const cache = hasRecentBatchDataEnrichment(property.zillowData)
     if (cache.cached && !opts.forceBatchData) {
@@ -388,7 +394,8 @@ export async function enrichProperty(
   }
 
   // ── Step 4: CourtListener per-seller search ─────────────────────────
-  if (!opts.skipCourtListener) {
+  // Gated by both opts.skipCourtListener (testing) AND env allowlist.
+  if (!opts.skipCourtListener && isVendorEnabled('courtlistener')) {
     try {
       const cl = await searchCourtListenerForProperty(propertyId, tenantId)
       result.courtlistener = { ran: true, ...cl }

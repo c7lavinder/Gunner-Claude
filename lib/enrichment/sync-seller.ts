@@ -20,6 +20,7 @@ import {
   type SkipTraceResult,
   skipTraceProperty,
 } from '@/lib/batchdata/client'
+import { isVendorEnabled } from '@/lib/enrichment/vendor-flags'
 
 interface SellerSlice {
   id: string
@@ -475,6 +476,12 @@ export async function skipTraceSeller(
   if (!seller) return null
   if (!opts.force && seller.phone && seller.email) {
     // Already have both — don't burn a $0.07 call.
+    return { fieldsTouched: [], traced: false }
+  }
+
+  // Skip-trace runs through BatchData. Gate by the same env allowlist as the
+  // BatchData property lookup (Session 66 simplification).
+  if (!isVendorEnabled('batchdata')) {
     return { fieldsTouched: [], traced: false }
   }
 

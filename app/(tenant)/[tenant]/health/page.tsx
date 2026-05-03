@@ -11,7 +11,7 @@ const fmtDate = (d: Date | null) => d ? d.toLocaleDateString('en-US', { month: '
 
 export default async function HealthPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
-  if (!isRoleAtLeast(session.role as UserRole, 'ADMIN')) redirect(`/${params.tenant}/tasks`)
+  if (!isRoleAtLeast(session.role as UserRole, 'ADMIN')) redirect(`/${params.tenant}/day-hub`)
 
   const tenantId = session.tenantId
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
