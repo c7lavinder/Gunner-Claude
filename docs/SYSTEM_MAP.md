@@ -311,6 +311,31 @@ reference: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
   `dealsTakenFromUsCount`, `dealsClosedWithUsCount`, `jvHistoryCount`,
   `lastDealDate`. Idempotent (absolute counts each run). Runs nightly
   at 4am UTC alongside seller + buyer aggregates.
+- **Phase 5** — `app/(tenant)/[tenant]/partners/[id]/page.tsx` +
+  `partner-detail-client.tsx`. Per-partner detail surface mirroring
+  `/sellers/[id]` and `/buyers/[id]` patterns:
+  - Header with name + type badges + grade + priority/bad flags +
+    edit button.
+  - Read view: identity card (phone/email/website/GHL deep-link/comm
+    pref), performance card (4 stat tiles + last deal / response
+    rate / reliability / avg commission / tier), conditional
+    type-flavored cards (brokerage+license for agents, wholesaler
+    operation for wholesalers), markets+focus, reputation notes,
+    deal history table (every linked Property with role + economics
+    + per-deal notes + status pill + click-through to property
+    detail), internal notes, tags.
+  - Edit form: full identity + multi-type chips + agent fields
+    (conditional on types includes agent) + wholesaler fields
+    (conditional on types includes wholesaler) + markets/experience
+    + reputation (grade/tier/priority/bad-with-us flags + notes) +
+    communication (preferred method/best time/DNC) + internal notes
+    + delete-partner action (with confirm).
+  - `app/api/partners/[partnerId]/route.ts` — PATCH (partner-level
+    fields) + DELETE (cascades PropertyPartner via Prisma onDelete).
+- All link surfaces routed to the new detail page: partners list
+  page rows (`partners-list-client.tsx`), contacts page Partners
+  tab rows (`contacts-client.tsx`), property-detail Partner cards
+  (`partners-tab.tsx`).
 
 ### Workers (in-process)
 

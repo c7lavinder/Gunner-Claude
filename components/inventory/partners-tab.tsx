@@ -441,7 +441,7 @@ function PartnerCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <Link
-              href={`/${_tenantSlug}/contacts`}
+              href={`/${_tenantSlug}/partners/${partner.id}`}
               className="text-ds-body text-txt-primary font-medium truncate hover:text-gunner-red hover:underline transition-colors"
             >
               {titleCase(partner.name)}

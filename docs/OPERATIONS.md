@@ -60,7 +60,7 @@ loop) has heartbeats today.
 
 ## Pages roster
 
-24 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`.
+25 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`.
 
 ### Tenant-scoped (`/{tenant}/...`)
 
@@ -75,6 +75,7 @@ loop) has heartbeats today.
 | `/{tenant}/buyers` + `/{tenant}/buyers/[id]` | Disposition Hub — buyer list + detail. | Built, **hidden from nav** |
 | `/{tenant}/contacts` | Contact list — tabbed Sellers / Buyers / **Partners** (Session 67 Phase 4). | Live |
 | `/{tenant}/partners` | Standalone Partners list — search + type filter (agent / wholesaler / attorney / title / lender / inspector / contractor / etc.). Session 67 Phase 3. | Live |
+| `/{tenant}/partners/[id]` | Partner detail — identity, type-flavored cards (brokerage/license, wholesaler operation), performance counters, full deal history, edit form. Session 67 Phase 5. | Live |
 | `/{tenant}/kpis` | KPI dashboard — score trends, milestones, TCP ranking. | Live |
 | `/{tenant}/ai-coach` | Full-page AI coaching surface. | Live |
 | `/{tenant}/ai-logs` | Admin AI interaction logs. **Tabbed UI as of Session 42**: Team Chats / AI Work / Problems. | Live (admin-only) |
@@ -105,16 +106,18 @@ loop) has heartbeats today.
 
 ## API surface
 
-113 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **complete for all tenant-scoped routes** as of 2026-04-29 (post-Wave-3-Session-F):
+114 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **complete for all tenant-scoped routes** as of 2026-04-29 (post-Wave-3-Session-F):
 
 | Pattern | Count | Tenant isolation |
 |---|---|---|
-| Total `route.ts` files | 113 | — |
-| Uses `withTenant` | 92 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
+| Total `route.ts` files | 114 | — |
+| Uses `withTenant` | 93 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
 | Uses `getSession` directly | 0 | ✅ Migration complete |
 | Other (auth / webhooks / cron / health / service-token / diagnostics / OAuth callback / Stripe checkout) | 19 | N/A — see breakdown below |
 
-Recently added (Session 67 Phase 2): `app/api/properties/[propertyId]/partners/route.ts` (GET/POST/DELETE). Mirrors the sibling sellers route shape — `withTenant` + property-tenant validation gate + composite-PK upsert via `lib/partners/sync.ts:upsertPartnerFromGHL()`.
+Recently added (Session 67):
+- Phase 2: `app/api/properties/[propertyId]/partners/route.ts` (GET/POST/DELETE) — mirrors the sibling sellers route shape; `withTenant` + property-tenant validation gate + composite-PK upsert via `lib/partners/sync.ts:upsertPartnerFromGHL()`.
+- Phase 5: `app/api/partners/[partnerId]/route.ts` (PATCH/DELETE) — partner-level field edits + cascade delete. Mirrors `/api/buyers/[buyerId]` pattern.
 
 ### The 19 non-tenant-session routes
 

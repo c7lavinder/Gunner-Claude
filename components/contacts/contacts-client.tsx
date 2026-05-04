@@ -273,7 +273,7 @@ export function ContactsClient({ sellers, buyers, partners, sellerCount, buyerCo
                     {filteredPartners.map(p => (
                       <tr key={p.id} className="border-b border-[rgba(0,0,0,0.04)] hover:bg-gray-50/50 transition-colors">
                         <td className="px-3 py-2.5">
-                          <Link href={`/${tenantSlug}/partners`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
+                          <Link href={`/${tenantSlug}/partners/${p.id}`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
                             {p.name}
                           </Link>
                         </td>

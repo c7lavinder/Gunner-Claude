@@ -154,7 +154,7 @@ export function PartnersListClient({
           {filtered.map(p => (
             <Link
               key={p.id}
-              href={`/${tenantSlug}/contacts`}
+              href={`/${tenantSlug}/partners/${p.id}`}
               className="block px-4 py-3 border-b-[0.5px] border-[rgba(0,0,0,0.06)] last:border-b-0 hover:bg-surface-secondary transition-colors"
             >
               <div className="md:grid md:grid-cols-[2fr_1.4fr_1fr_0.8fr_0.8fr_0.6fr] md:gap-4 md:items-center">
