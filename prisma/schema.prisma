@@ -28,41 +28,41 @@ model Tenant {
   logoUrl String? @map("logo_url")
 
   // GHL OAuth (Marketplace App)
-  ghlLocationId    String? @unique @map("ghl_location_id")   // sub-account ID
-  ghlAccessToken   String? @map("ghl_access_token")
-  ghlRefreshToken  String? @map("ghl_refresh_token")
-  ghlTokenExpiry   DateTime? @map("ghl_token_expiry")
-  ghlWebhookId     String? @map("ghl_webhook_id")
+  ghlLocationId   String?   @unique @map("ghl_location_id") // sub-account ID
+  ghlAccessToken  String?   @map("ghl_access_token")
+  ghlRefreshToken String?   @map("ghl_refresh_token")
+  ghlTokenExpiry  DateTime? @map("ghl_token_expiry")
+  ghlWebhookId    String?   @map("ghl_webhook_id")
 
   // Call export cursor — tracks last processed message for reliable call ingestion
   lastCallExportCursor String? @map("last_call_export_cursor")
 
   // AI Knowledge — company-specific context for grading/coaching
-  scripts          Json    @default("{}") @map("scripts")           // keyed by call type: {cold_call: "...", ...}
-  companyStandards String? @map("company_standards") @db.Text       // company rules/standards
+  scripts          Json    @default("{}") @map("scripts") // keyed by call type: {cold_call: "...", ...}
+  companyStandards String? @map("company_standards") @db.Text // company rules/standards
   calibrationCalls Json    @default("[]") @map("calibration_calls") // [{callId, type: "good"|"bad", notes}]
 
   // Property trigger config
-  propertyPipelineId    String? @map("property_pipeline_id")    // which GHL pipeline (acquisition)
-  propertyTriggerStage  String? @map("property_trigger_stage")  // which stage creates a property
-  dispoPipelineId       String? @map("dispo_pipeline_id")       // GHL dispo pipeline
-  dispoTriggerStage     String? @map("dispo_trigger_stage")     // stage that moves property into dispo
+  propertyPipelineId   String? @map("property_pipeline_id") // which GHL pipeline (acquisition)
+  propertyTriggerStage String? @map("property_trigger_stage") // which stage creates a property
+  dispoPipelineId      String? @map("dispo_pipeline_id") // GHL dispo pipeline
+  dispoTriggerStage    String? @map("dispo_trigger_stage") // stage that moves property into dispo
 
   // Onboarding state
   onboardingStep      Int     @default(0) @map("onboarding_step")
   onboardingCompleted Boolean @default(false) @map("onboarding_completed")
 
   // Stripe subscription
-  stripeCustomerId      String?   @unique @map("stripe_customer_id")
-  stripePriceId         String?   @map("stripe_price_id")
-  subscriptionStatus    String?   @map("subscription_status")   // active, past_due, canceled, trialing
-  stripeSubscriptionId  String?   @unique @map("stripe_subscription_id")
+  stripeCustomerId       String?   @unique @map("stripe_customer_id")
+  stripePriceId          String?   @map("stripe_price_id")
+  subscriptionStatus     String?   @map("subscription_status") // active, past_due, canceled, trialing
+  stripeSubscriptionId   String?   @unique @map("stripe_subscription_id")
   stripeCurrentPeriodEnd DateTime? @map("stripe_current_period_end")
 
   // Tenant-level config (JSON — flexible per client)
-  callTypes    Json @default("[]") @map("call_types")    // ["inbound", "outbound", "followup"]
-  callResults  Json @default("[]") @map("call_results")  // ["interested", "not interested", "callback"]
-  config       Json @default("{}") // misc config blob
+  callTypes   Json @default("[]") @map("call_types") // ["inbound", "outbound", "followup"]
+  callResults Json @default("[]") @map("call_results") // ["interested", "not interested", "callback"]
+  config      Json @default("{}") // misc config blob
 
   // Tenant-specific grading materials (scripts, processes, company standards)
   // WRITES TO: tenants.grading_materials (String?)
@@ -71,39 +71,41 @@ model Tenant {
   gradingMaterials String? @map("grading_materials") @db.Text
 
   // Relations
-  users         User[]
-  properties    Property[]
-  sellers       Seller[]
-  calls         Call[]
-  tasks         Task[]
-  kpiSnapshots  KpiSnapshot[]
-  auditLogs     AuditLog[]
-  callRubrics   CallRubric[]
-  roleConfigs   RoleConfig[]
-  userXp              UserXp[]
-  userBadges          UserBadge[]
-  xpEvents            XpEvent[]
-  leadSourceCosts     LeadSourceCost[]
-  coachLogs           CoachLog[]
-  workflowDefinitions WorkflowDefinition[]
-  workflowExecutions  WorkflowExecution[]
-  buyers              Buyer[]
-  markets             Market[]
-  outreachLogs        OutreachLog[]
-  dealBlasts          DealBlast[]
-  milestones          PropertyMilestone[]
-  propertyBuyerStages PropertyBuyerStage[]
-  propertyTeamMembers PropertyTeamMember[]
-  knowledgeDocuments  KnowledgeDocument[]
-  userProfiles        UserProfile[]
+  users                 User[]
+  properties            Property[]
+  sellers               Seller[]
+  calls                 Call[]
+  tasks                 Task[]
+  kpiSnapshots          KpiSnapshot[]
+  auditLogs             AuditLog[]
+  callRubrics           CallRubric[]
+  roleConfigs           RoleConfig[]
+  userXp                UserXp[]
+  userBadges            UserBadge[]
+  xpEvents              XpEvent[]
+  leadSourceCosts       LeadSourceCost[]
+  coachLogs             CoachLog[]
+  workflowDefinitions   WorkflowDefinition[]
+  workflowExecutions    WorkflowExecution[]
+  buyers                Buyer[]
+  markets               Market[]
+  outreachLogs          OutreachLog[]
+  dealBlasts            DealBlast[]
+  milestones            PropertyMilestone[]
+  propertyBuyerStages   PropertyBuyerStage[]
+  propertyTeamMembers   PropertyTeamMember[]
+  knowledgeDocuments    KnowledgeDocument[]
+  userProfiles          UserProfile[]
   callReclassifications CallReclassification[]
-  assistantMessages   AssistantMessage[]
-  actionLogs          ActionLog[]
-  aiLogs              AiLog[]
-  recordingFetchJobs  RecordingFetchJob[]
-  webhookLogs         WebhookLog[]
-  contactSuggestions  ContactSuggestion[]
-  bugReports          BugReport[]
+  assistantMessages     AssistantMessage[]
+  actionLogs            ActionLog[]
+  aiLogs                AiLog[]
+  recordingFetchJobs    RecordingFetchJob[]
+  webhookLogs           WebhookLog[]
+  contactSuggestions    ContactSuggestion[]
+  bugReports            BugReport[]
+  agents                Agent[]
+  wholesalers           Wholesaler[]
 
   @@map("tenants")
 }
@@ -122,8 +124,8 @@ model User {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Auth
-  email          String  @unique
-  hashedPassword String? @map("hashed_password")
+  email          String    @unique
+  hashedPassword String?   @map("hashed_password")
   emailVerified  DateTime? @map("email_verified")
 
   // Profile
@@ -133,38 +135,38 @@ model User {
 
   // Role + hierarchy
   role      UserRole
-  reportsTo String? @map("reports_to") // user id of their manager
+  reportsTo String?  @map("reports_to") // user id of their manager
 
   // Manager relation (self-referential)
-  manager    User?  @relation("UserReportsTo", fields: [reportsTo], references: [id])
+  manager       User?  @relation("UserReportsTo", fields: [reportsTo], references: [id])
   directReports User[] @relation("UserReportsTo")
 
   // Per-user config
-  kpiConfig       Json @default("{}") @map("kpi_config")       // which KPIs to show
-  cardConfig      Json @default("{}") @map("card_config")       // property card layout
-  taskSortConfig  Json @default("{}") @map("task_sort_config")  // task list preferences
+  kpiConfig       Json @default("{}") @map("kpi_config") // which KPIs to show
+  cardConfig      Json @default("{}") @map("card_config") // property card layout
+  taskSortConfig  Json @default("{}") @map("task_sort_config") // task list preferences
   dashboardConfig Json @default("{}") @map("dashboard_config")
 
   // GHL
   ghlUserId String? @map("ghl_user_id")
 
   // Relations
-  assignedCalls      Call[]     @relation("CallAssignedTo")
-  assignedTasks      Task[]     @relation("TaskAssignedTo")
-  assignedProperties Property[] @relation("PropertyAssignedTo")
-  kpiSnapshots       KpiSnapshot[]
-  auditLogs          AuditLog[]
-  xp                 UserXp?
-  badges             UserBadge[]
-  xpEvents           XpEvent[]
-  coachLogs          CoachLog[]
-  dealBlasts         DealBlast[] @relation("BlastCreatedBy")
-  loggedMilestones   PropertyMilestone[] @relation("MilestoneLoggedBy")
-  outreachLogs       OutreachLog[] @relation("OutreachLogUser")
-  propertyTeamMembers PropertyTeamMember[] @relation("PropertyTeamMembers")
-  userProfile         UserProfile?
-  assistantMessages   AssistantMessage[] @relation("AssistantMessages")
-  actionLogs          ActionLog[] @relation("ActionLogs")
+  assignedCalls         Call[]                 @relation("CallAssignedTo")
+  assignedTasks         Task[]                 @relation("TaskAssignedTo")
+  assignedProperties    Property[]             @relation("PropertyAssignedTo")
+  kpiSnapshots          KpiSnapshot[]
+  auditLogs             AuditLog[]
+  xp                    UserXp?
+  badges                UserBadge[]
+  xpEvents              XpEvent[]
+  coachLogs             CoachLog[]
+  dealBlasts            DealBlast[]            @relation("BlastCreatedBy")
+  loggedMilestones      PropertyMilestone[]    @relation("MilestoneLoggedBy")
+  outreachLogs          OutreachLog[]          @relation("OutreachLogUser")
+  propertyTeamMembers   PropertyTeamMember[]   @relation("PropertyTeamMembers")
+  userProfile           UserProfile?
+  assistantMessages     AssistantMessage[]     @relation("AssistantMessages")
+  actionLogs            ActionLog[]            @relation("ActionLogs")
   callReclassifications CallReclassification[] @relation("CallReclassifiedBy")
 
   @@map("users")
@@ -206,26 +208,26 @@ model Property {
   zip     String
 
   // Financial
-  arv          Decimal? @db.Decimal(12, 2) // After Repair Value
-  askingPrice  Decimal? @db.Decimal(12, 2) @map("asking_price")
-  mao          Decimal? @db.Decimal(12, 2) // Max Allowable Offer
-  contractPrice Decimal? @db.Decimal(12, 2) @map("contract_price")
-  assignmentFee Decimal? @db.Decimal(12, 2) @map("assignment_fee")
+  arv           Decimal? @db.Decimal(12, 2) // After Repair Value
+  askingPrice   Decimal? @map("asking_price") @db.Decimal(12, 2)
+  mao           Decimal? @db.Decimal(12, 2) // Max Allowable Offer
+  contractPrice Decimal? @map("contract_price") @db.Decimal(12, 2)
+  assignmentFee Decimal? @map("assignment_fee") @db.Decimal(12, 2)
 
   // Status — acquisition pipeline position (never overwritten by dispo)
-  status PropertyStatus @default(NEW_LEAD)
+  status         PropertyStatus  @default(NEW_LEAD)
   // Disposition pipeline position — null means not in dispo yet
-  dispoStatus PropertyStatus? @map("dispo_status")
+  dispoStatus    PropertyStatus? @map("dispo_status")
   // Moment the current stage was entered — powers days-in-stage badge. Updated on every status/dispoStatus change.
-  stageEnteredAt DateTime? @map("stage_entered_at")
+  stageEnteredAt DateTime?       @map("stage_entered_at")
   // When true, GHL webhook stage updates skip this property. Used after an
   // auto-split when one property continues in the GHL opp and the other needs
   // to diverge — user manages the locked property's stage manually.
-  ghlSyncLocked Boolean @default(false) @map("ghl_sync_locked")
+  ghlSyncLocked  Boolean         @default(false) @map("ghl_sync_locked")
 
   // Lead tracking
-  leadSource       String? @map("lead_source") // GHL opportunity source — tracked for KPIs
-  leadSubSource    String? @map("lead_sub_source") // Sub-channel: "Google Ads", "Facebook", "PropertyLeads", etc.
+  leadSource    String? @map("lead_source") // GHL opportunity source — tracked for KPIs
+  leadSubSource String? @map("lead_sub_source") // Sub-channel: "Google Ads", "Facebook", "PropertyLeads", etc.
 
   // TCP — True Conversion Probability (0.0 to 1.0)
   tcpScore     Float?    @map("tcp_score")
@@ -238,116 +240,116 @@ model Property {
   ghlPipelineStage String? @map("ghl_pipeline_stage")
 
   // Property details
-  beds         Int?
-  baths        Int?
-  sqft         Int?
-  yearBuilt    Int?     @map("year_built")
-  lotSize      String?  @map("lot_size")
-  propertyType String?  @map("property_type")  // House, Land, Multi-Family, Commercial, Other
-  occupancy    String?                          // Vacant, Owner Occupied, Tenant Occupied, Unknown
-  projectType  Json     @default("[]") @map("project_type") // ["Flip", "Rental", "Wholesale", etc.]
-  lockboxCode  String?  @map("lockbox_code")
-  description  String?  @db.Text
-  internalNotes String? @db.Text @map("internal_notes")
+  beds          Int?
+  baths         Int?
+  sqft          Int?
+  yearBuilt     Int?    @map("year_built")
+  lotSize       String? @map("lot_size")
+  propertyType  String? @map("property_type") // House, Land, Multi-Family, Commercial, Other
+  occupancy     String? // Vacant, Owner Occupied, Tenant Occupied, Unknown
+  projectType   Json    @default("[]") @map("project_type") // ["Flip", "Rental", "Wholesale", etc.]
+  lockboxCode   String? @map("lockbox_code")
+  description   String? @db.Text
+  internalNotes String? @map("internal_notes") @db.Text
 
   // Deal intel (gathered from calls)
-  propertyCondition     String?  @map("property_condition")     // Move-in, minor repairs, major rehab, teardown
-  competingOfferCount   Int?     @map("competing_offer_count")
-  dealHealthScore       Int?     @map("deal_health_score")      // 1-10 composite from AI
+  propertyCondition   String? @map("property_condition") // Move-in, minor repairs, major rehab, teardown
+  competingOfferCount Int?    @map("competing_offer_count")
+  dealHealthScore     Int?    @map("deal_health_score") // 1-10 composite from AI
   // Full deal intelligence JSON — accumulated from all calls
-  dealIntel             Json?    @map("deal_intel") // See lib/types/deal-intel.ts for structure
+  dealIntel           Json?   @map("deal_intel") // See lib/types/deal-intel.ts for structure
 
   // Extended financials
-  offerPrice     Decimal? @db.Decimal(12, 2) @map("offer_price")
-  repairCost     Decimal? @db.Decimal(12, 2) @map("repair_cost")
-  wholesalePrice Decimal? @db.Decimal(12, 2) @map("wholesale_price")
-  currentOffer   Decimal? @db.Decimal(12, 2) @map("current_offer")
-  highestOffer   Decimal? @db.Decimal(12, 2) @map("highest_offer")
-  acceptedPrice  Decimal? @db.Decimal(12, 2) @map("accepted_price")
-  finalProfit    Decimal? @db.Decimal(12, 2) @map("final_profit")
+  offerPrice     Decimal? @map("offer_price") @db.Decimal(12, 2)
+  repairCost     Decimal? @map("repair_cost") @db.Decimal(12, 2)
+  wholesalePrice Decimal? @map("wholesale_price") @db.Decimal(12, 2)
+  currentOffer   Decimal? @map("current_offer") @db.Decimal(12, 2)
+  highestOffer   Decimal? @map("highest_offer") @db.Decimal(12, 2)
+  acceptedPrice  Decimal? @map("accepted_price") @db.Decimal(12, 2)
+  finalProfit    Decimal? @map("final_profit") @db.Decimal(12, 2)
 
   // Source tracking for AI vs user edits — { fieldName: "ai" | "user" }
-  fieldSources   Json     @default("{}") @map("field_sources")
+  fieldSources Json @default("{}") @map("field_sources")
 
   // Tracking dates
-  lastOfferDate      DateTime? @map("last_offer_date")
-  lastContactedDate  DateTime? @map("last_contacted_date")
+  lastOfferDate     DateTime? @map("last_offer_date")
+  lastContactedDate DateTime? @map("last_contacted_date")
 
   // Market assignment
-  marketId String? @map("market_id")
-  market   Market? @relation(fields: [marketId], references: [id])
-  propertyMarkets  Json @default("[]") @map("property_markets") // ["Nashville", "Hot Springs", "Arkansas"]
+  marketId        String? @map("market_id")
+  market          Market? @relation(fields: [marketId], references: [id])
+  propertyMarkets Json    @default("[]") @map("property_markets") // ["Nashville", "Hot Springs", "Arkansas"]
   // v1.1 Wave 5 — manualBuyerIds dropped. Manual-add buyers now live as
   // PropertyBuyerStage rows with source='manual', stage='added'.
 
   // Enrichment (Phase 2 — Zillow, county records)
-  zillowData   Json? @map("zillow_data")
-  countyData   Json? @map("county_data")
-  constructionEstimate Decimal? @db.Decimal(12, 2) @map("construction_estimate")
+  zillowData           Json?    @map("zillow_data")
+  countyData           Json?    @map("county_data")
+  constructionEstimate Decimal? @map("construction_estimate") @db.Decimal(12, 2)
 
   // Utilities
-  waterType       String? @map("water_type")
-  waterNotes      String? @map("water_notes")
-  sewerType       String? @map("sewer_type")
-  sewerCondition  String? @map("sewer_condition")
-  sewerNotes      String? @map("sewer_notes")
-  electricType    String? @map("electric_type")
-  electricNotes   String? @map("electric_notes")
+  waterType      String? @map("water_type")
+  waterNotes     String? @map("water_notes")
+  sewerType      String? @map("sewer_type")
+  sewerCondition String? @map("sewer_condition")
+  sewerNotes     String? @map("sewer_notes")
+  electricType   String? @map("electric_type")
+  electricNotes  String? @map("electric_notes")
 
   // AI enrichment (Fix 4)
-  repairEstimate      Decimal? @db.Decimal(12, 2) @map("repair_estimate")
-  rentalEstimate      Decimal? @db.Decimal(12, 2) @map("rental_estimate")
-  neighborhoodSummary String?  @map("neighborhood_summary") @db.Text
-  zestimate           Decimal? @db.Decimal(12, 2)
+  repairEstimate      Decimal?  @map("repair_estimate") @db.Decimal(12, 2)
+  rentalEstimate      Decimal?  @map("rental_estimate") @db.Decimal(12, 2)
+  neighborhoodSummary String?   @map("neighborhood_summary") @db.Text
+  zestimate           Decimal?  @db.Decimal(12, 2)
   deedDate            DateTime? @map("deed_date")
-  taxAssessment       Decimal? @db.Decimal(12, 2) @map("tax_assessment")
-  annualTax           Decimal? @db.Decimal(12, 2) @map("annual_tax")
-  floodZone           String?  @map("flood_zone")
-  aiEnrichmentStatus  String?  @map("ai_enrichment_status") // 'pending' | 'complete' | 'failed'
-  aiEnrichmentError   String?  @map("ai_enrichment_error")
+  taxAssessment       Decimal?  @map("tax_assessment") @db.Decimal(12, 2)
+  annualTax           Decimal?  @map("annual_tax") @db.Decimal(12, 2)
+  floodZone           String?   @map("flood_zone")
+  aiEnrichmentStatus  String?   @map("ai_enrichment_status") // 'pending' | 'complete' | 'failed'
+  aiEnrichmentError   String?   @map("ai_enrichment_error")
 
   // Deal Blast overrides (Fix 5) — wholesalers show different numbers to buyers
-  dealBlastAskingOverride        Decimal? @db.Decimal(12, 2) @map("deal_blast_asking_override")
-  dealBlastArvOverride           Decimal? @db.Decimal(12, 2) @map("deal_blast_arv_override")
-  dealBlastContractOverride      Decimal? @db.Decimal(12, 2) @map("deal_blast_contract_override")
-  dealBlastAssignmentFeeOverride Decimal? @db.Decimal(12, 2) @map("deal_blast_assignment_fee_override")
+  dealBlastAskingOverride        Decimal? @map("deal_blast_asking_override") @db.Decimal(12, 2)
+  dealBlastArvOverride           Decimal? @map("deal_blast_arv_override") @db.Decimal(12, 2)
+  dealBlastContractOverride      Decimal? @map("deal_blast_contract_override") @db.Decimal(12, 2)
+  dealBlastAssignmentFeeOverride Decimal? @map("deal_blast_assignment_fee_override") @db.Decimal(12, 2)
 
   // Alt offer types (Novation, Subto, Partnership, etc.) — Cash lives in top-level
   // askingPrice/mao/contractPrice/etc. columns; altPrices holds per-type overrides
   // keyed by offer type. Shape: { novation: { mao: "180000", askingPrice: "240000", ... }, ... }
-  offerTypes Json @default("[]") @map("offer_types")   // String[] — ["Novation", "Subto", "Partnership"]
+  offerTypes Json @default("[]") @map("offer_types") // String[] — ["Novation", "Subto", "Partnership"]
   altPrices  Json @default("{}") @map("alt_prices")
 
   // Property Story — AI-generated narrative, refreshed on call.graded + daily cron
-  story           String?   @db.Text
-  storyUpdatedAt  DateTime? @map("story_updated_at")
-  storyVersion    Int       @default(0) @map("story_version")
+  story          String?   @db.Text
+  storyUpdatedAt DateTime? @map("story_updated_at")
+  storyVersion   Int       @default(0) @map("story_version")
 
   // Risk factor — free-form per-deal risk label (e.g. "High", "8/10", "title issue").
   // Per-offer-type values live in altPrices[type].riskFactor; this column is the Cash value.
-  riskFactor      String?   @map("risk_factor")
+  riskFactor String? @map("risk_factor")
 
   // Exterior / structural condition grades. Free-form strings so users can
   // pick any scheme (A-F, 1-10, "Good", "Needs replacement"); kept intentionally
   // loose until a grading standard emerges.
-  roofCondition      String? @map("roof_condition")
-  windowsCondition   String? @map("windows_condition")
-  sidingCondition    String? @map("siding_condition")
-  exteriorCondition  String? @map("exterior_condition")
+  roofCondition     String? @map("roof_condition")
+  windowsCondition  String? @map("windows_condition")
+  sidingCondition   String? @map("siding_condition")
+  exteriorCondition String? @map("exterior_condition")
 
   // Intangibles — qualitative, subjective grades that require eyes-on or
   // neighborhood feel and don't come from any data API.
-  comparableRisk     String? @map("comparable_risk")
-  basementStatus     String? @map("basement_status")
-  curbAppeal         String? @map("curb_appeal")
-  neighborsGrade     String? @map("neighbors_grade")
-  parkingType        String? @map("parking_type")
-  yardGrade          String? @map("yard_grade")
+  comparableRisk String? @map("comparable_risk")
+  basementStatus String? @map("basement_status")
+  curbAppeal     String? @map("curb_appeal")
+  neighborsGrade String? @map("neighbors_grade")
+  parkingType    String? @map("parking_type")
+  yardGrade      String? @map("yard_grade")
 
   // Location + market-level grades — typically applied once per deal after
   // driving the area / pulling comps, not per-offer-type.
-  locationGrade      String? @map("location_grade")
-  marketRisk         String? @map("market_risk")
+  locationGrade String? @map("location_grade")
+  marketRisk    String? @map("market_risk")
 
   // ── Vendor enrichment (Tier 1+2) ──
   // Promoted from zillowData.batchData JSON blob so we can query/filter
@@ -356,92 +358,92 @@ model Property {
   // opportunistic, vendors overlap.
 
   // Identity & location
-  county                  String?
-  latitude                Decimal? @db.Decimal(10, 8)
-  longitude               Decimal? @db.Decimal(11, 8)
-  apn                     String?
-  fips                    String?
-  subdivision             String?
+  county      String?
+  latitude    Decimal? @db.Decimal(10, 8)
+  longitude   Decimal? @db.Decimal(11, 8)
+  apn         String?
+  fips        String?
+  subdivision String?
 
   // Owner
-  absenteeOwner           Boolean? @map("absentee_owner")
+  absenteeOwner Boolean? @map("absentee_owner")
   // v1.1 Wave 5 — ownerPhone, ownerEmail, ownerType, ownershipLengthYears,
   // secondOwnerName, secondOwnerPhone, secondOwnerEmail dropped (moved to
   // Seller — see migration 20260501XXXXXX_v1_1_wave_5_property_strip).
 
   // Primary mortgage
-  mortgageAmount          Decimal? @db.Decimal(12, 2) @map("mortgage_amount")
-  mortgageDate            DateTime? @map("mortgage_date")
-  mortgageLender          String?  @map("mortgage_lender")
-  mortgageType            String?  @map("mortgage_type")
-  mortgageRate            Decimal? @db.Decimal(5, 3) @map("mortgage_rate")
+  mortgageAmount Decimal?  @map("mortgage_amount") @db.Decimal(12, 2)
+  mortgageDate   DateTime? @map("mortgage_date")
+  mortgageLender String?   @map("mortgage_lender")
+  mortgageType   String?   @map("mortgage_type")
+  mortgageRate   Decimal?  @map("mortgage_rate") @db.Decimal(5, 3)
 
   // Second mortgage / HELOC
-  secondMortgageAmount    Decimal? @db.Decimal(12, 2) @map("second_mortgage_amount")
-  secondMortgageDate      DateTime? @map("second_mortgage_date")
-  secondMortgageLender    String?  @map("second_mortgage_lender")
+  secondMortgageAmount Decimal?  @map("second_mortgage_amount") @db.Decimal(12, 2)
+  secondMortgageDate   DateTime? @map("second_mortgage_date")
+  secondMortgageLender String?   @map("second_mortgage_lender")
 
   // Liens & legal
-  lienCount               Int?     @map("lien_count")
-  propertyLienAmount      Decimal? @db.Decimal(12, 2) @map("property_lien_amount")
-  lienTypes               Json     @default("[]") @map("lien_types")
-  judgmentCount           Int?     @map("judgment_count")
+  lienCount          Int?     @map("lien_count")
+  propertyLienAmount Decimal? @map("property_lien_amount") @db.Decimal(12, 2)
+  lienTypes          Json     @default("[]") @map("lien_types")
+  judgmentCount      Int?     @map("judgment_count")
 
   // Distress & foreclosure
-  taxDelinquent           Boolean? @map("tax_delinquent")
-  taxDelinquentAmount     Decimal? @db.Decimal(12, 2) @map("tax_delinquent_amount")
-  foreclosureStatus       String?  @map("foreclosure_status")
-  bankOwned               Boolean? @map("bank_owned")
-  preForeclosure          Boolean? @map("pre_foreclosure")
-  nodDate                 DateTime? @map("nod_date")
-  lisPendensDate          DateTime? @map("lis_pendens_date")
-  lisPendensAmount        Decimal? @db.Decimal(12, 2) @map("lis_pendens_amount")
-  lisPendensPlaintiff     String?  @map("lis_pendens_plaintiff")
-  foreclosureAuctionDate  DateTime? @map("foreclosure_auction_date")
-  foreclosureOpeningBid   Decimal? @db.Decimal(12, 2) @map("foreclosure_opening_bid")
+  taxDelinquent          Boolean?  @map("tax_delinquent")
+  taxDelinquentAmount    Decimal?  @map("tax_delinquent_amount") @db.Decimal(12, 2)
+  foreclosureStatus      String?   @map("foreclosure_status")
+  bankOwned              Boolean?  @map("bank_owned")
+  preForeclosure         Boolean?  @map("pre_foreclosure")
+  nodDate                DateTime? @map("nod_date")
+  lisPendensDate         DateTime? @map("lis_pendens_date")
+  lisPendensAmount       Decimal?  @map("lis_pendens_amount") @db.Decimal(12, 2)
+  lisPendensPlaintiff    String?   @map("lis_pendens_plaintiff")
+  foreclosureAuctionDate DateTime? @map("foreclosure_auction_date")
+  foreclosureOpeningBid  Decimal?  @map("foreclosure_opening_bid") @db.Decimal(12, 2)
 
   // Structure
   stories                 Int?
   units                   Int?
-  basementFinishedPercent Int?     @map("basement_finished_percent")
+  basementFinishedPercent Int? @map("basement_finished_percent")
 
   // Transfer / deed history
-  lastSalePrice           Decimal? @db.Decimal(12, 2) @map("last_sale_price")
-  transferCount           Int?     @map("transfer_count")
-  deedType                String?  @map("deed_type")
-  dataLastUpdated         DateTime? @map("data_last_updated")
+  lastSalePrice   Decimal?  @map("last_sale_price") @db.Decimal(12, 2)
+  transferCount   Int?      @map("transfer_count")
+  deedType        String?   @map("deed_type")
+  dataLastUpdated DateTime? @map("data_last_updated")
 
   // Construction detail (Tier 2)
-  roofType                String?  @map("roof_type")
-  foundationType          String?  @map("foundation_type")
-  garageType              String?  @map("garage_type")
-  garageCapacity          Int?     @map("garage_capacity")
-  heatingSystem           String?  @map("heating_system")
-  coolingSystem           String?  @map("cooling_system")
-  exteriorWalls           String?  @map("exterior_walls")
+  roofType       String? @map("roof_type")
+  foundationType String? @map("foundation_type")
+  garageType     String? @map("garage_type")
+  garageCapacity Int?    @map("garage_capacity")
+  heatingSystem  String? @map("heating_system")
+  coolingSystem  String? @map("cooling_system")
+  exteriorWalls  String? @map("exterior_walls")
 
   // Amenity flags (Tier 2)
-  hasPool                 Boolean? @map("has_pool")
-  hasDeck                 Boolean? @map("has_deck")
-  hasPorch                Boolean? @map("has_porch")
-  hasSolar                Boolean? @map("has_solar")
-  hasFireplace            Boolean? @map("has_fireplace")
-  hasSpa                  Boolean? @map("has_spa")
+  hasPool      Boolean? @map("has_pool")
+  hasDeck      Boolean? @map("has_deck")
+  hasPorch     Boolean? @map("has_porch")
+  hasSolar     Boolean? @map("has_solar")
+  hasFireplace Boolean? @map("has_fireplace")
+  hasSpa       Boolean? @map("has_spa")
 
   // Zoning / neighborhood
-  zoningCode              String?  @map("zoning_code")
-  landUseCode             String?  @map("land_use_code")
-  propertySchoolDistrict  String?  @map("property_school_district")
+  zoningCode             String? @map("zoning_code")
+  landUseCode            String? @map("land_use_code")
+  propertySchoolDistrict String? @map("property_school_district")
 
   // Environmental risk (floodZone already exists above)
-  earthquakeZone          String?  @map("earthquake_zone")
-  wildfireRisk            String?  @map("wildfire_risk")
+  earthquakeZone String? @map("earthquake_zone")
+  wildfireRisk   String? @map("wildfire_risk")
 
   // Vacancy signals (BatchData ships 4 orthogonal flags)
-  vacantStatus            String?  @map("vacant_status")
-  vacantStatusYear        Int?     @map("vacant_status_year")
-  siteVacant              Boolean? @map("site_vacant")
-  mailVacant              Boolean? @map("mail_vacant")
+  vacantStatus     String?  @map("vacant_status")
+  vacantStatusYear Int?     @map("vacant_status_year")
+  siteVacant       Boolean? @map("site_vacant")
+  mailVacant       Boolean? @map("mail_vacant")
 
   // ── Vendor enrichment (Tier 3) ──
   // Vendor-exclusive signals confirmed 2026-04-23: PropertyRadar's distress
@@ -450,182 +452,184 @@ model Property {
   // typed columns so the inventory UI can filter on them directly.
 
   // PropertyRadar distress composite + legal distress flags
-  distressScore           Int?     @map("distress_score")
-  inBankruptcy            Boolean? @map("in_bankruptcy")
-  inProbate               Boolean? @map("in_probate")
-  inDivorce               Boolean? @map("in_divorce")
-  hasRecentEviction       Boolean? @map("has_recent_eviction")
-  isRecentFlip            Boolean? @map("is_recent_flip")
-  isRecentSale            Boolean? @map("is_recent_sale")
-  isListedForSale         Boolean? @map("is_listed_for_sale")
-  isAuction               Boolean? @map("is_auction")
+  distressScore     Int?     @map("distress_score")
+  inBankruptcy      Boolean? @map("in_bankruptcy")
+  inProbate         Boolean? @map("in_probate")
+  inDivorce         Boolean? @map("in_divorce")
+  hasRecentEviction Boolean? @map("has_recent_eviction")
+  isRecentFlip      Boolean? @map("is_recent_flip")
+  isRecentSale      Boolean? @map("is_recent_sale")
+  isListedForSale   Boolean? @map("is_listed_for_sale")
+  isAuction         Boolean? @map("is_auction")
 
   // Equity detail (beyond the equity_percent kept in fieldSources)
-  availableEquity         Decimal? @db.Decimal(12, 2) @map("available_equity")
-  estimatedEquity         Decimal? @db.Decimal(12, 2) @map("estimated_equity")
-  equityPercent           Decimal? @db.Decimal(5, 2)  @map("equity_percent")
-  openMortgageBalance     Decimal? @db.Decimal(12, 2) @map("open_mortgage_balance")
-  estimatedMortgagePayment Decimal? @db.Decimal(12, 2) @map("estimated_mortgage_payment")
+  availableEquity          Decimal? @map("available_equity") @db.Decimal(12, 2)
+  estimatedEquity          Decimal? @map("estimated_equity") @db.Decimal(12, 2)
+  equityPercent            Decimal? @map("equity_percent") @db.Decimal(5, 2)
+  openMortgageBalance      Decimal? @map("open_mortgage_balance") @db.Decimal(12, 2)
+  estimatedMortgagePayment Decimal? @map("estimated_mortgage_payment") @db.Decimal(12, 2)
 
   // Inheritance / death transfer + mortgage assumability (REAPI)
-  inherited               Boolean?
-  deathTransfer           Boolean? @map("death_transfer")
-  mortgageAssumable       Boolean? @map("mortgage_assumable")
+  inherited         Boolean?
+  deathTransfer     Boolean? @map("death_transfer")
+  mortgageAssumable Boolean? @map("mortgage_assumable")
 
   // MLS activity (REAPI)
-  mlsActive               Boolean? @map("mls_active")
-  mlsPending              Boolean? @map("mls_pending")
-  mlsSold                 Boolean? @map("mls_sold")
-  mlsCancelled            Boolean? @map("mls_cancelled")
-  mlsFailed               Boolean? @map("mls_failed")
-  mlsStatus               String?  @map("mls_status")
-  mlsType                 String?  @map("mls_type")
-  mlsListingDate          DateTime? @map("mls_listing_date")
-  mlsListingPrice         Decimal? @db.Decimal(12, 2) @map("mls_listing_price")
-  mlsSoldPrice            Decimal? @db.Decimal(12, 2) @map("mls_sold_price")
-  mlsDaysOnMarket         Int?     @map("mls_days_on_market")
-  mlsPricePerSqft         Decimal? @db.Decimal(10, 2) @map("mls_price_per_sqft")
-  mlsKeywords             Json     @default("[]") @map("mls_keywords")
-  mlsLastStatusDate       DateTime? @map("mls_last_status_date")
+  mlsActive         Boolean?  @map("mls_active")
+  mlsPending        Boolean?  @map("mls_pending")
+  mlsSold           Boolean?  @map("mls_sold")
+  mlsCancelled      Boolean?  @map("mls_cancelled")
+  mlsFailed         Boolean?  @map("mls_failed")
+  mlsStatus         String?   @map("mls_status")
+  mlsType           String?   @map("mls_type")
+  mlsListingDate    DateTime? @map("mls_listing_date")
+  mlsListingPrice   Decimal?  @map("mls_listing_price") @db.Decimal(12, 2)
+  mlsSoldPrice      Decimal?  @map("mls_sold_price") @db.Decimal(12, 2)
+  mlsDaysOnMarket   Int?      @map("mls_days_on_market")
+  mlsPricePerSqft   Decimal?  @map("mls_price_per_sqft") @db.Decimal(10, 2)
+  mlsKeywords       Json      @default("[]") @map("mls_keywords")
+  mlsLastStatusDate DateTime? @map("mls_last_status_date")
 
   // Flood detail
-  floodZoneType           String?  @map("flood_zone_type")
+  floodZoneType String? @map("flood_zone_type")
 
   // REAPI demographics / HUD area data
-  suggestedRent           Decimal? @db.Decimal(10, 2) @map("suggested_rent")
-  medianIncome            Decimal? @db.Decimal(12, 2) @map("median_income")
-  hudAreaCode             String?  @map("hud_area_code")
-  hudAreaName             String?  @map("hud_area_name")
-  fmrYear                 Int?     @map("fmr_year")
-  fmrEfficiency           Decimal? @db.Decimal(10, 2) @map("fmr_efficiency")
-  fmrOneBedroom           Decimal? @db.Decimal(10, 2) @map("fmr_one_bedroom")
-  fmrTwoBedroom           Decimal? @db.Decimal(10, 2) @map("fmr_two_bedroom")
-  fmrThreeBedroom         Decimal? @db.Decimal(10, 2) @map("fmr_three_bedroom")
-  fmrFourBedroom          Decimal? @db.Decimal(10, 2) @map("fmr_four_bedroom")
+  suggestedRent   Decimal? @map("suggested_rent") @db.Decimal(10, 2)
+  medianIncome    Decimal? @map("median_income") @db.Decimal(12, 2)
+  hudAreaCode     String?  @map("hud_area_code")
+  hudAreaName     String?  @map("hud_area_name")
+  fmrYear         Int?     @map("fmr_year")
+  fmrEfficiency   Decimal? @map("fmr_efficiency") @db.Decimal(10, 2)
+  fmrOneBedroom   Decimal? @map("fmr_one_bedroom") @db.Decimal(10, 2)
+  fmrTwoBedroom   Decimal? @map("fmr_two_bedroom") @db.Decimal(10, 2)
+  fmrThreeBedroom Decimal? @map("fmr_three_bedroom") @db.Decimal(10, 2)
+  fmrFourBedroom  Decimal? @map("fmr_four_bedroom") @db.Decimal(10, 2)
 
   // Schools (REAPI returns an array; promote primary + keep full list in JSON)
-  schoolPrimaryName       String?  @map("school_primary_name")
-  schoolPrimaryRating     Int?     @map("school_primary_rating")
-  schoolsJson             Json     @default("[]") @map("schools_json")
+  schoolPrimaryName   String? @map("school_primary_name")
+  schoolPrimaryRating Int?    @map("school_primary_rating")
+  schoolsJson         Json    @default("[]") @map("schools_json")
 
   // ── PropertyRadar subscription extras ──
   // Structured name parts (CourtListener + skip-trace both want these)
   // v1.1 Wave 5 — ownerFirstName1/2 + ownerLastName1/2 dropped
   // (moved to Seller.firstName / Seller.lastName per ordinal).
-  pctChangeInValue        Decimal? @db.Decimal(6, 2)  @map("pct_change_in_value")
-  cashSale                Boolean? @map("cash_sale")
-  investorType            String?  @map("investor_type")
-  hoaDues                 Decimal? @db.Decimal(10, 2) @map("hoa_dues")
-  hoaPastDue              Boolean? @map("hoa_past_due")
-  hoaName                 String?  @map("hoa_name")
-  lastMlsStatus           String?  @map("last_mls_status")
-  lastMlsListPrice        Decimal? @db.Decimal(12, 2) @map("last_mls_list_price")
-  lastMlsSoldPrice        Decimal? @db.Decimal(12, 2) @map("last_mls_sold_price")
+  pctChangeInValue     Decimal? @map("pct_change_in_value") @db.Decimal(6, 2)
+  cashSale             Boolean? @map("cash_sale")
+  investorType         String?  @map("investor_type")
+  hoaDues              Decimal? @map("hoa_dues") @db.Decimal(10, 2)
+  hoaPastDue           Boolean? @map("hoa_past_due")
+  hoaName              String?  @map("hoa_name")
+  lastMlsStatus        String?  @map("last_mls_status")
+  lastMlsListPrice     Decimal? @map("last_mls_list_price") @db.Decimal(12, 2)
+  lastMlsSoldPrice     Decimal? @map("last_mls_sold_price") @db.Decimal(12, 2)
   // Q3 lock (v1.1 Wave 1) — renamed from ownerMailingVacant. About a property
   // (the owner's MAILING property, not THIS property) — kept on Property side
   // since it's a property fact, not a person fact.
-  mailingAddressVacant    Boolean? @map("mailing_address_vacant")
+  mailingAddressVacant Boolean? @map("mailing_address_vacant")
 
   // ── PropertyRadar detail fields (condition + census + tax rate) ──
-  improvementCondition    String?  @map("improvement_condition")
-  buildingQuality         String?  @map("building_quality")
-  estimatedTaxRate        Decimal? @db.Decimal(5, 2) @map("estimated_tax_rate")
-  censusTract             String?  @map("census_tract")
-  censusBlock             String?  @map("census_block")
-  carrierRoute            String?  @map("carrier_route")
-  legalDescription        String?  @map("legal_description")
+  improvementCondition String?  @map("improvement_condition")
+  buildingQuality      String?  @map("building_quality")
+  estimatedTaxRate     Decimal? @map("estimated_tax_rate") @db.Decimal(5, 2)
+  censusTract          String?  @map("census_tract")
+  censusBlock          String?  @map("census_block")
+  carrierRoute         String?  @map("carrier_route")
+  legalDescription     String?  @map("legal_description")
 
   // ── Comprehensive vendor capture (migration 20260423060000) ─────
   // Address metadata (BatchData USPS validation)
-  addressValidity         String?  @map("address_validity")
-  zipPlus4                String?  @map("zip_plus4")
+  addressValidity String? @map("address_validity")
+  zipPlus4        String? @map("zip_plus4")
 
   // BatchData intel (seller motivation)
-  salePropensity          Decimal? @db.Decimal(5,2)  @map("sale_propensity")
-  salePropensityCategory  String?  @map("sale_propensity_category")
-  salePropensityStatus    String?  @map("sale_propensity_status")
+  salePropensity         Decimal? @map("sale_propensity") @db.Decimal(5, 2)
+  salePropensityCategory String?  @map("sale_propensity_category")
+  salePropensityStatus   String?  @map("sale_propensity_status")
 
   // BatchData listing activity
-  listingStatus           String?  @map("listing_status")
-  listingStatusCategory   String?  @map("listing_status_category")
-  listingFailedDate       DateTime? @map("listing_failed_date")
-  listingOriginalDate     DateTime? @map("listing_original_date")
-  listingSoldPrice        Decimal? @db.Decimal(12,2) @map("listing_sold_price")
-  listingSoldDate         DateTime? @map("listing_sold_date")
-  listingAgentName        String?  @map("listing_agent_name")
-  listingAgentPhone       String?  @map("listing_agent_phone")
-  listingBrokerName       String?  @map("listing_broker_name")
+  listingStatus         String?   @map("listing_status")
+  listingStatusCategory String?   @map("listing_status_category")
+  listingFailedDate     DateTime? @map("listing_failed_date")
+  listingOriginalDate   DateTime? @map("listing_original_date")
+  listingSoldPrice      Decimal?  @map("listing_sold_price") @db.Decimal(12, 2)
+  listingSoldDate       DateTime? @map("listing_sold_date")
+  listingAgentName      String?   @map("listing_agent_name")
+  listingAgentPhone     String?   @map("listing_agent_phone")
+  listingBrokerName     String?   @map("listing_broker_name")
 
   // Foreclosure extended detail (BatchData foreclosure block)
-  foreclosureAuctionCity    String?  @map("foreclosure_auction_city")
-  foreclosureAuctionLocation String? @map("foreclosure_auction_location")
-  foreclosureAuctionTime    String?  @map("foreclosure_auction_time")
-  foreclosureBorrower       String?  @map("foreclosure_borrower")
-  foreclosureDocumentType   String?  @map("foreclosure_document_type")
-  foreclosureFilingDate     DateTime? @map("foreclosure_filing_date")
-  foreclosureRecordingDate  DateTime? @map("foreclosure_recording_date")
-  foreclosureTrusteeName    String?  @map("foreclosure_trustee_name")
-  foreclosureTrusteePhone   String?  @map("foreclosure_trustee_phone")
-  foreclosureTrusteeAddress String?  @map("foreclosure_trustee_address")
-  foreclosureTrusteeSaleNum String?  @map("foreclosure_trustee_sale_num")
+  foreclosureAuctionCity     String?   @map("foreclosure_auction_city")
+  foreclosureAuctionLocation String?   @map("foreclosure_auction_location")
+  foreclosureAuctionTime     String?   @map("foreclosure_auction_time")
+  foreclosureBorrower        String?   @map("foreclosure_borrower")
+  foreclosureDocumentType    String?   @map("foreclosure_document_type")
+  foreclosureFilingDate      DateTime? @map("foreclosure_filing_date")
+  foreclosureRecordingDate   DateTime? @map("foreclosure_recording_date")
+  foreclosureTrusteeName     String?   @map("foreclosure_trustee_name")
+  foreclosureTrusteePhone    String?   @map("foreclosure_trustee_phone")
+  foreclosureTrusteeAddress  String?   @map("foreclosure_trustee_address")
+  foreclosureTrusteeSaleNum  String?   @map("foreclosure_trustee_sale_num")
 
   // Owner portfolio (BatchData propertyOwnerProfile)
   // v1.1 Wave 5 — ownerPortfolioCount + ownerPortfolioTotal* +
   // ownerPortfolioAvg* dropped from Property (moved to Seller).
 
   // QuickLists flags (BatchData)
-  absenteeOwnerInState     Boolean? @map("absentee_owner_in_state")
+  absenteeOwnerInState Boolean? @map("absentee_owner_in_state")
   // v1.1 Wave 5 — seniorOwner dropped from Property (moved to Seller).
-  samePropertyMailing      Boolean? @map("same_property_mailing")
+  samePropertyMailing  Boolean? @map("same_property_mailing")
 
   // Valuation detail (BatchData valuation block)
-  valuationAsOfDate        DateTime? @map("valuation_as_of_date")
-  valuationConfidence      Int?     @map("valuation_confidence")
-  valuationStdDeviation    Decimal? @db.Decimal(10,2) @map("valuation_std_deviation")
+  valuationAsOfDate     DateTime? @map("valuation_as_of_date")
+  valuationConfidence   Int?      @map("valuation_confidence")
+  valuationStdDeviation Decimal?  @map("valuation_std_deviation") @db.Decimal(10, 2)
 
   // PropertyRadar scalar flags + detail
-  advancedPropertyType     String?  @map("advanced_property_type")
-  lotDepthFootage          Int?     @map("lot_depth_footage")
+  advancedPropertyType String?  @map("advanced_property_type")
+  lotDepthFootage      Int?     @map("lot_depth_footage")
   // v1.1 Wave 5 — cashBuyerOwner + deceasedOwner dropped (moved to Seller).
-  hasOpenLiens             Boolean? @map("has_open_liens")
-  hasOpenPersonLiens       Boolean? @map("has_open_person_liens")
-  sameMailingOrExempt      Boolean? @map("same_mailing_or_exempt")
-  sameMailing              Boolean? @map("same_mailing")
-  underwater               Boolean? @map("underwater")
-  expiredListing           Boolean? @map("expired_listing")
+  hasOpenLiens         Boolean? @map("has_open_liens")
+  hasOpenPersonLiens   Boolean? @map("has_open_person_liens")
+  sameMailingOrExempt  Boolean? @map("same_mailing_or_exempt")
+  sameMailing          Boolean? @map("same_mailing")
+  underwater           Boolean? @map("underwater")
+  expiredListing       Boolean? @map("expired_listing")
 
   // Multi-row arrays stored as dedicated JSON columns
-  deedHistoryJson          Json? @map("deed_history_json")
-  mortgageHistoryJson      Json? @map("mortgage_history_json")
-  liensJson                Json? @map("liens_json")
-  foreclosureDetailJson    Json? @map("foreclosure_detail_json")
+  deedHistoryJson       Json? @map("deed_history_json")
+  mortgageHistoryJson   Json? @map("mortgage_history_json")
+  liensJson             Json? @map("liens_json")
+  foreclosureDetailJson Json? @map("foreclosure_detail_json")
   // v1.1 Wave 5 — ownerPortfolioJson dropped (moved to Seller).
-  valuationJson            Json? @map("valuation_json")
-  quickListsJson           Json? @map("quicklists_json")
+  valuationJson         Json? @map("valuation_json")
+  quickListsJson        Json? @map("quicklists_json")
 
   // ── Google Places fields ──
-  googlePlaceId           String?  @map("google_place_id")
-  googleVerifiedAddress   String?  @map("google_verified_address")
-  googleLatitude          Decimal? @db.Decimal(10, 8) @map("google_latitude")
-  googleLongitude         Decimal? @db.Decimal(11, 8) @map("google_longitude")
-  googleStreetViewUrl     String?  @map("google_street_view_url")
-  googleMapsUrl           String?  @map("google_maps_url")
-  googlePlaceTypes        Json     @default("[]") @map("google_place_types")
-  googlePhotoThumbnailUrl String?  @map("google_photo_thumbnail_url")
+  googlePlaceId           String?   @map("google_place_id")
+  googleVerifiedAddress   String?   @map("google_verified_address")
+  googleLatitude          Decimal?  @map("google_latitude") @db.Decimal(10, 8)
+  googleLongitude         Decimal?  @map("google_longitude") @db.Decimal(11, 8)
+  googleStreetViewUrl     String?   @map("google_street_view_url")
+  googleMapsUrl           String?   @map("google_maps_url")
+  googlePlaceTypes        Json      @default("[]") @map("google_place_types")
+  googlePhotoThumbnailUrl String?   @map("google_photo_thumbnail_url")
   googleSearchedAt        DateTime? @map("google_searched_at")
 
   // Flexible custom fields per tenant config
   customFields Json @default("{}") @map("custom_fields")
 
   // Relations
-  sellers    PropertySeller[]
-  teamMembers PropertyTeamMember[]
-  calls      Call[]
-  tasks      Task[]
-  dealBlasts DealBlast[]
-  milestones PropertyMilestone[]
+  sellers      PropertySeller[]
+  teamMembers  PropertyTeamMember[]
+  calls        Call[]
+  tasks        Task[]
+  dealBlasts   DealBlast[]
+  milestones   PropertyMilestone[]
   outreachLogs OutreachLog[]
-  buyerStages PropertyBuyerStage[]
+  buyerStages  PropertyBuyerStage[]
+  agents       PropertyAgent[]
+  wholesalers  PropertyWholesaler[]
 
   @@index([county])
   @@index([apn])
@@ -659,16 +663,16 @@ model PropertyMilestone {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @map("created_at")
 
-  tenantId  String @map("tenant_id")
-  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   propertyId String   @map("property_id")
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   type       MilestoneType
-  loggedById String? @map("logged_by_id")
-  loggedBy   User?   @relation("MilestoneLoggedBy", fields: [loggedById], references: [id])
-  source     String  @default("MANUAL") // "MANUAL" | "AUTO_WEBHOOK"
+  loggedById String?       @map("logged_by_id")
+  loggedBy   User?         @relation("MilestoneLoggedBy", fields: [loggedById], references: [id])
+  source     String        @default("MANUAL") // "MANUAL" | "AUTO_WEBHOOK"
   notes      String?
 
   @@map("property_milestones")
@@ -729,80 +733,80 @@ model Seller {
   // ── Identity & Contact ──────────────────
   // Legacy name column — drops in v1.1 Wave 5 cutover. UI reads decomposed
   // parts (firstName/middleName/lastName/nameSuffix) post-cutover.
-  name             String
+  name                     String
   // Q2 lock (v1.1 Wave 1) — decomposed name parts. CourtListener exact-name
   // search and skip-trace match quality both need structured form.
-  firstName        String?  @map("first_name")
-  middleName       String?  @map("middle_name")
-  lastName         String?  @map("last_name")
-  nameSuffix       String?  @map("name_suffix")
+  firstName                String?   @map("first_name")
+  middleName               String?   @map("middle_name")
+  lastName                 String?   @map("last_name")
+  nameSuffix               String?   @map("name_suffix")
   // Legacy GHL-overlap identity columns — drop in v1.1 Wave 5 cutover.
   // Render path post-cutover: live-fetch from GHL via ghlContactId, with
   // skipTraced* below as fallback when ghlContactId is null.
-  phone            String?
-  secondaryPhone   String?  @map("secondary_phone")
-  mobilePhone      String?  @map("mobile_phone")
-  email            String?
-  secondaryEmail   String?  @map("secondary_email")
-  mailingAddress   String?  @map("mailing_address")
-  mailingCity      String?  @map("mailing_city")
-  mailingState     String?  @map("mailing_state")
-  mailingZip       String?  @map("mailing_zip")
-  mailingZipPlus4  String?  @map("mailing_zip_plus4")
-  mailingCounty    String?  @map("mailing_county")
+  phone                    String?
+  secondaryPhone           String?   @map("secondary_phone")
+  mobilePhone              String?   @map("mobile_phone")
+  email                    String?
+  secondaryEmail           String?   @map("secondary_email")
+  mailingAddress           String?   @map("mailing_address")
+  mailingCity              String?   @map("mailing_city")
+  mailingState             String?   @map("mailing_state")
+  mailingZip               String?   @map("mailing_zip")
+  mailingZipPlus4          String?   @map("mailing_zip_plus4")
+  mailingCounty            String?   @map("mailing_county")
   // Q1/Shape A lock (v1.1 Wave 1) — skip-trace fallback identity. Used when
   // ghlContactId is null (skip-traced sellers not yet promoted to GHL contacts).
   // Once promoted, these become orphan history (kept for audit).
-  skipTracedPhone           String?  @map("skip_traced_phone")
-  skipTracedEmail           String?  @map("skip_traced_email")
-  skipTracedMailingAddress  String?  @map("skip_traced_mailing_address")
-  skipTracedMailingCity     String?  @map("skip_traced_mailing_city")
-  skipTracedMailingState    String?  @map("skip_traced_mailing_state")
-  skipTracedMailingZip      String?  @map("skip_traced_mailing_zip")
-  mailingValidity  String?  @map("mailing_validity")
-  mailingDeliveryPoint String? @map("mailing_delivery_point")
-  mailingDpvFootnotes  String? @map("mailing_dpv_footnotes")
-  mailingDpvMatchCode  String? @map("mailing_dpv_match_code")
-  dateOfBirth      DateTime? @map("date_of_birth")
-  maritalStatus    String?  @map("marital_status")   // single | married | divorced | widowed
-  spouseName       String?  @map("spouse_name")
-  spousePhone      String?  @map("spouse_phone")
-  spouseEmail      String?  @map("spouse_email")
-  occupation       String?
-  employer         String?
-  preferredContactMethod String? @map("preferred_contact_method") // call | text | email
-  bestTimeToCall   String?  @map("best_time_to_call")
-  languagePreference String? @map("language_preference")
-  doNotContact     Boolean  @default(false) @map("do_not_contact")
-  isDeceased       Boolean  @default(false) @map("is_deceased")
+  skipTracedPhone          String?   @map("skip_traced_phone")
+  skipTracedEmail          String?   @map("skip_traced_email")
+  skipTracedMailingAddress String?   @map("skip_traced_mailing_address")
+  skipTracedMailingCity    String?   @map("skip_traced_mailing_city")
+  skipTracedMailingState   String?   @map("skip_traced_mailing_state")
+  skipTracedMailingZip     String?   @map("skip_traced_mailing_zip")
+  mailingValidity          String?   @map("mailing_validity")
+  mailingDeliveryPoint     String?   @map("mailing_delivery_point")
+  mailingDpvFootnotes      String?   @map("mailing_dpv_footnotes")
+  mailingDpvMatchCode      String?   @map("mailing_dpv_match_code")
+  dateOfBirth              DateTime? @map("date_of_birth")
+  maritalStatus            String?   @map("marital_status") // single | married | divorced | widowed
+  spouseName               String?   @map("spouse_name")
+  spousePhone              String?   @map("spouse_phone")
+  spouseEmail              String?   @map("spouse_email")
+  occupation               String?
+  employer                 String?
+  preferredContactMethod   String?   @map("preferred_contact_method") // call | text | email
+  bestTimeToCall           String?   @map("best_time_to_call")
+  languagePreference       String?   @map("language_preference")
+  doNotContact             Boolean   @default(false) @map("do_not_contact")
+  isDeceased               Boolean   @default(false) @map("is_deceased")
   // PropertyRadar /persons demographics
-  age              Int?
-  gender           String?
-  personType       String?  @map("person_type")   // "Person" | "Company"
+  age                      Int?
+  gender                   String?
+  personType               String?   @map("person_type") // "Person" | "Company"
 
   // ── GHL ─────────────────────────────────
-  ghlContactId     String?  @map("ghl_contact_id")
+  ghlContactId String? @map("ghl_contact_id")
 
   // ── Property Ownership ──────────────────
   yearsOwned             Int?     @map("years_owned")
-  howAcquired            String?  @map("how_acquired")       // inherited | purchased | gift | other
-  ownershipType          String?  @map("ownership_type")     // sole | joint | trust | LLC | estate
-  entityName             String?  @map("entity_name")        // trust/LLC name
-  mortgageBalance        Decimal? @db.Decimal(12, 2) @map("mortgage_balance")
-  monthlyMortgagePayment Decimal? @db.Decimal(12, 2) @map("monthly_mortgage_payment")
+  howAcquired            String?  @map("how_acquired") // inherited | purchased | gift | other
+  ownershipType          String?  @map("ownership_type") // sole | joint | trust | LLC | estate
+  entityName             String?  @map("entity_name") // trust/LLC name
+  mortgageBalance        Decimal? @map("mortgage_balance") @db.Decimal(12, 2)
+  monthlyMortgagePayment Decimal? @map("monthly_mortgage_payment") @db.Decimal(12, 2)
   lenderName             String?  @map("lender_name")
   interestRate           Float?   @map("interest_rate")
-  loanType               String?  @map("loan_type")          // conventional | FHA | VA | hard_money | other
+  loanType               String?  @map("loan_type") // conventional | FHA | VA | hard_money | other
   remainingTermMonths    Int?     @map("remaining_term_months")
   hasSecondMortgage      Boolean? @map("has_second_mortgage")
-  secondMortgageBalance  Decimal? @db.Decimal(12, 2) @map("second_mortgage_balance")
+  secondMortgageBalance  Decimal? @map("second_mortgage_balance") @db.Decimal(12, 2)
   hasHoa                 Boolean? @map("has_hoa")
-  hoaAmount              Decimal? @db.Decimal(12, 2) @map("hoa_amount")
-  hoaStatus              String?  @map("hoa_status")         // current | delinquent
+  hoaAmount              Decimal? @map("hoa_amount") @db.Decimal(12, 2)
+  hoaStatus              String?  @map("hoa_status") // current | delinquent
   propertyTaxesCurrent   Boolean? @map("property_taxes_current")
-  propertyTaxesOwed      Decimal? @db.Decimal(12, 2) @map("property_taxes_owed")
+  propertyTaxesOwed      Decimal? @map("property_taxes_owed") @db.Decimal(12, 2)
   hasLiens               Boolean? @map("has_liens")
-  lienAmount             Decimal? @db.Decimal(12, 2) @map("lien_amount")
+  lienAmount             Decimal? @map("lien_amount") @db.Decimal(12, 2)
   lienType               String?  @map("lien_type")
   isProbate              Boolean? @map("is_probate")
   isEstate               Boolean? @map("is_estate")
@@ -810,198 +814,198 @@ model Seller {
   estateAttorneyPhone    String?  @map("estate_attorney_phone")
 
   // ── Motivation & Situation ───────────────
-  motivationPrimary      String?  @map("motivation_primary")   // inheritance | divorce | foreclosure | tired_landlord | relocation | health | financial | other
-  motivationSecondary    String?  @map("motivation_secondary")
-  situation              String?  @db.Text                      // free text: full story
-  urgencyScore           Int?     @map("urgency_score")         // 1-10
-  urgencyLevel           String?  @map("urgency_level")         // high | medium | low | unknown
-  saleTimeline           String?  @map("sale_timeline")         // ASAP | 30_days | 60_days | 90_days | flexible
-  hardshipType           String?  @map("hardship_type")         // financial | divorce | death | relocation | tired_landlord | health | other
-  isDivorce              Boolean? @map("is_divorce")
-  isForeclosure          Boolean? @map("is_foreclosure")
-  foreclosureAuctionDate DateTime? @map("foreclosure_auction_date")
-  isBankruptcy           Boolean? @map("is_bankruptcy")
-  isPreProbate           Boolean? @map("is_pre_probate")
-  isRecentlyInherited    Boolean? @map("is_recently_inherited")
-  behindOnPayments       Boolean? @map("behind_on_payments")
-  monthsBehindOnPayments Int?     @map("months_behind_on_payments")
-  lifeEventNotes         String?  @db.Text @map("life_event_notes")
-  emotionalState         String?  @map("emotional_state")       // distressed | neutral | motivated | testing
-  decisionMakers         String?  @map("decision_makers")       // spouse, family, attorney, etc.
-  isDecisionMakersConfirmed Boolean? @map("is_decision_makers_confirmed")
-  isTenantOccupied       Boolean? @map("is_tenant_occupied")
-  tenantLeaseEndDate     DateTime? @map("tenant_lease_end_date")
-  isTenantPaying         Boolean? @map("is_tenant_paying")
-  isEvictionInProgress   Boolean? @map("is_eviction_in_progress")
-  isVacant               Boolean? @map("is_vacant")
-  vacantDurationMonths   Int?     @map("vacant_duration_months")
-  isListedWithAgent      Boolean? @map("is_listed_with_agent")
-  agentName              String?  @map("agent_name")
-  agentListingExpiration DateTime? @map("agent_listing_expiration")
-  willingToDoSellerFinancing Boolean? @map("willing_to_do_seller_financing")
-  willingToDoSubjectTo   Boolean? @map("willing_to_do_subject_to")
-  moveOutTimeline        String?  @map("move_out_timeline")
+  motivationPrimary          String?   @map("motivation_primary") // inheritance | divorce | foreclosure | tired_landlord | relocation | health | financial | other
+  motivationSecondary        String?   @map("motivation_secondary")
+  situation                  String?   @db.Text // free text: full story
+  urgencyScore               Int?      @map("urgency_score") // 1-10
+  urgencyLevel               String?   @map("urgency_level") // high | medium | low | unknown
+  saleTimeline               String?   @map("sale_timeline") // ASAP | 30_days | 60_days | 90_days | flexible
+  hardshipType               String?   @map("hardship_type") // financial | divorce | death | relocation | tired_landlord | health | other
+  isDivorce                  Boolean?  @map("is_divorce")
+  isForeclosure              Boolean?  @map("is_foreclosure")
+  foreclosureAuctionDate     DateTime? @map("foreclosure_auction_date")
+  isBankruptcy               Boolean?  @map("is_bankruptcy")
+  isPreProbate               Boolean?  @map("is_pre_probate")
+  isRecentlyInherited        Boolean?  @map("is_recently_inherited")
+  behindOnPayments           Boolean?  @map("behind_on_payments")
+  monthsBehindOnPayments     Int?      @map("months_behind_on_payments")
+  lifeEventNotes             String?   @map("life_event_notes") @db.Text
+  emotionalState             String?   @map("emotional_state") // distressed | neutral | motivated | testing
+  decisionMakers             String?   @map("decision_makers") // spouse, family, attorney, etc.
+  isDecisionMakersConfirmed  Boolean?  @map("is_decision_makers_confirmed")
+  isTenantOccupied           Boolean?  @map("is_tenant_occupied")
+  tenantLeaseEndDate         DateTime? @map("tenant_lease_end_date")
+  isTenantPaying             Boolean?  @map("is_tenant_paying")
+  isEvictionInProgress       Boolean?  @map("is_eviction_in_progress")
+  isVacant                   Boolean?  @map("is_vacant")
+  vacantDurationMonths       Int?      @map("vacant_duration_months")
+  isListedWithAgent          Boolean?  @map("is_listed_with_agent")
+  agentName                  String?   @map("agent_name")
+  agentListingExpiration     DateTime? @map("agent_listing_expiration")
+  willingToDoSellerFinancing Boolean?  @map("willing_to_do_seller_financing")
+  willingToDoSubjectTo       Boolean?  @map("willing_to_do_subject_to")
+  moveOutTimeline            String?   @map("move_out_timeline")
 
   // ── Financial ───────────────────────────
-  sellerAskingPrice      Decimal? @db.Decimal(12, 2) @map("seller_asking_price")   // what seller wants
-  lowestAcceptablePrice  Decimal? @db.Decimal(12, 2) @map("lowest_acceptable_price")
-  amountNeededToClear    Decimal? @db.Decimal(12, 2) @map("amount_needed_to_clear")
-  askingReason           String?  @db.Text @map("asking_reason")  // why they need that price
+  sellerAskingPrice      Decimal? @map("seller_asking_price") @db.Decimal(12, 2) // what seller wants
+  lowestAcceptablePrice  Decimal? @map("lowest_acceptable_price") @db.Decimal(12, 2)
+  amountNeededToClear    Decimal? @map("amount_needed_to_clear") @db.Decimal(12, 2)
+  askingReason           String?  @map("asking_reason") @db.Text // why they need that price
   financialDistressScore Int?     @map("financial_distress_score") // 1-10 AI
-  monthlyCarryingCost    Decimal? @db.Decimal(12, 2) @map("monthly_carrying_cost")
+  monthlyCarryingCost    Decimal? @map("monthly_carrying_cost") @db.Decimal(12, 2)
   hasInsurance           Boolean? @map("has_insurance")
   insuranceCompany       String?  @map("insurance_company")
 
   // ── Interaction History ──────────────────
-  firstContactDate              DateTime? @map("first_contact_date")
-  lastContactDate               DateTime? @map("last_contact_date")
-  totalCallCount                Int       @default(0) @map("total_call_count")
-  lastCallOutcome               String?   @map("last_call_outcome")
-  responseRate                  Float?    @map("response_rate")       // 0-1
-  callsToAppointmentRatio       Float?    @map("calls_to_appointment_ratio")
-  bestDayToCall                 String?   @map("best_day_to_call")
-  noAnswerStreak                Int       @default(0) @map("no_answer_streak")
-  textResponseRate              Float?    @map("text_response_rate")
-  sentimentTrend                String?   @map("sentiment_trend")    // improving | declining | neutral
-  commonObjections              Json      @default("[]") @map("common_objections")
-  rapportScore                  Float?    @map("rapport_score")       // 0-10 AI
-  engagementLevel               String?   @map("engagement_level")   // high | medium | low | none
+  firstContactDate               DateTime? @map("first_contact_date")
+  lastContactDate                DateTime? @map("last_contact_date")
+  totalCallCount                 Int       @default(0) @map("total_call_count")
+  lastCallOutcome                String?   @map("last_call_outcome")
+  responseRate                   Float?    @map("response_rate") // 0-1
+  callsToAppointmentRatio        Float?    @map("calls_to_appointment_ratio")
+  bestDayToCall                  String?   @map("best_day_to_call")
+  noAnswerStreak                 Int       @default(0) @map("no_answer_streak")
+  textResponseRate               Float?    @map("text_response_rate")
+  sentimentTrend                 String?   @map("sentiment_trend") // improving | declining | neutral
+  commonObjections               Json      @default("[]") @map("common_objections")
+  rapportScore                   Float?    @map("rapport_score") // 0-10 AI
+  engagementLevel                String?   @map("engagement_level") // high | medium | low | none
   lastMeaningfulConversationDate DateTime? @map("last_meaningful_conversation_date")
 
   // ── Lead & Pipeline ─────────────────────
-  leadSource      String?   @map("lead_source")
-  leadDate        DateTime? @map("lead_date")
-  assignedToId    String?   @map("assigned_to_id")
-  campaignName    String?   @map("campaign_name")
-  listName        String?   @map("list_name")
-  timesRecycled   Int       @default(0) @map("times_recycled")
-  referralSource  String?   @map("referral_source")
-  leadScore       Float?    @map("lead_score") // 0-100 AI
+  leadSource     String?   @map("lead_source")
+  leadDate       DateTime? @map("lead_date")
+  assignedToId   String?   @map("assigned_to_id")
+  campaignName   String?   @map("campaign_name")
+  listName       String?   @map("list_name")
+  timesRecycled  Int       @default(0) @map("times_recycled")
+  referralSource String?   @map("referral_source")
+  leadScore      Float?    @map("lead_score") // 0-100 AI
 
   // ── AI Enriched ─────────────────────────
-  motivationScore            Float?  @map("motivation_score")          // 0-1
-  likelihoodToSellScore      Float?  @map("likelihood_to_sell_score")  // 0-1
-  personalityType            String? @map("personality_type")          // analytical | driver | expressive | amiable
-  communicationStyle         String? @map("communication_style")
-  priceSensitivity           String? @map("price_sensitivity")         // high | medium | low
-  objectionProfile           Json    @default("[]") @map("objection_profile")
-  recommendedApproach        String? @db.Text @map("recommended_approach")
-  redFlags                   Json    @default("[]") @map("red_flags")
-  positiveSignals            Json    @default("[]") @map("positive_signals")
-  priceReductionLikelihood   Float?  @map("price_reduction_likelihood") // 0-1
-  isSubjectToCandidate       Boolean? @map("is_subject_to_candidate")
-  isCreativeFinanceCandidate Boolean? @map("is_creative_finance_candidate")
-  followUpPriority           String? @map("follow_up_priority")         // urgent | high | medium | low
-  predictedCloseProbability  Float?  @map("predicted_close_probability") // 0-1
-  daysToCloseEstimate        Int?    @map("days_to_close_estimate")
-  aiSummary                  String? @db.Text @map("ai_summary")
-  aiCoachingNotes            String? @db.Text @map("ai_coaching_notes")
+  motivationScore            Float?    @map("motivation_score") // 0-1
+  likelihoodToSellScore      Float?    @map("likelihood_to_sell_score") // 0-1
+  personalityType            String?   @map("personality_type") // analytical | driver | expressive | amiable
+  communicationStyle         String?   @map("communication_style")
+  priceSensitivity           String?   @map("price_sensitivity") // high | medium | low
+  objectionProfile           Json      @default("[]") @map("objection_profile")
+  recommendedApproach        String?   @map("recommended_approach") @db.Text
+  redFlags                   Json      @default("[]") @map("red_flags")
+  positiveSignals            Json      @default("[]") @map("positive_signals")
+  priceReductionLikelihood   Float?    @map("price_reduction_likelihood") // 0-1
+  isSubjectToCandidate       Boolean?  @map("is_subject_to_candidate")
+  isCreativeFinanceCandidate Boolean?  @map("is_creative_finance_candidate")
+  followUpPriority           String?   @map("follow_up_priority") // urgent | high | medium | low
+  predictedCloseProbability  Float?    @map("predicted_close_probability") // 0-1
+  daysToCloseEstimate        Int?      @map("days_to_close_estimate")
+  aiSummary                  String?   @map("ai_summary") @db.Text
+  aiCoachingNotes            String?   @map("ai_coaching_notes") @db.Text
   lastAiAnalysisDate         DateTime? @map("last_ai_analysis_date")
 
   // ── Public Records / Enrichment ─────────
-  countyOwnerName      String?   @map("county_owner_name")
-  countyAssessedValue  Decimal?  @db.Decimal(12, 2) @map("county_assessed_value")
-  countyMarketValue    Decimal?  @db.Decimal(12, 2) @map("county_market_value")
-  lastSalePrice        Decimal?  @db.Decimal(12, 2) @map("last_sale_price")
-  lastSaleDate         DateTime? @map("last_sale_date")
-  parcelId             String?   @map("parcel_id")
-  legalDescription     String?   @db.Text @map("legal_description")
-  deedType             String?   @map("deed_type")
-  zoning               String?
-  schoolDistrict       String?   @map("school_district")
-  floodZone            String?   @map("flood_zone")
-  neighborhoodRating   Float?    @map("neighborhood_rating")
-  walkScore            Int?      @map("walk_score")
-  crimeScore           Int?      @map("crime_score")
-  naturalDisasterRisk  String?   @map("natural_disaster_risk")
-  foreclosureHistoryCount Int?   @map("foreclosure_history_count")
-  environmentalFlags   Json      @default("[]") @map("environmental_flags")
-  enrichmentStatus     String?   @map("enrichment_status")      // pending | complete | failed
-  enrichmentLastUpdated DateTime? @map("enrichment_last_updated")
+  countyOwnerName         String?   @map("county_owner_name")
+  countyAssessedValue     Decimal?  @map("county_assessed_value") @db.Decimal(12, 2)
+  countyMarketValue       Decimal?  @map("county_market_value") @db.Decimal(12, 2)
+  lastSalePrice           Decimal?  @map("last_sale_price") @db.Decimal(12, 2)
+  lastSaleDate            DateTime? @map("last_sale_date")
+  parcelId                String?   @map("parcel_id")
+  legalDescription        String?   @map("legal_description") @db.Text
+  deedType                String?   @map("deed_type")
+  zoning                  String?
+  schoolDistrict          String?   @map("school_district")
+  floodZone               String?   @map("flood_zone")
+  neighborhoodRating      Float?    @map("neighborhood_rating")
+  walkScore               Int?      @map("walk_score")
+  crimeScore              Int?      @map("crime_score")
+  naturalDisasterRisk     String?   @map("natural_disaster_risk")
+  foreclosureHistoryCount Int?      @map("foreclosure_history_count")
+  environmentalFlags      Json      @default("[]") @map("environmental_flags")
+  enrichmentStatus        String?   @map("enrichment_status") // pending | complete | failed
+  enrichmentLastUpdated   DateTime? @map("enrichment_last_updated")
 
   // ── Appointment & Visit ──────────────────
   appointmentSetDate         DateTime? @map("appointment_set_date")
   appointmentCompletedDate   DateTime? @map("appointment_completed_date")
   walkThroughCompleted       Boolean?  @map("walk_through_completed")
-  walkThroughNotes           String?   @db.Text @map("walk_through_notes")
+  walkThroughNotes           String?   @map("walk_through_notes") @db.Text
   photosTaken                Boolean?  @map("photos_taken")
-  interiorConditionRepNotes  String?   @db.Text @map("interior_condition_rep_notes")
-  exteriorConditionRepNotes  String?   @db.Text @map("exterior_condition_rep_notes")
-  neighborhoodConditionNotes String?   @db.Text @map("neighborhood_condition_notes")
-  accessNotes                String?   @db.Text @map("access_notes")
+  interiorConditionRepNotes  String?   @map("interior_condition_rep_notes") @db.Text
+  exteriorConditionRepNotes  String?   @map("exterior_condition_rep_notes") @db.Text
+  neighborhoodConditionNotes String?   @map("neighborhood_condition_notes") @db.Text
+  accessNotes                String?   @map("access_notes") @db.Text
 
   // ── Call voice / emotion aggregates (from Claude call extraction) ─
   // Promoted from the dealIntel JSON blob to typed columns so we can filter.
   // Trust arc is an append-only array of {step, callId, calledAt} so we can
   // visualize how trust moves across calls without recomputing.
-  trustScore             Int?     @map("trust_score")               // 0-100, composite
-  trustStepCurrent       String?  @map("trust_step_current")        // distrustful | neutral | warming | trusting
-  trustStepArc           Json     @default("[]") @map("trust_step_arc")
-  voiceEnergyTrend       String?  @map("voice_energy_trend")        // declining | stable | rising
+  trustScore                 Int?    @map("trust_score") // 0-100, composite
+  trustStepCurrent           String? @map("trust_step_current") // distrustful | neutral | warming | trusting
+  trustStepArc               Json    @default("[]") @map("trust_step_arc")
+  voiceEnergyTrend           String? @map("voice_energy_trend") // declining | stable | rising
   primaryEmotionMostFrequent String? @map("primary_emotion_most_frequent") // anxious | hopeful | resigned | angry | grief | defensive
-  competitorsMentionedByName Json  @default("[]") @map("competitors_mentioned_by_name")
-  dealkillersRaised      Json     @default("[]") @map("dealkillers_raised")
+  competitorsMentionedByName Json    @default("[]") @map("competitors_mentioned_by_name")
+  dealkillersRaised          Json    @default("[]") @map("dealkillers_raised")
 
   // ── Message aggregates (computed nightly from messages — once persisted) ─
-  messageResponseTimeAvgHours Float?   @map("message_response_time_avg_hours")
-  messageResponseRate         Float?   @map("message_response_rate")
-  messageBestReplyHourOfDay   Int?     @map("message_best_reply_hour_of_day")
-  messageBestReplyDayOfWeek   String?  @map("message_best_reply_day_of_week")
-  messageThreadSentimentTrend String?  @map("message_thread_sentiment_trend") // warming | flat | cooling
-  messageGhostCheckpoint      Int?     @map("message_ghost_checkpoint")       // # messages in before ghost
+  messageResponseTimeAvgHours Float?    @map("message_response_time_avg_hours")
+  messageResponseRate         Float?    @map("message_response_rate")
+  messageBestReplyHourOfDay   Int?      @map("message_best_reply_hour_of_day")
+  messageBestReplyDayOfWeek   String?   @map("message_best_reply_day_of_week")
+  messageThreadSentimentTrend String?   @map("message_thread_sentiment_trend") // warming | flat | cooling
+  messageGhostCheckpoint      Int?      @map("message_ghost_checkpoint") // # messages in before ghost
   lastMessageReceivedAt       DateTime? @map("last_message_received_at")
 
   // ── Portfolio aggregates (computed from PropertySeller + Property) ───
-  totalPropertiesOwned    Int      @default(0) @map("total_properties_owned")
-  totalPropertiesSoldToUs Int      @default(0) @map("total_properties_sold_to_us")
-  portfolioMarkets        Json     @default("[]") @map("portfolio_markets")
-  totalDealsWithUs        Int      @default(0) @map("total_deals_with_us")
-  totalDealsClosed        Int      @default(0) @map("total_deals_closed")
-  totalDealsWalked        Int      @default(0) @map("total_deals_walked")
-  avgDaysToClose          Int?     @map("avg_days_to_close")
+  totalPropertiesOwned    Int       @default(0) @map("total_properties_owned")
+  totalPropertiesSoldToUs Int       @default(0) @map("total_properties_sold_to_us")
+  portfolioMarkets        Json      @default("[]") @map("portfolio_markets")
+  totalDealsWithUs        Int       @default(0) @map("total_deals_with_us")
+  totalDealsClosed        Int       @default(0) @map("total_deals_closed")
+  totalDealsWalked        Int       @default(0) @map("total_deals_walked")
+  avgDaysToClose          Int?      @map("avg_days_to_close")
   lastDealClosedDate      DateTime? @map("last_deal_closed_date")
-  closeRate               Float?   @map("close_rate")
+  closeRate               Float?    @map("close_rate")
 
   // ── Owner portfolio (vendor-extracted, v1.1 Wave 1 — stripped from Property) ─
   // PropertyRadar / BatchData ship cross-portfolio totals on the OWNER, not on
   // any one property. These were on Property pre-v1.1 (staging-via-Property);
   // post-v1.1 they live on Seller, where the person is the unit. Property-side
   // duplicates drop in Wave 5 cutover.
-  ownerPortfolioTotalEquity   Decimal? @db.Decimal(14, 2) @map("owner_portfolio_total_equity")
-  ownerPortfolioTotalValue    Decimal? @db.Decimal(14, 2) @map("owner_portfolio_total_value")
-  ownerPortfolioTotalPurchase Decimal? @db.Decimal(14, 2) @map("owner_portfolio_total_purchase")
-  ownerPortfolioAvgAssessed   Decimal? @db.Decimal(14, 2) @map("owner_portfolio_avg_assessed")
-  ownerPortfolioAvgPurchase   Decimal? @db.Decimal(14, 2) @map("owner_portfolio_avg_purchase")
+  ownerPortfolioTotalEquity   Decimal? @map("owner_portfolio_total_equity") @db.Decimal(14, 2)
+  ownerPortfolioTotalValue    Decimal? @map("owner_portfolio_total_value") @db.Decimal(14, 2)
+  ownerPortfolioTotalPurchase Decimal? @map("owner_portfolio_total_purchase") @db.Decimal(14, 2)
+  ownerPortfolioAvgAssessed   Decimal? @map("owner_portfolio_avg_assessed") @db.Decimal(14, 2)
+  ownerPortfolioAvgPurchase   Decimal? @map("owner_portfolio_avg_purchase") @db.Decimal(14, 2)
   ownerPortfolioAvgYearBuilt  Int?     @map("owner_portfolio_avg_year_built")
   ownerPortfolioJson          Json?    @map("owner_portfolio_json")
 
   // Q3 lock (v1.1 Wave 1) — person-level flags stripped from Property.
   // PropertyRadar reports these about the OWNER record, not the property.
-  seniorOwner             Boolean? @map("senior_owner")
-  deceasedOwner           Boolean? @map("deceased_owner")
-  cashBuyerOwner          Boolean? @map("cash_buyer_owner")
+  seniorOwner    Boolean? @map("senior_owner")
+  deceasedOwner  Boolean? @map("deceased_owner")
+  cashBuyerOwner Boolean? @map("cash_buyer_owner")
 
   // ── Relationship + comm prefs (mostly manual, some computed) ─────────
-  whoReferredThem          String?  @map("who_referred_them")
-  contactResponsivenessTier String?  @map("contact_responsiveness_tier") // A | B | C | flaky
-  doNotText                Boolean  @default(false) @map("do_not_text")
-  preferredContactTime     String?  @map("preferred_contact_time") // morning | afternoon | evening | any
-  relationshipStrength     String?  @map("relationship_strength")  // new | warming | established | cold
+  whoReferredThem           String? @map("who_referred_them")
+  contactResponsivenessTier String? @map("contact_responsiveness_tier") // A | B | C | flaky
+  doNotText                 Boolean @default(false) @map("do_not_text")
+  preferredContactTime      String? @map("preferred_contact_time") // morning | afternoon | evening | any
+  relationshipStrength      String? @map("relationship_strength") // new | warming | established | cold
 
   // ── Cross-portfolio financial posture (not per-property) ─────────────
   overallFinancialPressureTier String? @map("overall_financial_pressure_tier") // A | B | C | stable
-  liquidityPosture             String? @map("liquidity_posture")  // cash-heavy | income-stable | constrained | distressed
-  creditProxyTier              String? @map("credit_proxy_tier")  // strong | middle | weak
+  liquidityPosture             String? @map("liquidity_posture") // cash-heavy | income-stable | constrained | distressed
+  creditProxyTier              String? @map("credit_proxy_tier") // strong | middle | weak
   bankruptcyHistoryFlag        Boolean @default(false) @map("bankruptcy_history_flag")
 
   // ── Public-records scan (person-level — federal + state court lookups) ─
-  federalBankruptcyActive      Boolean @default(false) @map("federal_bankruptcy_active")
-  federalBankruptcyChapter     String? @map("federal_bankruptcy_chapter") // 7 | 13 | other
-  civilSuitCountAsDefendant    Int     @default(0) @map("civil_suit_count_as_defendant")
-  divorceActiveFlag            Boolean @default(false) @map("divorce_active_flag")
-  evictionFilingCountAsPlaintiff Int   @default(0) @map("eviction_filing_count_as_plaintiff")
-  evictionFilingCountAsDefendant Int   @default(0) @map("eviction_filing_count_as_defendant")
-  publicRecordsLastScan        DateTime? @map("public_records_last_scan")
+  federalBankruptcyActive        Boolean   @default(false) @map("federal_bankruptcy_active")
+  federalBankruptcyChapter       String?   @map("federal_bankruptcy_chapter") // 7 | 13 | other
+  civilSuitCountAsDefendant      Int       @default(0) @map("civil_suit_count_as_defendant")
+  divorceActiveFlag              Boolean   @default(false) @map("divorce_active_flag")
+  evictionFilingCountAsPlaintiff Int       @default(0) @map("eviction_filing_count_as_plaintiff")
+  evictionFilingCountAsDefendant Int       @default(0) @map("eviction_filing_count_as_defendant")
+  publicRecordsLastScan          DateTime? @map("public_records_last_scan")
 
   // ── CourtListener automated case search ──────────────────────────────
   // Populated by lib/courtlistener/client.ts on each property enrichment
@@ -1024,7 +1028,7 @@ model Seller {
 
   // ── General ──────────────────────────────
   tags          Json    @default("[]")
-  internalNotes String? @db.Text @map("internal_notes")
+  internalNotes String? @map("internal_notes") @db.Text
   priorityFlag  Boolean @default(false) @map("priority_flag")
   customFields  Json    @default("{}") @map("custom_fields")
   fieldSources  Json    @default("{}") @map("field_sources") // tracks AI | API | manual per field
@@ -1050,14 +1054,14 @@ model PropertySeller {
   // current objections reflect the live read on this deal; the seller-level
   // analogs (Seller.objectionProfile, Seller.engagementLevel) aggregate across
   // all of their properties.
-  sellerResistanceLevel  String?   @map("seller_resistance_level") // eager | neutral | reluctant | hostile
-  lastConversationSummary String?  @db.Text @map("last_conversation_summary")
-  nextFollowupDate       DateTime? @map("next_followup_date")
-  competingOffersCount   Int       @default(0) @map("competing_offers_count")
-  sellerTimelineConstraint String? @map("seller_timeline_constraint") // asap | 30_days | flexible | no_rush
-  estimatedDaysToDecision Int?     @map("estimated_days_to_decision")
-  currentObjections      Json      @default("[]") @map("current_objections")
-  negotiationStage       String?   @map("negotiation_stage")  // initial | anchored | compromising | accepted | declined
+  sellerResistanceLevel    String?   @map("seller_resistance_level") // eager | neutral | reluctant | hostile
+  lastConversationSummary  String?   @map("last_conversation_summary") @db.Text
+  nextFollowupDate         DateTime? @map("next_followup_date")
+  competingOffersCount     Int       @default(0) @map("competing_offers_count")
+  sellerTimelineConstraint String?   @map("seller_timeline_constraint") // asap | 30_days | flexible | no_rush
+  estimatedDaysToDecision  Int?      @map("estimated_days_to_decision")
+  currentObjections        Json      @default("[]") @map("current_objections")
+  negotiationStage         String?   @map("negotiation_stage") // initial | anchored | compromising | accepted | declined
 
   @@id([propertyId, sellerId])
   @@map("property_sellers")
@@ -1107,20 +1111,20 @@ model Call {
   assignedTo   User?   @relation("CallAssignedTo", fields: [assignedToId], references: [id])
 
   // Property this call is about
-  propertyId String?  @map("property_id")
+  propertyId String?   @map("property_id")
   property   Property? @relation(fields: [propertyId], references: [id])
 
   // GHL data
-  ghlCallId    String? @unique @map("ghl_call_id")
-  ghlContactId String? @map("ghl_contact_id") // GHL contact ID for AM/PM tracking
-  sellerId   String? @map("seller_id")
-  seller     Seller? @relation(fields: [sellerId], references: [id])
-  buyerId  String? @map("buyer_id")
-  buyer    Buyer?  @relation(fields: [buyerId], references: [id])
-  contactName    String? @map("contact_name")    // cached from GHL contact
+  ghlCallId      String? @unique @map("ghl_call_id")
+  ghlContactId   String? @map("ghl_contact_id") // GHL contact ID for AM/PM tracking
+  sellerId       String? @map("seller_id")
+  seller         Seller? @relation(fields: [sellerId], references: [id])
+  buyerId        String? @map("buyer_id")
+  buyer          Buyer?  @relation(fields: [buyerId], references: [id])
+  contactName    String? @map("contact_name") // cached from GHL contact
   contactAddress String? @map("contact_address") // cached from GHL contact address1+city+state
   recordingUrl   String? @map("recording_url")
-  transcript   String? @db.Text
+  transcript     String? @db.Text
 
   // Manual upload (MP3/MP4/transcript paste via /calls/upload) — false for GHL-sourced calls
   manualUpload     Boolean @default(false) @map("manual_upload")
@@ -1131,33 +1135,33 @@ model Call {
   outcomeManualOverride Boolean @default(false) @map("outcome_manual_override")
 
   // Call metadata
-  callType     String? @map("call_type")   // from tenant.callTypes config
-  callResult   String? @map("call_result") // from tenant.callResults config
-  direction    CallDirection @default(OUTBOUND)
-  durationSeconds Int? @map("duration_seconds")
-  calledAt     DateTime? @map("called_at")
-  source       String?  @map("source") // 'webhook' | 'poll' — how this call was ingested
+  callType        String?       @map("call_type") // from tenant.callTypes config
+  callResult      String?       @map("call_result") // from tenant.callResults config
+  direction       CallDirection @default(OUTBOUND)
+  durationSeconds Int?          @map("duration_seconds")
+  calledAt        DateTime?     @map("called_at")
+  source          String?       @map("source") // 'webhook' | 'poll' — how this call was ingested
 
   // AI Grading
-  gradingStatus GradingStatus @default(PENDING) @map("grading_status")
-  score         Float?        // 0-100
-  rubricScores  Json?         @map("rubric_scores") // per-category scores
-  aiSummary     String?       @db.Text @map("ai_summary")
-  aiFeedback    String?       @db.Text @map("ai_feedback")
-  aiCoachingTips Json?        @map("ai_coaching_tips")
-  gradedAt      DateTime?     @map("graded_at")
+  gradingStatus  GradingStatus @default(PENDING) @map("grading_status")
+  score          Float? // 0-100
+  rubricScores   Json?         @map("rubric_scores") // per-category scores
+  aiSummary      String?       @map("ai_summary") @db.Text
+  aiFeedback     String?       @map("ai_feedback") @db.Text
+  aiCoachingTips Json?         @map("ai_coaching_tips")
+  gradedAt       DateTime?     @map("graded_at")
 
   // AI Analysis (populated during grading)
-  sentiment        Float?    // -1.0 to 1.0
-  objections       Json?     // [{objection, response, handled}]
-  talkRatio        Float?    @map("talk_ratio") // rep talk % vs seller talk %
-  keyMoments       Json?     @map("key_moments") // [{timestamp, type, description}]
-  callOutcome      String?   @map("call_outcome") // appointment_set, follow_up, dead, contract, not_interested
-  sellerMotivation Float?    @map("seller_motivation") // 0.0 to 1.0
-  nextBestAction   String?   @map("next_best_action") // AI suggested next step
-  aiNextSteps      Json?     @map("ai_next_steps") // [{type, label, reasoning, status, pushedAt}]
+  sentiment        Float? // -1.0 to 1.0
+  objections       Json? // [{objection, response, handled}]
+  talkRatio        Float?  @map("talk_ratio") // rep talk % vs seller talk %
+  keyMoments       Json?   @map("key_moments") // [{timestamp, type, description}]
+  callOutcome      String? @map("call_outcome") // appointment_set, follow_up, dead, contract, not_interested
+  sellerMotivation Float?  @map("seller_motivation") // 0.0 to 1.0
+  nextBestAction   String? @map("next_best_action") // AI suggested next step
+  aiNextSteps      Json?   @map("ai_next_steps") // [{type, label, reasoning, status, pushedAt}]
   // Deal intel proposed changes from this call — [{field, label, currentValue, proposedValue, confidence, evidence, category, decision, decidedAt}]
-  dealIntelHistory  Json?     @map("deal_intel_history")
+  dealIntelHistory Json?   @map("deal_intel_history")
 
   // ── Promoted per-call extractions (filterable) ────────────────────────
   // These duplicate signals already captured in dealIntelHistory JSON but
@@ -1165,12 +1169,12 @@ model Call {
   // per-seller aggregates can filter cheaply. Each is extracted fresh per
   // call by the Claude extractor and rolled up into Seller-level aggregates
   // (primaryEmotionMostFrequent, dealkillersRaised[], etc.) by the cron.
-  callPrimaryEmotion      String?   @map("call_primary_emotion")    // anxious | hopeful | resigned | angry | grief | defensive
-  callVoiceEnergyLevel    String?   @map("call_voice_energy_level") // high | medium | low | distressed
-  callTrustStep           String?   @map("call_trust_step")         // distrustful | neutral | warming | trusting
-  callFollowupCommitment  String?   @db.Text @map("call_followup_commitment") // verbatim agreed next step
-  callBestOfferMentioned  Decimal?  @db.Decimal(12, 2) @map("call_best_offer_mentioned")
-  callDealkillersSurfaced Json      @default("[]") @map("call_dealkillers_surfaced")
+  callPrimaryEmotion       String?  @map("call_primary_emotion") // anxious | hopeful | resigned | angry | grief | defensive
+  callVoiceEnergyLevel     String?  @map("call_voice_energy_level") // high | medium | low | distressed
+  callTrustStep            String?  @map("call_trust_step") // distrustful | neutral | warming | trusting
+  callFollowupCommitment   String?  @map("call_followup_commitment") @db.Text // verbatim agreed next step
+  callBestOfferMentioned   Decimal? @map("call_best_offer_mentioned") @db.Decimal(12, 2)
+  callDealkillersSurfaced  Json     @default("[]") @map("call_dealkillers_surfaced")
   callCompetitorsMentioned Json     @default("[]") @map("call_competitors_mentioned")
 
   // Calibration — mark as good/bad example for grading baseline
@@ -1211,7 +1215,7 @@ model CallReclassification {
 
   // Snapshot the AI's justification at the moment of reclassification — lets
   // future training see "what the AI thought" vs. "what the human decided"
-  previousAiSummary String? @db.Text @map("previous_ai_summary")
+  previousAiSummary String? @map("previous_ai_summary") @db.Text
 
   @@index([tenantId, createdAt])
   @@index([callId])
@@ -1235,8 +1239,8 @@ model RecordingFetchJob {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  call          Call     @relation(fields: [callId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  call   Call   @relation(fields: [callId], references: [id])
 
   @@index([status, nextAttemptAt])
   @@map("recording_fetch_jobs")
@@ -1278,7 +1282,7 @@ model CallRubric {
   isDefault Boolean  @default(false) @map("is_default")
 
   // Rubric criteria (array of {category, maxScore, description, weight})
-  criteria  Json
+  criteria Json
 
   @@map("call_rubrics")
 }
@@ -1304,12 +1308,12 @@ model Task {
 
   // Task data
   title       String
-  description String? @db.Text
+  description String?      @db.Text
   category    String? // from tenant task category config
-  status      TaskStatus @default(PENDING)
+  status      TaskStatus   @default(PENDING)
   priority    TaskPriority @default(MEDIUM)
-  dueAt       DateTime? @map("due_at")
-  completedAt DateTime? @map("completed_at")
+  dueAt       DateTime?    @map("due_at")
+  completedAt DateTime?    @map("completed_at")
 
   // GHL sync
   ghlTaskId String? @unique @map("ghl_task_id")
@@ -1350,7 +1354,7 @@ model KpiSnapshot {
   userId String? @map("user_id")
   user   User?   @relation(fields: [userId], references: [id])
 
-  snapshotDate DateTime @map("snapshot_date") @db.Date
+  snapshotDate DateTime       @map("snapshot_date") @db.Date
   period       SnapshotPeriod @default(DAILY)
 
   // Metrics stored as flexible JSON
@@ -1379,11 +1383,11 @@ model RoleConfig {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  role            UserRole
-  defaultKpis     Json @map("default_kpis")      // which KPIs are shown by default
-  allowedKpis     Json @map("allowed_kpis")       // which KPIs this role can enable
-  permissions     Json                             // feature-level permissions
-  taskCategories  Json @map("task_categories")    // task categories for this role
+  role           UserRole
+  defaultKpis    Json     @map("default_kpis") // which KPIs are shown by default
+  allowedKpis    Json     @map("allowed_kpis") // which KPIs this role can enable
+  permissions    Json // feature-level permissions
+  taskCategories Json     @map("task_categories") // task categories for this role
 
   @@unique([tenantId, role])
   @@map("role_configs")
@@ -1405,15 +1409,15 @@ model AuditLog {
   user   User?   @relation(fields: [userId], references: [id])
 
   // What happened
-  action   String               // e.g. "call.graded", "property.created", "audit.run"
-  resource String?              // e.g. "call", "property", "system"
-  resourceId String?            @map("resource_id")
-  payload  Json?                // full context
-  source   AuditSource @default(USER)
+  action     String // e.g. "call.graded", "property.created", "audit.run"
+  resource   String? // e.g. "call", "property", "system"
+  resourceId String?     @map("resource_id")
+  payload    Json? // full context
+  source     AuditSource @default(USER)
 
   // For system audit agent results
   severity AuditSeverity?
-  resolved Boolean @default(false)
+  resolved Boolean        @default(false)
 
   @@map("audit_logs")
 }
@@ -1467,8 +1471,8 @@ model UserBadge {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId    String @map("user_id")
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   badgeType String @map("badge_type") // first_call, sharp_shooter, on_fire, deal_maker, etc.
 
@@ -1483,11 +1487,11 @@ model XpEvent {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId    String @map("user_id")
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  eventType String @map("event_type") // call_made, score_over_60, appointment_set, streak_5, etc.
-  xpAwarded Int    @map("xp_awarded")
+  eventType String  @map("event_type") // call_made, score_over_60, appointment_set, streak_5, etc.
+  xpAwarded Int     @map("xp_awarded")
   relatedId String? @map("related_id") // callId, propertyId, etc.
 
   @@map("xp_events")
@@ -1529,7 +1533,7 @@ model CoachLog {
 
   message String @db.Text // user message
   role    String // user or assistant
-  actions Json?  // actions executed [{type, target, status}]
+  actions Json? // actions executed [{type, target, status}]
 
   @@map("coach_logs")
 }
@@ -1548,7 +1552,7 @@ model WorkflowDefinition {
 
   name         String
   triggerEvent String  @map("trigger_event") // property_created, stage_changed, call_graded, task_completed
-  steps        Json    // [{type, delay?, action, content?, condition?}]
+  steps        Json // [{type, delay?, action, content?, condition?}]
   isActive     Boolean @default(true) @map("is_active")
 
   executions WorkflowExecution[]
@@ -1564,14 +1568,14 @@ model WorkflowExecution {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  workflowId String              @map("workflow_id")
-  workflow   WorkflowDefinition  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId String             @map("workflow_id")
+  workflow   WorkflowDefinition @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
-  contactId   String  @map("contact_id") // GHL contact ID
-  propertyId  String? @map("property_id")
-  currentStep Int     @default(0) @map("current_step")
-  status      String  @default("active") // active, completed, paused, failed
-  context     Json    @default("{}") // execution context: {callId, propertyId, score, etc.}
+  contactId   String    @map("contact_id") // GHL contact ID
+  propertyId  String?   @map("property_id")
+  currentStep Int       @default(0) @map("current_step")
+  status      String    @default("active") // active, completed, paused, failed
+  context     Json      @default("{}") // execution context: {callId, propertyId, score, etc.}
   nextRunAt   DateTime? @map("next_run_at") // when to run the next step (for delays)
 
   @@map("workflow_executions")
@@ -1593,30 +1597,30 @@ model Buyer {
   // Legacy GHL-overlap identity columns — drop in v1.1 Wave 5 cutover.
   // Render path post-cutover: live-fetch from GHL via ghlContactId, with
   // skipTraced* below as fallback when ghlContactId is null.
-  name                   String
-  phone                  String?
-  secondaryPhone         String?  @map("secondary_phone")
-  mobilePhone            String?  @map("mobile_phone")
-  email                  String?
-  secondaryEmail         String?  @map("secondary_email")
-  company                String?
-  mailingAddress         String?  @map("mailing_address")
-  mailingCity            String?  @map("mailing_city")
-  mailingState           String?  @map("mailing_state")
-  mailingZip             String?  @map("mailing_zip")
-  website                String?
+  name                     String
+  phone                    String?
+  secondaryPhone           String? @map("secondary_phone")
+  mobilePhone              String? @map("mobile_phone")
+  email                    String?
+  secondaryEmail           String? @map("secondary_email")
+  company                  String?
+  mailingAddress           String? @map("mailing_address")
+  mailingCity              String? @map("mailing_city")
+  mailingState             String? @map("mailing_state")
+  mailingZip               String? @map("mailing_zip")
+  website                  String?
   // Q1/Shape A lock (v1.1 Wave 1) — skip-trace fallback identity. Used when
   // ghlContactId is null (rare for buyers — most arrive with a GHL contact).
-  skipTracedName            String?  @map("skip_traced_name")
-  skipTracedPhone           String?  @map("skip_traced_phone")
-  skipTracedEmail           String?  @map("skip_traced_email")
-  skipTracedCompany         String?  @map("skip_traced_company")
-  skipTracedMailingAddress  String?  @map("skip_traced_mailing_address")
-  preferredContactMethod String?  @map("preferred_contact_method") // call | text | email
-  bestTimeToContact      String?  @map("best_time_to_contact")
-  doNotContact           Boolean  @default(false) @map("do_not_contact")
-  isDeceased             Boolean  @default(false) @map("is_deceased")
-  isActive               Boolean  @default(true) @map("is_active")
+  skipTracedName           String? @map("skip_traced_name")
+  skipTracedPhone          String? @map("skip_traced_phone")
+  skipTracedEmail          String? @map("skip_traced_email")
+  skipTracedCompany        String? @map("skip_traced_company")
+  skipTracedMailingAddress String? @map("skip_traced_mailing_address")
+  preferredContactMethod   String? @map("preferred_contact_method") // call | text | email
+  bestTimeToContact        String? @map("best_time_to_contact")
+  doNotContact             Boolean @default(false) @map("do_not_contact")
+  isDeceased               Boolean @default(false) @map("is_deceased")
+  isActive                 Boolean @default(true) @map("is_active")
 
   // ── GHL ─────────────────────────────────
   ghlContactId String? @map("ghl_contact_id")
@@ -1634,186 +1638,186 @@ model Buyer {
   isOutOfStateBuyer       Boolean @default(false) @map("is_out_of_state_buyer")
 
   // ── Buybox — Property ───────────────────
-  propertyTypes       Json    @default("[]") @map("property_types") // SFR | MFR | commercial | land | mobile
-  minBeds             Int?    @map("min_beds")
-  maxBeds             Int?    @map("max_beds")
-  minBaths            Float?  @map("min_baths")
-  maxBaths            Float?  @map("max_baths")
-  minSqft             Int?    @map("min_sqft")
-  maxSqft             Int?    @map("max_sqft")
-  minLotSizeAcres     Float?  @map("min_lot_size_acres")
-  maxLotSizeAcres     Float?  @map("max_lot_size_acres")
-  yearBuiltMin        Int?    @map("year_built_min")
-  conditionRange      Json    @default("{}") @map("condition_range")
-  maxRepairBudget     Decimal? @db.Decimal(12, 2) @map("max_repair_budget")
-  structuralIssuesOk  Boolean? @map("structural_issues_ok")
-  foundationIssuesOk  Boolean? @map("foundation_issues_ok")
-  fireDamageOk        Boolean? @map("fire_damage_ok")
-  moldOk              Boolean? @map("mold_ok")
-  hoarderOk           Boolean? @map("hoarder_ok")
-  tenantOccupiedOk    Boolean? @map("tenant_occupied_ok")
-  prefersVacant       Boolean? @map("prefers_vacant")
-  basementRequired    Boolean? @map("basement_required")
-  garageRequired      Boolean? @map("garage_required")
-  poolOk              Boolean? @map("pool_ok")
-  hoaOk               Boolean? @map("hoa_ok")
-  historicDistrictOk  Boolean? @map("historic_district_ok")
+  propertyTypes      Json     @default("[]") @map("property_types") // SFR | MFR | commercial | land | mobile
+  minBeds            Int?     @map("min_beds")
+  maxBeds            Int?     @map("max_beds")
+  minBaths           Float?   @map("min_baths")
+  maxBaths           Float?   @map("max_baths")
+  minSqft            Int?     @map("min_sqft")
+  maxSqft            Int?     @map("max_sqft")
+  minLotSizeAcres    Float?   @map("min_lot_size_acres")
+  maxLotSizeAcres    Float?   @map("max_lot_size_acres")
+  yearBuiltMin       Int?     @map("year_built_min")
+  conditionRange     Json     @default("{}") @map("condition_range")
+  maxRepairBudget    Decimal? @map("max_repair_budget") @db.Decimal(12, 2)
+  structuralIssuesOk Boolean? @map("structural_issues_ok")
+  foundationIssuesOk Boolean? @map("foundation_issues_ok")
+  fireDamageOk       Boolean? @map("fire_damage_ok")
+  moldOk             Boolean? @map("mold_ok")
+  hoarderOk          Boolean? @map("hoarder_ok")
+  tenantOccupiedOk   Boolean? @map("tenant_occupied_ok")
+  prefersVacant      Boolean? @map("prefers_vacant")
+  basementRequired   Boolean? @map("basement_required")
+  garageRequired     Boolean? @map("garage_required")
+  poolOk             Boolean? @map("pool_ok")
+  hoaOk              Boolean? @map("hoa_ok")
+  historicDistrictOk Boolean? @map("historic_district_ok")
 
   // ── Buybox — Financial ──────────────────
-  minPurchasePrice         Decimal? @db.Decimal(12, 2) @map("min_purchase_price")
-  maxPurchasePrice         Decimal? @db.Decimal(12, 2) @map("max_purchase_price")
-  minArv                   Decimal? @db.Decimal(12, 2) @map("min_arv")
-  maxArv                   Decimal? @db.Decimal(12, 2) @map("max_arv")
-  maxArvPercent            Float?   @map("max_arv_percent")
-  minEquityRequired        Decimal? @db.Decimal(12, 2) @map("min_equity_required")
-  maxAssignmentFeeAccepted Decimal? @db.Decimal(12, 2) @map("max_assignment_fee_accepted")
-  minRoiRequired           Float?   @map("min_roi_required")
-  minCashFlowRequired      Decimal? @db.Decimal(12, 2) @map("min_cash_flow_required")
-  rehabBudgetMin           Decimal? @db.Decimal(12, 2) @map("rehab_budget_min")
-  rehabBudgetMax           Decimal? @db.Decimal(12, 2) @map("rehab_budget_max")
-  fundingType              String?  @map("funding_type")
-  proofOfFundsOnFile       Boolean  @default(false) @map("proof_of_funds_on_file")
-  pofAmount                Decimal? @db.Decimal(12, 2) @map("pof_amount")
+  minPurchasePrice         Decimal?  @map("min_purchase_price") @db.Decimal(12, 2)
+  maxPurchasePrice         Decimal?  @map("max_purchase_price") @db.Decimal(12, 2)
+  minArv                   Decimal?  @map("min_arv") @db.Decimal(12, 2)
+  maxArv                   Decimal?  @map("max_arv") @db.Decimal(12, 2)
+  maxArvPercent            Float?    @map("max_arv_percent")
+  minEquityRequired        Decimal?  @map("min_equity_required") @db.Decimal(12, 2)
+  maxAssignmentFeeAccepted Decimal?  @map("max_assignment_fee_accepted") @db.Decimal(12, 2)
+  minRoiRequired           Float?    @map("min_roi_required")
+  minCashFlowRequired      Decimal?  @map("min_cash_flow_required") @db.Decimal(12, 2)
+  rehabBudgetMin           Decimal?  @map("rehab_budget_min") @db.Decimal(12, 2)
+  rehabBudgetMax           Decimal?  @map("rehab_budget_max") @db.Decimal(12, 2)
+  fundingType              String?   @map("funding_type")
+  proofOfFundsOnFile       Boolean   @default(false) @map("proof_of_funds_on_file")
+  pofAmount                Decimal?  @map("pof_amount") @db.Decimal(12, 2)
   pofExpiration            DateTime? @map("pof_expiration")
-  hardMoneyLender          String?  @map("hard_money_lender")
-  typicalCloseTimelineDays Int?     @map("typical_close_timeline_days")
-  canCloseAsIs             Boolean? @map("can_close_as_is")
-  emdAmountComfortable     Decimal? @db.Decimal(12, 2) @map("emd_amount_comfortable")
-  doubleCloseOk            Boolean? @map("double_close_ok")
-  subjectToOk              Boolean? @map("subject_to_ok")
+  hardMoneyLender          String?   @map("hard_money_lender")
+  typicalCloseTimelineDays Int?      @map("typical_close_timeline_days")
+  canCloseAsIs             Boolean?  @map("can_close_as_is")
+  emdAmountComfortable     Decimal?  @map("emd_amount_comfortable") @db.Decimal(12, 2)
+  doubleCloseOk            Boolean?  @map("double_close_ok")
+  subjectToOk              Boolean?  @map("subject_to_ok")
 
   // ── Activity & Performance ──────────────
-  buyerSinceDate             DateTime? @map("buyer_since_date")
-  lastDealClosedDate         DateTime? @map("last_deal_closed_date")
-  totalDealsClosedWithUs     Int       @default(0) @map("total_deals_closed_with_us")
-  totalDealsClosedOverall    Int?      @map("total_deals_closed_overall")
-  averageDealPrice           Decimal?  @db.Decimal(12, 2) @map("average_deal_price")
-  averageSpreadAccepted      Decimal?  @db.Decimal(12, 2) @map("average_spread_accepted")
-  averageCloseTimelineDays   Int?      @map("average_close_timeline_days")
-  blastResponseRate          Float?    @map("blast_response_rate")
-  offerRate                  Float?    @map("offer_rate")
-  closeRate                  Float?    @map("close_rate")
-  dealsFallenThrough         Int       @default(0) @map("deals_fallen_through")
-  fallThroughReasons         Json      @default("[]") @map("fall_through_reasons")
-  totalVolumeFromUs          Decimal?  @db.Decimal(12, 2) @map("total_volume_from_us")
-  referralsGiven             Int       @default(0) @map("referrals_given")
-  referralsConverted         Int       @default(0) @map("referrals_converted")
-  reliabilityScore           Float?    @map("reliability_score")
-  communicationScore         Float?    @map("communication_score")
-  buyerGrade                 String?   @map("buyer_grade") // A | B | C | D
+  buyerSinceDate           DateTime? @map("buyer_since_date")
+  lastDealClosedDate       DateTime? @map("last_deal_closed_date")
+  totalDealsClosedWithUs   Int       @default(0) @map("total_deals_closed_with_us")
+  totalDealsClosedOverall  Int?      @map("total_deals_closed_overall")
+  averageDealPrice         Decimal?  @map("average_deal_price") @db.Decimal(12, 2)
+  averageSpreadAccepted    Decimal?  @map("average_spread_accepted") @db.Decimal(12, 2)
+  averageCloseTimelineDays Int?      @map("average_close_timeline_days")
+  blastResponseRate        Float?    @map("blast_response_rate")
+  offerRate                Float?    @map("offer_rate")
+  closeRate                Float?    @map("close_rate")
+  dealsFallenThrough       Int       @default(0) @map("deals_fallen_through")
+  fallThroughReasons       Json      @default("[]") @map("fall_through_reasons")
+  totalVolumeFromUs        Decimal?  @map("total_volume_from_us") @db.Decimal(12, 2)
+  referralsGiven           Int       @default(0) @map("referrals_given")
+  referralsConverted       Int       @default(0) @map("referrals_converted")
+  reliabilityScore         Float?    @map("reliability_score")
+  communicationScore       Float?    @map("communication_score")
+  buyerGrade               String?   @map("buyer_grade") // A | B | C | D
 
   // ── Blast & Communication ───────────────
-  blastFrequency          String?  @map("blast_frequency")       // daily | weekly | as_needed
-  bestBlastDay            String?  @map("best_blast_day")
-  bestBlastTime           String?  @map("best_blast_time")
-  preferredBlastChannel   String?  @map("preferred_blast_channel") // email | text | call
-  unsubscribedFromEmail   Boolean  @default(false) @map("unsubscribed_from_email")
-  unsubscribedFromText    Boolean  @default(false) @map("unsubscribed_from_text")
-  emailOpenRate           Float?   @map("email_open_rate")
-  textResponseRate        Float?   @map("text_response_rate")
-  callAnswerRate          Float?   @map("call_answer_rate")
-  lastCommunicationDate   DateTime? @map("last_communication_date")
-  averageResponseTimeHours Float?  @map("average_response_time_hours")
-  engagementTrend         String?  @map("engagement_trend") // improving | declining | stable
-  isGhost                 Boolean  @default(false) @map("is_ghost")
+  blastFrequency           String?   @map("blast_frequency") // daily | weekly | as_needed
+  bestBlastDay             String?   @map("best_blast_day")
+  bestBlastTime            String?   @map("best_blast_time")
+  preferredBlastChannel    String?   @map("preferred_blast_channel") // email | text | call
+  unsubscribedFromEmail    Boolean   @default(false) @map("unsubscribed_from_email")
+  unsubscribedFromText     Boolean   @default(false) @map("unsubscribed_from_text")
+  emailOpenRate            Float?    @map("email_open_rate")
+  textResponseRate         Float?    @map("text_response_rate")
+  callAnswerRate           Float?    @map("call_answer_rate")
+  lastCommunicationDate    DateTime? @map("last_communication_date")
+  averageResponseTimeHours Float?    @map("average_response_time_hours")
+  engagementTrend          String?   @map("engagement_trend") // improving | declining | stable
+  isGhost                  Boolean   @default(false) @map("is_ghost")
 
   // ── Relationship ────────────────────────
-  assignedToId         String?  @map("assigned_to_id")
-  howAcquired          String?  @map("how_acquired") // referral | cold | event | social | other
-  referralSourceName   String?  @map("referral_source_name")
-  relationshipStrength String?  @map("relationship_strength") // strong | good | neutral | weak
-  personalNotes        String?  @db.Text @map("personal_notes")
-  birthday             DateTime? @map("birthday")
-  spouseName           String?  @map("spouse_name")
-  keyStaffNames        Json     @default("[]") @map("key_staff_names")
-  lastInPersonMeeting  DateTime? @map("last_in_person_meeting")
-  isVip                Boolean  @default(false) @map("is_vip")
-  hasExclusivityAgreement Boolean @default(false) @map("has_exclusivity_agreement")
+  assignedToId            String?   @map("assigned_to_id")
+  howAcquired             String?   @map("how_acquired") // referral | cold | event | social | other
+  referralSourceName      String?   @map("referral_source_name")
+  relationshipStrength    String?   @map("relationship_strength") // strong | good | neutral | weak
+  personalNotes           String?   @map("personal_notes") @db.Text
+  birthday                DateTime? @map("birthday")
+  spouseName              String?   @map("spouse_name")
+  keyStaffNames           Json      @default("[]") @map("key_staff_names")
+  lastInPersonMeeting     DateTime? @map("last_in_person_meeting")
+  isVip                   Boolean   @default(false) @map("is_vip")
+  hasExclusivityAgreement Boolean   @default(false) @map("has_exclusivity_agreement")
 
   // ── Strategy & Preferences ──────────────
-  exitStrategies             Json    @default("[]") @map("exit_strategies")
-  holdPeriodMonths           Int?    @map("hold_period_months")
-  targetTenantProfile        String? @db.Text @map("target_tenant_profile")
-  propertyManagementCompany  String? @map("property_management_company")
-  typicalRehabTimelineDays   Int?    @map("typical_rehab_timeline_days")
-  offMarketOnly              Boolean @default(false) @map("off_market_only")
-  is1031Active               Boolean @default(false) @map("is_1031_active")
-  isOpportunityZoneInterest  Boolean @default(false) @map("is_opportunity_zone_interest")
-  creativeFinanceInterest    Boolean @default(false) @map("creative_finance_interest")
-  isSubjectToBuyer           Boolean @default(false) @map("is_subject_to_buyer")
+  exitStrategies            Json    @default("[]") @map("exit_strategies")
+  holdPeriodMonths          Int?    @map("hold_period_months")
+  targetTenantProfile       String? @map("target_tenant_profile") @db.Text
+  propertyManagementCompany String? @map("property_management_company")
+  typicalRehabTimelineDays  Int?    @map("typical_rehab_timeline_days")
+  offMarketOnly             Boolean @default(false) @map("off_market_only")
+  is1031Active              Boolean @default(false) @map("is_1031_active")
+  isOpportunityZoneInterest Boolean @default(false) @map("is_opportunity_zone_interest")
+  creativeFinanceInterest   Boolean @default(false) @map("creative_finance_interest")
+  isSubjectToBuyer          Boolean @default(false) @map("is_subject_to_buyer")
 
   // ── AI Enriched ─────────────────────────
-  buyerScore             Float?   @map("buyer_score")
+  buyerScore            Float?    @map("buyer_score")
   // v1.1 Wave 5 — matchLikelihoodScore dropped. Per-property fit lives on
   // PropertyBuyerStage.matchScore (Q7 lock). buyerScore stays as cross-
   // portfolio reliability score.
-  reliabilityPrediction  Float?   @map("reliability_prediction")
-  communicationStyleAi   String?  @map("communication_style_ai")
-  negotiationStyle       String?  @map("negotiation_style")
-  ghostRiskScore         Float?   @map("ghost_risk_score")
-  upsellPotential        Float?   @map("upsell_potential")
-  lifetimeValueEstimate  Decimal? @db.Decimal(12, 2) @map("lifetime_value_estimate")
-  aiSummary              String?  @db.Text @map("ai_summary")
-  recommendedApproach    String?  @db.Text @map("recommended_approach")
-  redFlagsAi             Json     @default("[]") @map("red_flags_ai")
-  churnRisk              Float?   @map("churn_risk")
-  lastAiAnalysisDate     DateTime? @map("last_ai_analysis_date")
+  reliabilityPrediction Float?    @map("reliability_prediction")
+  communicationStyleAi  String?   @map("communication_style_ai")
+  negotiationStyle      String?   @map("negotiation_style")
+  ghostRiskScore        Float?    @map("ghost_risk_score")
+  upsellPotential       Float?    @map("upsell_potential")
+  lifetimeValueEstimate Decimal?  @map("lifetime_value_estimate") @db.Decimal(12, 2)
+  aiSummary             String?   @map("ai_summary") @db.Text
+  recommendedApproach   String?   @map("recommended_approach") @db.Text
+  redFlagsAi            Json      @default("[]") @map("red_flags_ai")
+  churnRisk             Float?    @map("churn_risk")
+  lastAiAnalysisDate    DateTime? @map("last_ai_analysis_date")
 
   // ── Entity / legal (from OpenCorporates + manual) ───────────────────
-  entityLegalName        String?  @map("entity_legal_name")
-  entityEin              String?  @map("entity_ein")
-  entityState            String?  @map("entity_state")
-  entityStatus           String?  @map("entity_status") // active | dissolved | delinquent
+  entityLegalName              String? @map("entity_legal_name")
+  entityEin                    String? @map("entity_ein")
+  entityState                  String? @map("entity_state")
+  entityStatus                 String? @map("entity_status") // active | dissolved | delinquent
   signingAuthorityContactName  String? @map("signing_authority_contact_name")
   signingAuthorityContactPhone String? @map("signing_authority_contact_phone")
   signingAuthorityContactEmail String? @map("signing_authority_contact_email")
-  realEstateLicenseNumber String? @map("real_estate_license_number")
+  realEstateLicenseNumber      String? @map("real_estate_license_number")
 
   // ── Capital posture refinements (beyond min/max buybox) ──────────────
-  proofOfCapitalVerifiedDate  DateTime? @map("proof_of_capital_verified_date")
-  typicalCheckSize            Decimal?  @db.Decimal(12, 2) @map("typical_check_size")
-  lenderRelationships         Json      @default("[]") @map("lender_relationships")
-  escrowDepositTypicalAmount  Decimal?  @db.Decimal(12, 2) @map("escrow_deposit_typical_amount")
-  cashOrFinancingMix          String?   @map("cash_or_financing_mix") // cash | dscr | hard_money | mixed
-  largestDealCompleted        Decimal?  @db.Decimal(12, 2) @map("largest_deal_completed")
-  portfolioEstimatedSize      Int?      @map("portfolio_estimated_size")
-  portfolioEstimatedValue     Decimal?  @db.Decimal(14, 2) @map("portfolio_estimated_value")
-  publicRecordLastScan        DateTime? @map("public_record_last_scan")
+  proofOfCapitalVerifiedDate DateTime? @map("proof_of_capital_verified_date")
+  typicalCheckSize           Decimal?  @map("typical_check_size") @db.Decimal(12, 2)
+  lenderRelationships        Json      @default("[]") @map("lender_relationships")
+  escrowDepositTypicalAmount Decimal?  @map("escrow_deposit_typical_amount") @db.Decimal(12, 2)
+  cashOrFinancingMix         String?   @map("cash_or_financing_mix") // cash | dscr | hard_money | mixed
+  largestDealCompleted       Decimal?  @map("largest_deal_completed") @db.Decimal(12, 2)
+  portfolioEstimatedSize     Int?      @map("portfolio_estimated_size")
+  portfolioEstimatedValue    Decimal?  @map("portfolio_estimated_value") @db.Decimal(14, 2)
+  publicRecordLastScan       DateTime? @map("public_record_last_scan")
 
   // ── Buy-box refinements ──────────────────────────────────────────────
-  daysInMarketTolerance   Int?     @map("days_in_market_tolerance")
-  titleIssueTolerance     String?  @map("title_issue_tolerance") // clean_only | minor_lien_ok | any
+  daysInMarketTolerance Int?    @map("days_in_market_tolerance")
+  titleIssueTolerance   String? @map("title_issue_tolerance") // clean_only | minor_lien_ok | any
 
   // ── Execution / velocity ─────────────────────────────────────────────
-  averageDueDiligenceDays        Int?     @map("average_due_diligence_days")
-  inspectionContingencyTypical   String?  @map("inspection_contingency_typical") // always | sometimes | never
-  renegotiateFrequency           String?  @map("renegotiate_frequency") // never | rarely | often | always
+  averageDueDiligenceDays         Int?    @map("average_due_diligence_days")
+  inspectionContingencyTypical    String? @map("inspection_contingency_typical") // always | sometimes | never
+  renegotiateFrequency            String? @map("renegotiate_frequency") // never | rarely | often | always
   averageDaysUnderContractToClose Int?    @map("average_days_under_contract_to_close")
-  droppedAfterUcCount            Int      @default(0) @map("dropped_after_uc_count")
-  reasonForLastDrop              String?  @map("reason_for_last_drop")
+  droppedAfterUcCount             Int     @default(0) @map("dropped_after_uc_count")
+  reasonForLastDrop               String? @map("reason_for_last_drop")
 
   // ── Relationship extensions (tier + copy list + reputation) ─────────
-  jvHistoryCount       Int      @default(0) @map("jv_history_count")
-  copyOnEmails         Json     @default("[]") @map("copy_on_emails")
-  tierClassification   String?  @map("tier_classification") // A_list | B_list | C_list | spam
-  reputationNotes      String?  @db.Text @map("reputation_notes")
-  badWithUsFlag        Boolean  @default(false) @map("bad_with_us_flag")
+  jvHistoryCount     Int     @default(0) @map("jv_history_count")
+  copyOnEmails       Json    @default("[]") @map("copy_on_emails")
+  tierClassification String? @map("tier_classification") // A_list | B_list | C_list | spam
+  reputationNotes    String? @map("reputation_notes") @db.Text
+  badWithUsFlag      Boolean @default(false) @map("bad_with_us_flag")
 
   // ── Conversion funnel (computed nightly) ─────────────────────────────
-  offersSentCount                Int      @default(0) @map("offers_sent_count")
-  offersAcceptedCount            Int      @default(0) @map("offers_accepted_count")
-  conversionRateSentToAccepted   Float?   @map("conversion_rate_sent_to_accepted")
-  conversionRateAcceptedToClosed Float?   @map("conversion_rate_accepted_to_closed")
+  offersSentCount                Int    @default(0) @map("offers_sent_count")
+  offersAcceptedCount            Int    @default(0) @map("offers_accepted_count")
+  conversionRateSentToAccepted   Float? @map("conversion_rate_sent_to_accepted")
+  conversionRateAcceptedToClosed Float? @map("conversion_rate_accepted_to_closed")
 
   // ── Public records on buyer name ─────────────────────────────────────
-  civilSuitCountAsDefendant     Int      @default(0) @map("civil_suit_count_as_defendant")
-  emdForfeitureCountHistorical  Int      @default(0) @map("emd_forfeiture_count_historical")
-  contractDisputeCountHistorical Int     @default(0) @map("contract_dispute_count_historical")
+  civilSuitCountAsDefendant      Int @default(0) @map("civil_suit_count_as_defendant")
+  emdForfeitureCountHistorical   Int @default(0) @map("emd_forfeiture_count_historical")
+  contractDisputeCountHistorical Int @default(0) @map("contract_dispute_count_historical")
 
   // ── Social / reputation (web research) ───────────────────────────────
-  googleBusinessRating  Float?   @map("google_business_rating")
-  bbbRating             String?  @map("bbb_rating")
-  biggerPocketsMentions Int?     @map("bigger_pockets_mentions")
+  googleBusinessRating  Float?  @map("google_business_rating")
+  bbbRating             String? @map("bbb_rating")
+  biggerPocketsMentions Int?    @map("bigger_pockets_mentions")
 
   // ── Message aggregates (computed nightly — once messages persist) ────
   messageResponseRate        Float?  @map("message_response_rate")
@@ -1825,7 +1829,7 @@ model Buyer {
 
   // ── General ──────────────────────────────
   tags          Json    @default("[]")
-  internalNotes String? @db.Text @map("internal_notes")
+  internalNotes String? @map("internal_notes") @db.Text
   priorityFlag  Boolean @default(false) @map("priority_flag")
   customFields  Json    @default("{}") @map("custom_fields")
   fieldSources  Json    @default("{}") @map("field_sources")
@@ -1844,25 +1848,25 @@ model Buyer {
 // ─────────────────────────────────────────
 
 model PropertyBuyerStage {
-  id         String   @id @default(cuid())
-  tenantId   String   @map("tenant_id")
-  propertyId String   @map("property_id")
-  buyerId    String   @map("buyer_id")
-  stage      String   @default("matched") // matched | added | responded | interested
+  id                  String    @id @default(cuid())
+  tenantId            String    @map("tenant_id")
+  propertyId          String    @map("property_id")
+  buyerId             String    @map("buyer_id")
+  stage               String    @default("matched") // matched | added | responded | interested
   // Q1 + Property.manualBuyerIds-strip (v1.1 Wave 1) — disambiguate matched-from-buybox
   // vs added-manually. Pre-v1.1 the manual path wrote a JSON array on
   // Property; post-v1.1 both paths land here and `source` tells them apart.
-  source     String   @default("matched") // matched | manual
+  source              String    @default("matched") // matched | manual
   // Q7 lock (v1.1 Wave 4) — per-property buyer fit score (0-100). Replaces
   // Buyer.matchLikelihoodScore which was a per-Buyer column (wrong unit —
   // match quality is property-specific). Buyer.buyerScore stays as the
   // cross-portfolio reliability score. Computed by llmScoreBuyers in
   // app/api/properties/[propertyId]/buyers/route.ts on each match call;
   // persisted here so list reads don't have to recompute.
-  matchScore         Float?   @map("match_score")
+  matchScore          Float?    @map("match_score")
   matchScoreUpdatedAt DateTime? @map("match_score_updated_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   // Response tracking (Fix 6B)
   ghlResponse         String?   @map("ghl_response") @db.Text
@@ -1876,22 +1880,22 @@ model PropertyBuyerStage {
   // the actual deal: what they offered, when, EMD status, inspection, etc.
   // Buyer-level conversion funnel aggregates (offersSentCount, closeRate)
   // are rolled up from these rows by the nightly cron.
-  offerAmount         Decimal?  @db.Decimal(12, 2) @map("offer_amount")
-  offerDate           DateTime? @map("offer_date")
-  offerWithdrawnAt    DateTime? @map("offer_withdrawn_at")
-  withdrawnReason     String?   @map("withdrawn_reason")
-  inspectionStatus    String?   @map("inspection_status")     // scheduled | completed | waived | failed
+  offerAmount             Decimal?  @map("offer_amount") @db.Decimal(12, 2)
+  offerDate               DateTime? @map("offer_date")
+  offerWithdrawnAt        DateTime? @map("offer_withdrawn_at")
+  withdrawnReason         String?   @map("withdrawn_reason")
+  inspectionStatus        String?   @map("inspection_status") // scheduled | completed | waived | failed
   inspectionCompletedDate DateTime? @map("inspection_completed_date")
-  inspectionIssues    Json      @default("[]") @map("inspection_issues")
-  emdReceived         Boolean   @default(false) @map("emd_received")
-  emdAmount           Decimal?  @db.Decimal(12, 2) @map("emd_amount")
-  emdDate             DateTime? @map("emd_date")
-  dealStageOnProperty String?   @map("deal_stage_on_property") // matched | contacted | offer_sent | under_offer | accepted | due_diligence | closed | withdrawn
-  notesOnThisDeal     String?   @db.Text @map("notes_on_this_deal")
-  countOfOffersMade   Int       @default(0) @map("count_of_offers_made")
-  reasonForNonResponse String?  @map("reason_for_non_response")
-  lastBlastSentAt     DateTime? @map("last_blast_sent_at")
-  blastsReceivedCount Int       @default(0) @map("blasts_received_count")
+  inspectionIssues        Json      @default("[]") @map("inspection_issues")
+  emdReceived             Boolean   @default(false) @map("emd_received")
+  emdAmount               Decimal?  @map("emd_amount") @db.Decimal(12, 2)
+  emdDate                 DateTime? @map("emd_date")
+  dealStageOnProperty     String?   @map("deal_stage_on_property") // matched | contacted | offer_sent | under_offer | accepted | due_diligence | closed | withdrawn
+  notesOnThisDeal         String?   @map("notes_on_this_deal") @db.Text
+  countOfOffersMade       Int       @default(0) @map("count_of_offers_made")
+  reasonForNonResponse    String?   @map("reason_for_non_response")
+  lastBlastSentAt         DateTime? @map("last_blast_sent_at")
+  blastsReceivedCount     Int       @default(0) @map("blasts_received_count")
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -1899,6 +1903,206 @@ model PropertyBuyerStage {
 
   @@unique([propertyId, buyerId])
   @@map("property_buyer_stages")
+}
+
+// ─────────────────────────────────────────
+// AGENTS — real estate agents who source deals to us
+// or take our deals to their buyer clients.
+// Mirrors Seller/Buyer first-class-entity pattern (v1.1 Wave 4-5).
+// Linked to a GHL contact via ghlContactId; created by Phase 2 link-from-
+// GHL-contact UX. Distinct from Seller (property owner) and Buyer
+// (investor on our buy list).
+// ─────────────────────────────────────────
+
+model Agent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // ── Identity ────────────────────────────
+  name         String
+  firstName    String? @map("first_name")
+  lastName     String? @map("last_name")
+  phone        String?
+  email        String?
+  ghlContactId String? @map("ghl_contact_id")
+
+  // ── Brokerage / License ─────────────────
+  brokerageName     String?   @map("brokerage_name")
+  brokerageAddress  String?   @map("brokerage_address")
+  licenseNumber     String?   @map("license_number")
+  licenseState      String?   @map("license_state")
+  licenseExpiration DateTime? @map("license_expiration")
+
+  // ── Market focus ────────────────────────
+  primaryMarkets    Json    @default("[]") @map("primary_markets")
+  propertyTypeFocus String? @map("property_type_focus") // SFR | MFR | commercial | land | mixed
+  yearsExperience   Int?    @map("years_experience")
+  specialties       Json    @default("[]") // ["distressed", "luxury", "investor", ...]
+
+  // ── Side of the deal (can be both true) ─
+  isBuyerSideAgent  Boolean @default(false) @map("is_buyer_side_agent")
+  isSellerSideAgent Boolean @default(false) @map("is_seller_side_agent")
+
+  // ── Performance with us ─────────────────
+  dealsBroughtCount        Int       @default(0) @map("deals_brought_count") // they sourced TO us
+  dealsTakenToClientsCount Int       @default(0) @map("deals_taken_to_clients_count") // they took OUR deals to their buyers
+  dealsClosedWithUsCount   Int       @default(0) @map("deals_closed_with_us_count")
+  lastDealDate             DateTime? @map("last_deal_date")
+  responseRate             Float?    @map("response_rate") // 0-1
+  reliabilityScore         Float?    @map("reliability_score") // 0-1
+  agentGrade               String?   @map("agent_grade") // A | B | C | D
+  averageCommissionPercent Float?    @map("average_commission_percent")
+
+  // ── Communication ───────────────────────
+  preferredContactMethod String? @map("preferred_contact_method") // call | text | email
+  bestTimeToContact      String? @map("best_time_to_contact")
+  doNotContact           Boolean @default(false) @map("do_not_contact")
+
+  // ── Reputation ──────────────────────────
+  tierClassification String? @map("tier_classification") // A_list | B_list | C_list | spam
+  reputationNotes    String? @map("reputation_notes") @db.Text
+  badWithUsFlag      Boolean @default(false) @map("bad_with_us_flag")
+
+  // ── Standard ────────────────────────────
+  tags          Json    @default("[]")
+  internalNotes String? @map("internal_notes") @db.Text
+  priorityFlag  Boolean @default(false) @map("priority_flag")
+  customFields  Json    @default("{}") @map("custom_fields")
+  fieldSources  Json    @default("{}") @map("field_sources")
+
+  // ── Relations ───────────────────────────
+  properties PropertyAgent[]
+
+  @@index([tenantId, phone])
+  @@index([tenantId, ghlContactId])
+  @@map("agents")
+}
+
+// ─────────────────────────────────────────
+// PROPERTY AGENTS — agent on a specific deal
+// ─────────────────────────────────────────
+
+model PropertyAgent {
+  propertyId String   @map("property_id")
+  agentId    String   @map("agent_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Role on THIS deal
+  role String @default("sourced_to_us") // sourced_to_us | taking_to_clients | closing_agent
+
+  // Per-deal economics
+  commissionPercent Float?   @map("commission_percent")
+  commissionAmount  Decimal? @map("commission_amount") @db.Decimal(12, 2)
+
+  // Per-deal text
+  notesOnThisDeal String? @map("notes_on_this_deal") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([propertyId, agentId])
+  @@map("property_agents")
+}
+
+// ─────────────────────────────────────────
+// WHOLESALERS — other wholesalers who sell us
+// off-market contracts, or take our contracts to
+// their own buyer list. Mirrors Agent shape with
+// wholesaler-specific operational fields.
+// ─────────────────────────────────────────
+
+model Wholesaler {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // ── Identity ────────────────────────────
+  name         String
+  firstName    String? @map("first_name")
+  lastName     String? @map("last_name")
+  phone        String?
+  email        String?
+  ghlContactId String? @map("ghl_contact_id")
+  company      String?
+  website      String?
+
+  // ── Operation ───────────────────────────
+  buyerListSize         Int?     @map("buyer_list_size")
+  primaryMarkets        Json     @default("[]") @map("primary_markets")
+  dealsPerMonthEstimate Int?     @map("deals_per_month_estimate")
+  prefersAssignment     Boolean? @map("prefers_assignment") // true = assignment, false = double-close, null = either
+  typicalAssignmentFee  Decimal? @map("typical_assignment_fee") @db.Decimal(10, 2)
+
+  // ── Side of the deal (can be both true) ─
+  bringsUsInventory Boolean @default(false) @map("brings_us_inventory") // sells contracts TO us
+  takesOurInventory Boolean @default(false) @map("takes_our_inventory") // we sell contracts to them
+
+  // ── Performance with us ─────────────────
+  dealsSoldToUsCount    Int       @default(0) @map("deals_sold_to_us_count")
+  dealsTakenFromUsCount Int       @default(0) @map("deals_taken_from_us_count")
+  lastDealDate          DateTime? @map("last_deal_date")
+  responseRate          Float?    @map("response_rate")
+  reliabilityScore      Float?    @map("reliability_score")
+  jvHistoryCount        Int       @default(0) @map("jv_history_count")
+
+  // ── Communication ───────────────────────
+  preferredContactMethod String? @map("preferred_contact_method")
+  bestTimeToContact      String? @map("best_time_to_contact")
+  doNotContact           Boolean @default(false) @map("do_not_contact")
+
+  // ── Reputation ──────────────────────────
+  tierClassification String? @map("tier_classification") // A_list | B_list | C_list | spam
+  reputationNotes    String? @map("reputation_notes") @db.Text
+  badWithUsFlag      Boolean @default(false) @map("bad_with_us_flag")
+
+  // ── Standard ────────────────────────────
+  tags          Json    @default("[]")
+  internalNotes String? @map("internal_notes") @db.Text
+  priorityFlag  Boolean @default(false) @map("priority_flag")
+  customFields  Json    @default("{}") @map("custom_fields")
+  fieldSources  Json    @default("{}") @map("field_sources")
+
+  // ── Relations ───────────────────────────
+  properties PropertyWholesaler[]
+
+  @@index([tenantId, phone])
+  @@index([tenantId, ghlContactId])
+  @@map("wholesalers")
+}
+
+// ─────────────────────────────────────────
+// PROPERTY WHOLESALERS — wholesaler on a specific deal
+// ─────────────────────────────────────────
+
+model PropertyWholesaler {
+  propertyId   String     @map("property_id")
+  wholesalerId String     @map("wholesaler_id")
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  wholesaler   Wholesaler @relation(fields: [wholesalerId], references: [id], onDelete: Cascade)
+
+  // Role on THIS deal
+  role String @default("sold_us_this") // sold_us_this | we_sold_them_this | jv_partner
+
+  // Per-deal economics
+  purchasePrice     Decimal? @map("purchase_price") @db.Decimal(12, 2)
+  assignmentFeePaid Decimal? @map("assignment_fee_paid") @db.Decimal(12, 2)
+
+  // Per-deal text
+  notesOnThisDeal String? @map("notes_on_this_deal") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([propertyId, wholesalerId])
+  @@map("property_wholesalers")
 }
 
 // ─────────────────────────────────────────
@@ -1912,15 +2116,15 @@ model DealBlast {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  propertyId String @map("property_id")
+  propertyId String   @map("property_id")
   property   Property @relation(fields: [propertyId], references: [id])
 
   createdById String @map("created_by_id")
   createdBy   User   @relation("BlastCreatedBy", fields: [createdById], references: [id])
 
-  channel    String  // sms, email
-  message    String  @db.Text
-  status     String  @default("pending") // pending, approved, sent, failed
+  channel    String // sms, email
+  message    String    @db.Text
+  status     String    @default("pending") // pending, approved, sent, failed
   approvedAt DateTime? @map("approved_at")
   sentAt     DateTime? @map("sent_at")
 
@@ -1939,7 +2143,7 @@ model DealBlastRecipient {
   buyerId String @map("buyer_id")
   buyer   Buyer  @relation(fields: [buyerId], references: [id])
 
-  response   String?   // interested, pass, no_response
+  response    String? // interested, pass, no_response
   respondedAt DateTime? @map("responded_at")
 
   @@unique([blastId, buyerId])
@@ -1957,7 +2161,7 @@ model Market {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  name     String           // e.g. "Nashville, TN"
+  name     String // e.g. "Nashville, TN"
   zipCodes String[] @default([]) @map("zip_codes") // ["37201", "37202", ...]
 
   properties Property[]
@@ -1980,18 +2184,18 @@ model OutreachLog {
   userId     String   @map("user_id")
   user       User     @relation("OutreachLogUser", fields: [userId], references: [id])
 
-  type             String   // send, offer, showing
-  channel          String   // sms, email, call, in_person
-  recipientName    String   @map("recipient_name")
-  recipientContact String   @map("recipient_contact")
-  ghlContactId     String?  @map("ghl_contact_id")
-  notes            String?  @db.Text
-  offerAmount      Float?   @map("offer_amount")
-  offerStatus      String?  @map("offer_status")    // Pending, Accepted, Rejected, Countered, Expired
+  type             String // send, offer, showing
+  channel          String // sms, email, call, in_person
+  recipientName    String    @map("recipient_name")
+  recipientContact String    @map("recipient_contact")
+  ghlContactId     String?   @map("ghl_contact_id")
+  notes            String?   @db.Text
+  offerAmount      Float?    @map("offer_amount")
+  offerStatus      String?   @map("offer_status") // Pending, Accepted, Rejected, Countered, Expired
   showingDate      DateTime? @map("showing_date")
-  showingStatus    String?  @map("showing_status")   // Scheduled, Completed, Cancelled, No Show
-  source           String   @default("Manual") @map("source") // Manual, Blast, Auto
-  loggedAt         DateTime @default(now()) @map("logged_at")
+  showingStatus    String?   @map("showing_status") // Scheduled, Completed, Cancelled, No Show
+  source           String    @default("Manual") @map("source") // Manual, Blast, Auto
+  loggedAt         DateTime  @default(now()) @map("logged_at")
 
   @@map("outreach_logs")
 }
@@ -2009,13 +2213,13 @@ model KnowledgeDocument {
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  title    String                // "Cold Call Script v3"
-  type     String                // script | standard | playbook | training | market | objection | industry
-  callType String? @map("call_type") // cold_call | qualification_call | offer_call | etc
-  role     String?               // LEAD_MANAGER | ACQUISITION_MANAGER | ALL | etc
-  content  String  @db.Text      // full markdown content
-  source   String  @default("upload") // upload | playbook | system
-  isActive Boolean @default(true) @map("is_active")
+  title     String // "Cold Call Script v3"
+  type      String // script | standard | playbook | training | market | objection | industry
+  callType  String?                @map("call_type") // cold_call | qualification_call | offer_call | etc
+  role      String? // LEAD_MANAGER | ACQUISITION_MANAGER | ALL | etc
+  content   String                 @db.Text // full markdown content
+  source    String                 @default("upload") // upload | playbook | system
+  isActive  Boolean                @default(true) @map("is_active")
   embedding Unsupported("vector")?
 
   @@index([embedding], map: "idx_knowledge_embedding_hnsw")
@@ -2038,16 +2242,16 @@ model UserProfile {
   userId String @unique @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  scoringPatterns     Json @default("{}") @map("scoring_patterns")      // avg per rubric category
-  strengths           Json @default("[]") @map("strengths")             // string array
-  weaknesses          Json @default("[]") @map("weaknesses")            // string array
-  commonMistakes      Json @default("[]") @map("common_mistakes")       // string array
-  communicationStyle  String? @map("communication_style")               // warm/direct/analytical/etc
-  improvementVelocity Json @default("{}") @map("improvement_velocity")  // 30/60/90 day trends
-  preferredActions    Json @default("{}") @map("preferred_actions")     // action type approval rates
-  coachingPriorities  Json @default("[]") @map("coaching_priorities")   // ranked focus areas
-  totalCallsGraded    Int @default(0) @map("total_calls_graded")
-  profileSource       String @default("auto") @map("profile_source")   // auto | playbook | manual
+  scoringPatterns     Json    @default("{}") @map("scoring_patterns") // avg per rubric category
+  strengths           Json    @default("[]") @map("strengths") // string array
+  weaknesses          Json    @default("[]") @map("weaknesses") // string array
+  commonMistakes      Json    @default("[]") @map("common_mistakes") // string array
+  communicationStyle  String? @map("communication_style") // warm/direct/analytical/etc
+  improvementVelocity Json    @default("{}") @map("improvement_velocity") // 30/60/90 day trends
+  preferredActions    Json    @default("{}") @map("preferred_actions") // action type approval rates
+  coachingPriorities  Json    @default("[]") @map("coaching_priorities") // ranked focus areas
+  totalCallsGraded    Int     @default(0) @map("total_calls_graded")
+  profileSource       String  @default("auto") @map("profile_source") // auto | playbook | manual
 
   @@unique([tenantId, userId])
   @@map("user_profiles")
@@ -2061,17 +2265,17 @@ model AssistantMessage {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @map("created_at")
 
-  tenantId    String   @map("tenant_id")
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId      String   @map("user_id")
-  user        User     @relation("AssistantMessages", fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation("AssistantMessages", fields: [userId], references: [id], onDelete: Cascade)
 
-  sessionDate String   @map("session_date") // YYYY-MM-DD — conversations persist within a day
-  role        String                         // user | assistant | tool_call | tool_result
-  content     String   @db.Text             // message text
-  toolCalls   Json?    @map("tool_calls")   // actions proposed/executed
-  pageContext String?  @map("page_context") // property:abc123 | call:xyz | dayhub | etc
+  sessionDate String  @map("session_date") // YYYY-MM-DD — conversations persist within a day
+  role        String // user | assistant | tool_call | tool_result
+  content     String  @db.Text // message text
+  toolCalls   Json?   @map("tool_calls") // actions proposed/executed
+  pageContext String? @map("page_context") // property:abc123 | call:xyz | dayhub | etc
 
   @@index([tenantId, userId, sessionDate])
   @@map("assistant_messages")
@@ -2085,18 +2289,18 @@ model ActionLog {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @map("created_at")
 
-  tenantId    String @map("tenant_id")
-  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId      String @map("user_id")
-  user        User   @relation("ActionLogs", fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation("ActionLogs", fields: [userId], references: [id], onDelete: Cascade)
 
-  actionType  String  @map("action_type")  // send_sms | create_task | change_stage | etc
-  proposed    Json                          // what AI suggested
-  executed    Json?                         // what was actually executed (after edits)
+  actionType  String  @map("action_type") // send_sms | create_task | change_stage | etc
+  proposed    Json // what AI suggested
+  executed    Json? // what was actually executed (after edits)
   wasEdited   Boolean @default(false) @map("was_edited")
   wasRejected Boolean @default(false) @map("was_rejected")
-  editDiff    Json?   @map("edit_diff")    // what fields changed
+  editDiff    Json?   @map("edit_diff") // what fields changed
   pageContext String? @map("page_context")
 
   @@map("action_logs")
@@ -2110,24 +2314,24 @@ model AiLog {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @map("created_at")
 
-  tenantId     String  @map("tenant_id")
-  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId       String? @map("user_id") // null for system (auto-grading)
-  type         String                   // assistant_chat | call_grading | deal_intel | next_steps | blast_gen | buyer_scoring | property_enrich | action_execution
-  pageContext  String? @map("page_context")
-  inputSummary String  @map("input_summary") @db.Text  // first 500 chars
-  inputFull    String? @map("input_full") @db.Text      // full prompt (large)
-  outputSummary String @map("output_summary") @db.Text  // first 500 chars
-  outputFull   String? @map("output_full") @db.Text     // full response (large)
-  toolsCalled  Json?   @map("tools_called")             // array of tool names + params
-  status       String  @default("success")              // success | error | rejected | edited
-  errorMessage String? @map("error_message") @db.Text
-  tokensIn     Int?    @map("tokens_in")
-  tokensOut    Int?    @map("tokens_out")
-  estimatedCost Float? @map("estimated_cost")
-  durationMs   Int?    @map("duration_ms")
-  model        String?                                   // claude-sonnet-4-6, etc
+  userId        String? @map("user_id") // null for system (auto-grading)
+  type          String // assistant_chat | call_grading | deal_intel | next_steps | blast_gen | buyer_scoring | property_enrich | action_execution
+  pageContext   String? @map("page_context")
+  inputSummary  String  @map("input_summary") @db.Text // first 500 chars
+  inputFull     String? @map("input_full") @db.Text // full prompt (large)
+  outputSummary String  @map("output_summary") @db.Text // first 500 chars
+  outputFull    String? @map("output_full") @db.Text // full response (large)
+  toolsCalled   Json?   @map("tools_called") // array of tool names + params
+  status        String  @default("success") // success | error | rejected | edited
+  errorMessage  String? @map("error_message") @db.Text
+  tokensIn      Int?    @map("tokens_in")
+  tokensOut     Int?    @map("tokens_out")
+  estimatedCost Float?  @map("estimated_cost")
+  durationMs    Int?    @map("duration_ms")
+  model         String? // claude-sonnet-4-6, etc
 
   @@index([tenantId, createdAt])
   @@index([tenantId, type])
@@ -2140,26 +2344,26 @@ model AiLog {
 // Used for deduplication, debugging, and audit.
 // ─────────────────────────────────────────
 model WebhookLog {
-  id          String   @id @default(cuid())
-  receivedAt  DateTime @default(now()) @map("received_at")
-  eventType   String   @map("event_type")
-  messageId   String?  @map("message_id")
-  locationId  String   @map("location_id")
-  rawPayload  Json     @map("raw_payload")
-  processed   Boolean  @default(false)
-  callId      String?  @map("call_id")
-  notes       String?
+  id         String   @id @default(cuid())
+  receivedAt DateTime @default(now()) @map("received_at")
+  eventType  String   @map("event_type")
+  messageId  String?  @map("message_id")
+  locationId String   @map("location_id")
+  rawPayload Json     @map("raw_payload")
+  processed  Boolean  @default(false)
+  callId     String?  @map("call_id")
+  notes      String?
 
   // Source detection — how the webhook arrived
   webhookSource String? @map("webhook_source") // 'oauth' | 'automation'
 
   // Outcome tracking — written after processing completes or fails
-  status      String   @default("received") // received | processing | success | failed
+  status      String    @default("received") // received | processing | success | failed
   processedAt DateTime? @map("processed_at")
-  errorReason String?  @map("error_reason")
+  errorReason String?   @map("error_reason")
 
-  tenantId    String?  @map("tenant_id")
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String? @map("tenant_id")
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
   @@index([locationId, receivedAt])
@@ -2218,9 +2422,9 @@ model ContactSuggestion {
 // ─────────────────────────────────────────
 
 model BugReport {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2230,8 +2434,8 @@ model BugReport {
   reporterName String? @map("reporter_name")
 
   // Report content
-  description String  @db.Text
-  severity    String  @default("medium") // low | medium | high | critical
+  description String @db.Text
+  severity    String @default("medium") // low | medium | high | critical
 
   // Auto-captured context
   pageUrl   String? @map("page_url")

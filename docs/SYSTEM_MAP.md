@@ -68,7 +68,7 @@ Gunner enhances GHL. It does not replace it.
 | Owns | Source of truth |
 |---|---|
 | **GHL** | Contacts, conversations, messages, appointments, calendars, pipelines, stages, tasks, call recordings + metadata |
-| **Gunner** | Properties (ARV, repairs, equity, MAO, assignment fee, status), call grades + rubrics + coaching, KPI snapshots + milestones, buyer activity + deal blasts, role configs + permissions, AI logs, deal intel (cumulative across calls), property stories, vendor enrichment data |
+| **Gunner** | Properties (ARV, repairs, equity, MAO, assignment fee, status), call grades + rubrics + coaching, KPI snapshots + milestones, buyer activity + deal blasts, role configs + permissions, AI logs, deal intel (cumulative across calls), property stories, vendor enrichment data, **deal-side metadata for Sellers / Buyers / Agents / Wholesalers** (their performance with us, market focus, reputation, role + economics on each Property — the contact identity itself still lives in GHL via `ghlContactId`) |
 
 If GHL can store it natively, we do not duplicate. We only build what GHL cannot.
 
@@ -231,6 +231,35 @@ Per-vendor isolation: vendor failures do not take down the orchestrator.
 ### Buyers
 
 - `lib/buyers/sync.ts` — buyer matching against new properties + outreach sync.
+
+### Agents + Wholesalers (Session 67, schema only)
+
+Two new contact types beyond Seller / Buyer. Models added to
+`prisma/schema.prisma`; no app code reads them yet (Phase 2+ will land the
+property-detail link UX and the standalone list pages).
+
+- `Agent` — real estate agents who source deals to us (seller-side) or
+  take our deals to their buyer clients (buyer-side). Both sides can be
+  true. Includes brokerage / license fields, performance counters
+  (`dealsBroughtCount`, `dealsTakenToClientsCount`, `dealsClosedWithUsCount`),
+  and reputation grading (`agentGrade` A/B/C/D, `tierClassification`).
+- `Wholesaler` — other wholesalers who sell us off-market contracts
+  (`bringsUsInventory`) or take our contracts to their buyer list
+  (`takesOurInventory`). Includes operational fields (buyer list size,
+  deals/month, prefers-assignment-vs-double-close), JV history count,
+  reputation grading.
+- `PropertyAgent` join — composite key (propertyId, agentId). Per-deal
+  `role` (`sourced_to_us` | `taking_to_clients` | `closing_agent`),
+  commission % + amount, deal notes.
+- `PropertyWholesaler` join — composite key (propertyId, wholesalerId).
+  Per-deal `role` (`sold_us_this` | `we_sold_them_this` | `jv_partner`),
+  purchase price, assignment fee paid, deal notes.
+
+Both top-level models follow the Seller/Buyer first-class pattern:
+identity + GHL link via `ghlContactId`, market focus, performance with us,
+communication prefs, reputation, standard `tags` / `internalNotes` /
+`customFields` / `fieldSources` / `priorityFlag`. Plan reference:
+`~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
 
 ### Workers (in-process)
 
