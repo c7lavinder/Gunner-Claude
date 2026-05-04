@@ -69,6 +69,7 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     // v1.1 Wave 3 Phase A — surface Sellers list + Buyers (was hidden from nav).
     { href: `${base}/sellers`, label: 'Sellers', permission: 'properties.view.assigned' as never },
     { href: `${base}/buyers`, label: 'Buyers', adminOnly: true },
+    { href: `${base}/partners`, label: 'Partners', adminOnly: true },
     { href: `${base}/contacts`, label: 'Contacts', adminOnly: true },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
     { href: `${base}/accountability`, label: 'Accountability', adminOnly: true },

@@ -14,7 +14,7 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
 
   if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/dashboard`)
 
-  const [sellers, sellerCount, buyers, buyerCount] = await Promise.all([
+  const [sellers, sellerCount, buyers, buyerCount, partners, partnerCount] = await Promise.all([
     db.seller.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
@@ -52,6 +52,18 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
       },
     }),
     db.buyer.count({ where: { tenantId } }),
+    // Session 67 Phase 4 — Partners tab on /contacts.
+    db.partner.findMany({
+      where: { tenantId },
+      orderBy: [{ priorityFlag: 'desc' }, { lastDealDate: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
+      select: {
+        id: true, name: true, phone: true, email: true, company: true, ghlContactId: true,
+        types: true, partnerGrade: true, primaryMarkets: true, lastDealDate: true,
+        _count: { select: { properties: true } },
+      },
+    }),
+    db.partner.count({ where: { tenantId } }),
   ])
 
   return (
@@ -75,8 +87,22 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
         customFields: (b.customFields ?? {}) as Record<string, unknown>,
         createdAt: b.createdAt.toISOString(),
       }))}
+      partners={partners.map(p => ({
+        id: p.id,
+        name: p.name,
+        phone: p.phone,
+        email: p.email,
+        company: p.company,
+        ghlContactId: p.ghlContactId,
+        types: (p.types ?? []) as string[],
+        partnerGrade: p.partnerGrade,
+        primaryMarkets: (p.primaryMarkets ?? []) as string[],
+        propertyLinkCount: p._count.properties,
+        lastDealDate: p.lastDealDate?.toISOString() ?? null,
+      }))}
       sellerCount={sellerCount}
       buyerCount={buyerCount}
+      partnerCount={partnerCount}
       tenantSlug={params.tenant}
       canSync={isRoleAtLeast(role, 'ADMIN')}
     />

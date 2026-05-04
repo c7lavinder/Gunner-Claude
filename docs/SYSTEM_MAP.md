@@ -269,7 +269,7 @@ intermediate tables) + `20260504010000_replace_agent_wholesaler_with_partner`
 (drops them and creates `partners` + `property_partners`). Plan
 reference: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
 
-**Phase 2 wiring (Session 67):**
+**Phase 2 + 3 + 4 wiring (Session 67, all in one calendar day):**
 
 - `lib/partners/sync.ts` — `upsertPartnerFromGHL()` helper. Single
   source of truth for "create-or-link a Partner row from a GHL
@@ -294,6 +294,23 @@ reference: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
   query extended with `partners: { include: { partner: { select: ... } } }`
   + map step that serializes Decimal fields to strings for the client
   prop.
+- **Phase 3** — `app/(tenant)/[tenant]/partners/page.tsx` +
+  `partners-list-client.tsx`. Standalone browseable list with search
+  (name/company/phone/email) + type filter chips (one per type, with
+  per-type counts). Shows propertyLinkCount per partner so reps can
+  see "this agent is on 12 deals." `properties.view.assigned`
+  permission gated. Linked from top-nav (admin-only).
+- **Phase 4** — `components/contacts/contacts-client.tsx` extended
+  with a third tab. Partners tab table shows name, types, phone,
+  email, company, markets, on-deal count, last deal, grade, and a
+  GHL deep-link icon. `app/(tenant)/[tenant]/contacts/page.tsx`
+  fetches partners alongside sellers + buyers.
+- **Phase 2 close** — `scripts/compute-aggregates.ts` extended with
+  `computePartnerAggregates()`. Maps PropertyPartner.role + Property.status
+  to per-Partner counters: `dealsSourcedToUsCount`,
+  `dealsTakenFromUsCount`, `dealsClosedWithUsCount`, `jvHistoryCount`,
+  `lastDealDate`. Idempotent (absolute counts each run). Runs nightly
+  at 4am UTC alongside seller + buyer aggregates.
 
 ### Workers (in-process)
 

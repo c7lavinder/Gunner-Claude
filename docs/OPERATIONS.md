@@ -28,7 +28,7 @@ Live in `railway.toml`. Healthcheck at `[PRODUCTION_URL]/api/health`.
 | `daily-kpi-snapshot` | `0 0 * * *` (midnight UTC) | `npx tsx scripts/kpi-snapshot.ts` | Snapshot per-rep KPIs to `kpi_snapshots` table for trend charts. |
 | `weekly-profiles` | `0 3 * * 0` (Sun 3am UTC) | `npx tsx scripts/generate-profiles.ts` | Auto-generate per-rep coaching profiles from last week's calls. |
 | `regenerate-stories` | `0 7 * * *` (daily 7am UTC) | `npx tsx scripts/regenerate-stories.ts` | Regen Property Stories for properties touched by edits / milestone changes / buyer activity / blasts that didn't go through the grading path. |
-| `compute-aggregates` | `0 4 * * *` (daily 4am UTC) | `npx tsx scripts/compute-aggregates.ts` | Seller portfolio rollup + voice analytics + buyer funnel metrics from `PropertyBuyerStage`. After KPI snapshot, before story regen. |
+| `compute-aggregates` | `0 4 * * *` (daily 4am UTC) | `npx tsx scripts/compute-aggregates.ts` | Seller portfolio rollup + voice analytics + buyer funnel metrics from `PropertyBuyerStage` + **Partner cross-portfolio counters** (Session 67 Phase 2 close — `dealsSourcedToUsCount` / `dealsTakenFromUsCount` / `dealsClosedWithUsCount` / `jvHistoryCount` / `lastDealDate` per Partner, derived from PropertyPartner.role + Property.status). After KPI snapshot, before story regen. |
 
 ### HTTP cron wrappers (manual + external trigger surface)
 
@@ -60,7 +60,7 @@ loop) has heartbeats today.
 
 ## Pages roster
 
-23 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`.
+24 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`.
 
 ### Tenant-scoped (`/{tenant}/...`)
 
@@ -73,7 +73,8 @@ loop) has heartbeats today.
 | `/{tenant}/inventory` + `/{tenant}/inventory/[propertyId]` + `/{tenant}/inventory/new` + `/{tenant}/inventory/[propertyId]/edit` | Property list + detail (200+ fields, vendor intel surfacing, deal intel research tab) + manual create + edit forms. Cash-hero matrix + 3-col Numbers panel + persistent cross-tab side panel (Session 39-40 redesign). | Live |
 | `/{tenant}/sellers/[id]` | Seller-centric detail view. Court records, portfolio, voice analytics aggregates. | Live (added Sessions 41-42) |
 | `/{tenant}/buyers` + `/{tenant}/buyers/[id]` | Disposition Hub — buyer list + detail. | Built, **hidden from nav** |
-| `/{tenant}/contacts` | Contact list. | Live |
+| `/{tenant}/contacts` | Contact list — tabbed Sellers / Buyers / **Partners** (Session 67 Phase 4). | Live |
+| `/{tenant}/partners` | Standalone Partners list — search + type filter (agent / wholesaler / attorney / title / lender / inspector / contractor / etc.). Session 67 Phase 3. | Live |
 | `/{tenant}/kpis` | KPI dashboard — score trends, milestones, TCP ranking. | Live |
 | `/{tenant}/ai-coach` | Full-page AI coaching surface. | Live |
 | `/{tenant}/ai-logs` | Admin AI interaction logs. **Tabbed UI as of Session 42**: Team Chats / AI Work / Problems. | Live (admin-only) |

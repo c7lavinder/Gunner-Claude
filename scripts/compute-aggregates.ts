@@ -253,17 +253,100 @@ async function computeBuyerAggregates(): Promise<BuyerResult[]> {
   return results
 }
 
+// Session 67 Phase 2 close — Partner cross-portfolio counters. Reads
+// PropertyPartner rows and aggregates per-partner counts based on the
+// per-deal `role` value. Idempotent: writes are absolute counts each
+// run, not increments, so re-runs converge to the right state.
+//
+// Role → counter mapping:
+//   sourced_to_us            → dealsSourcedToUsCount
+//   taking_to_clients,
+//   we_sold_them_this        → dealsTakenFromUsCount
+//   sold_us_this             → dealsSourcedToUsCount (treat wholesaler
+//                              who sold us a contract as a source)
+//   jv_partner               → jvHistoryCount
+//   (any role) + property
+//   status in CLOSED_STATUSES → dealsClosedWithUsCount
+//
+// Plus lastDealDate — the most recent createdAt across this partner's
+// PropertyPartner rows where the property is closed.
+interface PartnerResult {
+  id: string
+  status: 'updated' | 'error'
+  reason?: string
+}
+
+async function computePartnerAggregates(): Promise<PartnerResult[]> {
+  const partners = await db.partner.findMany({ select: { id: true, tenantId: true } })
+  const results: PartnerResult[] = []
+
+  for (const partner of partners) {
+    try {
+      const links = await db.propertyPartner.findMany({
+        where: { partnerId: partner.id },
+        select: {
+          role: true,
+          createdAt: true,
+          property: { select: { status: true } },
+        },
+      })
+
+      let dealsSourcedToUsCount = 0
+      let dealsTakenFromUsCount = 0
+      let dealsClosedWithUsCount = 0
+      let jvHistoryCount = 0
+      let lastDealDate: Date | null = null
+
+      for (const l of links) {
+        const role = l.role
+        if (role === 'sourced_to_us' || role === 'sold_us_this') dealsSourcedToUsCount++
+        else if (role === 'taking_to_clients' || role === 'we_sold_them_this') dealsTakenFromUsCount++
+        else if (role === 'jv_partner') jvHistoryCount++
+
+        if (l.property?.status && CLOSED_STATUSES.has(l.property.status)) {
+          dealsClosedWithUsCount++
+          if (!lastDealDate || l.createdAt > lastDealDate) lastDealDate = l.createdAt
+        }
+      }
+
+      await db.partner.update({
+        where: { id: partner.id },
+        data: {
+          dealsSourcedToUsCount,
+          dealsTakenFromUsCount,
+          dealsClosedWithUsCount,
+          jvHistoryCount,
+          lastDealDate,
+        },
+      })
+
+      results.push({ id: partner.id, status: 'updated' })
+    } catch (err) {
+      results.push({
+        id: partner.id,
+        status: 'error',
+        reason: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  return results
+}
+
 async function main() {
   const startedAt = Date.now()
   console.log('[Aggregates] Starting nightly aggregate computation...')
 
   const sellerResults = await computeSellerAggregates()
   const buyerResults = await computeBuyerAggregates()
+  const partnerResults = await computePartnerAggregates()
 
   const sellerUpdated = sellerResults.filter(r => r.status === 'updated').length
   const sellerErrors = sellerResults.filter(r => r.status === 'error').length
   const buyerUpdated = buyerResults.filter(r => r.status === 'updated').length
   const buyerErrors = buyerResults.filter(r => r.status === 'error').length
+  const partnerUpdated = partnerResults.filter(r => r.status === 'updated').length
+  const partnerErrors = partnerResults.filter(r => r.status === 'error').length
 
   const durationMs = Date.now() - startedAt
   const summary = {
@@ -271,6 +354,8 @@ async function main() {
     sellerErrors,
     buyerUpdated,
     buyerErrors,
+    partnerUpdated,
+    partnerErrors,
     durationMs,
   }
 

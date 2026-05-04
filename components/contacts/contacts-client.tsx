@@ -44,11 +44,28 @@ interface BuyerRow {
   createdAt: string
 }
 
+// Session 67 Phase 4 — Partner row shape for the Partners tab.
+interface PartnerRow {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  company: string | null
+  ghlContactId: string | null
+  types: string[]
+  partnerGrade: string | null
+  primaryMarkets: string[]
+  propertyLinkCount: number
+  lastDealDate: string | null
+}
+
 interface ContactsClientProps {
   sellers: SellerRow[]
   buyers: BuyerRow[]
+  partners: PartnerRow[]
   sellerCount: number
   buyerCount: number
+  partnerCount: number
   tenantSlug: string
   canSync?: boolean
 }
@@ -90,9 +107,13 @@ function relTime(dateStr: string | null): string {
 
 // ── Main Component ─────────────────────────────────────────
 
-type Tab = 'sellers' | 'buyers'
+type Tab = 'sellers' | 'buyers' | 'partners'
 
-export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenantSlug, canSync }: ContactsClientProps) {
+function partnerTypeLabel(t: string): string {
+  return t === 'property_manager' ? 'Property Mgr' : t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+export function ContactsClient({ sellers, buyers, partners, sellerCount, buyerCount, partnerCount, tenantSlug, canSync }: ContactsClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('sellers')
   const [search, setSearch] = useState('')
   const [syncing, setSyncing] = useState(false)
@@ -142,6 +163,17 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
     )
   }, [buyers, q])
 
+  const filteredPartners = useMemo(() => {
+    if (!q) return partners
+    return partners.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.phone ?? '').includes(q) ||
+      (p.email ?? '').toLowerCase().includes(q) ||
+      (p.company ?? '').toLowerCase().includes(q) ||
+      p.types.some(t => t.toLowerCase().includes(q))
+    )
+  }, [partners, q])
+
   return (
     <div className="min-h-screen bg-[#FAF9F6]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       {/* Header */}
@@ -149,7 +181,7 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-gray-900">Contacts</h1>
-            <p className="text-[11px] text-gray-500 mt-0.5">{sellerCount} seller{sellerCount !== 1 ? 's' : ''} &middot; {buyerCount} buyer{buyerCount !== 1 ? 's' : ''}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{sellerCount} seller{sellerCount !== 1 ? 's' : ''} &middot; {buyerCount} buyer{buyerCount !== 1 ? 's' : ''} &middot; {partnerCount} partner{partnerCount !== 1 ? 's' : ''}</p>
           </div>
           <div className="flex items-center gap-3">
             {syncResult && (
@@ -200,13 +232,95 @@ export function ContactsClient({ sellers, buyers, sellerCount, buyerCount, tenan
           >
             Buyers ({q ? filteredBuyers.length : buyerCount})
           </button>
+          <button
+            onClick={() => setActiveTab('partners')}
+            className={`px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors ${
+              activeTab === 'partners' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            Partners ({q ? filteredPartners.length : partnerCount})
+          </button>
         </div>
       </div>
 
       {/* Table */}
       <div className="mx-auto px-6 py-5">
         <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-x-auto">
-          {activeTab === 'sellers' ? (
+          {activeTab === 'partners' ? (
+            filteredPartners.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-[12px] font-medium text-gray-500">No partners yet</p>
+                <p className="text-[10px] text-gray-400 mt-1">Link an agent or wholesaler from any property detail page</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAFA]">
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Types</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Company</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Markets</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">On deals</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Last deal</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
+                      <th className="text-left px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider">GHL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPartners.map(p => (
+                      <tr key={p.id} className="border-b border-[rgba(0,0,0,0.04)] hover:bg-gray-50/50 transition-colors">
+                        <td className="px-3 py-2.5">
+                          <Link href={`/${tenantSlug}/partners`} className="font-medium text-gray-900 hover:text-blue-600 hover:underline">
+                            {p.name}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {p.types.length === 0 ? <span className="text-gray-300">{'—'}</span> : (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {p.types.slice(0, 3).map(t => (
+                                <span key={t} className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-rose-100 text-rose-700">{partnerTypeLabel(t)}</span>
+                              ))}
+                              {p.types.length > 3 && <span className="text-[9px] text-gray-400">+{p.types.length - 3}</span>}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-600">{formatPhone(p.phone)}</td>
+                        <td className="px-3 py-2.5 text-gray-600 max-w-[160px] truncate">{p.email ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-gray-600 max-w-[140px] truncate">{p.company ?? '—'}</td>
+                        <td className="px-3 py-2.5">
+                          {p.primaryMarkets.length > 0 ? (
+                            <div className="flex items-center gap-1">
+                              {p.primaryMarkets.slice(0, 2).map((m, i) => (
+                                <span key={i} className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-blue-50 text-blue-600">{String(m)}</span>
+                              ))}
+                              {p.primaryMarkets.length > 2 && <span className="text-[9px] text-gray-400">+{p.primaryMarkets.length - 2}</span>}
+                            </div>
+                          ) : <span className="text-gray-300">{'—'}</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-700 font-medium">{p.propertyLinkCount}</td>
+                        <td className="px-3 py-2.5 text-gray-500 text-[10px]">{relTime(p.lastDealDate)}</td>
+                        <td className="px-3 py-2.5">
+                          {p.partnerGrade ? (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${GRADE_COLORS[p.partnerGrade] ?? 'bg-gray-100 text-gray-600'}`}>{p.partnerGrade}</span>
+                          ) : <span className="text-gray-300">{'—'}</span>}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {p.ghlContactId ? (
+                            <a href={`https://app.gohighlevel.com/contacts/detail/${p.ghlContactId}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : activeTab === 'sellers' ? (
             filteredSellers.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-[12px] font-medium text-gray-500">No sellers yet</p>
