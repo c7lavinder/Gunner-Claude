@@ -472,3 +472,103 @@ property extraction step, but the pipeline bubbles them up.
 - Does TCP (lib/ai/scoring.ts) need to change to read from both scopes?
 
 **Date opened:** 2026-04-22 | Raised during Property tab UX review.
+
+---
+
+### D-045 — Unified Partner table for non-buyer-non-seller deal participants
+
+**Decision:** One `Partner` table + one `PropertyPartner` join, with
+`Partner.types: Json` array carrying any combination of values
+(`agent`, `wholesaler`, `attorney`, `title`, `lender`, `inspector`,
+`contractor`, `photographer`, `property_manager`, `other`). Per-deal
+role on the join via free-string `role` column. Seller + Buyer stay
+as their own typed tables.
+
+**Why:**
+- A single contact often plays multiple roles (a wholesaler who is
+  also a buyer-side agent). Separate tables would duplicate identity.
+- New contact types (lenders, title companies) appear without warning
+  in this domain; an array-based type field absorbs them with zero
+  schema change.
+- The fields agents and wholesalers share (identity, GHL link,
+  performance counters, reputation, communication prefs) outweigh
+  their differences. Type-flavored fields (license #, brokerage,
+  buyer list size, prefers-assignment) live as nullable columns —
+  cheap when empty, typed when used.
+- Seller (200+ ownership-specific fields populated by vendor
+  enrichment + TCP scoring) and Buyer (200+ buybox / capital fields
+  populated by the disposition flow) are different enough that
+  merging them would have invalidated v1.1 Wave 4–5 (Sessions 60–62).
+  Partners as a distinct unified table is the right scope.
+
+**Alternatives considered:**
+- Separate Agent + Wholesaler tables mirroring Seller/Buyer.
+  Rejected mid-Session-67 after shipping it (commit `bb94f97`) —
+  the duplication cost across 80%-shared fields outweighed the
+  per-type query convenience. Replaced with Partner in commit
+  `e2c3fbf` before any data was written.
+- Reuse the dormant `PropertySeller.role` field at
+  `prisma/schema.prisma:1046` (defaults to "Seller", never read or
+  written today). Rejected — storing an "Agent" row in the `sellers`
+  table is semantically wrong, and the 200+ Seller-specific fields
+  don't apply.
+- Full unification (Sellers + Buyers + Partners in one table).
+  Rejected — would have undone v1.1 Wave 4–5 and produced a
+  ~600-column union table with 80%+ nulls per row. Multi-week
+  rebuild to reverse a 5-session foundation; cost not justified.
+
+**Per-deal role values (free string, extensible):**
+- Agent flavors: `sourced_to_us` | `taking_to_clients` | `closing_agent`
+- Wholesaler flavors: `sold_us_this` | `we_sold_them_this` | `jv_partner`
+- Service flavors: `attorney_seller` | `attorney_buyer` |
+  `title_company` | `lender` | `inspector` | `contractor` |
+  `photographer` | `property_manager` | `other`
+
+**Migration history:**
+- `20260504000000_add_agent_wholesaler` — created the 4 intermediate
+  tables (now empty in prod, kept in version history as record).
+- `20260504010000_replace_agent_wholesaler_with_partner` — dropped
+  the 4 empty tables (CASCADE) and created `partners` +
+  `property_partners`. Same calendar day.
+
+**Status:** Locked. Date: 2026-05-04 (Session 67).
+Plan reference: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
+
+---
+
+### D-046 — Partner contacts live in GHL contacts, not a dedicated GHL pipeline
+
+**Decision:** Partners are linked to Gunner from existing GHL contacts
+via the property-detail "Link Partner" UX. There is no bulk-pipeline
+sync route (the way `/api/[tenant]/contacts/sync-from-ghl` works for
+Seller + Buyer pipelines). Partners are scattered across normal GHL
+contacts; the canonical input is "find a GHL contact, mark it with one
+or more partner types, Gunner creates the local row pointing at that
+ghlContactId."
+
+**Why:**
+- Per the user (CEO Corey, Session 67): partners "are scattered.
+  Should just live in GHL contacts" — they don't get their own
+  pipeline because their relationship to the team isn't pipeline-
+  shaped.
+- Idempotency on `(tenantId, ghlContactId)` via
+  `lib/partners/sync.ts:upsertPartnerFromGHL()` means re-linking the
+  same GHL contact to a different property reuses the same Partner
+  row and merges the types arrays.
+- Avoids the "two sources of truth" drift problem CLAUDE.md's GHL
+  boundary rule (Rule 1) prevents.
+
+**Alternatives considered:**
+- Dedicated GHL pipelines per type (Agents pipeline, Wholesalers
+  pipeline). Rejected — pipelines exist to model deal stages, not
+  contact categories. Forcing the categorization into a pipeline
+  would create empty / synthetic stages.
+- GHL tag-based identification (read `tags: []` on contacts, treat
+  any contact tagged `agent` as an Agent). Possible future addition
+  as a discovery aid ("show me all GHL contacts tagged 'agent'
+  that aren't yet in Gunner") but not the canonical input — tag
+  hygiene varies and would create silent type drift.
+- Manual-entry-in-Gunner-only with no GHL link. Rejected —
+  violates the GHL boundary rule.
+
+**Status:** Locked. Date: 2026-05-04 (Session 67).

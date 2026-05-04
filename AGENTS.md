@@ -580,6 +580,7 @@ the route handler's 401 JSON, not a 307 redirect.
 | Stripe | lib/stripe/index.ts | Subscription management, plan definitions |
 | Gamification | lib/gamification/xp.ts | XP, badges, leaderboard |
 | Workflow engine | lib/workflows/engine.ts | Trigger-based automation workflows |
+| Partner sync | lib/partners/sync.ts | `upsertPartnerFromGHL()` — idempotent create-or-link of a Partner row from a GHL contact, keyed on `(tenantId, ghlContactId)`. Merges `types` arrays on existing rows; never wipes contact details to null. Use for any "this GHL contact is now also Type X" flow. (Session 67 D-046.) |
 
 ---
 

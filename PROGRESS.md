@@ -364,19 +364,57 @@ but leaner.
 
 **Verification:** `npx tsc --noEmit` exit 0 (after one Lucide-type fix).
 
-**Next session:** Live verification — Corey clicks through:
-1. Property detail → Partners tab → Link Partner from a real GHL
-   contact → confirm `partners` row appears + `property_partners`
-   join row created.
-2. `/{tenant}/partners` — confirm the list shows the just-linked
-   partner with on-deals count = 1.
-3. `/{tenant}/contacts` → Partners tab — confirm same row appears.
-4. Wait for nightly `compute-aggregates` (or trigger manually) →
-   confirm cross-portfolio counters populate.
+## Next Session — exact first task
 
-After verification: Blocker #2 verification ritual is still pending
-from Session 65 (six high-stakes Role Assistant tools — drive UI,
-read `/api/diagnostics/high-stakes-audit`).
+**First task:** Live verification of the Partner feature (Session 67
+shipped end-to-end but no real-data click-through yet). Run this on
+the production Railway URL with a real property + GHL contact, then
+report results.
+
+**First prompt to paste into a new Claude session:**
+
+> Continue from Session 67 close. The Partner contact-type feature
+> shipped end-to-end across 5 commits today (`bb94f97` → `e2c3fbf`
+> → `91a549a` → `2cbc57f` → `e1a5eb2`). I'm about to click through
+> the live flow. Read `PROGRESS.md` Session 67, walk me through the
+> 4-step verification below, and listen for anything that doesn't
+> behave as documented.
+
+**Verification steps Corey clicks through (read SYSTEM_MAP "Partners"
+section + PROGRESS.md Session 67 to understand expected shapes):**
+
+1. **Property-detail link path.** Open a real property at
+   `/{tenant}/inventory/{propertyId}`. Click the new **Partners**
+   tab (between Buyers and Outreach). Click **+ Link Partner**.
+   Search a known GHL contact. Pick one or more types. Save.
+   Expected: card appears in the linked-partners list with type
+   badges + per-deal facts row.
+2. **Standalone list.** Visit `/{tenant}/partners`. Expected: row
+   for the just-linked partner; on-deals count = 1; type chips +
+   counts populated.
+3. **Contacts page tab.** Visit `/{tenant}/contacts` → click
+   **Partners** tab. Expected: same row, 10 columns including
+   "On deals = 1".
+4. **Detail page.** Click the partner's name from any of the 3
+   surfaces. Expected: routes to `/{tenant}/partners/{id}` —
+   header, identity card, performance counters (mostly zero
+   pre-rollup), conditional brokerage / wholesaler cards based on
+   selected types, deal-history table with the property listed.
+   Click **Edit partner**, change a field, **Save** — confirm the
+   read view reflects the change.
+
+**Counter rollup check (defer until next morning if 4am UTC hasn't
+hit yet):** Trigger `scripts/compute-aggregates.ts` manually or wait
+for the cron. Re-load the partner detail page — `dealsSourcedToUsCount`
+or whichever counter matches the role you set should be 1.
+
+**After verification passes:**
+- Blocker #2 verification ritual (still pending from Session 65 —
+  six high-stakes Role Assistant tools, drive UI, read
+  `/api/diagnostics/high-stakes-audit`).
+- Optional: GHL tag-discovery aid for partners ("show me GHL contacts
+  tagged 'agent' that aren't yet in Gunner"). Per D-046 not
+  canonical, but useful as a discovery tool. ~1 hour build.
 
 **Side-finding (deferred to backlog):** `PropertySeller.role` field at
 `prisma/schema.prisma:1046` defaults to `"Seller"` but is **never read
