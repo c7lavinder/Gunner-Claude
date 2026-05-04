@@ -16,7 +16,7 @@ export default async function PartnersPage({ params }: { params: { tenant: strin
   const tenantId = session.tenantId
   const role = session.role as UserRole
 
-  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/dashboard`)
+  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/day-hub`)
 
   const partners = await db.partner.findMany({
     where: { tenantId },

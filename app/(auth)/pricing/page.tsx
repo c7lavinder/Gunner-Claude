@@ -18,7 +18,7 @@ export default async function PricingPage() {
       select: { subscriptionStatus: true },
     })
     if (isSubscriptionActive(tenant?.subscriptionStatus)) {
-      redirect(`/${session.tenantSlug}/dashboard`)
+      redirect(`/${session.tenantSlug}/day-hub`)
     }
   }
 

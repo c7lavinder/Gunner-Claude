@@ -19,7 +19,7 @@ export default async function PropertyDetailPage({
   const tenantId = session.tenantId
   const role = (session.role) as UserRole
 
-  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/dashboard`)
+  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/day-hub`)
 
   let property
   try {

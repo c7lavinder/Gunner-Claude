@@ -48,12 +48,12 @@ export async function middleware(request: NextRequest) {
   const segments = pathname.split('/').filter(Boolean)
   const tenantSlug = segments[0]
 
-  // Root path — redirect to onboarding if not completed, otherwise dashboard
+  // Root path — redirect to onboarding if not completed, otherwise Day Hub
   if (!tenantSlug || tenantSlug === '') {
     const userTenantSlug = token.tenantSlug as string | undefined
     const onboardingCompleted = token.onboardingCompleted as boolean | undefined
     if (userTenantSlug && onboardingCompleted) {
-      return NextResponse.redirect(new URL(`/${userTenantSlug}/tasks`, request.url))
+      return NextResponse.redirect(new URL(`/${userTenantSlug}/day-hub`, request.url))
     }
     return NextResponse.redirect(new URL('/onboarding', request.url))
   }
@@ -66,7 +66,7 @@ export async function middleware(request: NextRequest) {
   // Verify the user belongs to this tenant
   const userTenantSlug = token.tenantSlug as string | undefined
   if (userTenantSlug && tenantSlug !== userTenantSlug) {
-    return NextResponse.redirect(new URL(`/${userTenantSlug}/tasks`, request.url))
+    return NextResponse.redirect(new URL(`/${userTenantSlug}/day-hub`, request.url))
   }
 
   // Inject tenant context into headers for server components

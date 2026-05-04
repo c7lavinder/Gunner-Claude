@@ -171,7 +171,7 @@ export function CoachSidebar() {
     if (parts.includes('buyers')) return 'buyers'
     if (parts.includes('settings')) return 'settings'
     if (parts.includes('kpis')) return 'kpis'
-    return 'dashboard'
+    return 'home'
   }, [pathname])
 
   // Load session messages (daily persistence)

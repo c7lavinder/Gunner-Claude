@@ -16,7 +16,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
   const tenantId = session.tenantId
   const role = (session.role) as UserRole
 
-  if (!hasPermission(role, 'inventory.view')) redirect(`/${params.tenant}/dashboard`)
+  if (!hasPermission(role, 'inventory.view')) redirect(`/${params.tenant}/day-hub`)
 
   const canViewAll = hasPermission(role, 'properties.view.all')
 

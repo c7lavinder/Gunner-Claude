@@ -22,7 +22,7 @@ export default async function SellersListPage({
   const role = session.role as UserRole
 
   if (!hasPermission(role, 'properties.view.assigned')) {
-    redirect(`/${params.tenant}/dashboard`)
+    redirect(`/${params.tenant}/day-hub`)
   }
 
   const canViewAll = hasPermission(role, 'properties.view.all')

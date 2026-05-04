@@ -337,6 +337,80 @@ reference: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
   tab rows (`contacts-client.tsx`), property-detail Partner cards
   (`partners-tab.tsx`).
 
+### Disposition (Session 68 — journey + portfolio)
+
+The disposition workflow is a five-section journey per property,
+plus a manager portfolio view that groups properties by their current
+journey stage. Same status logic powers both surfaces (one util,
+two callers).
+
+- `lib/disposition/journey-status.ts` — pure function
+  `computeJourneyStatus(inputs)` returns per-section status
+  (`not_started | in_progress | done`) for the 5 sections plus an
+  aggregate `stage` label (`ready_to_blast` | `awaiting_responses`
+  | `in_offer` | `closing`). Inputs are a narrow projection of
+  Property + relation counts so the portfolio query doesn't need
+  a full PropertyDetail fetch. `firstActiveSection()` picks the
+  section to auto-expand on first load.
+- `components/disposition/journey/disposition-journey.tsx` —
+  per-property journey container. Mounted on the property-detail
+  Disposition tab. Renders 5 collapsible sections in sequence;
+  first non-Done section auto-opens; manual expand/collapse via
+  chevrons (state is client-only — no persistence).
+- `components/disposition/journey/journey-section.tsx` — shared
+  chrome (header bar, status pill, collapse chevron, summary line,
+  body slot).
+- `components/disposition/journey/section-1-deal-info.tsx` —
+  Section 1 (Deal info readiness checklist). Surfaces the acq → dispo
+  handoff: required fields with check/X icons, deep-link buttons that
+  jump back to Overview / Data tabs.
+- `components/disposition/journey/section-2-deal-blast.tsx` —
+  Section 2 (Generate deal blast). Lifted verbatim from the prior
+  `DealBlastTab`. Tier selector, email + SMS body generation, send
+  buttons, blast history.
+- `components/disposition/journey/section-3-buyer-match.tsx` —
+  Section 3 (Match buyers). Lifted from the prior `BuyersTab`.
+  Buyer matching kanban (matched / responded / interested), match
+  scores, add-buyer flow, edit slide-over, SMS compose modal.
+- `components/disposition/journey/section-4-responses.tsx` —
+  Section 4 placeholder. The unified inbound-response data layer
+  (SMS + email across blast + outreach) is deferred per plan
+  Stage 5; rendered as `not_started` with a "coming soon" empty
+  state.
+- `components/disposition/journey/section-5-offers-showings.tsx` —
+  Section 5 (Offers & showings). Lifted from the prior `OutreachTab`,
+  trimmed to the 'offer' and 'showing' sub-tabs only — the 'send'
+  sub-tab is dropped because that work lives in Section 2 now.
+  Includes the inline `<OutreachLogCard>` (offer status pills,
+  showing-date editing).
+- `components/inventory/contacts-panel.tsx` — replaces the prior
+  Sellers / Buyers / Partners property-detail tabs with a compact
+  panel mounted at the top of Overview and Data tabs. Three short
+  stacked sections (Sellers · Buyer · Partners), each row =
+  name + role/type + phone/email + click-through to the per-type
+  detail page. Empty states surface handoff gaps explicitly.
+- `app/(tenant)/[tenant]/disposition/page.tsx` +
+  `disposition-client.tsx` — admin pipeline view. Server fetch
+  selects properties with `status ∈ (IN_DISPOSITION,
+  UNDER_CONTRACT)` only (strict dispo scope per plan); computes
+  journey stage per row via `computeJourneyStatus`; client groups
+  rows under the four stages (Ready to Blast → Awaiting Responses
+  → In Offer → Closing). Each row click-throughs to
+  `/inventory/{id}?tab=disposition` — the property-detail page
+  reads `?tab=` from search params to land on the right tab.
+
+**Property-detail tabs collapsed 8 → 4** (Session 68): Overview ·
+Activity · Data · Disposition. The prior Sellers / Buyers /
+Partners tabs collapsed into `<ContactsPanel>` (Overview top + Data
+top); Outreach + Deal Blast tabs collapsed into Section 2 / 5 of the
+journey. The lifted tab functions were physically deleted from
+`components/inventory/property-detail-client.tsx` (file shrank from
+~7,100 to ~4,900 LOC). `InlineTextArea` is now exported from
+property-detail-client so Section 2 can reuse it.
+
+**Plan reference:**
+`~/.claude/plans/okay-this-is-all-radiant-canyon.md`.
+
 ### Workers (in-process)
 
 - `instrumentation.ts` — Next.js 14.2 boot hook. Fires `startGradingWorker()`

@@ -66,11 +66,12 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     { href: `${base}/day-hub`, label: 'Day Hub', always: true },
     { href: `${base}/calls`, label: 'Calls', permission: 'calls.view.own' as never },
     { href: `${base}/inventory`, label: 'Inventory', permission: 'inventory.view' as never },
-    // v1.1 Wave 3 Phase A — surface Sellers list + Buyers (was hidden from nav).
-    { href: `${base}/sellers`, label: 'Sellers', permission: 'properties.view.assigned' as never },
-    { href: `${base}/buyers`, label: 'Buyers', adminOnly: true },
-    { href: `${base}/partners`, label: 'Partners', adminOnly: true },
+    // /contacts is the canonical surface for Sellers/Buyers/Partners
+    // (replaces the prior Sellers/Buyers/Partners top-level nav links).
     { href: `${base}/contacts`, label: 'Contacts', adminOnly: true },
+    // /disposition is the admin pipeline view; replaces the prior /buyers
+    // (Disposition Hub) link. Click-through into the per-property journey.
+    { href: `${base}/disposition`, label: 'Disposition', adminOnly: true },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
     { href: `${base}/accountability`, label: 'Accountability', adminOnly: true },
   ]

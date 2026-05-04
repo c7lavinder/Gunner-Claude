@@ -15,7 +15,7 @@ export default async function AuditPage({ params }: AuditPageProps) {
   const session = await requireSession()
 
   if (!isRoleAtLeast(session.role, 'ADMIN')) {
-    redirect(`/${params.tenant}/dashboard`)
+    redirect(`/${params.tenant}/day-hub`)
   }
 
   const tenant = await db.tenant.findUnique({

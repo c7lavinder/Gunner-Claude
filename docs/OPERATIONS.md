@@ -60,7 +60,7 @@ loop) has heartbeats today.
 
 ## Pages roster
 
-25 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`.
+23 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`. (Session 68: `/dashboard` and `/buyers` list page deleted; `/disposition` added.)
 
 ### Tenant-scoped (`/{tenant}/...`)
 
@@ -68,13 +68,14 @@ loop) has heartbeats today.
 |---|---|---|
 | `/{tenant}/day-hub` | Morning planner — fetches GHL tasks live, classifies + scores them, AM/PM dial pills, KPI Ledger modal, in-app GHL action modals (Add Note, Create Apt, Workflow, Update Task). **Canonical Tasks/Day Hub surface per CLAUDE.md Rule 3 § 7.** Consolidated from `/tasks` in Session 66 (2026-05-03) — the richer page logic moved here, old `/day-hub` simpler variant overwritten. | Live, primary |
 | `/{tenant}/tasks` | Redirect stub → `/{tenant}/day-hub`. Preserves Chris's bookmark and any external links. Single `redirect()` call, no UI. | Legacy redirect |
-| `/{tenant}/dashboard` | Overview dashboard. | Live |
 | `/{tenant}/calls` + `/{tenant}/calls/[callId]` | Calls list + call detail (5-tab: coaching, transcript, next steps, property tabs, manual upload). | Live |
-| `/{tenant}/inventory` + `/{tenant}/inventory/[propertyId]` + `/{tenant}/inventory/new` + `/{tenant}/inventory/[propertyId]/edit` | Property list + detail (200+ fields, vendor intel surfacing, deal intel research tab) + manual create + edit forms. Cash-hero matrix + 3-col Numbers panel + persistent cross-tab side panel (Session 39-40 redesign). | Live |
+| `/{tenant}/inventory` + `/{tenant}/inventory/[propertyId]` + `/{tenant}/inventory/new` + `/{tenant}/inventory/[propertyId]/edit` | Property list + 4-tab detail (Overview · Activity · Data · **Disposition**) + manual create + edit forms. Disposition tab mounts the 5-section `<DispositionJourney>`. `<ContactsPanel>` at top of Overview + Data shows linked sellers/buyers/partners (replaces prior Sellers/Buyers/Partners tabs). Property-detail rebuilt Session 68 (2026-05-05). | Live |
+| `/{tenant}/disposition` | Admin pipeline view — properties with `status ∈ (IN_DISPOSITION, UNDER_CONTRACT)` grouped by journey stage (Ready to Blast → Awaiting Responses → In Offer → Closing). Click-through to `/inventory/{id}?tab=disposition`. Replaces the prior `/buyers` list page. Session 68. | Live (admin-only) |
 | `/{tenant}/sellers/[id]` | Seller-centric detail view. Court records, portfolio, voice analytics aggregates. | Live (added Sessions 41-42) |
-| `/{tenant}/buyers` + `/{tenant}/buyers/[id]` | Disposition Hub — buyer list + detail. | Built, **hidden from nav** |
-| `/{tenant}/contacts` | Contact list — tabbed Sellers / Buyers / **Partners** (Session 67 Phase 4). | Live |
-| `/{tenant}/partners` | Standalone Partners list — search + type filter (agent / wholesaler / attorney / title / lender / inspector / contractor / etc.). Session 67 Phase 3. | Live |
+| `/{tenant}/sellers` | Standalone Sellers list. **No nav link as of Session 68** — `/contacts` Sellers tab is canonical. URL still resolves; Buy Signal feature lives here pending revisit. | Live, **hidden from nav** |
+| `/{tenant}/buyers/[id]` | Buyer detail page. Click-through from `/contacts` Buyers tab + `<ContactsPanel>`. | Live |
+| `/{tenant}/contacts` | Contact list — tabbed Sellers / Buyers / **Partners** (Session 67 Phase 4). Canonical surface for all contact types. | Live |
+| `/{tenant}/partners` | Standalone Partners list — search + type filter. **No nav link as of Session 68** — `/contacts` Partners tab is canonical. URL still resolves. | Live, **hidden from nav** |
 | `/{tenant}/partners/[id]` | Partner detail — identity, type-flavored cards (brokerage/license, wholesaler operation), performance counters, full deal history, edit form. Session 67 Phase 5. | Live |
 | `/{tenant}/kpis` | KPI dashboard — score trends, milestones, TCP ranking. | Live |
 | `/{tenant}/ai-coach` | Full-page AI coaching surface. | Live |

@@ -116,7 +116,7 @@ export default function OnboardingClient() {
 
   function goToDashboard() {
     const tenantSlug = (session?.user as Record<string, unknown>)?.tenantSlug as string
-    router.push(tenantSlug ? `/${tenantSlug}/dashboard` : '/')
+    router.push(tenantSlug ? `/${tenantSlug}/day-hub` : '/')
   }
 
   const selectedPipelineObj = pipelines.find((p) => p.id === selectedPipeline)
@@ -411,7 +411,7 @@ export default function OnboardingClient() {
                 onClick={goToDashboard}
                 className="inline-flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark text-white font-semibold rounded-[10px] px-8 py-3 text-ds-body transition-colors"
               >
-                Open my dashboard <ArrowRight size={14} />
+                Open my Day Hub <ArrowRight size={14} />
               </button>
             </div>
           )}

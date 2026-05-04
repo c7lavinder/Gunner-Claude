@@ -18,7 +18,7 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
   const session = await requireSession()
 
   const tenantSlug = session.tenantSlug
-  if (tenantSlug !== params.tenant) redirect(`/${tenantSlug}/dashboard`)
+  if (tenantSlug !== params.tenant) redirect(`/${tenantSlug}/day-hub`)
 
   return (
     <div className="min-h-screen bg-surface-primary">

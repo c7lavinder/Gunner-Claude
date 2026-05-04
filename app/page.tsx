@@ -1,5 +1,5 @@
 // app/page.tsx
-// Root route — redirects authenticated users to their dashboard, others to login
+// Root route — redirects authenticated users to their Day Hub, others to login
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth/config'
 export default async function RootPage() {
   // TEMP: DEV BYPASS — remove this if-block to restore normal auth
   if (process.env.DEV_BYPASS_AUTH === 'true') {
-    redirect('/apex-dev/dashboard')
+    redirect('/apex-dev/day-hub')
   }
 
   const session = await getServerSession(authOptions)
@@ -23,5 +23,5 @@ export default async function RootPage() {
     redirect('/onboarding')
   }
 
-  redirect(`/${tenantSlug}/dashboard`)
+  redirect(`/${tenantSlug}/day-hub`)
 }

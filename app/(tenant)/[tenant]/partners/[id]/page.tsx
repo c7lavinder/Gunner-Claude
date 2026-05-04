@@ -18,7 +18,7 @@ export default async function PartnerDetailPage({
   const tenantId = session.tenantId
   const role = session.role as UserRole
 
-  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/dashboard`)
+  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/day-hub`)
   const canEdit = hasPermission(role, 'properties.edit')
 
   const partner = await db.partner.findFirst({

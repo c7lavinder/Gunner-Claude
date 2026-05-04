@@ -16,7 +16,7 @@ export default async function BuyerDetailPage({
   const tenantId = session.tenantId
   const role = session.role as UserRole
 
-  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/dashboard`)
+  if (!hasPermission(role, 'properties.view.assigned')) redirect(`/${params.tenant}/day-hub`)
 
   const buyer = await db.buyer.findFirst({
     where: { id: params.id, tenantId },

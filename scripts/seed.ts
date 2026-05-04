@@ -122,7 +122,7 @@ async function main() {
   console.log(`  Acquisition: acq@apex.dev`)
   console.log(`  Lead Mgr:    lm@apex.dev`)
   console.log(`  Disposition: disp@apex.dev`)
-  console.log(`\n  URL: /apex-dev/dashboard\n`)
+  console.log(`\n  URL: /apex-dev/day-hub\n`)
 }
 
 main()

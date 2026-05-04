@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     customer: customerId,
     mode: 'subscription',
     line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-    success_url: `${appUrl}/${session.tenantSlug}/dashboard?subscription=success`,
+    success_url: `${appUrl}/${session.tenantSlug}/day-hub?subscription=success`,
     cancel_url: `${appUrl}/pricing?canceled=true`,
     metadata: {
       tenantId: session.tenantId,
