@@ -68,7 +68,7 @@ Gunner enhances GHL. It does not replace it.
 | Owns | Source of truth |
 |---|---|
 | **GHL** | Contacts, conversations, messages, appointments, calendars, pipelines, stages, tasks, call recordings + metadata |
-| **Gunner** | Properties (ARV, repairs, equity, MAO, assignment fee, status), call grades + rubrics + coaching, KPI snapshots + milestones, buyer activity + deal blasts, role configs + permissions, AI logs, deal intel (cumulative across calls), property stories, vendor enrichment data, **deal-side metadata for Sellers / Buyers / Agents / Wholesalers** (their performance with us, market focus, reputation, role + economics on each Property — the contact identity itself still lives in GHL via `ghlContactId`) |
+| **Gunner** | Properties (ARV, repairs, equity, MAO, assignment fee, status), call grades + rubrics + coaching, KPI snapshots + milestones, buyer activity + deal blasts, role configs + permissions, AI logs, deal intel (cumulative across calls), property stories, vendor enrichment data, **deal-side metadata for Sellers / Buyers / Partners** (their performance with us, market focus, reputation, role + economics on each Property — contact identity itself still lives in GHL via `ghlContactId`. `Partner.types[]` covers agent / wholesaler / attorney / title / lender / inspector / contractor / etc.) |
 
 If GHL can store it natively, we do not duplicate. We only build what GHL cannot.
 
@@ -232,34 +232,42 @@ Per-vendor isolation: vendor failures do not take down the orchestrator.
 
 - `lib/buyers/sync.ts` — buyer matching against new properties + outreach sync.
 
-### Agents + Wholesalers (Session 67, schema only)
+### Partners (Session 67 — schema only, unified shape)
 
-Two new contact types beyond Seller / Buyer. Models added to
-`prisma/schema.prisma`; no app code reads them yet (Phase 2+ will land the
-property-detail link UX and the standalone list pages).
+Unified contact table for everyone in a deal who isn't the property
+owner (Seller) or on our buy list (Buyer). One row per person, with a
+`types` array carrying any combination of roles. Future contact types
+add by extending the array, not by changing schema.
 
-- `Agent` — real estate agents who source deals to us (seller-side) or
-  take our deals to their buyer clients (buyer-side). Both sides can be
-  true. Includes brokerage / license fields, performance counters
-  (`dealsBroughtCount`, `dealsTakenToClientsCount`, `dealsClosedWithUsCount`),
-  and reputation grading (`agentGrade` A/B/C/D, `tierClassification`).
-- `Wholesaler` — other wholesalers who sell us off-market contracts
-  (`bringsUsInventory`) or take our contracts to their buyer list
-  (`takesOurInventory`). Includes operational fields (buyer list size,
-  deals/month, prefers-assignment-vs-double-close), JV history count,
-  reputation grading.
-- `PropertyAgent` join — composite key (propertyId, agentId). Per-deal
-  `role` (`sourced_to_us` | `taking_to_clients` | `closing_agent`),
-  commission % + amount, deal notes.
-- `PropertyWholesaler` join — composite key (propertyId, wholesalerId).
-  Per-deal `role` (`sold_us_this` | `we_sold_them_this` | `jv_partner`),
-  purchase price, assignment fee paid, deal notes.
+Recognized values for `Partner.types[]` (extensible):
+`agent` | `wholesaler` | `attorney` | `title` | `lender` |
+`inspector` | `contractor` | `photographer` | `property_manager` |
+`other`
 
-Both top-level models follow the Seller/Buyer first-class pattern:
-identity + GHL link via `ghlContactId`, market focus, performance with us,
-communication prefs, reputation, standard `tags` / `internalNotes` /
-`customFields` / `fieldSources` / `priorityFlag`. Plan reference:
-`~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
+- `Partner` — identity + GHL link via `ghlContactId`. Holds nullable
+  type-flavored fields (brokerage / license for agents, buyer list
+  size / deals-per-month / prefers-assignment for wholesalers).
+  Cross-portfolio performance counters (`dealsSourcedToUsCount`,
+  `dealsTakenFromUsCount`, `dealsClosedWithUsCount`, `jvHistoryCount`),
+  reputation grading (`partnerGrade` A/B/C/D, `tierClassification`),
+  market focus, communication prefs, standard `tags` / `internalNotes`
+  / `customFields` / `fieldSources` / `priorityFlag`.
+- `PropertyPartner` join — composite key (propertyId, partnerId).
+  Free-string `role` (per-deal: `sourced_to_us` |
+  `taking_to_clients` | `closing_agent` | `sold_us_this` |
+  `we_sold_them_this` | `jv_partner` | `attorney_seller` |
+  `attorney_buyer` | `title_company` | `lender` | `inspector` | …),
+  per-deal economics (`commissionPercent` / `commissionAmount` /
+  `purchasePrice` / `assignmentFeePaid` — all nullable, only relevant
+  fields filled), `notesOnThisDeal`.
+
+**Architectural note (Session 67 mid-session pivot):** Initial Phase 1
+shipped separate Agent + Wholesaler tables; pivoted to this unified
+shape within the hour before any data was written. Two migrations land
+back-to-back: `20260504000000_add_agent_wholesaler` (creates the 4
+intermediate tables) + `20260504010000_replace_agent_wholesaler_with_partner`
+(drops them and creates `partners` + `property_partners`). Plan
+reference: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
 
 ### Workers (in-process)
 

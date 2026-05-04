@@ -104,8 +104,7 @@ model Tenant {
   webhookLogs           WebhookLog[]
   contactSuggestions    ContactSuggestion[]
   bugReports            BugReport[]
-  agents                Agent[]
-  wholesalers           Wholesaler[]
+  partners              Partner[]
 
   @@map("tenants")
 }
@@ -628,8 +627,7 @@ model Property {
   milestones   PropertyMilestone[]
   outreachLogs OutreachLog[]
   buyerStages  PropertyBuyerStage[]
-  agents       PropertyAgent[]
-  wholesalers  PropertyWholesaler[]
+  partners     PropertyPartner[]
 
   @@index([county])
   @@index([apn])
@@ -1906,21 +1904,37 @@ model PropertyBuyerStage {
 }
 
 // ─────────────────────────────────────────
-// AGENTS — real estate agents who source deals to us
-// or take our deals to their buyer clients.
-// Mirrors Seller/Buyer first-class-entity pattern (v1.1 Wave 4-5).
-// Linked to a GHL contact via ghlContactId; created by Phase 2 link-from-
-// GHL-contact UX. Distinct from Seller (property owner) and Buyer
-// (investor on our buy list).
+// PARTNERS — unified deal-team contact table.
+// Covers real estate agents, other wholesalers, attorneys, title
+// companies, lenders, inspectors, contractors — anyone who participates
+// in a deal but is neither the property owner (Seller) nor on our buy
+// list (Buyer). One person can be multiple types simultaneously
+// (e.g. an agent who is also a wholesaler) via the `types` array.
+//
+// Session 67 (2026-05-04) — replaced the separate Agent + Wholesaler
+// tables with this unified shape. Architectural pivot mid-session per
+// user direction; the standalone tables shipped earlier in the same
+// session were dropped before any data was written.
+//
+// Linked to a GHL contact via ghlContactId; created by the
+// link-from-GHL-contact UX (Phase 2). Distinct from Seller (200+
+// ownership-specific fields) and Buyer (200+ investor-specific fields)
+// — those keep their own typed tables.
 // ─────────────────────────────────────────
 
-model Agent {
+model Partner {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   tenantId String @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // ── Type(s) — one row can carry multiple roles ─
+  // Recognized values (extensible without schema change):
+  //   agent | wholesaler | attorney | title | lender | inspector |
+  //   contractor | photographer | property_manager | other
+  types Json @default("[]")
 
   // ── Identity ────────────────────────────
   name         String
@@ -1929,32 +1943,37 @@ model Agent {
   phone        String?
   email        String?
   ghlContactId String? @map("ghl_contact_id")
+  company      String?
+  website      String?
 
-  // ── Brokerage / License ─────────────────
+  // ── Agent-flavored (nullable when not an agent) ─
   brokerageName     String?   @map("brokerage_name")
   brokerageAddress  String?   @map("brokerage_address")
   licenseNumber     String?   @map("license_number")
   licenseState      String?   @map("license_state")
   licenseExpiration DateTime? @map("license_expiration")
 
+  // ── Wholesaler-flavored (nullable when not a wholesaler) ─
+  buyerListSize         Int?     @map("buyer_list_size")
+  dealsPerMonthEstimate Int?     @map("deals_per_month_estimate")
+  prefersAssignment     Boolean? @map("prefers_assignment") // true = assignment, false = double-close
+  typicalAssignmentFee  Decimal? @map("typical_assignment_fee") @db.Decimal(10, 2)
+
   // ── Market focus ────────────────────────
   primaryMarkets    Json    @default("[]") @map("primary_markets")
   propertyTypeFocus String? @map("property_type_focus") // SFR | MFR | commercial | land | mixed
   yearsExperience   Int?    @map("years_experience")
-  specialties       Json    @default("[]") // ["distressed", "luxury", "investor", ...]
+  specialties       Json    @default("[]") // ["distressed", "luxury", "investor", "off-market", ...]
 
-  // ── Side of the deal (can be both true) ─
-  isBuyerSideAgent  Boolean @default(false) @map("is_buyer_side_agent")
-  isSellerSideAgent Boolean @default(false) @map("is_seller_side_agent")
-
-  // ── Performance with us ─────────────────
-  dealsBroughtCount        Int       @default(0) @map("deals_brought_count") // they sourced TO us
-  dealsTakenToClientsCount Int       @default(0) @map("deals_taken_to_clients_count") // they took OUR deals to their buyers
+  // ── Performance with us (counters span every role) ─
+  dealsSourcedToUsCount    Int       @default(0) @map("deals_sourced_to_us_count") // brought us a deal
+  dealsTakenFromUsCount    Int       @default(0) @map("deals_taken_from_us_count") // took our deal to their list/clients
   dealsClosedWithUsCount   Int       @default(0) @map("deals_closed_with_us_count")
+  jvHistoryCount           Int       @default(0) @map("jv_history_count")
   lastDealDate             DateTime? @map("last_deal_date")
   responseRate             Float?    @map("response_rate") // 0-1
   reliabilityScore         Float?    @map("reliability_score") // 0-1
-  agentGrade               String?   @map("agent_grade") // A | B | C | D
+  partnerGrade             String?   @map("partner_grade") // A | B | C | D
   averageCommissionPercent Float?    @map("average_commission_percent")
 
   // ── Communication ───────────────────────
@@ -1975,123 +1994,37 @@ model Agent {
   fieldSources  Json    @default("{}") @map("field_sources")
 
   // ── Relations ───────────────────────────
-  properties PropertyAgent[]
+  properties PropertyPartner[]
 
   @@index([tenantId, phone])
   @@index([tenantId, ghlContactId])
-  @@map("agents")
+  @@map("partners")
 }
 
 // ─────────────────────────────────────────
-// PROPERTY AGENTS — agent on a specific deal
+// PROPERTY PARTNERS — partner on a specific deal.
+// `role` is the per-deal role (a partner with types=[agent,wholesaler]
+// might be `taking_to_clients` on one property and `sold_us_this` on
+// another). Per-deal economics live here; cross-portfolio counters
+// live on Partner.
 // ─────────────────────────────────────────
 
-model PropertyAgent {
+model PropertyPartner {
   propertyId String   @map("property_id")
-  agentId    String   @map("agent_id")
+  partnerId  String   @map("partner_id")
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  partner    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
-  // Role on THIS deal
-  role String @default("sourced_to_us") // sourced_to_us | taking_to_clients | closing_agent
+  // Role on THIS deal. Free string so it stays extensible. Common values:
+  //   sourced_to_us | taking_to_clients | closing_agent (agent flavors)
+  //   sold_us_this | we_sold_them_this | jv_partner    (wholesaler flavors)
+  //   attorney_seller | attorney_buyer | title_company | lender
+  //   inspector | contractor | photographer | property_manager
+  role String @default("sourced_to_us")
 
-  // Per-deal economics
+  // Per-deal economics. Nullable — only some roles use these.
   commissionPercent Float?   @map("commission_percent")
   commissionAmount  Decimal? @map("commission_amount") @db.Decimal(12, 2)
-
-  // Per-deal text
-  notesOnThisDeal String? @map("notes_on_this_deal") @db.Text
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@id([propertyId, agentId])
-  @@map("property_agents")
-}
-
-// ─────────────────────────────────────────
-// WHOLESALERS — other wholesalers who sell us
-// off-market contracts, or take our contracts to
-// their own buyer list. Mirrors Agent shape with
-// wholesaler-specific operational fields.
-// ─────────────────────────────────────────
-
-model Wholesaler {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  tenantId String @map("tenant_id")
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // ── Identity ────────────────────────────
-  name         String
-  firstName    String? @map("first_name")
-  lastName     String? @map("last_name")
-  phone        String?
-  email        String?
-  ghlContactId String? @map("ghl_contact_id")
-  company      String?
-  website      String?
-
-  // ── Operation ───────────────────────────
-  buyerListSize         Int?     @map("buyer_list_size")
-  primaryMarkets        Json     @default("[]") @map("primary_markets")
-  dealsPerMonthEstimate Int?     @map("deals_per_month_estimate")
-  prefersAssignment     Boolean? @map("prefers_assignment") // true = assignment, false = double-close, null = either
-  typicalAssignmentFee  Decimal? @map("typical_assignment_fee") @db.Decimal(10, 2)
-
-  // ── Side of the deal (can be both true) ─
-  bringsUsInventory Boolean @default(false) @map("brings_us_inventory") // sells contracts TO us
-  takesOurInventory Boolean @default(false) @map("takes_our_inventory") // we sell contracts to them
-
-  // ── Performance with us ─────────────────
-  dealsSoldToUsCount    Int       @default(0) @map("deals_sold_to_us_count")
-  dealsTakenFromUsCount Int       @default(0) @map("deals_taken_from_us_count")
-  lastDealDate          DateTime? @map("last_deal_date")
-  responseRate          Float?    @map("response_rate")
-  reliabilityScore      Float?    @map("reliability_score")
-  jvHistoryCount        Int       @default(0) @map("jv_history_count")
-
-  // ── Communication ───────────────────────
-  preferredContactMethod String? @map("preferred_contact_method")
-  bestTimeToContact      String? @map("best_time_to_contact")
-  doNotContact           Boolean @default(false) @map("do_not_contact")
-
-  // ── Reputation ──────────────────────────
-  tierClassification String? @map("tier_classification") // A_list | B_list | C_list | spam
-  reputationNotes    String? @map("reputation_notes") @db.Text
-  badWithUsFlag      Boolean @default(false) @map("bad_with_us_flag")
-
-  // ── Standard ────────────────────────────
-  tags          Json    @default("[]")
-  internalNotes String? @map("internal_notes") @db.Text
-  priorityFlag  Boolean @default(false) @map("priority_flag")
-  customFields  Json    @default("{}") @map("custom_fields")
-  fieldSources  Json    @default("{}") @map("field_sources")
-
-  // ── Relations ───────────────────────────
-  properties PropertyWholesaler[]
-
-  @@index([tenantId, phone])
-  @@index([tenantId, ghlContactId])
-  @@map("wholesalers")
-}
-
-// ─────────────────────────────────────────
-// PROPERTY WHOLESALERS — wholesaler on a specific deal
-// ─────────────────────────────────────────
-
-model PropertyWholesaler {
-  propertyId   String     @map("property_id")
-  wholesalerId String     @map("wholesaler_id")
-  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  wholesaler   Wholesaler @relation(fields: [wholesalerId], references: [id], onDelete: Cascade)
-
-  // Role on THIS deal
-  role String @default("sold_us_this") // sold_us_this | we_sold_them_this | jv_partner
-
-  // Per-deal economics
   purchasePrice     Decimal? @map("purchase_price") @db.Decimal(12, 2)
   assignmentFeePaid Decimal? @map("assignment_fee_paid") @db.Decimal(12, 2)
 
@@ -2101,8 +2034,8 @@ model PropertyWholesaler {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@id([propertyId, wholesalerId])
-  @@map("property_wholesalers")
+  @@id([propertyId, partnerId])
+  @@map("property_partners")
 }
 
 // ─────────────────────────────────────────
