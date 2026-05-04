@@ -104,14 +104,16 @@ loop) has heartbeats today.
 
 ## API surface
 
-110 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **complete for all tenant-scoped routes** as of 2026-04-29 (post-Wave-3-Session-F):
+113 route files under `app/api/`. Migration to `withTenant` from `lib/api/withTenant.ts` is **complete for all tenant-scoped routes** as of 2026-04-29 (post-Wave-3-Session-F):
 
 | Pattern | Count | Tenant isolation |
 |---|---|---|
-| Total `route.ts` files | 110 | — |
-| Uses `withTenant` | 91 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
+| Total `route.ts` files | 113 | — |
+| Uses `withTenant` | 92 | ✅ Enforced structurally — `ctx.tenantId` guaranteed valid |
 | Uses `getSession` directly | 0 | ✅ Migration complete |
 | Other (auth / webhooks / cron / health / service-token / diagnostics / OAuth callback / Stripe checkout) | 19 | N/A — see breakdown below |
+
+Recently added (Session 67 Phase 2): `app/api/properties/[propertyId]/partners/route.ts` (GET/POST/DELETE). Mirrors the sibling sellers route shape — `withTenant` + property-tenant validation gate + composite-PK upsert via `lib/partners/sync.ts:upsertPartnerFromGHL()`.
 
 ### The 19 non-tenant-session routes
 

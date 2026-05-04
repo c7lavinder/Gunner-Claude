@@ -232,7 +232,7 @@ Per-vendor isolation: vendor failures do not take down the orchestrator.
 
 - `lib/buyers/sync.ts` — buyer matching against new properties + outreach sync.
 
-### Partners (Session 67 — schema only, unified shape)
+### Partners (Session 67 — schema + property-detail UX)
 
 Unified contact table for everyone in a deal who isn't the property
 owner (Seller) or on our buy list (Buyer). One row per person, with a
@@ -268,6 +268,32 @@ back-to-back: `20260504000000_add_agent_wholesaler` (creates the 4
 intermediate tables) + `20260504010000_replace_agent_wholesaler_with_partner`
 (drops them and creates `partners` + `property_partners`). Plan
 reference: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`.
+
+**Phase 2 wiring (Session 67):**
+
+- `lib/partners/sync.ts` — `upsertPartnerFromGHL()` helper. Single
+  source of truth for "create-or-link a Partner row from a GHL
+  contact". Idempotent on (tenantId, ghlContactId): existing row gets
+  its `types` array merged with new types and contact details refreshed
+  (never wiped to null); new rows are created with the seed fields.
+  Exports `PARTNER_TYPES` const tuple + `isPartnerType()` guard.
+- `app/api/properties/[propertyId]/partners/route.ts` — GET/POST/DELETE
+  for the property-bound partner list. POST handles two actions: link
+  a new partner (creates-or-reuses Partner via `upsertPartnerFromGHL`,
+  then creates the PropertyPartner join row with role + economics) AND
+  update an existing PropertyPartner row (action='update' branch).
+  Mirrors the sibling sellers route. Permission gated on
+  `properties.edit`.
+- `components/inventory/partners-tab.tsx` — new client component.
+  Three pieces: `<PartnersTab>` (top-level container), `<LinkPartnerForm>`
+  (GHL contact search + multi-type chips + role select + economics +
+  notes), `<PartnerCard>` (read/edit per linked partner). Mounted from
+  `components/inventory/property-detail-client.tsx` as the new
+  `partners` tab (TabKey added next to `sellers` + `buyers`).
+- `app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx` — Prisma
+  query extended with `partners: { include: { partner: { select: ... } } }`
+  + map step that serializes Decimal fields to strings for the client
+  prop.
 
 ### Workers (in-process)
 

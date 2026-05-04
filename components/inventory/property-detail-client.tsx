@@ -10,6 +10,7 @@ import {
   MessageSquare, FileText, ChevronRight, ChevronLeft, Zap, Pencil, Check,
   DollarSign, Bot, Send, Clock, Plus, Loader2,
   Home, Search as SearchIcon, Users, Activity, Sparkles, Megaphone, X, AlertTriangle, Calendar,
+  Briefcase,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -17,6 +18,7 @@ import { formatPhone, titleCase } from '@/lib/format'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
 import { FloatingDropdown } from '@/components/ui/FloatingDropdown'
+import { PartnersTab } from '@/components/inventory/partners-tab'
 
 const GHL_STAGE_COLORS: Record<string, string> = {
   'New Lead (1)': 'bg-sky-100 text-sky-700',
@@ -214,12 +216,28 @@ interface PropertyDetail {
   dispoStatus: string | null
   teamMembers: Array<{ id: string; name: string }>
   messages: Array<{ id: string; text: string; mentions: Array<{ id: string; name: string }>; userId: string | null; userName: string; createdAt: string }>
+  // v1.1 Session 67 Phase 2 — Partners on this deal (agents, wholesalers,
+  // attorneys, etc). Loaded by app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx
+  // and rendered by the Partners tab. See components/inventory/partners-tab.tsx.
+  partners: Array<{
+    id: string; name: string
+    phone: string | null; email: string | null; company: string | null
+    ghlContactId: string | null
+    types: string[]
+    partnerGrade: string | null; tierClassification: string | null
+    role: string
+    commissionPercent: number | null
+    commissionAmount: string | null
+    purchasePrice: string | null
+    assignmentFeePaid: string | null
+    notesOnThisDeal: string | null
+  }>
 }
 
 // Timezone abbreviation for display (e.g. "CST", "EST")
 const TZ_ABBR = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
 
-type TabKey = 'overview' | 'data' | 'sellers' | 'buyers' | 'outreach' | 'activity' | 'ai' | 'blast'
+type TabKey = 'overview' | 'data' | 'sellers' | 'buyers' | 'partners' | 'outreach' | 'activity' | 'ai' | 'blast'
 
 const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
   { key: 'overview', label: 'Overview',      icon: Home },
@@ -230,6 +248,9 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
   // tab so the inventory detail page exposes both sides of the deal.
   { key: 'sellers',  label: 'Sellers',       icon: User },
   { key: 'buyers',   label: 'Buyers',        icon: Users },
+  // Session 67 Phase 2 — Partners tab covers agents, wholesalers,
+  // attorneys, title, lenders, etc. Distinct from Sellers + Buyers.
+  { key: 'partners', label: 'Partners',      icon: Briefcase },
   { key: 'outreach', label: 'Outreach',      icon: Send },
   { key: 'blast',    label: 'Deal Blast',    icon: Megaphone },
 ]
@@ -656,6 +677,14 @@ export function PropertyDetailClient({
           )}
           {activeTab === 'sellers' && <SellersTab property={property} tenantSlug={tenantSlug} />}
           {activeTab === 'buyers' && <BuyersTab property={property} tenantSlug={tenantSlug} />}
+          {activeTab === 'partners' && (
+            <PartnersTab
+              propertyId={property.id}
+              tenantSlug={tenantSlug}
+              initialPartners={property.partners}
+              canEdit={canEdit}
+            />
+          )}
           {activeTab === 'outreach' && <OutreachTab property={property} />}
           {activeTab === 'activity' && (
             <ActivityTab property={property} tenantSlug={tenantSlug} runGhlAction={runGhlAction} sending={sending} ghlContactId={ghlContactId} />

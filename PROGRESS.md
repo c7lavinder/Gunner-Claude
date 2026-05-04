@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 67 — Partner contact-type table Phase 1 (schema only, 2026-05-04) — **MID-SESSION ARCHITECTURAL PIVOT.** Started by adding separate Agent + Wholesaler tables (commit `bb94f97` deployed to Railway). Within the hour Corey said "I think we just need one big database of contacts and then have a contact type which can be a whole array of options" — so dropped the 4 empty tables and replaced with one unified `Partner` table + `PropertyPartner` join. `Partner.types` is a JSON array (`agent` | `wholesaler` | `attorney` | `title` | `lender` | `inspector` | `contractor` | `photographer` | `property_manager` | `other`) — one person can carry multiple types. `PropertyPartner.role` is a free string for the per-deal role. Seller + Buyer **stay as their own typed tables** (200+ specialized fields each — vendor enrichment, TCP scoring, disposition flow all keyed there; merging them would invalidate v1.1 Wave 4-5 work). Two migrations on disk back-to-back: `20260504000000_add_agent_wholesaler` (the now-superseded 4-table shape) + `20260504010000_replace_agent_wholesaler_with_partner` (drops the 4 empty tables CASCADE + creates `partners` + `property_partners`). Zero data loss — no UI / API ever wrote to the intermediate tables. `npx prisma format` clean, `npx prisma generate` clean, `npx tsc --noEmit` exit 0. **Input source is GHL contacts (scattered, not in dedicated pipelines)** — Phase 2 link UX is "find a GHL contact → assign one or more partner types → Gunner creates the row pointing at that ghlContactId". Phase 1 ships zero behavioral change (empty tables). Phases 2-4 follow: property-detail link UX, list/detail pages, contacts-page tab. **Previous: Session 66 — Day Hub consolidation + vendor flag-gating (2026-05-03)** — `/tasks` page consolidated to `/day-hub` with redirect stub for Chris's bookmark; `ENRICHMENT_VENDORS_ENABLED` allowlist gates BatchData / CourtListener / RentCast / RealEstateAPI off by default (PR + Google enabled). — **TWO SIMPLIFICATIONS SHIPPED.** (1) `/{tenant}/tasks` and `/{tenant}/day-hub` were dual surfaces; nav pointed at `/tasks` (the richer page) while docs claimed `/day-hub` was canonical. Consolidated by moving the 3 files (`page.tsx`, `day-hub-client.tsx`, `KpiLedgerModal.tsx`) from `/tasks/` to `/day-hub/` (overwriting the simpler /day-hub variant) and replacing `/tasks/page.tsx` with a tiny `redirect()` stub for Chris's bookmark. Updated 7 internal links across top-nav, dashboard, settings, and 4 admin-only redirect targets to point at `/day-hub` directly. (2) Property-data vendor sprawl gated behind `ENRICHMENT_VENDORS_ENABLED` env allowlist. New `lib/enrichment/vendor-flags.ts` is the single source of truth. Default = `propertyradar,google` (PR primary + Google for Inventory Street View images). The 4 other vendors (BatchData, CourtListener, RentCast, RealEstateAPI) are gated off by default. Setting `ENRICHMENT_VENDORS_ENABLED=propertyradar,google,batchdata,courtlistener` restores pre-Session-66 behavior; `ENRICHMENT_VENDORS_ENABLED=propertyradar` drops Google too (no images on new properties — existing photos remain in DB). Code paths preserved for instant reversibility — schema columns untouched. `npx tsc --noEmit` clean. **Previous: Session 65 — Blocker #2 verification infra (2026-05-02) — HIGH-STAKES AUDIT ENDPOINT SHIPPED + DEPLOY-FAILURE INCIDENT CLOSED.** Plan was to build the verification surface for Blocker #2 (Role Assistant production verification of 6 high-stakes action types) — diagnostic endpoint, ritual doc. While verifying the deploy live, discovered Railway had been silently FAILING all deploys since 2026-05-01 18:56 (the Phase 4 success): Phase 5, Session-64 close, AND today's high-stakes-audit endpoint never made it to production. Root cause: `config/env.ts` strict validation killed `next build` because Railway's build env lacks `GHL_WEBHOOK_SECRET` (and the var was never in runtime env either — schema/use-site mismatch since the use site at `app/api/webhooks/ghl/route.ts:15-19` already treats it as optional). Two fixes: (1) skip `process.exit(1)` during `NEXT_PHASE='phase-production-build'`, (2) make `GHL_WEBHOOK_SECRET` schema optional. Commits: `0c6eb89` (high-stakes-audit endpoint + AUDIT_PLAN.md ritual + OPERATIONS.md cross-link), `3433c21` (env build-phase fix), `7ac5ee7` (env schema fix). Final deploy SUCCESS at 2026-05-02 15:58 UTC; high-stakes-audit endpoint verified live with proper JSON shape. The 4 commits that had been stuck on yesterday's build (Phase 5, session-close, high-stakes-audit, env-build-fix) are now all in production. **Previous: Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — CLEANUP WAVE COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
+**Current session**: 67 — Partner contact-type table Phase 1 + Phase 2 (2026-05-04) — **PIVOT + UI WIRING IN ONE SESSION.** Started by adding separate Agent + Wholesaler tables (commit `bb94f97` deployed to Railway). Within the hour Corey said "I think we just need one big database of contacts and then have a contact type which can be a whole array of options" — so dropped the 4 empty tables and replaced with one unified `Partner` table + `PropertyPartner` join. `Partner.types` is a JSON array (`agent` | `wholesaler` | `attorney` | `title` | `lender` | `inspector` | `contractor` | `photographer` | `property_manager` | `other`) — one person can carry multiple types. `PropertyPartner.role` is a free string for the per-deal role. Seller + Buyer **stay as their own typed tables** (200+ specialized fields each — vendor enrichment, TCP scoring, disposition flow all keyed there; merging them would invalidate v1.1 Wave 4-5 work). Two migrations on disk back-to-back: `20260504000000_add_agent_wholesaler` (the now-superseded 4-table shape) + `20260504010000_replace_agent_wholesaler_with_partner` (drops the 4 empty tables CASCADE + creates `partners` + `property_partners`). Zero data loss — no UI / API ever wrote to the intermediate tables. `npx prisma format` clean, `npx prisma generate` clean, `npx tsc --noEmit` exit 0. **Input source is GHL contacts (scattered, not in dedicated pipelines)** — Phase 2 link UX is "find a GHL contact → assign one or more partner types → Gunner creates the row pointing at that ghlContactId". Phase 1 ships zero behavioral change (empty tables). Phases 2-4 follow: property-detail link UX, list/detail pages, contacts-page tab. **Previous: Session 66 — Day Hub consolidation + vendor flag-gating (2026-05-03)** — `/tasks` page consolidated to `/day-hub` with redirect stub for Chris's bookmark; `ENRICHMENT_VENDORS_ENABLED` allowlist gates BatchData / CourtListener / RentCast / RealEstateAPI off by default (PR + Google enabled). — **TWO SIMPLIFICATIONS SHIPPED.** (1) `/{tenant}/tasks` and `/{tenant}/day-hub` were dual surfaces; nav pointed at `/tasks` (the richer page) while docs claimed `/day-hub` was canonical. Consolidated by moving the 3 files (`page.tsx`, `day-hub-client.tsx`, `KpiLedgerModal.tsx`) from `/tasks/` to `/day-hub/` (overwriting the simpler /day-hub variant) and replacing `/tasks/page.tsx` with a tiny `redirect()` stub for Chris's bookmark. Updated 7 internal links across top-nav, dashboard, settings, and 4 admin-only redirect targets to point at `/day-hub` directly. (2) Property-data vendor sprawl gated behind `ENRICHMENT_VENDORS_ENABLED` env allowlist. New `lib/enrichment/vendor-flags.ts` is the single source of truth. Default = `propertyradar,google` (PR primary + Google for Inventory Street View images). The 4 other vendors (BatchData, CourtListener, RentCast, RealEstateAPI) are gated off by default. Setting `ENRICHMENT_VENDORS_ENABLED=propertyradar,google,batchdata,courtlistener` restores pre-Session-66 behavior; `ENRICHMENT_VENDORS_ENABLED=propertyradar` drops Google too (no images on new properties — existing photos remain in DB). Code paths preserved for instant reversibility — schema columns untouched. `npx tsc --noEmit` clean. **Previous: Session 65 — Blocker #2 verification infra (2026-05-02) — HIGH-STAKES AUDIT ENDPOINT SHIPPED + DEPLOY-FAILURE INCIDENT CLOSED.** Plan was to build the verification surface for Blocker #2 (Role Assistant production verification of 6 high-stakes action types) — diagnostic endpoint, ritual doc. While verifying the deploy live, discovered Railway had been silently FAILING all deploys since 2026-05-01 18:56 (the Phase 4 success): Phase 5, Session-64 close, AND today's high-stakes-audit endpoint never made it to production. Root cause: `config/env.ts` strict validation killed `next build` because Railway's build env lacks `GHL_WEBHOOK_SECRET` (and the var was never in runtime env either — schema/use-site mismatch since the use site at `app/api/webhooks/ghl/route.ts:15-19` already treats it as optional). Two fixes: (1) skip `process.exit(1)` during `NEXT_PHASE='phase-production-build'`, (2) make `GHL_WEBHOOK_SECRET` schema optional. Commits: `0c6eb89` (high-stakes-audit endpoint + AUDIT_PLAN.md ritual + OPERATIONS.md cross-link), `3433c21` (env build-phase fix), `7ac5ee7` (env schema fix). Final deploy SUCCESS at 2026-05-02 15:58 UTC; high-stakes-audit endpoint verified live with proper JSON shape. The 4 commits that had been stuck on yesterday's build (Phase 5, session-close, high-stakes-audit, env-build-fix) are now all in production. **Previous: Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — CLEANUP WAVE COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -175,13 +175,78 @@ schema change). `npx tsc --noEmit` exit 0.
   point at Partner / PropertyPartner), `docs/SYSTEM_MAP.md`,
   `docs/OPERATIONS.md`, `PROGRESS.md` (this entry)
 
-**Next session:** Phase 2 — property-detail page integration. Add
-"Partners on this deal" section to
-`/{tenant}/inventory/[propertyId]`. Build the link-from-GHL-contact
-modal (reuse `<GHLDropdown>` pattern from
-`components/ui/ghl-dropdown.tsx`). Build 4 new API routes (Partner
-CRUD + link/unlink to property). Sync helper `lib/partners/sync.ts`
-mirroring `lib/buyers/sync.ts:parseGHLContact()`.
+**Phase 2 shipped same session ("hammer it out"):**
+
+After Phase 1 deployed, Corey said "hammer it out" — built the full
+property-detail UX in the same session.
+
+1. **`lib/partners/sync.ts` (108 lines)** — `upsertPartnerFromGHL()`
+   helper. Idempotent on (tenantId, ghlContactId): existing rows get
+   their `types` array merged with new types and contact details
+   refreshed (never wiped to null); new rows seeded with the GHL
+   payload. Exports `PARTNER_TYPES` const tuple + `isPartnerType()`
+   guard for use in API zod schemas.
+2. **`app/api/properties/[propertyId]/partners/route.ts` (216 lines)**
+   — GET/POST/DELETE. POST handles two actions:
+   - Default branch: link a new partner. Calls `upsertPartnerFromGHL`,
+     creates `PropertyPartner` join row with role + economics. Returns
+     the linked partner shape.
+   - `action: 'update'` branch: update an existing PropertyPartner
+     row's per-deal fields (role, commission, purchase price,
+     assignment fee, notes).
+   - DELETE removes the join row only — Partner stays for future
+     deals. Permission gated on `properties.edit`. Mirrors the
+     sibling sellers route shape exactly.
+3. **`components/inventory/partners-tab.tsx` (462 lines)** — three
+   client components:
+   - `<PartnersTab>` — top-level container with header + "Link
+     Partner" toggle + cards list.
+   - `<LinkPartnerForm>` — GHL contact search via `/api/ghl/contacts`,
+     multi-type chips (10 types selectable), per-deal role dropdown
+     (15 options), conditional economics fields (commission shows for
+     agent flavors, purchase/assignment shows for wholesaler
+     flavors), notes textarea, validation requires at least one type.
+   - `<PartnerCard>` — read view with name + type badges + grade pill
+     + per-deal facts row, edit toggle that switches to inline form
+     (role + 4 economics fields + notes), unlink button with confirm.
+4. **`components/inventory/property-detail-client.tsx` edits:** added
+   `Partners` tab to TABS, `partners` to PropertyDetail interface,
+   `<PartnersTab>` mount in tab-render block, Briefcase icon import,
+   PartnersTab import.
+5. **`app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx` edits:**
+   added `partners: { include: { partner: { select: ... } } }` to
+   the Prisma fetch, added partners-mapping step in the prop
+   serialization (Decimal → string).
+6. **`docs/SYSTEM_MAP.md`** — extended Partners section with the
+   Phase 2 file roster.
+7. **`docs/OPERATIONS.md`** — bumped route count 110 → 113, withTenant
+   count 91 → 92.
+
+**Verification:** `npx tsc --noEmit` exit 0 after every step. Pre-push
+hook will re-run before push.
+
+**End of Session 67 reliability scorecard delta:**
+
+| # | Dimension | S66 | S67 | Δ | What changed |
+|---|---|---|---|---|---|
+| 1 | Call ingestion | 9 | 9 | — | No regression. |
+| 2 | Grading pipeline | 9 | 9 | — | No regression. |
+| 3 | Multi-tenancy | 9 | 9 | — | New partners route uses `withTenant` + property-tenant validation gate. |
+| 4 | Error visibility | 8 | 8 | — | No change. |
+| 5 | Documentation hygiene | 9 | 9 | — | SYSTEM_MAP + OPERATIONS + PROGRESS all updated in same commit per Rule 8. |
+| 6 | Repo security posture | 8 | 8 | — | No identifier leaks. |
+| 7 | Production verification discipline | 9 | 9 | — | Phase 1 + 2 verified via tsc; live verification deferred to Corey clicking Link Partner on a real property. |
+| 8 | Seller/Buyer contact data model | 8 | 8 | — | Untouched by this session. |
+
+Average **8.625/10** (unchanged). Net new dimension we should consider
+adding: "Partner / deal-team data model" — would start at 7/10
+(schema + API + UI all live, but no list page yet, no GHL bulk sync,
+no scoring).
+
+**Next session:** Phase 3 candidates — standalone `/{tenant}/partners`
+list page with type filter, Partners tab on the existing `/contacts`
+page (Phase 4), or fresh work entirely. Phase 2 ships value end-to-end
+on the property detail page; the rest is gravy.
 
 **Side-finding (deferred to backlog):** `PropertySeller.role` field at
 `prisma/schema.prisma:1046` defaults to `"Seller"` but is **never read

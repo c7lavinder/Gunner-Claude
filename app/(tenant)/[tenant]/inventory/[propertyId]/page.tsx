@@ -122,6 +122,20 @@ export default async function PropertyDetailPage({
           },
           orderBy: { isPrimary: 'desc' },
         },
+        // Session 67 Phase 2 — Partners on this deal (agents, wholesalers,
+        // attorneys, etc). Distinct from sellers + buyers. See
+        // components/inventory/partners-tab.tsx + lib/partners/sync.ts.
+        partners: {
+          include: {
+            partner: {
+              select: {
+                id: true, name: true, phone: true, email: true, company: true,
+                ghlContactId: true, types: true, partnerGrade: true, tierClassification: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         assignedTo: { select: { id: true, name: true, role: true } },
         market: { select: { name: true } },
         calls: {
@@ -455,6 +469,23 @@ export default async function PropertyDetailPage({
           userId: m.userId,
           userName: m.user?.name ?? 'Unknown',
           createdAt: m.createdAt.toISOString(),
+        })),
+        partners: property.partners.map((pp) => ({
+          id: pp.partner.id,
+          name: pp.partner.name,
+          phone: pp.partner.phone,
+          email: pp.partner.email,
+          company: pp.partner.company,
+          ghlContactId: pp.partner.ghlContactId,
+          types: (pp.partner.types ?? []) as string[],
+          partnerGrade: pp.partner.partnerGrade,
+          tierClassification: pp.partner.tierClassification,
+          role: pp.role,
+          commissionPercent: pp.commissionPercent,
+          commissionAmount: pp.commissionAmount?.toString() ?? null,
+          purchasePrice: pp.purchasePrice?.toString() ?? null,
+          assignmentFeePaid: pp.assignmentFeePaid?.toString() ?? null,
+          notesOnThisDeal: pp.notesOnThisDeal,
         })),
       }}
       tenantSlug={params.tenant}
