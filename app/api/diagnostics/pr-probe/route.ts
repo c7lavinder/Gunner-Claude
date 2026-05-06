@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
+import { enrichProperty } from '@/lib/enrichment/enrich-property'
 
 const PR_BASE = 'https://api.propertyradar.com/v1'
 
@@ -30,6 +31,10 @@ export async function GET(req: Request) {
   // to 0 (preview, no credit) for safety; pass ?purchase=1 to verify real
   // data flow through the matching path.
   const purchase = url.searchParams.get('purchase') === '1' ? 1 : 0
+  // ?enrich=1 also runs the full enrichProperty() orchestrator afterward
+  // and reports columns written + a re-fetch of the property to show what
+  // landed. Burns ~3 PR credits + 1 Google call per invocation.
+  const runEnrich = url.searchParams.get('enrich') === '1'
   if (!tenantSlug) {
     return NextResponse.json({ error: 'Missing ?tenant=<slug>' }, { status: 400 })
   }
@@ -108,6 +113,22 @@ export async function GET(req: Request) {
   const firstResult = results?.[0]
   const radarId = firstResult ? (firstResult.RadarID as string | undefined) : undefined
 
+  // Optional: run the full enrichment orchestrator. Writes to DB.
+  let enrichResult: unknown = null
+  let propertyAfter: unknown = null
+  if (runEnrich) {
+    try {
+      enrichResult = await enrichProperty(property.id, tenant.id)
+      const after = await db.property.findUnique({
+        where: { id: property.id },
+        select: { fieldSources: true, distressScore: true, availableEquity: true, estimatedEquity: true, openMortgageBalance: true, beds: true, baths: true, sqft: true, yearBuilt: true, taxAssessment: true, advancedPropertyType: true, latitude: true, longitude: true, apn: true },
+      })
+      propertyAfter = after
+    } catch (err) {
+      enrichResult = { error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
   return NextResponse.json({
     durationMs: Date.now() - startedAt,
     property,
@@ -117,6 +138,8 @@ export async function GET(req: Request) {
       url: searchUrl,
       criteria,
     },
+    enrich: enrichResult,
+    propertyAfter,
     response: {
       status: searchStatus,
       headers: {
