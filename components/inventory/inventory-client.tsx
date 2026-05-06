@@ -227,12 +227,20 @@ export function InventoryClient({ properties: initialProperties, statusCounts, t
             {showArchived ? 'Hide archived' : 'Show archived'}
           </Link>
           {canManage && (
-            <Link
-              href={`/${tenantSlug}/inventory/new`}
-              className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-body font-semibold px-4 py-[9px] rounded-[10px] transition-colors"
-            >
-              <Plus size={14} /> Add property
-            </Link>
+            <>
+              <Link
+                href={`/${tenantSlug}/inventory/log-jv-deal`}
+                className="flex items-center gap-1.5 text-ds-body font-medium px-3 py-[9px] rounded-[10px] border-[0.5px] bg-white text-txt-secondary border-[rgba(0,0,0,0.14)] hover:text-txt-primary hover:bg-surface-secondary transition-colors"
+              >
+                <Plus size={14} /> Log JV deal
+              </Link>
+              <Link
+                href={`/${tenantSlug}/inventory/new`}
+                className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-body font-semibold px-4 py-[9px] rounded-[10px] transition-colors"
+              >
+                <Plus size={14} /> Add property
+              </Link>
+            </>
           )}
         </div>
       </div>
