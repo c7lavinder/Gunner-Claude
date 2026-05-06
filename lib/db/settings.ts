@@ -14,8 +14,8 @@ interface ToolResponse<T = unknown> {
 }
 
 interface TenantSettingsUpdate {
-  propertyPipelineId: string | null
-  propertyTriggerStage: string | null
+  // Phase 1 commit 2: pipeline registration moved to tenant_ghl_pipelines.
+  // The /api/tenants/ghl-pipelines endpoint mutates that table directly.
   onboardingStep: number
   onboardingCompleted: boolean
   callTypes: string[]

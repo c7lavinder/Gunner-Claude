@@ -44,11 +44,21 @@ export async function handleGHLWebhook(event: GHLWebhookEvent): Promise<void> {
       await handleMessage(tenant.id, event)
       break
 
+    case 'OpportunityCreate':
+    case 'opportunity.create':
+      await handleOpportunityCreate(tenant.id, event)
+      break
+
     case 'OpportunityStageChanged':
     case 'opportunity.stageChanged':
-    case 'OpportunityCreate':
     case 'OpportunityUpdate':
-      await handleOpportunityStageChanged(tenant.id, event)
+    case 'opportunity.update':
+      await handleOpportunityUpdate(tenant.id, event)
+      break
+
+    case 'OpportunityDelete':
+    case 'opportunity.delete':
+      await handleOpportunityDelete(tenant.id, event)
       break
 
     case 'ContactCreated':
@@ -416,325 +426,447 @@ async function handleCallCompleted(tenantId: string, event: GHLWebhookEvent) {
   // Cron processes this call within ~30 seconds. One path, no fragile chains.
 }
 
-// ─── Opportunity Stage Changed → Maybe create property ─────────────────────
+// ─── Opportunity Create / Update / Delete (lane-aware, Phase 1 commit 2) ───
+//
+// Lane is determined by the GHL pipeline ID looking up tenant_ghl_pipelines.
+// If the pipeline isn't registered → log INFO + ignore. The handler writes
+// only to the lane's matching status / opp ID / stage name / entered-at
+// columns (strict-lane writes per plan §0 decision #2). The single allowed
+// cross-lane exception is the Sales Process pipeline at the "1 Month
+// Follow Up" stage, which writes longtermStatus instead of acqStatus.
 
-async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhookEvent) {
-  const oppData = event as {
-    id?: string
-    stageId?: string
-    pipelineStageId?: string
-    previousStageId?: string
-    contactId?: string
-    pipelineId?: string
-    source?: string
-    assignedTo?: string
-    userId?: string
-    locationId: string
-  }
+type GhlOppEvent = {
+  id?: string                  // opp ID
+  stageId?: string
+  pipelineStageId?: string
+  previousStageId?: string
+  contactId?: string
+  pipelineId?: string
+  source?: string
+  assignedTo?: string
+  userId?: string
+  locationId: string
+}
 
-  const stageId = oppData.pipelineStageId || oppData.stageId
-  if (!oppData.contactId || !stageId) return
+type Lane = 'acquisition' | 'disposition' | 'longterm'
 
-  // Resolve stage name from GHL upfront — used by all paths below
-  let resolvedStageName: string | null = null
+async function resolveStageName(tenantId: string, stageId: string): Promise<string | null> {
   try {
     const { getGHLClient } = await import('@/lib/ghl/client')
     const ghl = await getGHLClient(tenantId)
     const pipelines = await ghl.getPipelines()
     for (const pipeline of pipelines.pipelines ?? []) {
       const stage = pipeline.stages?.find((s: { id: string; name: string }) => s.id === stageId)
-      if (stage) { resolvedStageName = stage.name; break }
+      if (stage) return stage.name
     }
-  } catch (err) { await logFailure(tenantId, 'webhook.pipeline_lookup_failed', 'property', err, { stageId, contactId: oppData.contactId }) }
-
-  const tenant = await db.tenant.findUnique({
-    where: { id: tenantId },
-    select: {
-      propertyPipelineId: true, propertyTriggerStage: true,
-      dispoPipelineId: true, dispoTriggerStage: true,
-    },
-  })
-  if (!tenant) return
-
-  // Resolve GHL user → local user for milestone attribution
-  const ghlUserId = oppData.assignedTo ?? oppData.userId ?? ''
-  const milestoneUser = ghlUserId
-    ? await db.user.findFirst({ where: { tenantId, ghlUserId }, select: { id: true } })
-    : null
-
-  // ─── Check: is this the acquisition trigger? ──────────────────────────
-  const isAcqTrigger =
-    tenant.propertyTriggerStage &&
-    stageId === tenant.propertyTriggerStage &&
-    (!tenant.propertyPipelineId || oppData.pipelineId === tenant.propertyPipelineId)
-
-  if (isAcqTrigger) {
-    await createPropertyFromContact(tenantId, oppData.contactId, {
-      ghlPipelineId: oppData.pipelineId,
-      ghlPipelineStage: resolvedStageName ?? stageId,
-      opportunitySource: oppData.source,
-    })
-    return
-  }
-
-  // ─── Check: is this the dispo trigger? ────────────────────────────────
-  const isDispoTrigger =
-    tenant.dispoTriggerStage &&
-    stageId === tenant.dispoTriggerStage &&
-    (!tenant.dispoPipelineId || oppData.pipelineId === tenant.dispoPipelineId)
-
-  if (isDispoTrigger) {
-    // Entering dispo: set dispoStatus (never touch acq status).
-    const existing = await db.property.findFirst({
-      where: { tenantId, ghlContactId: oppData.contactId },
-      select: { id: true, address: true, acqStatus: true },
-    })
-    if (existing) {
-      // Respect the per-property sync lock — user may have paused sync on one
-      // half of a split so the other half can continue following the GHL opp.
-      const locked = await db.property.findUnique({
-        where: { id: existing.id },
-        select: { ghlSyncLocked: true },
-      })
-      if (locked?.ghlSyncLocked) {
-        console.log(`[GHL Webhook] Dispo trigger skipped (sync locked): ${existing.address}`)
-      } else {
-        await db.property.update({
-          where: { id: existing.id },
-          data: {
-            dispoStatus: 'IN_DISPOSITION',
-            dispoStageEnteredAt: new Date(),
-            ghlDispoStageName: resolvedStageName ?? stageId,
-          },
-        })
-        console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → dispoStatus=IN_DISPOSITION (acq stays ${existing.acqStatus ?? '—'})`)
-      }
-    } else {
-      await createPropertyFromContact(tenantId, oppData.contactId, {
-        ghlPipelineId: oppData.pipelineId,
-        ghlPipelineStage: resolvedStageName ?? stageId,
-        opportunitySource: oppData.source,
-      })
-    }
-
-    const propForMilestone = existing ?? await db.property.findFirst({
-      where: { tenantId, ghlContactId: oppData.contactId },
-      select: { id: true, acqStatus: true },
-    })
-    if (propForMilestone) {
-      const { getCentralDayBounds } = await import('@/lib/dates')
-      const { dayStart, dayEnd } = getCentralDayBounds()
-
-      // Backfill any missing acquisition milestones up to current acq status.
-      // A property entering dispo has clearly completed acquisition through its current stage.
-      const ACQ_STATUS_TO_MILESTONES: Record<string, string[]> = {
-        'UNDER_CONTRACT': ['LEAD', 'UNDER_CONTRACT'],
-        'OFFER_MADE': ['LEAD', 'OFFER_MADE'],
-        'APPOINTMENT_SET': ['LEAD', 'APPOINTMENT_SET'],
-        'CLOSED': ['LEAD', 'UNDER_CONTRACT', 'CLOSED'],
-      }
-      const acqStatus = (existing ?? propForMilestone).acqStatus ?? ''
-      const neededMilestones = ACQ_STATUS_TO_MILESTONES[acqStatus] ?? ['LEAD']
-      for (const mType of neededMilestones) {
-        const exists = await db.propertyMilestone.findFirst({
-          where: { tenantId, propertyId: propForMilestone.id, type: mType as import('@prisma/client').MilestoneType },
-        })
-        if (!exists) {
-          await db.propertyMilestone.create({
-            data: { tenantId, propertyId: propForMilestone.id, type: mType as import('@prisma/client').MilestoneType, source: 'AUTO_WEBHOOK', loggedById: milestoneUser?.id },
-          }).catch(err => logFailure(tenantId, 'webhook.milestone_backfill_failed', 'property_milestone', err, { propertyId: propForMilestone.id, milestoneType: mType }))
-          console.log(`[GHL Webhook] Backfilled ${mType} milestone for ${propForMilestone.id}`)
-        }
-      }
-
-      // Create DISPO_NEW milestone (same-day dedup)
-      const existingDispo = await db.propertyMilestone.findFirst({
-        where: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', createdAt: { gte: dayStart, lte: dayEnd } },
-      })
-      if (!existingDispo) {
-        await db.propertyMilestone.create({
-          data: { tenantId, propertyId: propForMilestone.id, type: 'DISPO_NEW', source: 'AUTO_WEBHOOK', loggedById: milestoneUser?.id },
-        }).catch(err => logFailure(tenantId, 'webhook.milestone_create_failed', 'property_milestone', err, { propertyId: propForMilestone.id, milestoneType: 'DISPO_NEW' }))
-        console.log(`[GHL Webhook] Created DISPO_NEW milestone for ${propForMilestone.id}`)
-      }
-    }
-    return
-  }
-
-  // ─── General stage change: update existing property status ────────────
-  try {
-    const stageName = resolvedStageName
-
-    const { getAppStage } = await import('@/lib/ghl-stage-map')
-    const appStage = stageName ? getAppStage(stageName) : null
-
-    // Per-lane mapping (Phase 1 of GHL multi-pipeline redesign).
-    // Note: SOLD → CLOSED, DISPO_CLOSED → CLOSED renames per plan §3.
-    const APP_STAGE_TO_STATUS: Record<string, string> = {
-      'acquisition.new_lead': 'NEW_LEAD',
-      'acquisition.appt_set': 'APPOINTMENT_SET',
-      'acquisition.offer_made': 'OFFER_MADE',
-      'acquisition.contract': 'UNDER_CONTRACT',
-      'acquisition.closed': 'CLOSED',
-      'disposition.new_deal': 'IN_DISPOSITION',
-      'disposition.pushed_out': 'DISPO_PUSHED',
-      'disposition.offers_received': 'DISPO_OFFERS',
-      'disposition.contracted': 'DISPO_CONTRACTED',
-      'disposition.closed': 'CLOSED',
-      'longterm.follow_up': 'FOLLOW_UP',
-      'longterm.dead': 'DEAD',
-    }
-
-    const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
-    const lane = appStage?.startsWith('disposition')
-      ? 'disposition'
-      : appStage?.startsWith('longterm')
-      ? 'longterm'
-      : 'acquisition'
-    const now = new Date()
-    const stageLabel = stageName ?? stageId
-
-    // Strict-lane writes per plan §0 decision #2: each pipeline writes only
-    // to its own lane column. Acquisition writes acqStatus + acq stage name +
-    // acq entered-at; same shape per lane.
-    const updateData: Record<string, unknown> = {}
-
-    if (newStatus) {
-      if (lane === 'disposition') {
-        updateData.dispoStatus = newStatus
-        updateData.dispoStageEnteredAt = now
-        updateData.ghlDispoStageName = stageLabel
-      } else if (lane === 'longterm') {
-        updateData.longtermStatus = newStatus
-        updateData.longtermStageEnteredAt = now
-        updateData.ghlLongtermStageName = stageLabel
-      } else {
-        updateData.acqStatus = newStatus
-        updateData.acqStageEnteredAt = now
-        updateData.ghlAcqStageName = stageLabel
-      }
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      // Only push stage updates to properties that still follow this GHL opp.
-      // Properties with ghlSyncLocked=true have been intentionally diverged
-      // by the user (e.g., split-pair where one moves and the other stays).
-      await db.property.updateMany({
-        where: { tenantId, ghlContactId: oppData.contactId, ghlSyncLocked: false },
-        data: updateData,
-      })
-    }
-
-    // Auto-create ALL milestones required for this status (backfill any gaps).
-    // A property at OFFER_MADE should have: LEAD, APPOINTMENT_SET, OFFER_MADE.
-    // If it jumped from NEW_LEAD to OFFER_MADE, the intermediate ones get created here.
-    // Keyed by appStage (not raw status) so acq/dispo CLOSED don't collide.
-    if (newStatus && appStage) {
-      const APPSTAGE_REQUIRED_MILESTONES: Record<string, string[]> = {
-        'acquisition.new_lead':   ['LEAD'],
-        'acquisition.appt_set':   ['LEAD', 'APPOINTMENT_SET'],
-        'acquisition.offer_made': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE'],
-        'acquisition.contract':   ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT'],
-        'acquisition.closed':     ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED'],
-        'disposition.new_deal':       ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW'],
-        'disposition.pushed_out':     ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED'],
-        'disposition.offers_received':['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED'],
-        'disposition.contracted':     ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED'],
-        'disposition.closed':         ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED'],
-        'longterm.follow_up': ['LEAD'],
-        'longterm.dead': [],
-      }
-      const requiredMilestones = APPSTAGE_REQUIRED_MILESTONES[appStage] ?? []
-      if (requiredMilestones.length > 0) {
-        try {
-          const prop = await db.property.findFirst({
-            where: { tenantId, ghlContactId: oppData.contactId },
-            select: { id: true, milestones: { select: { type: true } } },
-          })
-          if (prop) {
-            const existing = new Set(prop.milestones.map(m => String(m.type)))
-            for (const mType of requiredMilestones) {
-              if (existing.has(mType)) continue
-              await db.propertyMilestone.create({
-                data: {
-                  tenantId,
-                  propertyId: prop.id,
-                  type: mType as import('@prisma/client').MilestoneType,
-                  source: 'AUTO_WEBHOOK',
-                  loggedById: milestoneUser?.id,
-                },
-              }).catch(err => logFailure(tenantId, 'webhook.milestone_backfill_failed', 'property_milestone', err, { propertyId: prop.id, milestoneType: mType }))
-              console.log(`[GHL Webhook] Auto-created ${mType} milestone for property ${prop.id}`)
-            }
-          }
-        } catch (err) {
-          await logFailure(tenantId, 'webhook.milestone_create_failed', 'property_milestone', err, { contactId: oppData.contactId, newStatus, stageId })
-        }
-      }
-    }
-
-    console.log(`[GHL Webhook] Stage changed for contact ${oppData.contactId}: ${stageName ?? stageId} → ${appStage ?? 'unknown'} → ${newStatus ?? 'no update'}`)
   } catch (err) {
-    await logFailure(tenantId, 'webhook.stage_update_failed', 'property', err, { contactId: oppData.contactId, stageId })
+    await logFailure(tenantId, 'webhook.pipeline_lookup_failed', 'property', err, { stageId })
+  }
+  return null
+}
+
+async function getTrackForPipeline(tenantId: string, pipelineId: string): Promise<Lane | null> {
+  const row = await db.tenantGhlPipeline.findFirst({
+    where: { tenantId, ghlPipelineId: pipelineId, isActive: true },
+    select: { track: true },
+  })
+  if (!row) return null
+  if (row.track === 'acquisition' || row.track === 'disposition' || row.track === 'longterm') {
+    return row.track
+  }
+  return null
+}
+
+const APP_STAGE_TO_STATUS: Record<string, string> = {
+  'acquisition.new_lead': 'NEW_LEAD',
+  'acquisition.appt_set': 'APPOINTMENT_SET',
+  'acquisition.offer_made': 'OFFER_MADE',
+  'acquisition.contract': 'UNDER_CONTRACT',
+  'acquisition.closed': 'CLOSED',
+  'disposition.new_deal': 'IN_DISPOSITION',
+  'disposition.pushed_out': 'DISPO_PUSHED',
+  'disposition.offers_received': 'DISPO_OFFERS',
+  'disposition.contracted': 'DISPO_CONTRACTED',
+  'disposition.closed': 'CLOSED',
+  'longterm.follow_up': 'FOLLOW_UP',
+  'longterm.dead': 'DEAD',
+}
+
+const APPSTAGE_REQUIRED_MILESTONES: Record<string, string[]> = {
+  'acquisition.new_lead':   ['LEAD'],
+  'acquisition.appt_set':   ['LEAD', 'APPOINTMENT_SET'],
+  'acquisition.offer_made': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE'],
+  'acquisition.contract':   ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT'],
+  'acquisition.closed':     ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED'],
+  'disposition.new_deal':       ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW'],
+  'disposition.pushed_out':     ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED'],
+  'disposition.offers_received':['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED'],
+  'disposition.contracted':     ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED'],
+  'disposition.closed':         ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED'],
+  'longterm.follow_up': ['LEAD'],
+  'longterm.dead': [],
+}
+
+// Resolve the lane + status to write based on track + stageName.
+// Returns null when the move is a NO-OP under strict-lane mode (e.g. SP at
+// "4 Month FU" — paired Follow Up opp expected to do the longterm write).
+async function resolveLaneAndStatus(
+  track: Lane,
+  stageName: string,
+): Promise<{ lane: Lane; status: string; appStage: string } | null> {
+  const { getAppStage } = await import('@/lib/ghl-stage-map')
+  const appStage = getAppStage(stageName)
+
+  if (track === 'acquisition') {
+    if (appStage.startsWith('acquisition.')) {
+      const status = APP_STAGE_TO_STATUS[appStage]
+      return status ? { lane: 'acquisition', status, appStage } : null
+    }
+    // Cross-lane exception: SP at "1 Month Follow Up" → longtermStatus
+    if (appStage === 'longterm.follow_up' && stageName === '1 Month Follow Up') {
+      return { lane: 'longterm', status: 'FOLLOW_UP', appStage: 'longterm.follow_up' }
+    }
+    // SP at 4 Month FU / 1 Year FU / Ghosted / DO NOT WANT / SOLD → NO-OP.
+    // Strict-lane mode expects a paired Follow Up pipeline opp to drive
+    // longtermStatus separately.
+    return null
   }
 
-  // ─── Upsert Seller/Buyer by pipeline ───────────────────────────────────
-  // When an opportunity is created or moves stages, ensure the contact
-  // exists as a Seller (sales pipeline) or Buyer (buyers pipeline).
-  if (oppData.contactId && oppData.pipelineId) {
-    try {
-      const { getSellerBuyerPipelineIds } = await import('@/lib/ghl/pipelines')
-      const { sellerPipelineId, buyerPipelineId } = await getSellerBuyerPipelineIds(tenantId)
-      const ghl = await getGHLClient(tenantId)
-      const contact = await ghl.getContact(oppData.contactId)
-      const contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim()
-      if (!contactName) return
-
-      const normalizePhone = (p: string | null | undefined): string | null => {
-        if (!p) return null
-        const d = p.replace(/\D/g, '')
-        if (d.length === 10) return `+1${d}`
-        if (d.length === 11 && d.startsWith('1')) return `+${d}`
-        return p
-      }
-      const phone = normalizePhone(contact.phone)
-
-      if (oppData.pipelineId === sellerPipelineId) {
-        const existing = await db.seller.findFirst({
-          where: {
-            tenantId,
-            OR: [{ ghlContactId: oppData.contactId }, ...(phone ? [{ phone }] : [])],
-          },
-          select: { id: true },
-        })
-        if (existing) {
-          await db.seller.update({ where: { id: existing.id }, data: { name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
-        } else {
-          await db.seller.create({ data: { tenantId, name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
-        }
-        console.log(`[GHL Webhook] Seller upserted from opportunity: ${contactName}`)
-      }
-
-      if (oppData.pipelineId === buyerPipelineId) {
-        const existing = await db.buyer.findFirst({
-          where: {
-            tenantId,
-            OR: [{ ghlContactId: oppData.contactId }, ...(phone ? [{ phone }] : [])],
-          },
-          select: { id: true },
-        })
-        if (existing) {
-          await db.buyer.update({ where: { id: existing.id }, data: { name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
-        } else {
-          await db.buyer.create({ data: { tenantId, name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
-        }
-        console.log(`[GHL Webhook] Buyer upserted from opportunity: ${contactName}`)
-      }
-    } catch (err) {
-      await logFailure(tenantId, 'webhook.contact_upsert_from_opp_failed', 'seller', err, { contactId: oppData.contactId })
+  if (track === 'disposition') {
+    if (appStage.startsWith('disposition.')) {
+      const status = APP_STAGE_TO_STATUS[appStage]
+      return status ? { lane: 'disposition', status, appStage } : null
     }
+    // Stage didn't classify cleanly — log + treat as default new-deal entry
+    return { lane: 'disposition', status: 'IN_DISPOSITION', appStage }
+  }
+
+  if (track === 'longterm') {
+    if (appStage === 'acquisition.closed') {
+      // FU pipeline at "Purchased" stage → NO-OP per plan §2
+      return null
+    }
+    if (appStage.startsWith('longterm.')) {
+      const status = APP_STAGE_TO_STATUS[appStage]
+      return status ? { lane: 'longterm', status, appStage } : null
+    }
+    return { lane: 'longterm', status: 'FOLLOW_UP', appStage }
+  }
+
+  return null
+}
+
+// Build the per-lane Property update payload (status + entered_at + stage name + opp ID).
+function laneUpdatePayload(
+  lane: Lane,
+  status: string,
+  stageLabel: string,
+  oppId: string | null,
+  now: Date,
+): Record<string, unknown> {
+  if (lane === 'acquisition') {
+    return {
+      acqStatus: status,
+      acqStageEnteredAt: now,
+      ghlAcqStageName: stageLabel,
+      ...(oppId ? { ghlAcqOppId: oppId } : {}),
+    }
+  }
+  if (lane === 'disposition') {
+    return {
+      dispoStatus: status,
+      dispoStageEnteredAt: now,
+      ghlDispoStageName: stageLabel,
+      ...(oppId ? { ghlDispoOppId: oppId } : {}),
+    }
+  }
+  return {
+    longtermStatus: status,
+    longtermStageEnteredAt: now,
+    ghlLongtermStageName: stageLabel,
+    ...(oppId ? { ghlLongtermOppId: oppId } : {}),
   }
 }
+
+async function logUnlistenedPipeline(tenantId: string, oppData: GhlOppEvent, eventType: string) {
+  await db.auditLog.create({
+    data: {
+      tenantId,
+      action: 'ghl.webhook.unlistened_pipeline',
+      resource: 'webhook',
+      severity: 'INFO',
+      source: 'GHL_WEBHOOK',
+      payload: {
+        eventType,
+        contactId: oppData.contactId,
+        pipelineId: oppData.pipelineId,
+        oppId: oppData.id,
+      } as Prisma.InputJsonValue,
+    },
+  }).catch(() => {})
+}
+
+// Auto-create milestones (LEAD, APPOINTMENT_SET, etc.) up to and including
+// the current appStage. Works the same for any lane.
+async function backfillMilestones(
+  tenantId: string,
+  propertyId: string,
+  appStage: string,
+  loggedById: string | null,
+): Promise<void> {
+  const required = APPSTAGE_REQUIRED_MILESTONES[appStage] ?? []
+  if (required.length === 0) return
+  try {
+    const prop = await db.property.findFirst({
+      where: { tenantId, id: propertyId },
+      select: { milestones: { select: { type: true } } },
+    })
+    if (!prop) return
+    const existing = new Set(prop.milestones.map(m => String(m.type)))
+    for (const mType of required) {
+      if (existing.has(mType)) continue
+      await db.propertyMilestone.create({
+        data: {
+          tenantId,
+          propertyId,
+          type: mType as import('@prisma/client').MilestoneType,
+          source: 'AUTO_WEBHOOK',
+          loggedById: loggedById ?? undefined,
+        },
+      }).catch(err => logFailure(tenantId, 'webhook.milestone_backfill_failed', 'property_milestone', err, { propertyId, milestoneType: mType }))
+    }
+  } catch (err) {
+    await logFailure(tenantId, 'webhook.milestone_create_failed', 'property_milestone', err, { propertyId, appStage })
+  }
+}
+
+// Upsert seller / buyer when the opp's pipeline is the configured
+// seller-pipeline or buyer-pipeline. Independent of the property write path.
+async function upsertSellerBuyerFromOpp(tenantId: string, oppData: GhlOppEvent): Promise<void> {
+  if (!oppData.contactId || !oppData.pipelineId) return
+  try {
+    const { getSellerBuyerPipelineIds } = await import('@/lib/ghl/pipelines')
+    const { sellerPipelineId, buyerPipelineId } = await getSellerBuyerPipelineIds(tenantId)
+    const ghl = await getGHLClient(tenantId)
+    const contact = await ghl.getContact(oppData.contactId)
+    const contactName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim()
+    if (!contactName) return
+
+    const normalizePhone = (p: string | null | undefined): string | null => {
+      if (!p) return null
+      const d = p.replace(/\D/g, '')
+      if (d.length === 10) return `+1${d}`
+      if (d.length === 11 && d.startsWith('1')) return `+${d}`
+      return p
+    }
+    const phone = normalizePhone(contact.phone)
+
+    if (oppData.pipelineId === sellerPipelineId) {
+      const existing = await db.seller.findFirst({
+        where: { tenantId, OR: [{ ghlContactId: oppData.contactId }, ...(phone ? [{ phone }] : [])] },
+        select: { id: true },
+      })
+      if (existing) {
+        await db.seller.update({ where: { id: existing.id }, data: { name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+      } else {
+        await db.seller.create({ data: { tenantId, name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+      }
+    }
+
+    if (oppData.pipelineId === buyerPipelineId) {
+      const existing = await db.buyer.findFirst({
+        where: { tenantId, OR: [{ ghlContactId: oppData.contactId }, ...(phone ? [{ phone }] : [])] },
+        select: { id: true },
+      })
+      if (existing) {
+        await db.buyer.update({ where: { id: existing.id }, data: { name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+      } else {
+        await db.buyer.create({ data: { tenantId, name: contactName, phone, email: contact.email || null, ghlContactId: oppData.contactId } })
+      }
+    }
+  } catch (err) {
+    await logFailure(tenantId, 'webhook.contact_upsert_from_opp_failed', 'seller', err, { contactId: oppData.contactId })
+  }
+}
+
+// Resolve the assigned GHL user → local user (for milestone attribution).
+async function resolveMilestoneUser(tenantId: string, oppData: GhlOppEvent): Promise<string | null> {
+  const ghlUserId = oppData.assignedTo ?? oppData.userId ?? ''
+  if (!ghlUserId) return null
+  const user = await db.user.findFirst({ where: { tenantId, ghlUserId }, select: { id: true } })
+  return user?.id ?? null
+}
+
+// ── Common path: process a Create or Update event for a known lane ──────
+async function processLaneOppEvent(
+  tenantId: string,
+  oppData: GhlOppEvent,
+  track: Lane,
+  resolvedStageName: string | null,
+  isCreate: boolean,
+): Promise<void> {
+  const stageId = oppData.pipelineStageId || oppData.stageId || ''
+  if (!oppData.contactId || !stageId) return
+  const stageLabel = resolvedStageName ?? stageId
+
+  const resolution = resolvedStageName ? await resolveLaneAndStatus(track, resolvedStageName) : null
+  if (!resolution) {
+    // Strict-lane NO-OP — paired opp expected in another pipeline.
+    console.log(`[GHL Webhook] No-op stage move (track=${track}, stage=${stageLabel})`)
+    return
+  }
+
+  const { lane, status, appStage } = resolution
+  const now = new Date()
+  const milestoneUserId = await resolveMilestoneUser(tenantId, oppData)
+
+  // Find the existing property for this contact (any lane).
+  const existing = await db.property.findFirst({
+    where: { tenantId, ghlContactId: oppData.contactId },
+    select: { id: true, address: true, ghlSyncLocked: true },
+  })
+
+  if (!existing) {
+    // No property yet for this contact. Behavior per plan §1 target:
+    //   - Acquisition: ALWAYS create
+    //   - Disposition: rare — create
+    //   - Longterm: SKIP + LOG (paired SP opp expected to have created one)
+    if (lane === 'longterm') {
+      await db.auditLog.create({
+        data: {
+          tenantId,
+          action: 'ghl.webhook.longterm_no_property',
+          resource: 'webhook',
+          severity: 'WARNING',
+          source: 'GHL_WEBHOOK',
+          payload: {
+            contactId: oppData.contactId,
+            pipelineId: oppData.pipelineId,
+            stage: stageLabel,
+          } as Prisma.InputJsonValue,
+        },
+      }).catch(() => {})
+      console.log(`[GHL Webhook] Longterm stage move skipped — no property for contact ${oppData.contactId}`)
+      return
+    }
+
+    // Create property + apply lane payload.
+    await createPropertyFromContact(tenantId, oppData.contactId, {
+      ghlPipelineId: oppData.pipelineId,
+      ghlPipelineStage: stageLabel,
+      opportunitySource: oppData.source,
+    })
+
+    const created = await db.property.findFirst({
+      where: { tenantId, ghlContactId: oppData.contactId },
+      select: { id: true },
+    })
+    if (created) {
+      await db.property.update({
+        where: { id: created.id },
+        data: laneUpdatePayload(lane, status, stageLabel, oppData.id ?? null, now),
+      })
+      await backfillMilestones(tenantId, created.id, appStage, milestoneUserId)
+    }
+    console.log(`[GHL Webhook] ${isCreate ? 'Created' : 'Stage moved'} → property created for contact ${oppData.contactId} (lane=${lane}, status=${status})`)
+    return
+  }
+
+  // Existing property — respect sync lock then write the lane.
+  if (existing.ghlSyncLocked) {
+    console.log(`[GHL Webhook] Lane write skipped (sync locked): ${existing.address}`)
+    return
+  }
+
+  await db.property.update({
+    where: { id: existing.id, tenantId },
+    data: laneUpdatePayload(lane, status, stageLabel, oppData.id ?? null, now),
+  })
+  await backfillMilestones(tenantId, existing.id, appStage, milestoneUserId)
+  console.log(`[GHL Webhook] ${existing.address} → ${lane}=${status} (stage="${stageLabel}")`)
+}
+
+async function handleOpportunityCreate(tenantId: string, event: GHLWebhookEvent) {
+  const oppData = event as unknown as GhlOppEvent
+  const stageId = oppData.pipelineStageId || oppData.stageId
+  if (!oppData.contactId || !stageId || !oppData.pipelineId) return
+
+  const track = await getTrackForPipeline(tenantId, oppData.pipelineId)
+  if (!track) {
+    await logUnlistenedPipeline(tenantId, oppData, 'OpportunityCreate')
+    return
+  }
+
+  const resolvedStageName = await resolveStageName(tenantId, stageId)
+  await processLaneOppEvent(tenantId, oppData, track, resolvedStageName, true)
+  await upsertSellerBuyerFromOpp(tenantId, oppData)
+}
+
+async function handleOpportunityUpdate(tenantId: string, event: GHLWebhookEvent) {
+  const oppData = event as unknown as GhlOppEvent
+  const stageId = oppData.pipelineStageId || oppData.stageId
+  if (!oppData.contactId || !stageId || !oppData.pipelineId) return
+
+  const track = await getTrackForPipeline(tenantId, oppData.pipelineId)
+  if (!track) {
+    await logUnlistenedPipeline(tenantId, oppData, 'OpportunityUpdate')
+    return
+  }
+
+  const resolvedStageName = await resolveStageName(tenantId, stageId)
+  await processLaneOppEvent(tenantId, oppData, track, resolvedStageName, false)
+  await upsertSellerBuyerFromOpp(tenantId, oppData)
+}
+
+// On opp delete: clear the matching lane's *OppId. Status values stay
+// intact. If a new opp arrives later for the same contact in the same
+// pipeline, the field repopulates and the property reappears in views
+// keyed off opp ID.
+async function handleOpportunityDelete(tenantId: string, event: GHLWebhookEvent) {
+  const oppData = event as unknown as GhlOppEvent
+  const oppId = oppData.id
+  if (!oppId) return
+
+  // Find any property whose lane opp ID matches this deleted opp.
+  const props = await db.property.findMany({
+    where: {
+      tenantId,
+      OR: [
+        { ghlAcqOppId: oppId },
+        { ghlDispoOppId: oppId },
+        { ghlLongtermOppId: oppId },
+      ],
+    },
+    select: {
+      id: true, address: true,
+      ghlAcqOppId: true, ghlDispoOppId: true, ghlLongtermOppId: true,
+    },
+  })
+
+  for (const p of props) {
+    const data: Record<string, null> = {}
+    if (p.ghlAcqOppId === oppId) data.ghlAcqOppId = null
+    if (p.ghlDispoOppId === oppId) data.ghlDispoOppId = null
+    if (p.ghlLongtermOppId === oppId) data.ghlLongtermOppId = null
+    if (Object.keys(data).length === 0) continue
+
+    await db.property.update({ where: { id: p.id, tenantId }, data })
+    console.log(`[GHL Webhook] Cleared opp ID ${oppId} from ${p.address} (${Object.keys(data).join(', ')})`)
+  }
+
+  await db.auditLog.create({
+    data: {
+      tenantId,
+      action: 'ghl.webhook.opportunity_deleted',
+      resource: 'webhook',
+      resourceId: oppId,
+      severity: 'INFO',
+      source: 'GHL_WEBHOOK',
+      payload: { oppId, propertiesCleared: props.length } as Prisma.InputJsonValue,
+    },
+  }).catch(() => {})
+}
+
 
 // ─── Task Completed → Sync to our DB ───────────────────────────────────────
 

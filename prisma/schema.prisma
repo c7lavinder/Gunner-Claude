@@ -42,11 +42,10 @@ model Tenant {
   companyStandards String? @map("company_standards") @db.Text // company rules/standards
   calibrationCalls Json    @default("[]") @map("calibration_calls") // [{callId, type: "good"|"bad", notes}]
 
-  // Property trigger config
-  propertyPipelineId   String? @map("property_pipeline_id") // which GHL pipeline (acquisition)
-  propertyTriggerStage String? @map("property_trigger_stage") // which stage creates a property
-  dispoPipelineId      String? @map("dispo_pipeline_id") // GHL dispo pipeline
-  dispoTriggerStage    String? @map("dispo_trigger_stage") // stage that moves property into dispo
+  // Phase 1 commit 2: pipeline registration moved to tenant_ghl_pipelines.
+  // The previous columns (property_pipeline_id, property_trigger_stage,
+  // dispo_pipeline_id, dispo_trigger_stage) were dropped in
+  // 20260506100000_phase1_drop_legacy_tenant_pipeline_cols.
 
   // Onboarding state
   onboardingStep      Int     @default(0) @map("onboarding_step")

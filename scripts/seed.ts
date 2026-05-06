@@ -29,7 +29,6 @@ async function main() {
       onboardingStep: 5,
       callTypes: ['Inbound lead', 'Outbound cold call', 'Follow-up', 'Appointment confirmation'],
       callResults: ['Interested', 'Not interested', 'Call back', 'Appointment set', 'Wrong number', 'No answer'],
-      propertyTriggerStage: 'new-lead-stage',
     },
   })
   console.log(`✅ Tenant: ${tenant.name} (/${tenant.slug})`)

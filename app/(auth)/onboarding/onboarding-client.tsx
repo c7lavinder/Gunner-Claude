@@ -72,10 +72,20 @@ export default function OnboardingClient() {
 
   async function savePipelineTrigger() {
     setSaving(true)
+    // Phase 1 commit 2: register the picked pipeline as the acquisition
+    // track in tenant_ghl_pipelines. The "trigger stage" picker is now
+    // informational only — listening is pipeline-wide, not stage-specific.
+    if (selectedPipeline) {
+      await fetch('/api/tenants/ghl-pipelines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ghlPipelineId: selectedPipeline, track: 'acquisition' }),
+      })
+    }
     await fetch('/api/tenants/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ propertyPipelineId: selectedPipeline, propertyTriggerStage: selectedStage, onboardingStep: 3 }),
+      body: JSON.stringify({ onboardingStep: 3 }),
     })
     setSaving(false)
     setStep(3)

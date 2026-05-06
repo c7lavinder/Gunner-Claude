@@ -5,11 +5,11 @@ import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
+// Phase 1 commit 2: pipeline config moved out of tenants. Listening
+// pipelines now live in tenant_ghl_pipelines via the dedicated CRUD at
+// /api/tenants/ghl-pipelines. This route handles only the remaining
+// tenant-config blob (callTypes, gradingMaterials, etc.).
 const configSchema = z.object({
-  propertyPipelineId: z.string().optional(),
-  propertyTriggerStage: z.string().optional(),
-  dispoPipelineId: z.string().nullable().optional(),
-  dispoTriggerStage: z.string().nullable().optional(),
   onboardingStep: z.number().optional(),
   onboardingCompleted: z.boolean().optional(),
   callTypes: z.array(z.string()).optional(),
@@ -25,8 +25,6 @@ export const GET = withTenant(async (_req, ctx) => {
     select: {
       id: true, slug: true,
       callTypes: true, callResults: true, gradingMaterials: true,
-      propertyPipelineId: true, propertyTriggerStage: true,
-      dispoPipelineId: true, dispoTriggerStage: true,
       config: true,
     },
   })

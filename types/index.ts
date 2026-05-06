@@ -64,8 +64,7 @@ export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 export interface TenantConfig {
   callTypes: string[]
   callResults: string[]
-  propertyPipelineId?: string
-  propertyTriggerStage?: string
+  // Phase 1 commit 2: pipeline registration moved to tenant_ghl_pipelines.
 }
 
 // ─── GHL types (shared between lib and components) ───────────────────────────

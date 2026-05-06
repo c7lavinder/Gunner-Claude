@@ -16,21 +16,41 @@ import { CALL_TYPES } from '@/lib/call-types'
 interface TenantInfo {
   id: string; name: string; slug: string; ghlConnected: boolean
   callTypes: string[]; callResults: Record<string, string[]> | string[]
-  // WRITES TO: tenants.property_pipeline_id (String?)
-  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
-  propertyPipelineId: string
-  // WRITES TO: tenants.property_trigger_stage (String?)
-  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
-  propertyTriggerStage: string
-  // WRITES TO: tenants.dispo_pipeline_id + dispo_trigger_stage
-  dispoPipelineId: string
-  dispoTriggerStage: string
+  // Phase 1 commit 2: pipeline registration moved to tenant_ghl_pipelines.
+  // The Pipeline tab loads + mutates rows via /api/tenants/ghl-pipelines.
   // WRITES TO: tenants.grading_materials (String?)
   // READ BY: lib/ai/grading.ts → buildGradingSystemPrompt()
   gradingMaterials: string
   // WRITES TO: tenants.config (Json) → { projectTypes: string[] }
   // READ BY: property detail page → Project Type tag row options
   config: Record<string, unknown>
+}
+
+interface TenantPipelineRow {
+  id: string
+  ghlPipelineId: string
+  track: 'acquisition' | 'disposition' | 'longterm'
+  isActive: boolean
+}
+
+interface AvailablePipeline {
+  id: string
+  name: string
+}
+
+const TRACK_LABELS: Record<TenantPipelineRow['track'], { title: string; description: string }> = {
+  acquisition: {
+    title: 'Acquisition (Sales Process)',
+    description: 'Pipelines that drive the buying side. Stage moves write to acqStatus.',
+  },
+  disposition: {
+    title: 'Disposition (Selling)',
+    description: 'Pipelines that drive the selling side. Stage moves write to dispoStatus.',
+  },
+  longterm: {
+    title: 'Long-term Follow Up',
+    description: 'Pipelines that nurture leads outside active acquisition. Writes to longtermStatus.',
+  },
 }
 interface TeamMember {
   id: string; name: string; email: string; phone: string | null; role: string
@@ -64,28 +84,17 @@ export function SettingsClient({
   const [inviteMsg, setInviteMsg] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // Pipeline settings state
-  // WRITES TO: tenants.property_pipeline_id (String?)
-  // API ENDPOINT: PATCH /api/tenants/config
-  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
-  // READ QUERY: db.tenant.findUnique({ select: { propertyPipelineId: true } })
-  // DROPDOWN SOURCE: GET /api/ghl/pipelines → pipelines[].id
-  const [selectedPipeline, setSelectedPipeline] = useState(tenant.propertyPipelineId)
-
-  // WRITES TO: tenants.property_trigger_stage (String?)
-  // API ENDPOINT: PATCH /api/tenants/config
-  // READ BY: lib/ghl/webhooks.ts → handleOpportunityStageChanged()
-  // READ QUERY: db.tenant.findUnique({ select: { propertyTriggerStage: true } })
-  // DROPDOWN SOURCE: derived from selected pipeline stages[]
-  const [selectedStage, setSelectedStage] = useState(tenant.propertyTriggerStage)
-  const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string }>>([])
-  const [savingPipeline, setSavingPipeline] = useState(false)
+  // Pipeline registration state (Phase 1 commit 2 — list per track)
+  // WRITES TO: tenant_ghl_pipelines (one row per (tenant, GHL pipeline))
+  // API: GET / POST /api/tenants/ghl-pipelines, DELETE /api/tenants/ghl-pipelines/[id]
+  // READ BY: lib/ghl/webhooks.ts → getTrackForPipeline()
+  // DROPDOWN SOURCE: GET /api/ghl/pipelines → pipelines[]
+  const [tenantPipelines, setTenantPipelines] = useState<TenantPipelineRow[]>([])
+  const [availablePipelines, setAvailablePipelines] = useState<AvailablePipeline[]>([])
   const [pipelineSaveMsg, setPipelineSaveMsg] = useState('')
-
-  // Dispo pipeline settings
-  const [selectedDispoPipeline, setSelectedDispoPipeline] = useState(tenant.dispoPipelineId)
-  const [selectedDispoStage, setSelectedDispoStage] = useState(tenant.dispoTriggerStage)
-  const [dispoStages, setDispoStages] = useState<Array<{ id: string; name: string }>>([])
+  const [pipelineActionId, setPipelineActionId] = useState<string | null>(null)
+  const [pendingAddTrack, setPendingAddTrack] = useState<TenantPipelineRow['track'] | null>(null)
+  const [pendingAddPipelineId, setPendingAddPipelineId] = useState('')
 
 
   // GHL user mapping state
@@ -214,75 +223,75 @@ export function SettingsClient({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Fetch stages for a given pipeline
-  const fetchStagesForPipeline = useCallback((pipelineId: string) => {
-    if (!pipelineId) { setPipelineStages([]); return }
-    fetch('/api/ghl/pipelines')
-      .then((r) => r.json())
-      .then((data) => {
-        const pipeline = (data.pipelines ?? []).find(
-          (p: { id: string }) => p.id === pipelineId
-        )
-        if (pipeline?.stages) setPipelineStages(pipeline.stages)
-      })
-      .catch(() => setPipelineStages([]))
+  // Load registered pipelines + GHL pipeline list when entering Pipeline tab
+  const loadTenantPipelines = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tenants/ghl-pipelines')
+      if (res.ok) {
+        const data = await res.json() as { pipelines: TenantPipelineRow[] }
+        setTenantPipelines(data.pipelines ?? [])
+      }
+    } catch { /* ignore */ }
   }, [])
 
-  // Generic stage fetcher
-  const fetchStagesForId = useCallback((pipelineId: string, setter: (stages: Array<{ id: string; name: string }>) => void) => {
-    if (!pipelineId) { setter([]); return }
-    fetch('/api/ghl/pipelines')
-      .then(r => r.json())
-      .then(data => {
-        const pipeline = (data.pipelines ?? []).find((p: { id: string }) => p.id === pipelineId)
-        if (pipeline?.stages) setter(pipeline.stages)
-      })
-      .catch(() => setter([]))
-  }, [])
+  const loadAvailablePipelines = useCallback(async () => {
+    if (!tenant.ghlConnected) return
+    try {
+      const res = await fetch('/api/ghl/pipelines')
+      if (res.ok) {
+        const data = await res.json() as { pipelines: Array<{ id: string; name: string }> }
+        setAvailablePipelines((data.pipelines ?? []).map(p => ({ id: p.id, name: p.name })))
+      }
+    } catch { /* ignore */ }
+  }, [tenant.ghlConnected])
 
-  // Load stages on mount if pipeline already selected
   useEffect(() => {
-    if (selectedPipeline) fetchStagesForId(selectedPipeline, setPipelineStages)
-    if (selectedDispoPipeline) fetchStagesForId(selectedDispoPipeline, setDispoStages)
-  }, [selectedPipeline, selectedDispoPipeline, fetchStagesForId])
+    if (tab === 'pipeline') {
+      loadTenantPipelines()
+      loadAvailablePipelines()
+    }
+  }, [tab, loadTenantPipelines, loadAvailablePipelines])
 
-  const handlePipelineChange = useCallback((pipelineId: string) => {
-    setSelectedPipeline(pipelineId)
-    setSelectedStage('')
-    setPipelineStages([])
-    fetchStagesForId(pipelineId, setPipelineStages)
-  }, [fetchStagesForId])
-
-  const handleDispoPipelineChange = useCallback((pipelineId: string) => {
-    setSelectedDispoPipeline(pipelineId)
-    setSelectedDispoStage('')
-    setDispoStages([])
-    fetchStagesForId(pipelineId, setDispoStages)
-  }, [fetchStagesForId])
-
-  async function savePipelineSettings() {
-    setSavingPipeline(true)
+  async function addPipeline(track: TenantPipelineRow['track'], ghlPipelineId: string) {
+    if (!ghlPipelineId) return
+    setPipelineActionId(`add-${track}`)
     setPipelineSaveMsg('')
     try {
-      const res = await fetch('/api/tenants/config', {
-        method: 'PATCH',
+      const res = await fetch('/api/tenants/ghl-pipelines', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          propertyPipelineId: selectedPipeline || null,
-          propertyTriggerStage: selectedStage || null,
-          dispoPipelineId: selectedDispoPipeline || null,
-          dispoTriggerStage: selectedDispoStage || null,
-        }),
+        body: JSON.stringify({ ghlPipelineId, track }),
       })
       if (res.ok) {
-        setPipelineSaveMsg('Pipeline settings saved')
+        await loadTenantPipelines()
+        setPipelineSaveMsg('Pipeline added')
+        setPendingAddTrack(null)
+        setPendingAddPipelineId('')
       } else {
-        setPipelineSaveMsg('Failed to save pipeline settings')
+        setPipelineSaveMsg('Failed to add pipeline')
       }
     } catch {
-      setPipelineSaveMsg('Error saving pipeline settings')
+      setPipelineSaveMsg('Failed to add pipeline')
     }
-    setSavingPipeline(false)
+    setPipelineActionId(null)
+    setTimeout(() => setPipelineSaveMsg(''), 3000)
+  }
+
+  async function removePipeline(rowId: string) {
+    setPipelineActionId(rowId)
+    setPipelineSaveMsg('')
+    try {
+      const res = await fetch(`/api/tenants/ghl-pipelines/${rowId}`, { method: 'DELETE' })
+      if (res.ok) {
+        await loadTenantPipelines()
+        setPipelineSaveMsg('Pipeline removed')
+      } else {
+        setPipelineSaveMsg('Failed to remove pipeline')
+      }
+    } catch {
+      setPipelineSaveMsg('Failed to remove pipeline')
+    }
+    setPipelineActionId(null)
     setTimeout(() => setPipelineSaveMsg(''), 3000)
   }
 
@@ -630,117 +639,94 @@ export function SettingsClient({
         <div className="space-y-4">
           <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5 space-y-5">
             <div>
-              <h2 className="text-ds-label font-medium text-txt-primary mb-1">Property creation trigger</h2>
+              <h2 className="text-ds-label font-medium text-txt-primary mb-1">Listening pipelines</h2>
               <p className="text-ds-fine text-txt-secondary mb-4">
-                When a GHL contact enters the selected pipeline stage, Gunner AI automatically creates a property in your inventory.
+                Each registered GHL pipeline feeds one of three lanes (acquisition, disposition, or long-term follow up). Stage moves on opportunities in these pipelines automatically update the matching lane on the property.
               </p>
             </div>
 
             {!tenant.ghlConnected ? (
               <div className="bg-semantic-amber-bg border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] p-4 text-ds-body text-semantic-amber">
-                Connect GHL in the Integrations tab first to configure pipeline triggers.
+                Connect GHL in the Integrations tab first to register pipelines.
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Pipeline dropdown — live from GHL API */}
-                <div>
-                  <label className="block text-ds-body text-txt-secondary mb-1.5">Pipeline</label>
-                  <GHLDropdown
-                    endpoint="/api/ghl/pipelines"
-                    valueKey="id"
-                    labelKey="name"
-                    value={selectedPipeline}
-                    onChange={handlePipelineChange}
-                    placeholder="Select a pipeline..."
-                  />
-                </div>
-
-                {/* Stage dropdown — derived from selected pipeline */}
-                {selectedPipeline && (
-                  <div>
-                    <label className="block text-ds-body text-txt-secondary mb-1.5">Trigger stage</label>
-                    {pipelineStages.length > 0 ? (
-                      <select
-                        value={selectedStage}
-                        onChange={(e) => setSelectedStage(e.target.value)}
-                        className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-txt-primary text-ds-body focus:outline-none focus:border-[rgba(0,0,0,0.14)]"
-                      >
-                        <option value="">Select a stage...</option>
-                        {pipelineStages.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5 text-ds-body text-txt-muted">
-                        <Loader2 size={14} className="animate-spin" />
-                        Loading stages...
+              <div className="space-y-5">
+                {(['acquisition', 'disposition', 'longterm'] as const).map(track => {
+                  const rows = tenantPipelines.filter(r => r.track === track)
+                  const remaining = availablePipelines.filter(p => !tenantPipelines.some(r => r.ghlPipelineId === p.id))
+                  const trackInfo = TRACK_LABELS[track]
+                  const isAdding = pendingAddTrack === track
+                  return (
+                    <div key={track} className="border-t border-[rgba(0,0,0,0.06)] pt-5 first:border-t-0 first:pt-0">
+                      <div className="mb-3">
+                        <h3 className="text-ds-body font-medium text-txt-primary">{trackInfo.title}</h3>
+                        <p className="text-ds-fine text-txt-secondary mt-0.5">{trackInfo.description}</p>
                       </div>
-                    )}
-                  </div>
-                )}
 
-                {/* Preview what will happen */}
-                {selectedStage && (
-                  <div className="bg-gunner-red-light border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] p-4 text-ds-body text-gunner-red">
-                    When a contact enters stage <strong className="font-semibold">{pipelineStages.find(s => s.id === selectedStage)?.name}</strong>, a property will be created automatically.
-                  </div>
-                )}
-
-                {/* ── Disposition Pipeline ─────────────────────── */}
-                <div className="border-t border-[rgba(0,0,0,0.06)] pt-5 mt-5">
-                  <h2 className="text-ds-label font-medium text-txt-primary mb-1">Disposition pipeline trigger</h2>
-                  <p className="text-ds-fine text-txt-secondary mb-4">
-                    When an opportunity enters the selected dispo stage, the property moves into Disposition.
-                  </p>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-ds-fine text-txt-muted block mb-1">Dispo pipeline</label>
-                      <GHLDropdown
-                        endpoint="/api/ghl/pipelines"
-                        valueKey="id"
-                        labelKey="name"
-                        value={selectedDispoPipeline}
-                        onChange={handleDispoPipelineChange}
-                        placeholder="Select dispo pipeline..."
-                      />
-                    </div>
-                    <div>
-                      <label className="text-ds-fine text-txt-muted block mb-1">Dispo trigger stage</label>
-                      {dispoStages.length > 0 ? (
-                        <select
-                          value={selectedDispoStage}
-                          onChange={(e) => setSelectedDispoStage(e.target.value)}
-                          className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-3 py-2 text-ds-body focus:outline-none"
-                        >
-                          <option value="">Select stage...</option>
-                          {dispoStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
+                      {rows.length === 0 ? (
+                        <div className="text-ds-fine text-txt-muted bg-surface-secondary rounded-[10px] px-3 py-2 mb-3">
+                          No pipelines registered for this lane yet.
+                        </div>
                       ) : (
-                        <div className="text-ds-fine text-txt-muted bg-surface-secondary rounded-[10px] px-3 py-2">
-                          {selectedDispoPipeline ? 'Loading stages...' : 'Select a dispo pipeline first'}
+                        <div className="space-y-2 mb-3">
+                          {rows.map(row => {
+                            const ghlName = availablePipelines.find(p => p.id === row.ghlPipelineId)?.name ?? row.ghlPipelineId
+                            return (
+                              <div key={row.id} className="flex items-center justify-between gap-2 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-4 py-2.5">
+                                <span className="text-ds-body text-txt-primary truncate">{ghlName}</span>
+                                <button
+                                  onClick={() => removePipeline(row.id)}
+                                  disabled={pipelineActionId === row.id}
+                                  className="flex items-center gap-1 text-ds-fine text-semantic-red hover:text-semantic-red-dark disabled:opacity-40"
+                                >
+                                  {pipelineActionId === row.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                  Remove
+                                </button>
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
-                    </div>
-                    {selectedDispoStage && (
-                      <div className="bg-semantic-blue-bg border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] p-4 text-ds-body text-semantic-blue">
-                        When an opportunity enters <strong>{dispoStages.find(s => s.id === selectedDispoStage)?.name}</strong>, the property moves to Disposition.
-                      </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* Save button */}
-                <button
-                  onClick={savePipelineSettings}
-                  disabled={savingPipeline}
-                  className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-5 py-2.5 rounded-[10px] transition-colors"
-                >
-                  {savingPipeline ? (
-                    <><Loader2 size={14} className="animate-spin" /> Saving...</>
-                  ) : (
-                    'Save pipeline settings'
-                  )}
-                </button>
+                      {isAdding ? (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={pendingAddPipelineId}
+                            onChange={e => setPendingAddPipelineId(e.target.value)}
+                            className="flex-1 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary focus:outline-none"
+                          >
+                            <option value="">Select a GHL pipeline...</option>
+                            {remaining.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => addPipeline(track, pendingAddPipelineId)}
+                            disabled={!pendingAddPipelineId || pipelineActionId === `add-${track}`}
+                            className="flex items-center gap-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-4 py-2 rounded-[10px]"
+                          >
+                            {pipelineActionId === `add-${track}` ? <Loader2 size={12} className="animate-spin" /> : null}
+                            Save
+                          </button>
+                          <button
+                            onClick={() => { setPendingAddTrack(null); setPendingAddPipelineId('') }}
+                            className="text-ds-body text-txt-secondary hover:text-txt-primary px-2"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setPendingAddTrack(track); setPendingAddPipelineId('') }}
+                          disabled={remaining.length === 0}
+                          className="text-ds-body text-gunner-red hover:text-gunner-red-dark disabled:opacity-40"
+                        >
+                          + Add pipeline
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
 
                 {pipelineSaveMsg && (
                   <p className={`text-ds-fine ${pipelineSaveMsg.includes('Failed') || pipelineSaveMsg.includes('Error') ? 'text-semantic-red' : 'text-semantic-green'}`}>

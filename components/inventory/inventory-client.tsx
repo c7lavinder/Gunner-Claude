@@ -108,12 +108,13 @@ function DistressBadge({
   )
 }
 
-export function InventoryClient({ properties: initialProperties, statusCounts, tenantSlug, canManage, ghlLocationId }: {
+export function InventoryClient({ properties: initialProperties, statusCounts, tenantSlug, canManage, ghlLocationId, showArchived }: {
   properties: Property[]
   statusCounts: Record<string, number>
   tenantSlug: string
   canManage: boolean
   ghlLocationId?: string
+  showArchived: boolean
 }) {
   const searchParams = useSearchParams()
   const [selectedStage, setSelectedStage] = useState<AppStage | null>(null)
@@ -206,16 +207,34 @@ export function InventoryClient({ properties: initialProperties, statusCounts, t
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-ds-page font-semibold text-txt-primary">Inventory</h1>
-          <p className="text-ds-body text-txt-secondary mt-1">{activeCount} active properties</p>
+          <p className="text-ds-body text-txt-secondary mt-1">
+            {activeCount} {showArchived ? 'total' : 'active'} properties
+            {showArchived ? ' (including archived)' : ''}
+          </p>
         </div>
-        {canManage && (
+        <div className="flex items-center gap-2">
+          {/* Show-archived toggle (Phase 1 commit 2 — plan §4 visibility rule).
+              Active default hides longterm-only / dead / fully-closed rows;
+              toggle reveals them via ?archived=1 URL param. */}
           <Link
-            href={`/${tenantSlug}/inventory/new`}
-            className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-body font-semibold px-4 py-[9px] rounded-[10px] transition-colors"
+            href={showArchived ? `/${tenantSlug}/inventory` : `/${tenantSlug}/inventory?archived=1`}
+            className={`flex items-center gap-1.5 text-ds-body font-medium px-3 py-[9px] rounded-[10px] border-[0.5px] transition-colors ${
+              showArchived
+                ? 'bg-gunner-red text-white border-gunner-red hover:bg-gunner-red-dark'
+                : 'bg-white text-txt-secondary border-[rgba(0,0,0,0.14)] hover:text-txt-primary hover:bg-surface-secondary'
+            }`}
           >
-            <Plus size={14} /> Add property
+            {showArchived ? 'Hide archived' : 'Show archived'}
           </Link>
-        )}
+          {canManage && (
+            <Link
+              href={`/${tenantSlug}/inventory/new`}
+              className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-body font-semibold px-4 py-[9px] rounded-[10px] transition-colors"
+            >
+              <Plus size={14} /> Add property
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Pipeline stage selector */}

@@ -12,6 +12,14 @@ const MAX_RETRIES = 2
 // Simple in-memory lock to prevent concurrent token refreshes per tenant
 const refreshLocks = new Map<string, Promise<string>>()
 
+// Phase 1 commit 2: per-tenant lock around getGHLClient. Closes the
+// read-tenant → check-expiry → refresh → construct sequence so that
+// concurrent webhook handlers and long-running backfill scripts can't
+// race each other into stale-token territory. The narrower refreshLocks
+// above only protects the refresh call itself; clientLocks protects the
+// whole factory. Plan §6 task 3 (audit gap C.3).
+const clientLocks = new Map<string, Promise<GHLClient>>()
+
 export class GHLClient {
   private tenantId: string
   accessToken: string
@@ -460,31 +468,41 @@ export class GHLClient {
 // ─── Factory: get a ready GHL client for a tenant ──────────────────────────
 
 export async function getGHLClient(tenantId: string): Promise<GHLClient> {
-  const tenant = await db.tenant.findUnique({
-    where: { id: tenantId },
-    select: {
-      ghlAccessToken: true,
-      ghlRefreshToken: true,
-      ghlTokenExpiry: true,
-      ghlLocationId: true,
-    },
-  })
+  // Per-tenant client mutex — concurrent callers (e.g. parallel webhook
+  // handlers + backfill cron) coalesce on the same in-flight construction.
+  const inflight = clientLocks.get(tenantId)
+  if (inflight) return inflight
 
-  if (!tenant?.ghlAccessToken || !tenant.ghlLocationId) {
-    throw new Error(`Tenant ${tenantId} has no GHL connection`)
-  }
+  const promise = (async (): Promise<GHLClient> => {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        ghlAccessToken: true,
+        ghlRefreshToken: true,
+        ghlTokenExpiry: true,
+        ghlLocationId: true,
+      },
+    })
 
-  // Refresh token if expired or expiring in next 5 minutes
-  const expiresAt = tenant.ghlTokenExpiry
-  const needsRefresh = !expiresAt || expiresAt < new Date(Date.now() + 5 * 60 * 1000)
+    if (!tenant?.ghlAccessToken || !tenant.ghlLocationId) {
+      throw new Error(`Tenant ${tenantId} has no GHL connection`)
+    }
 
-  let accessToken = tenant.ghlAccessToken
+    // Refresh token if expired or expiring in next 5 minutes
+    const expiresAt = tenant.ghlTokenExpiry
+    const needsRefresh = !expiresAt || expiresAt < new Date(Date.now() + 5 * 60 * 1000)
 
-  if (needsRefresh && tenant.ghlRefreshToken) {
-    accessToken = await refreshGHLTokenWithLock(tenantId)
-  }
+    let accessToken = tenant.ghlAccessToken
 
-  return new GHLClient(tenantId, accessToken, tenant.ghlLocationId)
+    if (needsRefresh && tenant.ghlRefreshToken) {
+      accessToken = await refreshGHLTokenWithLock(tenantId)
+    }
+
+    return new GHLClient(tenantId, accessToken, tenant.ghlLocationId)
+  })().finally(() => clientLocks.delete(tenantId))
+
+  clientLocks.set(tenantId, promise)
+  return promise
 }
 
 // ─── OAuth helpers ──────────────────────────────────────────────────────────

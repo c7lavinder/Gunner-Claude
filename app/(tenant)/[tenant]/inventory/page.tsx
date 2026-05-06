@@ -9,9 +9,15 @@ import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
 import { effectiveStatus, effectiveStageName, effectiveStageEnteredAt, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
-export default async function InventoryPage({ params }: { params: { tenant: string } }) {
+export default async function InventoryPage({
+  params,
+  searchParams,
+}: {
+  params: { tenant: string }
+  searchParams?: { archived?: string }
+}) {
   const session = await requireSession()
-  
+
 
   const userId = session.userId
   const tenantId = session.tenantId
@@ -21,12 +27,27 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
 
   const canViewAll = hasPermission(role, 'properties.view.all')
 
+  // Phase 1 visibility (plan §4): default to active properties only —
+  // acqStatus set (any value) OR dispoStatus set & not CLOSED. The
+  // ?archived=1 query param flips to "show everything" so the user can
+  // find longterm-only / dead / fully-closed rows that are normally hidden.
+  const showArchived = searchParams?.archived === '1'
+  const visibilityFilter = showArchived
+    ? {}
+    : {
+        OR: [
+          { acqStatus: { not: null } },
+          { AND: [{ dispoStatus: { not: null } }, { dispoStatus: { not: 'CLOSED' as const } }] },
+        ],
+      }
+
   let properties
   try {
     properties = await db.property.findMany({
       where: {
         tenantId,
         ...(!canViewAll ? { assignedToId: userId } : {}),
+        ...visibilityFilter,
       },
       orderBy: { createdAt: 'desc' },
       take: 20000,
@@ -162,6 +183,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
       tenantSlug={params.tenant}
       canManage={hasPermission(role, 'inventory.manage')}
       ghlLocationId={tenant?.ghlLocationId ?? undefined}
+      showArchived={showArchived}
     />
     </Suspense>
   )
