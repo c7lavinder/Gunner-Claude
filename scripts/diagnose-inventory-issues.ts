@@ -41,7 +41,7 @@ async function main() {
     },
     select: {
       id: true, address: true, city: true, state: true, zip: true,
-      createdAt: true, status: true, leadSource: true,
+      createdAt: true, acqStatus: true, dispoStatus: true, longtermStatus: true, leadSource: true,
       ghlContactId: true,
     },
     orderBy: { createdAt: 'desc' },
@@ -85,33 +85,15 @@ async function main() {
 
   console.log('\nSample (first 10):')
   for (const p of noMarket.slice(0, 10)) {
-    console.log(`  ${p.address || '(no addr)'} ${p.city}, ${p.state} ${p.zip} — status=${p.status} source=${p.leadSource ?? '—'} created=${p.createdAt.toISOString().slice(0, 10)}`)
+    console.log(`  ${p.address || '(no addr)'} ${p.city}, ${p.state} ${p.zip} — acq=${p.acqStatus ?? '—'} dispo=${p.dispoStatus ?? '—'} longterm=${p.longtermStatus ?? '—'} source=${p.leadSource ?? '—'} created=${p.createdAt.toISOString().slice(0, 10)}`)
   }
 
-  // ── Issue 3a — dispo pollution in status ──────────────────────────────────
-  header('Issue 3a — properties with dispo value in `status` (should be acquisition-only)')
-  const polluted = await db.property.findMany({
-    where: {
-      tenantId: tenant.id,
-      status: { in: DISPO_STATUSES as unknown as string[] as never },
-    },
-    select: {
-      id: true, address: true, status: true, dispoStatus: true,
-      ghlPipelineId: true, ghlPipelineStage: true,
-      createdAt: true, updatedAt: true,
-    },
-    orderBy: { updatedAt: 'desc' },
-  })
-  console.log(`Total rows with dispo-leak in status: ${polluted.length}`)
-  const byStatus = polluted.reduce<Record<string, number>>((acc, p) => {
-    acc[p.status] = (acc[p.status] ?? 0) + 1
-    return acc
-  }, {})
-  console.log('Breakdown:', byStatus)
-  console.log('\nSample (first 15):')
-  for (const p of polluted.slice(0, 15)) {
-    console.log(`  ${p.address} — status=${p.status} dispoStatus=${p.dispoStatus ?? '—'} ghlStage=${p.ghlPipelineStage ?? '—'}`)
-  }
+  // ── Issue 3a — DEPRECATED ─────────────────────────────────────────────────
+  // Phase 1 of GHL multi-pipeline redesign moved dispo to its own column
+  // (dispoStatus). The "dispo value in status" pollution this check looked
+  // for is structurally impossible under the new schema. Kept as a no-op.
+  header('Issue 3a — DEPRECATED (Phase 1 strict-lane writes prevent this)')
+  console.log('  No-op. Each lane writes only its own column under the new model.')
 
   // ── Issue 3b — 1908 Breezy specifics ──────────────────────────────────────
   header('Issue 3b — 1908 Breezy full state + audit history')
@@ -122,8 +104,9 @@ async function main() {
     },
     select: {
       id: true, address: true, city: true, state: true, zip: true,
-      status: true, dispoStatus: true,
-      ghlPipelineId: true, ghlPipelineStage: true,
+      acqStatus: true, dispoStatus: true, longtermStatus: true,
+      ghlAcqOppId: true, ghlAcqStageName: true,
+      ghlDispoOppId: true, ghlDispoStageName: true,
       ghlContactId: true, marketId: true,
       createdAt: true, updatedAt: true,
     },
@@ -131,8 +114,9 @@ async function main() {
   for (const p of breezy) {
     console.log(`\nProperty ${p.id}`)
     console.log(`  ${p.address}, ${p.city}, ${p.state} ${p.zip}`)
-    console.log(`  status=${p.status}  dispoStatus=${p.dispoStatus ?? '—'}`)
-    console.log(`  ghlPipelineId=${p.ghlPipelineId ?? '—'}  ghlPipelineStage=${p.ghlPipelineStage ?? '—'}`)
+    console.log(`  acqStatus=${p.acqStatus ?? '—'}  dispoStatus=${p.dispoStatus ?? '—'}  longtermStatus=${p.longtermStatus ?? '—'}`)
+    console.log(`  ghlAcqOpp=${p.ghlAcqOppId ?? '—'}  ghlAcqStage=${p.ghlAcqStageName ?? '—'}`)
+    console.log(`  ghlDispoOpp=${p.ghlDispoOppId ?? '—'}  ghlDispoStage=${p.ghlDispoStageName ?? '—'}`)
     console.log(`  contactId=${p.ghlContactId ?? '—'}  marketId=${p.marketId ?? '—'}`)
     console.log(`  created=${p.createdAt.toISOString()}  updated=${p.updatedAt.toISOString()}`)
 
@@ -168,25 +152,32 @@ async function main() {
   }
 
   // ── Issue 2 — sample latest-milestone-per-property to sanity check ────────
-  header('Issue 2 — sample: latest milestone per property (stageEnteredAt candidate)')
+  header('Issue 2 — sample: latest milestone per property (per-lane stage entered-at)')
   const sample = await db.property.findMany({
     where: { tenantId: tenant.id },
     orderBy: { createdAt: 'desc' },
     take: 8,
     select: {
-      id: true, address: true, status: true, dispoStatus: true, createdAt: true,
-      milestones: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { type: true, createdAt: true },
-      },
+      id: true, address: true, acqStatus: true, dispoStatus: true, longtermStatus: true, createdAt: true,
     },
   })
+  const sampleMilestones = await db.propertyMilestone.findMany({
+    where: { propertyId: { in: sample.map(p => p.id) } },
+    orderBy: { createdAt: 'desc' },
+    select: { propertyId: true, type: true, createdAt: true },
+  })
+  const latestByProperty = new Map<string, { type: string; createdAt: Date }>()
+  for (const m of sampleMilestones) {
+    if (!latestByProperty.has(m.propertyId)) latestByProperty.set(m.propertyId, m)
+  }
   for (const p of sample) {
-    const latest = p.milestones[0]
+    const latest = latestByProperty.get(p.id)
+    const acq = p.acqStatus ?? '—'
+    const dispo = p.dispoStatus ?? '—'
+    const lt = p.longtermStatus ?? '—'
     const domPipeline = Math.floor((Date.now() - p.createdAt.getTime()) / 86400000)
     const domStage = latest ? Math.floor((Date.now() - latest.createdAt.getTime()) / 86400000) : null
-    console.log(`  ${p.address.padEnd(40)} status=${p.status.padEnd(18)} dispo=${(p.dispoStatus ?? '—').padEnd(18)} pipeline=${domPipeline}d  stage=${domStage !== null ? `${domStage}d (${latest.type})` : '— no milestone —'}`)
+    console.log(`  ${p.address.padEnd(40)} acq=${acq.padEnd(18)} dispo=${dispo.padEnd(18)} lt=${lt.padEnd(12)} pipeline=${domPipeline}d  stage=${domStage !== null ? `${domStage}d (${latest!.type})` : '— no milestone —'}`)
   }
 }
 

@@ -25,30 +25,29 @@ function header(label: string) {
 }
 
 async function main() {
-  // ── Step 1 — backfill stageEnteredAt ────────────────────────────────────
-  header('Step 1 — backfill stageEnteredAt for properties where it is null')
-  const needsBackfill = await db.property.findMany({
-    where: { stageEnteredAt: null },
+  // ── Step 1 — backfill acqStageEnteredAt ─────────────────────────────────
+  // Phase 1 multi-pipeline: stageEnteredAt was split into per-lane columns.
+  // For acq-only rows where acqStageEnteredAt is null, populate from the
+  // latest milestone or createdAt.
+  header('Step 1 — backfill acqStageEnteredAt for properties where it is null')
+  const needsBackfill = await db.propertyMilestone.findMany({
+    where: { property: { acqStatus: { not: null }, acqStageEnteredAt: null } },
+    orderBy: { createdAt: 'desc' },
+    distinct: ['propertyId'],
     select: {
-      id: true, address: true, createdAt: true,
-      milestones: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+      propertyId: true, createdAt: true,
+      property: { select: { id: true, address: true, createdAt: true } },
     },
   })
   console.log(`Candidates: ${needsBackfill.length}`)
-  let fromMilestone = 0
-  let fromCreatedAt = 0
-  for (const p of needsBackfill) {
-    const anchor = p.milestones[0]?.createdAt ?? p.createdAt
-    if (p.milestones[0]) fromMilestone++; else fromCreatedAt++
+  for (const m of needsBackfill) {
     if (!DRY) {
       await db.property.update({
-        where: { id: p.id },
-        data: { stageEnteredAt: anchor },
+        where: { id: m.propertyId },
+        data: { acqStageEnteredAt: m.createdAt },
       })
     }
   }
-  console.log(`  Source=latest milestone: ${fromMilestone}`)
-  console.log(`  Source=createdAt fallback: ${fromCreatedAt}`)
 
   // ── Step 2 — assign markets to zip-but-no-market rows ───────────────────
   header('Step 2 — resolve markets for properties with zip but no marketId')
@@ -75,37 +74,21 @@ async function main() {
   if (!DRY) console.log(`  Assigned: ${assigned}  Still null: ${stillNull}`)
 
   // ── Step 3 — repair 1908 Breezy Ridge Trl ────────────────────────────────
-  header('Step 3 — repair 1908 Breezy Ridge Trl')
+  // Phase 1 multi-pipeline: per-lane status columns. The legacy "status set
+  // to IN_DISPOSITION via dispo trigger" pollution issue is addressed by
+  // strict-lane writes; this repair shouldn't be needed under the new
+  // handler. Kept for reference on historical state. NOTE: this script
+  // already ran on prod once and is no longer invoked; left in place so the
+  // build stays green.
+  header('Step 3 — repair 1908 Breezy Ridge Trl (no-op under Phase 1 lane model)')
   const breezy = await db.property.findFirst({
     where: { address: { contains: 'Breezy Ridge', mode: 'insensitive' } },
-    select: { id: true, address: true, status: true, dispoStatus: true },
+    select: { id: true, address: true, acqStatus: true, dispoStatus: true },
   })
   if (!breezy) {
     console.log('  No matching property. Skipping.')
   } else {
-    console.log(`  Before: ${breezy.address}  status=${breezy.status}  dispoStatus=${breezy.dispoStatus}`)
-    if (breezy.status === 'IN_DISPOSITION') {
-      if (!DRY) {
-        await db.property.update({
-          where: { id: breezy.id },
-          data: { status: 'UNDER_CONTRACT' },
-        })
-        await db.auditLog.create({
-          data: {
-            tenantId: (await db.property.findUnique({ where: { id: breezy.id }, select: { tenantId: true } }))!.tenantId,
-            action: 'property.status.repaired',
-            resource: 'property',
-            resourceId: breezy.id,
-            source: 'SYSTEM',
-            severity: 'INFO',
-            payload: { from: 'IN_DISPOSITION', to: 'UNDER_CONTRACT', reason: 'dispo-trigger creation polluted acquisition status' },
-          },
-        }).catch(() => {})
-      }
-      console.log(`  After:  status=UNDER_CONTRACT  dispoStatus=${breezy.dispoStatus}`)
-    } else {
-      console.log(`  Status already correct (${breezy.status}) — no change.`)
-    }
+    console.log(`  Status: ${breezy.address}  acqStatus=${breezy.acqStatus ?? '—'}  dispoStatus=${breezy.dispoStatus ?? '—'}`)
   }
 
   header('Done')

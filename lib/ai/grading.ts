@@ -13,6 +13,7 @@ import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
+import { effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 // ─── Main grading function ──────────────────────────────────────────────────
 
@@ -1059,7 +1060,7 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
         aiSummary: true, callOutcome: true, callType: true, transcript: true, contactName: true,
         calledAt: true,
         assignedTo: { select: { name: true, role: true } },
-        property: { select: { address: true, city: true, state: true, propertyCondition: true, ghlPipelineStage: true, ghlPipelineId: true } },
+        property: { select: { address: true, city: true, state: true, propertyCondition: true, ...PROPERTY_LANE_SELECT } },
       },
     })
     if (!call) return
@@ -1158,8 +1159,8 @@ ${pipelinesBlock}
 Contact name: ${contactName}
 Property: ${propertyAddress}
 Property Condition: ${call.property?.propertyCondition ?? 'Unknown'}
-Current pipeline stage: ${call.property?.ghlPipelineStage ?? 'Unknown'}
-Current pipeline id: ${call.property?.ghlPipelineId ?? 'Unknown'}
+Current pipeline stage: ${call.property ? (effectiveStageName(call.property) ?? 'Unknown') : 'Unknown'}
+Current pipeline id: Unknown
 Call summary: ${gradingResult.summary}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
 Call type: ${call.callType ?? 'Unknown'}

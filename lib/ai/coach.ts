@@ -8,6 +8,7 @@ import type { UserRole } from '@/types/roles'
 import { subDays, startOfWeek } from 'date-fns'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
+import { effectiveStatus } from '@/lib/property-status'
 import { anthropic } from '@/config/anthropic'
 
 export interface CoachMessage {
@@ -145,7 +146,7 @@ export async function getCoachResponse(
       where: { tenantId, assignedToId: userId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
     }),
     db.property.count({
-      where: { tenantId, assignedToId: userId, status: { notIn: ['SOLD', 'DEAD'] } },
+      where: { tenantId, assignedToId: userId, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } },
     }),
     db.userXp.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
@@ -179,7 +180,7 @@ export async function getCoachResponse(
         propertyContext = `
 CURRENT PROPERTY (user is viewing this property right now):
 - Address: ${prop.address}, ${prop.city}, ${prop.state} ${prop.zip}
-- Status: ${prop.status}
+- Status: ${effectiveStatus(prop)}
 - Market: ${prop.market?.name ?? 'Unknown'}
 - Assigned to: ${prop.assignedTo?.name ?? 'Unassigned'}
 - Seller: ${prop.sellers[0]?.seller.name ?? 'No seller linked'}

@@ -105,6 +105,7 @@ model Tenant {
   contactSuggestions    ContactSuggestion[]
   bugReports            BugReport[]
   partners              Partner[]
+  ghlPipelines          TenantGhlPipeline[]
 
   @@map("tenants")
 }
@@ -213,16 +214,39 @@ model Property {
   contractPrice Decimal? @map("contract_price") @db.Decimal(12, 2)
   assignmentFee Decimal? @map("assignment_fee") @db.Decimal(12, 2)
 
-  // Status — acquisition pipeline position (never overwritten by dispo)
-  status         PropertyStatus  @default(NEW_LEAD)
-  // Disposition pipeline position — null means not in dispo yet
-  dispoStatus    PropertyStatus? @map("dispo_status")
-  // Moment the current stage was entered — powers days-in-stage badge. Updated on every status/dispoStatus change.
-  stageEnteredAt DateTime?       @map("stage_entered_at")
+  // Per-lane status (Phase 1 of GHL multi-pipeline redesign — see
+  // docs/plans/ghl-multi-pipeline-bulletproof.md). Each pipeline writes
+  // only to its own column. Strict-lane mode — see plan §0 decision #2.
+  acqStatus      AcqStatus?      @map("acq_status")
+  dispoStatus    DispoStatus?    @map("dispo_status")
+  longtermStatus LongtermStatus? @map("longterm_status")
+
+  // Per-lane GHL opp ID — opp tracking the property in each pipeline.
+  // Cleared on OpportunityDelete; status values stay intact (plan §4).
+  ghlAcqOppId      String? @map("ghl_acq_opp_id")
+  ghlDispoOppId    String? @map("ghl_dispo_opp_id")
+  ghlLongtermOppId String? @map("ghl_longterm_opp_id")
+
+  // Per-lane current GHL stage display name (e.g. "Hot Leads(2)").
+  // Used by the inventory card to show stage label per §4b.
+  ghlAcqStageName      String? @map("ghl_acq_stage_name")
+  ghlDispoStageName    String? @map("ghl_dispo_stage_name")
+  ghlLongtermStageName String? @map("ghl_longterm_stage_name")
+
+  // Per-lane moment-of-stage-change — drives days-in-stage label per §4b.
+  acqStageEnteredAt      DateTime? @map("acq_stage_entered_at")
+  dispoStageEnteredAt    DateTime? @map("dispo_stage_entered_at")
+  longtermStageEnteredAt DateTime? @map("longterm_stage_entered_at")
+
+  // Backfill flag — true if Phase 2 backfill created this row before
+  // Phase 3 catch-up cron has run enrichment. False once enrichment lands.
+  pendingEnrichment Boolean @default(false) @map("pending_enrichment")
+
   // When true, GHL webhook stage updates skip this property. Used after an
   // auto-split when one property continues in the GHL opp and the other needs
   // to diverge — user manages the locked property's stage manually.
-  ghlSyncLocked  Boolean         @default(false) @map("ghl_sync_locked")
+  // Locks all three lanes (single-flag carry-forward — plan §6).
+  ghlSyncLocked Boolean @default(false) @map("ghl_sync_locked")
 
   // Lead tracking
   leadSource    String? @map("lead_source") // GHL opportunity source — tracked for KPIs
@@ -233,10 +257,9 @@ model Property {
   tcpFactors   Json?     @map("tcp_factors") // {callSentiment, touchCount, equity, motivation, ...}
   tcpUpdatedAt DateTime? @map("tcp_updated_at")
 
-  // GHL sync
-  ghlContactId     String? @map("ghl_contact_id")
-  ghlPipelineId    String? @map("ghl_pipeline_id")
-  ghlPipelineStage String? @map("ghl_pipeline_stage")
+  // GHL sync — contact pin only. Per-lane opp/stage/entered-at fields
+  // live in the per-lane block above (see plan §3).
+  ghlContactId String? @map("ghl_contact_id")
 
   // Property details
   beds          Int?
@@ -693,25 +716,35 @@ enum MilestoneType {
   @@map("milestone_type")
 }
 
-enum PropertyStatus {
+// Per-lane status enums — Phase 1 of GHL multi-pipeline redesign.
+// Replaces the combined PropertyStatus enum (dropped in same migration).
+// See docs/plans/ghl-multi-pipeline-bulletproof.md §3.
+
+enum AcqStatus {
   NEW_LEAD
-  CONTACTED
   APPOINTMENT_SET
-  APPOINTMENT_COMPLETED
   OFFER_MADE
   UNDER_CONTRACT
-  // Disposition pipeline stages
+  CLOSED
+
+  @@map("acq_status")
+}
+
+enum DispoStatus {
   IN_DISPOSITION
   DISPO_PUSHED
   DISPO_OFFERS
   DISPO_CONTRACTED
-  DISPO_CLOSED
-  // Terminal + long-term
-  SOLD
+  CLOSED
+
+  @@map("dispo_status")
+}
+
+enum LongtermStatus {
   FOLLOW_UP
   DEAD
 
-  @@map("property_status")
+  @@map("longterm_status")
 }
 
 // ─────────────────────────────────────────
@@ -2388,4 +2421,22 @@ model BugReport {
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   @@map("bug_reports")
+}
+
+// Listening pipelines per tenant — replaces the single
+// Tenant.propertyPipelineId / Tenant.dispoPipelineId model. One row per
+// (tenant, GHL pipeline). Track tells the webhook handler which lane
+// to write status changes to. See plan §3 + §6.
+model TenantGhlPipeline {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now()) @map("created_at")
+  tenantId      String   @map("tenant_id")
+  ghlPipelineId String   @map("ghl_pipeline_id")
+  track         String // 'acquisition' | 'disposition' | 'longterm'
+  isActive      Boolean  @default(true) @map("is_active")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, ghlPipelineId])
+  @@index([tenantId, track])
+  @@map("tenant_ghl_pipelines")
 }

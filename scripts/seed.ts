@@ -66,11 +66,11 @@ async function main() {
 
   // Create properties
   const properties = await Promise.all([
-    db.property.create({ data: { tenantId: tenant.id, assignedToId: acqManager.id, address: '1423 Maple St', city: 'Memphis', state: 'TN', zip: '38104', status: 'APPOINTMENT_SET', arv: 180000, askingPrice: 95000, mao: 90000, ghlContactId: 'ghl-contact-001' } }),
-    db.property.create({ data: { tenantId: tenant.id, assignedToId: acqManager.id, address: '2891 Oak Ave', city: 'Memphis', state: 'TN', zip: '38106', status: 'UNDER_CONTRACT', arv: 210000, askingPrice: 120000, mao: 105000, contractPrice: 112000, assignmentFee: 15000, ghlContactId: 'ghl-contact-002' } }),
-    db.property.create({ data: { tenantId: tenant.id, assignedToId: disp.id, address: '567 Pine Rd', city: 'Nashville', state: 'TN', zip: '37201', status: 'IN_DISPOSITION', arv: 290000, askingPrice: 175000, mao: 145000, contractPrice: 158000, assignmentFee: 22000, ghlContactId: 'ghl-contact-003' } }),
-    db.property.create({ data: { tenantId: tenant.id, assignedToId: leadManager.id, address: '891 Elm Dr', city: 'Memphis', state: 'TN', zip: '38108', status: 'NEW_LEAD', arv: 155000, askingPrice: 85000, ghlContactId: 'ghl-contact-004' } }),
-    db.property.create({ data: { tenantId: tenant.id, assignedToId: acqManager.id, address: '3344 Cedar Blvd', city: 'Knoxville', state: 'TN', zip: '37901', status: 'CONTACTED', arv: 195000, askingPrice: 110000, ghlContactId: 'ghl-contact-005' } }),
+    db.property.create({ data: { tenantId: tenant.id, assignedToId: acqManager.id, address: '1423 Maple St', city: 'Memphis', state: 'TN', zip: '38104', acqStatus: 'APPOINTMENT_SET', arv: 180000, askingPrice: 95000, mao: 90000, ghlContactId: 'ghl-contact-001' } }),
+    db.property.create({ data: { tenantId: tenant.id, assignedToId: acqManager.id, address: '2891 Oak Ave', city: 'Memphis', state: 'TN', zip: '38106', acqStatus: 'UNDER_CONTRACT', arv: 210000, askingPrice: 120000, mao: 105000, contractPrice: 112000, assignmentFee: 15000, ghlContactId: 'ghl-contact-002' } }),
+    db.property.create({ data: { tenantId: tenant.id, assignedToId: disp.id, address: '567 Pine Rd', city: 'Nashville', state: 'TN', zip: '37201', dispoStatus: 'IN_DISPOSITION', arv: 290000, askingPrice: 175000, mao: 145000, contractPrice: 158000, assignmentFee: 22000, ghlContactId: 'ghl-contact-003' } }),
+    db.property.create({ data: { tenantId: tenant.id, assignedToId: leadManager.id, address: '891 Elm Dr', city: 'Memphis', state: 'TN', zip: '38108', acqStatus: 'NEW_LEAD', arv: 155000, askingPrice: 85000, ghlContactId: 'ghl-contact-004' } }),
+    db.property.create({ data: { tenantId: tenant.id, assignedToId: acqManager.id, address: '3344 Cedar Blvd', city: 'Knoxville', state: 'TN', zip: '37901', acqStatus: 'NEW_LEAD', arv: 195000, askingPrice: 110000, ghlContactId: 'ghl-contact-005' } }),
   ])
   console.log(`✅ Properties: ${properties.length} created`)
 

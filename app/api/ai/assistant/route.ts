@@ -8,6 +8,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { ASSISTANT_TOOLS } from '@/lib/ai/assistant-tools'
 import { logFailure } from '@/lib/audit'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export const POST = withTenant(async (request, ctx) => {
   const { message, pageContext } = await request.json()
@@ -53,7 +54,8 @@ export const POST = withTenant(async (request, ctx) => {
       const property = await db.property.findUnique({
         where: { id: propertyId, tenantId },
         select: {
-          address: true, city: true, state: true, zip: true, status: true, dispoStatus: true,
+          address: true, city: true, state: true, zip: true,
+          ...PROPERTY_LANE_SELECT,
           askingPrice: true, arv: true, mao: true, currentOffer: true, contractPrice: true,
           propertyCondition: true, dealIntel: true,
           propertyMarkets: true, projectType: true, beds: true, baths: true, sqft: true, yearBuilt: true,
@@ -64,7 +66,7 @@ export const POST = withTenant(async (request, ctx) => {
       })
       if (property) {
         pageData = `CURRENT PROPERTY: ${property.address}, ${property.city}, ${property.state} ${property.zip}
-Status: ${property.status}${property.dispoStatus ? ` | Dispo: ${property.dispoStatus}` : ''}
+Status: ${effectiveStatus(property)}${property.dispoStatus ? ` | Dispo: ${property.dispoStatus}` : ''}
 Pricing: Asking ${property.askingPrice ?? 'N/A'} | ARV ${property.arv ?? 'N/A'} | MAO ${property.mao ?? 'N/A'} | Current Offer ${property.currentOffer ?? 'N/A'} | Contract ${property.contractPrice ?? 'N/A'}
 Details: ${property.beds ?? '?'}bd/${property.baths ?? '?'}ba, ${property.sqft ?? '?'}sqft, built ${property.yearBuilt ?? '?'}
 Condition: ${property.propertyCondition ?? 'N/A'}

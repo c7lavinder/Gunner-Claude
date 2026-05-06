@@ -10,7 +10,10 @@ async function main() {
     where: { address: { contains: 'Enterprise', mode: 'insensitive' } },
     select: {
       id: true, address: true, city: true, state: true, zip: true,
-      status: true, dispoStatus: true, ghlContactId: true, ghlPipelineId: true, ghlPipelineStage: true,
+      acqStatus: true, dispoStatus: true, longtermStatus: true,
+      ghlContactId: true,
+      ghlAcqOppId: true, ghlDispoOppId: true, ghlLongtermOppId: true,
+      ghlAcqStageName: true, ghlDispoStageName: true, ghlLongtermStageName: true,
       createdAt: true, leadSource: true, assignedToId: true,
     },
   })
@@ -19,8 +22,8 @@ async function main() {
     console.log(`\n  ${p.id}`)
     console.log(`  address=${p.address}`)
     console.log(`  city=${p.city} state=${p.state} zip=${p.zip}`)
-    console.log(`  status=${p.status} dispoStatus=${p.dispoStatus}`)
-    console.log(`  ghlContactId=${p.ghlContactId ?? '—'}  ghlPipelineStage=${p.ghlPipelineStage ?? '—'}`)
+    console.log(`  acqStatus=${p.acqStatus ?? '—'} dispoStatus=${p.dispoStatus ?? '—'} longtermStatus=${p.longtermStatus ?? '—'}`)
+    console.log(`  ghlContactId=${p.ghlContactId ?? '—'}  acqStage=${p.ghlAcqStageName ?? '—'}  dispoStage=${p.ghlDispoStageName ?? '—'}  longtermStage=${p.ghlLongtermStageName ?? '—'}`)
     console.log(`  leadSource=${p.leadSource ?? '—'}  created=${p.createdAt.toISOString()}`)
     console.log(`  sellers + audit trail:`)
 

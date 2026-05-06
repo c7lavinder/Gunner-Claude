@@ -7,11 +7,13 @@
 import { db } from '../lib/db/client'
 
 async function fix() {
-  const dispoStatuses = ['IN_DISPOSITION', 'DISPO_PUSHED', 'DISPO_OFFERS', 'DISPO_CONTRACTED', 'DISPO_CLOSED'] as const
-
+  // Phase 1 multi-pipeline: dispo lane is its own column. DISPO_CLOSED was
+  // renamed to CLOSED. Pull every property that is or was in dispo.
   const props = await db.property.findMany({
-    where: { status: { in: dispoStatuses as unknown as import('@prisma/client').PropertyStatus[] } },
-    select: { id: true, address: true, status: true, tenantId: true },
+    where: {
+      dispoStatus: { in: ['IN_DISPOSITION', 'DISPO_PUSHED', 'DISPO_OFFERS', 'DISPO_CONTRACTED', 'CLOSED'] },
+    },
+    select: { id: true, address: true, dispoStatus: true, tenantId: true },
   })
 
   console.log(`Found ${props.length} properties with dispo status`)
@@ -50,7 +52,7 @@ async function fix() {
       console.log(`  + DISPO_NEW milestone for ${prop.address}`)
     }
 
-    console.log(`OK: ${prop.address} (status: ${prop.status}, milestones ensured)`)
+    console.log(`OK: ${prop.address} (dispoStatus: ${prop.dispoStatus}, milestones ensured)`)
   }
 
   console.log('Done.')

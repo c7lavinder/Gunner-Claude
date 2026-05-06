@@ -73,7 +73,6 @@ export default async function SellersListPage({
               address: true,
               city: true,
               state: true,
-              status: true,
             },
           },
         },

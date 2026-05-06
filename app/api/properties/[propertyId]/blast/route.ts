@@ -42,7 +42,7 @@ export const POST = withTenant<{ propertyId: string }>(async (req, ctx, params) 
         dealBlastAskingOverride: true, dealBlastArvOverride: true,
         dealBlastContractOverride: true, dealBlastAssignmentFeeOverride: true,
         beds: true, baths: true, sqft: true, yearBuilt: true, lotSize: true,
-        propertyType: true, description: true, status: true,
+        propertyType: true, description: true,
         zillowData: true,
       },
     })

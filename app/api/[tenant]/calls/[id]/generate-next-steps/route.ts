@@ -4,6 +4,7 @@ import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
+import { effectiveStatus, effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export const POST = withTenant<{ tenant: string; id: string }>(async (request, ctx, params) => {
   const body = await request.json().catch(() => ({}))
@@ -16,7 +17,7 @@ export const POST = withTenant<{ tenant: string; id: string }>(async (request, c
       id: true, aiSummary: true, callOutcome: true, callType: true,
       transcript: true, contactName: true, aiNextSteps: true, calledAt: true,
       assignedTo: { select: { name: true, role: true } },
-      property: { select: { address: true, city: true, state: true, status: true, ghlPipelineStage: true, ghlPipelineId: true } },
+      property: { select: { address: true, city: true, state: true, ...PROPERTY_LANE_SELECT } },
     },
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
@@ -173,9 +174,9 @@ Return JSON array only, no other text:
 Rep: ${call.assignedTo?.name ?? 'Unknown'} (${call.assignedTo?.role ?? 'Unknown'})
 Contact: ${call.contactName ?? 'Unknown'}
 Property: ${call.property ? `${call.property.address}, ${call.property.city}, ${call.property.state}` : 'Unknown'}
-Property status: ${call.property?.status ?? 'Unknown'}
-Pipeline stage: ${call.property?.ghlPipelineStage ?? 'Unknown'}
-Current pipeline id: ${call.property?.ghlPipelineId ?? 'Unknown'}
+Property status: ${call.property ? effectiveStatus(call.property) : 'Unknown'}
+Pipeline stage: ${call.property ? (effectiveStageName(call.property) ?? 'Unknown') : 'Unknown'}
+Current pipeline id: Unknown
 Call summary: ${call.aiSummary ?? 'No summary'}
 Call outcome: ${call.callOutcome ?? 'Unknown'}
 Call type: ${call.callType ?? 'Unknown'}

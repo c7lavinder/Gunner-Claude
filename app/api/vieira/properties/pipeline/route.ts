@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateVieiraToken, unauthorized } from '@/lib/vieira-auth'
 import { db } from '@/lib/db/client'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export async function GET(req: NextRequest) {
   if (!validateVieiraToken(req)) return unauthorized()
@@ -15,24 +16,23 @@ export async function GET(req: NextRequest) {
     }
     const tidFilter = tenantId ? { tenantId } : {}
 
-    // Group by status
-    const byStage = await db.property.groupBy({
-      by: ['status'],
+    // Pull all properties once (per-lane schema — no single status column to group by)
+    const allProps = await db.property.findMany({
       where: tidFilter,
-      _count: true,
-      _sum: { assignmentFee: true, contractPrice: true },
-    })
-
-    // Group by market
-    const properties = await db.property.findMany({
-      where: { ...tidFilter, status: { notIn: ['DEAD', 'SOLD'] } },
       select: {
-        status: true,
+        ...PROPERTY_LANE_SELECT,
         assignmentFee: true,
         contractPrice: true,
         city: true,
         market: { select: { name: true } },
       },
+    })
+
+    // Active = not closed in either lane and not dead in longterm
+    const properties = allProps.filter(p => {
+      const closed = p.acqStatus === 'CLOSED' || p.dispoStatus === 'CLOSED'
+      const dead = p.longtermStatus === 'DEAD'
+      return !closed && !dead
     })
 
     // Build market breakdown
@@ -44,12 +44,20 @@ export async function GET(req: NextRequest) {
       marketMap[mkt].value += Number(p.assignmentFee ?? p.contractPrice ?? 0)
     }
 
-    // Pipeline summary
-    const pipeline = byStage.map(s => ({
-      stage: s.status,
-      count: s._count,
-      total_assignment_fee: s._sum.assignmentFee ?? 0,
-      total_contract_price: s._sum.contractPrice ?? 0,
+    // Pipeline summary — derive primary lane status per property and aggregate
+    const stageMap: Record<string, { count: number; assignmentFee: number; contractPrice: number }> = {}
+    for (const p of allProps) {
+      const stage = effectiveStatus(p)
+      if (!stageMap[stage]) stageMap[stage] = { count: 0, assignmentFee: 0, contractPrice: 0 }
+      stageMap[stage].count++
+      stageMap[stage].assignmentFee += Number(p.assignmentFee ?? 0)
+      stageMap[stage].contractPrice += Number(p.contractPrice ?? 0)
+    }
+    const pipeline = Object.entries(stageMap).map(([stage, agg]) => ({
+      stage,
+      count: agg.count,
+      total_assignment_fee: agg.assignmentFee,
+      total_contract_price: agg.contractPrice,
     }))
 
     // Sort pipeline by logical deal flow order

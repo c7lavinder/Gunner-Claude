@@ -17,28 +17,36 @@ export interface ApiError {
 }
 
 // ─── Property types ───────────────────────────────────────────────────────────
+// Phase 1 of GHL multi-pipeline redesign replaced the single PropertyStatus
+// enum with three per-lane enums (AcqStatus / DispoStatus / LongtermStatus)
+// imported directly from @prisma/client. Display labels live alongside their
+// owning lane below.
 
-export type PropertyStatus =
-  | 'NEW_LEAD'
-  | 'CONTACTED'
-  | 'APPOINTMENT_SET'
-  | 'APPOINTMENT_COMPLETED'
-  | 'OFFER_MADE'
-  | 'UNDER_CONTRACT'
-  | 'IN_DISPOSITION'
-  | 'SOLD'
-  | 'DEAD'
-
-export const PROPERTY_STATUS_LABELS: Record<PropertyStatus, string> = {
+export const ACQ_STATUS_LABELS: Record<string, string> = {
   NEW_LEAD: 'New lead',
-  CONTACTED: 'Contacted',
   APPOINTMENT_SET: 'Appointment set',
-  APPOINTMENT_COMPLETED: 'Appointment done',
   OFFER_MADE: 'Offer made',
   UNDER_CONTRACT: 'Under contract',
+  CLOSED: 'Closed (purchased)',
+}
+
+export const DISPO_STATUS_LABELS: Record<string, string> = {
   IN_DISPOSITION: 'In disposition',
-  SOLD: 'Sold',
+  DISPO_PUSHED: 'Pushed to buyers',
+  DISPO_OFFERS: 'Offers received',
+  DISPO_CONTRACTED: 'Under contract (buyer)',
+  CLOSED: 'Closed (sold)',
+}
+
+export const LONGTERM_STATUS_LABELS: Record<string, string> = {
+  FOLLOW_UP: 'Follow up',
   DEAD: 'Dead',
+}
+
+export const PROPERTY_STATUS_LABELS: Record<string, string> = {
+  ...ACQ_STATUS_LABELS,
+  ...DISPO_STATUS_LABELS,
+  ...LONGTERM_STATUS_LABELS,
 }
 
 // ─── Call types ───────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import { db } from '@/lib/db/client'
 import { STATUS_TO_APP_STAGE } from '@/types/property'
 import type { AppStage } from '@/types/property'
+import { effectiveStatus, isClosedDeal, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 interface KPIFilters {
   tenantId: string
@@ -40,7 +41,7 @@ export async function getInventoryKPIs(filters: KPIFilters) {
   const properties = await db.property.findMany({
     where,
     select: {
-      status: true,
+      ...PROPERTY_LANE_SELECT,
       assignmentFee: true,
       contractPrice: true,
       askingPrice: true,
@@ -55,7 +56,7 @@ export async function getInventoryKPIs(filters: KPIFilters) {
   // Stage counts
   const stageCounts: Record<string, number> = {}
   for (const p of properties) {
-    const stage = STATUS_TO_APP_STAGE[p.status] ?? 'acquisition.new_lead'
+    const stage = STATUS_TO_APP_STAGE[effectiveStatus(p)] ?? 'acquisition.new_lead'
     stageCounts[stage] = (stageCounts[stage] ?? 0) + 1
   }
 
@@ -71,7 +72,7 @@ export async function getInventoryKPIs(filters: KPIFilters) {
   const safeDiv = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0
 
   // Financials from closed deals
-  const closedProps = properties.filter(p => p.status === 'SOLD')
+  const closedProps = properties.filter(isClosedDeal)
   const totalRevenue = closedProps.reduce((sum, p) => sum + (p.assignmentFee ? Number(p.assignmentFee) : 0), 0)
   const avgDealSize = closedProps.length > 0 ? totalRevenue / closedProps.length : 0
 
@@ -90,7 +91,7 @@ export async function getInventoryKPIs(filters: KPIFilters) {
   for (const p of properties) {
     const src = p.leadSource ?? 'Unknown'
     const existing = sourceMap.get(src) ?? { leads: 0, apptSet: 0, offers: 0, contracted: 0, closed: 0, revenue: 0 }
-    const stage = STATUS_TO_APP_STAGE[p.status]
+    const stage = STATUS_TO_APP_STAGE[effectiveStatus(p)]
     if (stage === 'acquisition.new_lead') existing.leads++
     else if (stage === 'acquisition.appt_set') existing.apptSet++
     else if (stage === 'acquisition.offer_made') existing.offers++

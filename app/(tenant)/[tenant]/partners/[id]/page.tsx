@@ -8,6 +8,7 @@ import { notFound, redirect } from 'next/navigation'
 import { PartnerDetailClient } from './partner-detail-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export default async function PartnerDetailPage({
   params,
@@ -32,7 +33,7 @@ export default async function PartnerDetailPage({
               address: true,
               city: true,
               state: true,
-              status: true,
+              ...PROPERTY_LANE_SELECT,
               arv: true,
               askingPrice: true,
             },
@@ -122,7 +123,7 @@ export default async function PartnerDetailPage({
         address: pp.property.address,
         city: pp.property.city,
         state: pp.property.state,
-        status: pp.property.status,
+        status: effectiveStatus(pp.property),
         arv: pp.property.arv?.toString() ?? null,
         askingPrice: pp.property.askingPrice?.toString() ?? null,
       },

@@ -7,6 +7,7 @@ import type { UserRole } from '@/types/roles'
 import { redirect } from 'next/navigation'
 import { getCentralDayBounds } from '@/lib/dates'
 import { AccountabilityClient } from './accountability-client'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 // Status → which milestones should exist for a property at that status
 const STATUS_MILESTONES: Record<string, string[]> = {
@@ -47,16 +48,17 @@ export default async function AccountabilityPage({ params }: { params: { tenant:
     callsToday,
     overdueTasks,
   ] = await Promise.all([
-    // Data quality counts
-    db.property.count({ where: { tenantId, marketId: null, status: { notIn: ['DEAD', 'SOLD'] } } }),
-    db.property.count({ where: { tenantId, leadSource: null, status: { notIn: ['DEAD', 'SOLD'] } } }),
-    db.property.count({ where: { tenantId, address: '', status: { notIn: ['DEAD', 'SOLD'] } } }),
+    // Data quality counts — exclude terminal (closed in either lane) and dead (longterm)
+    db.property.count({ where: { tenantId, marketId: null, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
+    db.property.count({ where: { tenantId, leadSource: null, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
+    db.property.count({ where: { tenantId, address: '', acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
 
-    // Properties with their milestones for gap detection
+    // Properties with their milestones for gap detection — exclude brand-new acq leads + dead
     db.property.findMany({
-      where: { tenantId, status: { notIn: ['NEW_LEAD', 'DEAD'] } },
+      where: { tenantId, acqStatus: { not: 'NEW_LEAD' }, longtermStatus: { not: 'DEAD' } },
       select: {
-        id: true, address: true, city: true, state: true, status: true,
+        id: true, address: true, city: true, state: true,
+        ...PROPERTY_LANE_SELECT,
         milestones: { select: { type: true } },
       },
     }),
@@ -94,10 +96,11 @@ export default async function AccountabilityPage({ params }: { params: { tenant:
   // ── Compute milestone gaps ──
   const milestoneGaps = propertiesWithMilestones
     .map(p => {
-      const required = STATUS_MILESTONES[p.status] ?? []
+      const status = effectiveStatus(p)
+      const required = STATUS_MILESTONES[status] ?? []
       const existing = new Set(p.milestones.map(m => m.type as string))
       const missing = required.filter(m => !existing.has(m))
-      return { id: p.id, address: `${p.address}, ${p.city} ${p.state}`, status: p.status, missing }
+      return { id: p.id, address: `${p.address}, ${p.city} ${p.state}`, status, missing }
     })
     .filter(p => p.missing.length > 0)
 

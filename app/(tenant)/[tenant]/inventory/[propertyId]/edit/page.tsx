@@ -4,6 +4,7 @@ import { db } from '@/lib/db/client'
 import { redirect, notFound } from 'next/navigation'
 import { hasPermission } from '@/types/roles'
 import { PropertyForm } from '@/components/inventory/property-form'
+import { effectiveStatus } from '@/lib/property-status'
 
 export default async function PropertyEditPage({
   params,
@@ -56,7 +57,7 @@ export default async function PropertyEditPage({
         city: property.city,
         state: property.state,
         zip: property.zip,
-        status: property.status,
+        status: effectiveStatus(property),
         arv: property.arv?.toString() ?? '',
         askingPrice: property.askingPrice?.toString() ?? '',
         mao: property.mao?.toString() ?? '',

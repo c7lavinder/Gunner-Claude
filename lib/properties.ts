@@ -121,56 +121,80 @@ export async function createPropertyFromContact(
     // Auto-assign market by zip code (check DB first, then config fallback, then Global)
     const marketId = await resolveMarketForZip(tenantId, zip)
 
-    // Map GHL stage → acquisition status + disposition status separately.
-    // `status` is acquisition-only; `dispoStatus` is disposition-only. A property
-    // created via the dispo trigger sets status=UNDER_CONTRACT (entering dispo
-    // implies an acquisition contract already exists) + dispoStatus=<dispo enum>.
-    let status = 'NEW_LEAD'
-    let dispoStatus: string | null = null
+    // Map GHL stage → per-lane status + per-lane stage label. Phase 1 of
+    // GHL multi-pipeline redesign — each lane writes its own column.
+    // A property created via the dispo trigger sets acqStatus=UNDER_CONTRACT
+    // (entering dispo implies an acq contract already exists) AND the
+    // matching dispoStatus. See plan §2.
+    type AcqStatusValue = 'NEW_LEAD' | 'APPOINTMENT_SET' | 'OFFER_MADE' | 'UNDER_CONTRACT' | 'CLOSED'
+    type DispoStatusValue = 'IN_DISPOSITION' | 'DISPO_PUSHED' | 'DISPO_OFFERS' | 'DISPO_CONTRACTED' | 'CLOSED'
+    type LongtermStatusValue = 'FOLLOW_UP' | 'DEAD'
+
+    let acqStatus: AcqStatusValue | null = 'NEW_LEAD'
+    let dispoStatus: DispoStatusValue | null = null
+    let longtermStatus: LongtermStatusValue | null = null
+    let acqStageName: string | null = null
+    let dispoStageName: string | null = null
+    let longtermStageName: string | null = null
+
     if (context.ghlPipelineStage) {
       try {
         const { getAppStage } = await import('@/lib/ghl-stage-map')
         const appStage = getAppStage(context.ghlPipelineStage)
-        const ACQ_MAP: Record<string, string> = {
-          'acquisition.new_lead': 'NEW_LEAD',
-          'acquisition.appt_set': 'APPOINTMENT_SET',
+        const ACQ_MAP: Record<string, AcqStatusValue> = {
+          'acquisition.new_lead':   'NEW_LEAD',
+          'acquisition.appt_set':   'APPOINTMENT_SET',
           'acquisition.offer_made': 'OFFER_MADE',
-          'acquisition.contract': 'UNDER_CONTRACT',
-          'acquisition.closed': 'SOLD',
-          'longterm.follow_up': 'CONTACTED',
-          'longterm.dead': 'DEAD',
+          'acquisition.contract':   'UNDER_CONTRACT',
+          'acquisition.closed':     'CLOSED',
         }
-        const DISPO_MAP: Record<string, string> = {
-          'disposition.new_deal': 'IN_DISPOSITION',
-          'disposition.pushed_out': 'DISPO_PUSHED',
-          'disposition.offers_received': 'DISPO_OFFERS',
-          'disposition.contracted': 'DISPO_CONTRACTED',
-          'disposition.closed': 'DISPO_CLOSED',
+        const DISPO_MAP: Record<string, DispoStatusValue> = {
+          'disposition.new_deal':       'IN_DISPOSITION',
+          'disposition.pushed_out':     'DISPO_PUSHED',
+          'disposition.offers_received':'DISPO_OFFERS',
+          'disposition.contracted':     'DISPO_CONTRACTED',
+          'disposition.closed':         'CLOSED',
+        }
+        const LONGTERM_MAP: Record<string, LongtermStatusValue> = {
+          'longterm.follow_up': 'FOLLOW_UP',
+          'longterm.dead':      'DEAD',
         }
         if (appStage?.startsWith('disposition')) {
-          status = 'UNDER_CONTRACT'
+          acqStatus = 'UNDER_CONTRACT'
           dispoStatus = DISPO_MAP[appStage] ?? 'IN_DISPOSITION'
+          dispoStageName = context.ghlPipelineStage
+        } else if (appStage?.startsWith('longterm')) {
+          acqStatus = null
+          longtermStatus = LONGTERM_MAP[appStage] ?? 'FOLLOW_UP'
+          longtermStageName = context.ghlPipelineStage
         } else {
-          status = ACQ_MAP[appStage] ?? 'NEW_LEAD'
+          acqStatus = ACQ_MAP[appStage] ?? 'NEW_LEAD'
+          acqStageName = context.ghlPipelineStage
         }
       } catch { /* use default */ }
     }
+
+    const now = new Date()
 
     // Create property — Gunner is source of truth
     const property = await db.property.create({
       data: {
         tenantId,
         ghlContactId,
-        ghlPipelineId: context.ghlPipelineId,
-        ghlPipelineStage: context.ghlPipelineStage,
         leadSource,
         address: address || '',
         city: city || '',
         state: state || '',
         zip: zip || '',
-        status: status as 'NEW_LEAD',
-        dispoStatus: dispoStatus as 'IN_DISPOSITION' | null,
-        stageEnteredAt: new Date(),
+        acqStatus,
+        dispoStatus,
+        longtermStatus,
+        ghlAcqStageName: acqStageName,
+        ghlDispoStageName: dispoStageName,
+        ghlLongtermStageName: longtermStageName,
+        acqStageEnteredAt: acqStatus ? now : null,
+        dispoStageEnteredAt: dispoStatus ? now : null,
+        longtermStageEnteredAt: longtermStatus ? now : null,
         assignedToId,
         marketId,
       },

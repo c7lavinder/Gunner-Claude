@@ -44,7 +44,7 @@ async function main() {
         db.call.aggregate({ where: { tenantId: tenant.id, assignedToId: user.id, gradingStatus: 'COMPLETED', createdAt: { gte: monthStart } }, _avg: { score: true } }),
         db.task.count({ where: { tenantId: tenant.id, assignedToId: user.id, status: 'COMPLETED', completedAt: { gte: dayStart } } }),
         db.task.count({ where: { tenantId: tenant.id, assignedToId: user.id, status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
-        db.property.count({ where: { tenantId: tenant.id, assignedToId: user.id, status: { notIn: ['SOLD', 'DEAD'] } } }),
+        db.property.count({ where: { tenantId: tenant.id, assignedToId: user.id, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
       ])
 
       const metrics = {
@@ -82,8 +82,8 @@ async function main() {
     // Tenant-level aggregate snapshot (no userId)
     const [tenantCalls, tenantActive, tenantSold] = await Promise.all([
       db.call.count({ where: { tenantId: tenant.id, createdAt: { gte: dayStart } } }),
-      db.property.count({ where: { tenantId: tenant.id, status: { notIn: ['SOLD', 'DEAD'] } } }),
-      db.property.count({ where: { tenantId: tenant.id, status: 'SOLD', updatedAt: { gte: monthStart } } }),
+      db.property.count({ where: { tenantId: tenant.id, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
+      db.property.count({ where: { tenantId: tenant.id, OR: [{ acqStatus: 'CLOSED' }, { dispoStatus: 'CLOSED' }], updatedAt: { gte: monthStart } } }),
     ])
 
     // Use raw upsert for the tenant-level snapshot (userId is null)

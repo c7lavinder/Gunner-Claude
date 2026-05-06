@@ -16,6 +16,7 @@
 
 import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
+import { effectiveStageName } from '@/lib/property-status'
 
 interface TCPFactors {
   callDurationBonus: number
@@ -111,7 +112,7 @@ export async function calculateTCP(tenantId: string, propertyId: string): Promis
   const daysSinceFirstContact = Math.max(WEIGHTS.daysSinceFirstContact * weeksSince, -0.30) // cap at -30%
 
   // Factor 7: Stage velocity — how fast they moved through stages
-  const stageVelocity = property.ghlPipelineStage ? WEIGHTS.stageVelocity * 0.5 : 0
+  const stageVelocity = effectiveStageName(property) ? WEIGHTS.stageVelocity * 0.5 : 0
 
   // Factor 8: Equity bonus — high equity = more motivated seller
   const arv = property.arv ? Number(property.arv) : 0

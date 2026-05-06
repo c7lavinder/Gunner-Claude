@@ -7,6 +7,7 @@ import type { UserRole } from '@/types/roles'
 import { isRoleAtLeast } from '@/types/roles'
 import { getMarketsForZip } from '@/lib/config/crm.config'
 import { KpiDashboard } from './KpiDashboard'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export default async function KpisPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -29,7 +30,8 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
       where: { tenantId },
       select: {
         id: true, address: true, city: true, state: true,
-        status: true, leadSource: true, zip: true,
+        ...PROPERTY_LANE_SELECT,
+        leadSource: true, zip: true,
         projectType: true, assignmentFee: true, finalProfit: true,
         createdAt: true,
       },
@@ -50,7 +52,7 @@ export default async function KpisPage({ params }: { params: { tenant: string } 
         const market = zipMarkets.length > 0 ? zipMarkets[0] : 'Global'
         return {
           id: p.id, address: p.address, city: p.city, state: p.state,
-          status: p.status, leadSource: p.leadSource, zip: p.zip, market,
+          status: effectiveStatus(p), leadSource: p.leadSource, zip: p.zip, market,
           projectType: (Array.isArray(p.projectType) ? p.projectType : []) as string[],
           assignmentFee: p.assignmentFee ? Number(p.assignmentFee) : null,
           finalProfit: p.finalProfit ? Number(p.finalProfit) : null,

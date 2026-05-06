@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateVieiraToken, unauthorized } from '@/lib/vieira-auth'
 import { db } from '@/lib/db/client'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export async function GET(req: NextRequest) {
   if (!validateVieiraToken(req)) return unauthorized()
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
         nextBestAction: true,
         callOutcome: true,
         assignedTo: { select: { name: true, role: true } },
-        property: { select: { id: true, address: true, city: true, status: true } },
+        property: { select: { id: true, address: true, city: true, ...PROPERTY_LANE_SELECT } },
       },
     })
 
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
         outcome: c.callOutcome,
         agent: c.assignedTo?.name,
         agent_role: c.assignedTo?.role,
-        property_status: c.property?.status,
+        property_status: c.property ? effectiveStatus(c.property) : null,
       })),
       count: calls.length,
     })

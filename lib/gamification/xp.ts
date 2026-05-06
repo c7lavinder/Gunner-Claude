@@ -234,16 +234,23 @@ async function checkAndAwardBadges(tenantId: string, userId: string): Promise<vo
   )
 
   // Build context for badge checks
-  const [callStats, propertyStats, xpRecord, recentCalls, buySignalCount] = await Promise.all([
+  const [callStats, propertiesContractedCount, propertiesClosedCount, xpRecord, recentCalls, buySignalCount] = await Promise.all([
     db.call.groupBy({
       by: ['gradingStatus'],
       where: { tenantId, assignedToId: userId, gradingStatus: 'COMPLETED' },
-      _count: true,
+      _count: { _all: true },
     }),
-    db.property.groupBy({
-      by: ['status'],
-      where: { tenantId, assignedToId: userId, status: { in: ['UNDER_CONTRACT', 'SOLD'] } },
-      _count: true,
+    // UNDER_CONTRACT lives only in the acquisition lane.
+    db.property.count({
+      where: { tenantId, assignedToId: userId, acqStatus: 'UNDER_CONTRACT' },
+    }),
+    // "Closed" deals = either lane reached CLOSED (legacy SOLD).
+    db.property.count({
+      where: {
+        tenantId,
+        assignedToId: userId,
+        OR: [{ acqStatus: 'CLOSED' }, { dispoStatus: 'CLOSED' }],
+      },
     }),
     db.userXp.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
@@ -260,7 +267,7 @@ async function checkAndAwardBadges(tenantId: string, userId: string): Promise<vo
     }),
   ])
 
-  const totalCallsGraded = callStats.find(c => c.gradingStatus === 'COMPLETED')?._count ?? 0
+  const totalCallsGraded = callStats.find(c => c.gradingStatus === 'COMPLETED')?._count._all ?? 0
   const callsOver90 = recentCalls.filter(c => (c.score ?? 0) >= 90).length
 
   // Calculate consecutive high scores from most recent
@@ -277,8 +284,8 @@ async function checkAndAwardBadges(tenantId: string, userId: string): Promise<vo
     totalCallsGraded,
     consecutiveHighScores,
     callsOver90,
-    propertiesSold: propertyStats.find(p => p.status === 'SOLD')?._count ?? 0,
-    propertiesContracted: propertyStats.find(p => p.status === 'UNDER_CONTRACT')?._count ?? 0,
+    propertiesSold: propertiesClosedCount,
+    propertiesContracted: propertiesContractedCount,
     buySignals: buySignalCount,
     level: xpRecord?.level ?? 1,
   }

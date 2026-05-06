@@ -71,7 +71,7 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
       id: true, aiSummary: true, calledAt: true, ghlCallId: true, ghlContactId: true,
       property: {
         select: {
-          id: true, address: true, ghlContactId: true, ghlPipelineId: true, ghlPipelineStage: true,
+          id: true, address: true, ghlContactId: true,
           sellers: { include: { seller: { select: { id: true, name: true, phone: true, ghlContactId: true } } }, take: 1 },
         },
       },

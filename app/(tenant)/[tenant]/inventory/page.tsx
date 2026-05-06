@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { InventoryClient } from '@/components/inventory/inventory-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
+import { effectiveStatus, effectiveStageName, effectiveStageEnteredAt, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export default async function InventoryPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -31,13 +32,14 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
       take: 20000,
       select: {
         id: true, address: true, city: true, state: true, zip: true,
-        status: true, dispoStatus: true, createdAt: true, stageEnteredAt: true,
+        ...PROPERTY_LANE_SELECT,
+        createdAt: true,
         ghlSyncLocked: true,
         arv: true, askingPrice: true, mao: true, contractPrice: true,
         assignmentFee: true, currentOffer: true, highestOffer: true,
         acceptedPrice: true, finalProfit: true,
         offerTypes: true, altPrices: true,
-        fieldSources: true, ghlContactId: true, ghlPipelineStage: true,
+        fieldSources: true, ghlContactId: true,
         leadSource: true, lastOfferDate: true, lastContactedDate: true,
         assignedToId: true,
         // Vendor distress signals for the inventory row badge
@@ -67,8 +69,9 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
 
   // Status counts for filter chips — properties with dispoStatus count in BOTH pipelines
   const statusCounts = properties.reduce<Record<string, number>>((acc, p) => {
-    acc[p.status] = (acc[p.status] ?? 0) + 1
-    if (p.dispoStatus) {
+    const primary = effectiveStatus(p)
+    acc[primary] = (acc[primary] ?? 0) + 1
+    if (p.dispoStatus && p.dispoStatus !== primary) {
       acc[p.dispoStatus] = (acc[p.dispoStatus] ?? 0) + 1
     }
     return acc
@@ -107,7 +110,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         city: p.city,
         state: p.state,
         zip: p.zip,
-        status: p.status,
+        status: effectiveStatus(p),
         dispoStatus: p.dispoStatus,
         arv: p.arv?.toString() ?? null,
         askingPrice: p.askingPrice?.toString() ?? null,
@@ -122,7 +125,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         altPrices: (p.altPrices ?? {}) as Record<string, Record<string, string | null>>,
         fieldSources: (p.fieldSources ?? {}) as Record<string, string>,
         createdAt: p.createdAt.toISOString(),
-        stageEnteredAt: p.stageEnteredAt?.toISOString() ?? null,
+        stageEnteredAt: effectiveStageEnteredAt(p)?.toISOString() ?? null,
         ghlSyncLocked: p.ghlSyncLocked,
         ...pipelineTimestamps(p.milestones, p.createdAt),
         sellerName: p.sellers[0]?.seller.name ?? null,
@@ -141,7 +144,7 @@ export default async function InventoryPage({ params }: { params: { tenant: stri
         taskCount: p._count.tasks,
         ghlContactId: p.ghlContactId,
         leadSource: p.leadSource,
-        ghlStageName: p.ghlPipelineStage,
+        ghlStageName: effectiveStageName(p),
         market: p.market?.name ?? null,
         lastOfferDate: p.lastOfferDate?.toISOString() ?? null,
         lastContactedDate: p.lastContactedDate?.toISOString() ?? null,

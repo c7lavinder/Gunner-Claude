@@ -10,6 +10,7 @@ import { db } from '@/lib/db/client'
 import { isRoleAtLeast } from '@/types/roles'
 import { computeJourneyStatus, type JourneyInputs } from '@/lib/disposition/journey-status'
 import { DispositionClient, type DispositionRow } from './disposition-client'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export default async function DispositionPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -21,14 +22,17 @@ export default async function DispositionPage({ params }: { params: { tenant: st
   const properties = await db.property.findMany({
     where: {
       tenantId: session.tenantId,
-      status: { in: ['IN_DISPOSITION', 'UNDER_CONTRACT'] },
+      OR: [
+        { dispoStatus: 'IN_DISPOSITION' },
+        { acqStatus: 'UNDER_CONTRACT' },
+      ],
     },
     select: {
       id: true,
       address: true,
       city: true,
       state: true,
-      status: true,
+      ...PROPERTY_LANE_SELECT,
       askingPrice: true,
       arv: true,
       description: true,
@@ -64,8 +68,9 @@ export default async function DispositionPage({ params }: { params: { tenant: st
 
   const rows: DispositionRow[] = properties.map(p => {
     const offers = offerCounts.get(p.id) ?? { logged: 0, accepted: 0 }
+    const status = effectiveStatus(p)
     const inputs: JourneyInputs = {
-      status: p.status,
+      status,
       address: p.address,
       askingPrice: p.askingPrice ? p.askingPrice.toString() : null,
       arv: p.arv ? p.arv.toString() : null,
@@ -85,7 +90,7 @@ export default async function DispositionPage({ params }: { params: { tenant: st
       address: p.address,
       city: p.city,
       state: p.state,
-      status: p.status,
+      status,
       askingPrice: p.askingPrice ? p.askingPrice.toString() : null,
       assignmentFee: p.assignmentFee ? p.assignmentFee.toString() : null,
       stage: journey.stage,

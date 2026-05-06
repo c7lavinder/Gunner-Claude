@@ -7,6 +7,7 @@ import { CallDetailClient } from '@/components/calls/call-detail-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
 import { getSignedAudioUrl } from '@/lib/storage/supabase'
+import { effectiveStatus, effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export default async function CallDetailPage({
   params,
@@ -25,7 +26,8 @@ export default async function CallDetailPage({
       assignedTo: { select: { id: true, name: true, role: true } },
       property: {
         select: {
-          id: true, address: true, city: true, state: true, status: true, ghlPipelineStage: true,
+          id: true, address: true, city: true, state: true,
+          ...PROPERTY_LANE_SELECT,
           sellers: { include: { seller: { select: { name: true, phone: true } } }, take: 1 },
         },
       },
@@ -34,13 +36,20 @@ export default async function CallDetailPage({
 
   // All properties linked to this contact (not just the one linked to this call)
   // — powers the multi-property header pills.
-  const relatedProperties = call?.ghlContactId
+  const relatedPropertiesRaw = call?.ghlContactId
     ? await db.property.findMany({
         where: { tenantId, ghlContactId: call.ghlContactId },
-        select: { id: true, address: true, city: true, state: true, status: true },
+        select: { id: true, address: true, city: true, state: true, ...PROPERTY_LANE_SELECT },
         orderBy: { createdAt: 'desc' },
       })
     : []
+  const relatedProperties = relatedPropertiesRaw.map(p => ({
+    id: p.id,
+    address: p.address,
+    city: p.city,
+    state: p.state,
+    status: effectiveStatus(p),
+  }))
 
   // Safe-cast aiNextSteps from Json to typed array
   const aiNextSteps = (call?.aiNextSteps as Array<{ type: string; label: string; reasoning: string; status: string; pushedAt: string | null }> | null) ?? null
@@ -120,8 +129,8 @@ export default async function CallDetailPage({
           address: call.property.address,
           city: call.property.city,
           state: call.property.state,
-          status: call.property.status,
-          ghlPipelineStage: call.property.ghlPipelineStage,
+          status: effectiveStatus(call.property),
+          ghlPipelineStage: effectiveStageName(call.property),
           sellerName: call.property.sellers[0]?.seller.name ?? null,
         } : null,
         relatedProperties,

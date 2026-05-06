@@ -8,6 +8,7 @@ import type { DealIntel, ProposedDealIntelChange, DealIntelCategory } from '@/li
 import { FIELD_LABELS, FIELD_CATEGORY } from '@/lib/types/deal-intel'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export async function extractDealIntel(callId: string): Promise<void> {
   const call = await db.call.findUnique({
@@ -17,7 +18,8 @@ export async function extractDealIntel(callId: string): Promise<void> {
       property: {
         select: {
           id: true, address: true, city: true, state: true, zip: true,
-          status: true, askingPrice: true, offerPrice: true, contractPrice: true,
+          ...PROPERTY_LANE_SELECT,
+          askingPrice: true, offerPrice: true, contractPrice: true,
           propertyCondition: true, occupancy: true, dealIntel: true,
           zillowData: true,
         },
@@ -48,7 +50,11 @@ export async function extractDealIntel(callId: string): Promise<void> {
   try {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const timer = startTimer()
-    const userPrompt = buildExtractionUserPrompt({ ...call, property }, currentDealIntel, batchData)
+    const userPrompt = buildExtractionUserPrompt(
+      { ...call, property: { ...property, status: effectiveStatus(property) } },
+      currentDealIntel,
+      batchData,
+    )
 
     const DEAL_INTEL_MODEL = 'claude-opus-4-6'
     // Stream to avoid SDK v0.90 10-minute non-streaming preflight rejection

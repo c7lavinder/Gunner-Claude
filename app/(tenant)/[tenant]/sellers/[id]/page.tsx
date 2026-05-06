@@ -6,6 +6,7 @@ import { notFound, redirect } from 'next/navigation'
 import { SellerDetailClient } from '@/components/sellers/seller-detail-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export default async function SellerDetailPage({
   params,
@@ -29,7 +30,7 @@ export default async function SellerDetailPage({
               address: true,
               city: true,
               state: true,
-              status: true,
+              ...PROPERTY_LANE_SELECT,
               arv: true,
               assignedTo: { select: { name: true } },
             },
@@ -101,7 +102,7 @@ export default async function SellerDetailPage({
         address: ps.property.address,
         city: ps.property.city,
         state: ps.property.state,
-        status: ps.property.status,
+        status: effectiveStatus(ps.property),
         arv: ps.property.arv?.toString() ?? null,
         assignedToName: ps.property.assignedTo?.name ?? null,
       },

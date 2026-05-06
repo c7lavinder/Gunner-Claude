@@ -4,7 +4,9 @@ import { forbiddenResponse } from '@/lib/auth/session'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { hasPermission } from '@/types/roles'
-import { Prisma, PropertyStatus } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import type { AcqStatus, DispoStatus, LongtermStatus } from '@prisma/client'
+import { effectiveStatus } from '@/lib/property-status'
 import { z } from 'zod'
 import { awardPropertyXP } from '@/lib/gamification/xp'
 import type { UserRole } from '@/types/roles'
@@ -210,10 +212,26 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(rawCity && { city: standardizeCity(rawCity) }),
           ...(rawState && { state: standardizeState(rawState) }),
           ...(rawZip !== undefined && { zip: standardizeZip(rawZip ?? '') }),
-          ...(status && status !== property.status && {
-            status: status as PropertyStatus,
-            stageEnteredAt: new Date(),
-          }),
+          ...(status && status !== effectiveStatus(property) && (() => {
+            // Lane dispatch — Phase 1 multi-pipeline: a single incoming
+            // status value writes to the matching per-lane column. CLOSED
+            // is ambiguous (acq + dispo both terminate there); disambiguate
+            // by the property's current state — if dispo lane is active,
+            // close dispo; otherwise close acq.
+            const ACQ = new Set(['NEW_LEAD','APPOINTMENT_SET','OFFER_MADE','UNDER_CONTRACT'])
+            const DISPO = new Set(['IN_DISPOSITION','DISPO_PUSHED','DISPO_OFFERS','DISPO_CONTRACTED'])
+            const LONGTERM = new Set(['FOLLOW_UP','DEAD'])
+            const now = new Date()
+            if (ACQ.has(status)) return { acqStatus: status as AcqStatus, acqStageEnteredAt: now }
+            if (DISPO.has(status)) return { dispoStatus: status as DispoStatus, dispoStageEnteredAt: now }
+            if (LONGTERM.has(status)) return { longtermStatus: status as LongtermStatus, longtermStageEnteredAt: now }
+            if (status === 'CLOSED') {
+              return property.dispoStatus
+                ? { dispoStatus: 'CLOSED' as DispoStatus, dispoStageEnteredAt: now }
+                : { acqStatus: 'CLOSED' as AcqStatus, acqStageEnteredAt: now }
+            }
+            return {}
+          })()),
           ...(arv !== undefined && { arv: arv ? parseFloat(arv) : null }),
           ...(askingPrice !== undefined && { askingPrice: askingPrice ? parseFloat(askingPrice) : null }),
           ...(mao !== undefined && { mao: mao ? parseFloat(mao) : null }),

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { validateVieiraToken, unauthorized } from '@/lib/vieira-auth'
 import { db } from '@/lib/db/client'
 import { startOfDay, endOfDay } from 'date-fns'
+import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export async function GET(req: NextRequest) {
   if (!validateVieiraToken(req)) return unauthorized()
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
       db.call.count({ where: { ...tidFilter, calledAt: { gte: dayStart, lte: dayEnd } } }),
       db.call.count({ where: { ...tidFilter, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' } }),
       db.call.aggregate({ where: { ...tidFilter, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' }, _avg: { score: true } }),
-      db.property.count({ where: { ...tidFilter, status: { notIn: ['DEAD', 'SOLD'] } } }),
+      db.property.count({ where: { ...tidFilter, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
       db.task.count({ where: { ...tidFilter, status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
       db.task.count({ where: { ...tidFilter, status: { in: ['PENDING', 'IN_PROGRESS'] }, dueAt: { lt: dayStart } } }),
       db.propertyMilestone.count({ where: { ...tidFilter, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }),
@@ -51,13 +52,18 @@ export async function GET(req: NextRequest) {
     const stalled = await db.property.findMany({
       where: {
         ...tidFilter,
-        status: { notIn: ['DEAD', 'SOLD', 'NEW_LEAD'] },
+        // Exclude closed (either lane), dead (longterm), and brand-new acq leads
+        acqStatus: { not: 'CLOSED' },
+        dispoStatus: { not: 'CLOSED' },
+        longtermStatus: { not: 'DEAD' },
+        NOT: { acqStatus: 'NEW_LEAD' },
         updatedAt: { lt: sevenDaysAgo },
       },
       orderBy: { updatedAt: 'asc' },
       take: 3,
       select: {
-        id: true, address: true, city: true, status: true,
+        id: true, address: true, city: true,
+        ...PROPERTY_LANE_SELECT,
         assignmentFee: true, contractPrice: true, updatedAt: true,
       },
     })
@@ -84,7 +90,7 @@ export async function GET(req: NextRequest) {
       stalled_properties: stalled.map(p => ({
         id: p.id,
         address: `${p.address}, ${p.city}`,
-        status: p.status,
+        status: effectiveStatus(p),
         assignment_fee: p.assignmentFee,
         days_stale: Math.floor((Date.now() - p.updatedAt.getTime()) / 86400000),
       })),

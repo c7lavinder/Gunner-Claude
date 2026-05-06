@@ -32,6 +32,25 @@ export const STEP_TYPE_LABELS: Record<WorkflowStep['type'], string> = {
   wait: 'Wait',
 }
 
+// Map a legacy free-form status string from a workflow definition onto the
+// per-lane column it belongs to. Returns null when the string is unrecognised.
+function laneForLegacyStatus(s: string): { column: 'acqStatus' | 'dispoStatus' | 'longtermStatus'; value: string } | null {
+  const v = s.toUpperCase()
+  if (v === 'NEW_LEAD' || v === 'CONTACTED') return { column: 'acqStatus', value: 'NEW_LEAD' }
+  if (v === 'APPOINTMENT_SET' || v === 'APPOINTMENT_COMPLETED') return { column: 'acqStatus', value: 'APPOINTMENT_SET' }
+  if (v === 'OFFER_MADE') return { column: 'acqStatus', value: 'OFFER_MADE' }
+  if (v === 'UNDER_CONTRACT') return { column: 'acqStatus', value: 'UNDER_CONTRACT' }
+  if (v === 'SOLD') return { column: 'acqStatus', value: 'CLOSED' }
+  if (v === 'IN_DISPOSITION') return { column: 'dispoStatus', value: 'IN_DISPOSITION' }
+  if (v === 'DISPO_PUSHED') return { column: 'dispoStatus', value: 'DISPO_PUSHED' }
+  if (v === 'DISPO_OFFERS') return { column: 'dispoStatus', value: 'DISPO_OFFERS' }
+  if (v === 'DISPO_CONTRACTED') return { column: 'dispoStatus', value: 'DISPO_CONTRACTED' }
+  if (v === 'DISPO_CLOSED') return { column: 'dispoStatus', value: 'CLOSED' }
+  if (v === 'FOLLOW_UP') return { column: 'longtermStatus', value: 'FOLLOW_UP' }
+  if (v === 'DEAD') return { column: 'longtermStatus', value: 'DEAD' }
+  return null
+}
+
 // ─── Trigger workflows ─────────────────────────────────────────────────────
 
 export async function triggerWorkflows(
@@ -177,10 +196,15 @@ async function executeStep(
 
     case 'update_status': {
       if (context.propertyId && step.action) {
-        await db.property.update({
-          where: { id: context.propertyId as string },
-          data: { status: step.action as never },
-        }).catch(() => {}) // non-blocking
+        // Map a legacy status string to its lane column. Per-lane schema means
+        // "set status" depends on which lane the value belongs to.
+        const lane = laneForLegacyStatus(step.action)
+        if (lane) {
+          await db.property.update({
+            where: { id: context.propertyId as string },
+            data: { [lane.column]: lane.value } as Prisma.PropertyUpdateInput,
+          }).catch(() => {}) // non-blocking
+        }
       }
       break
     }

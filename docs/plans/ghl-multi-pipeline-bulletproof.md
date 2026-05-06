@@ -172,12 +172,30 @@ Exception: Sales Process at "1 Month Follow Up" stage may write
 | `OFFER_MADE` | `acqStatus = OFFER_MADE` |
 | `UNDER_CONTRACT` | `acqStatus = UNDER_CONTRACT` |
 | `SOLD` | `acqStatus = CLOSED` (renamed) |
-| `IN_DISPOSITION` ... `DISPO_CLOSED` | already in `dispoStatus` field — no change |
+| `IN_DISPOSITION`, `DISPO_PUSHED`, `DISPO_OFFERS`, `DISPO_CONTRACTED` | already in `dispoStatus` field — value preserved, column retyped (see below) |
+| `DISPO_CLOSED` (in `dispoStatus`) | `dispoStatus = CLOSED` (renamed in same migration) |
 | `FOLLOW_UP` | `longtermStatus = FOLLOW_UP` |
 | `DEAD` | `longtermStatus = DEAD` |
 
-After migration, `Property.status` column is dropped entirely. `dispoStatus`
-field stays (already in correct place).
+After migration:
+- `Property.status` column dropped entirely.
+- `Property.dispoStatus` retyped from `PropertyStatus?` to a new dedicated
+  `DispoStatus` enum: `{ IN_DISPOSITION, DISPO_PUSHED, DISPO_OFFERS,
+  DISPO_CONTRACTED, CLOSED }`. The retype is a `USING CASE …` cast that
+  also performs `DISPO_CLOSED → CLOSED` in the same statement.
+- The old `PropertyStatus` enum is dropped (no remaining columns reference it).
+
+### Dropped `Property` columns (legacy, superseded by per-lane equivalents)
+
+- `Property.ghlPipelineId` (was the pipeline-id pin; replaced by per-lane
+  `ghl{Acq,Dispo,Longterm}OppId` — those are opp IDs, not pipeline IDs)
+- `Property.ghlPipelineStage` (replaced by `ghl{Acq,Dispo,Longterm}StageName`)
+- `Property.stageEnteredAt` (replaced by `{acq,dispo,longterm}StageEnteredAt`)
+
+These three are dropped in the same migration as `Property.status`. The ~53
+read sites that reference them are rewritten in the same commit (the
+"commit 1" of Phase 1, which is migration + read-site swaps as a single
+atomic unit — see §6 sequencing note).
 
 ### New `TenantGhlPipeline` table
 
@@ -208,11 +226,28 @@ model TenantGhlPipeline {
 
 ## 4. Per-property visibility rules
 
+**Phase 1 visibility (status-presence-based — transitional rule):**
+
 | Surface | Show if |
 |---|---|
-| Main inventory list | (`ghlAcqOppId` set AND `acqStatus` IN {NEW_LEAD, APPOINTMENT_SET, OFFER_MADE, UNDER_CONTRACT, CLOSED}) OR (`ghlDispoOppId` set AND `dispoStatus` ≠ `CLOSED`) |
-| Follow Up view *(deferred)* | `longtermStatus = FOLLOW_UP` AND (`ghlLongtermOppId` set OR `ghlAcqOppId` opp at "1 Month Follow Up") |
+| Main inventory list | `acqStatus` IN {NEW_LEAD, APPOINTMENT_SET, OFFER_MADE, UNDER_CONTRACT, CLOSED} OR `dispoStatus` IS NOT NULL AND `dispoStatus` ≠ `CLOSED` |
+| Follow Up view *(deferred)* | `longtermStatus = FOLLOW_UP` |
 | Hidden / archived bucket | All other cases. Findable via "Show archived" toggle. **Never deleted.** |
+
+**Why status-presence and not opp-ID-presence in Phase 1:** existing
+properties don't have `ghl{Acq,Dispo,Longterm}OppId` populated until
+Phase 2 backfill runs (today's `Property.ghlPipelineId` stores the
+*pipeline* ID, not an opp ID — there's no source for opp IDs on
+existing rows during the schema migration). Visibility based on the
+status column instead keeps existing properties visible after Phase 1
+ships, which is required by the §6 verification block.
+
+**Phase 2+ visibility (post-backfill — tightened rule):** once the
+backfill has populated `ghl{Acq,Dispo,Longterm}OppId` on every row that
+should be visible, the rule tightens to require the opp ID:
+*(ghlAcqOppId set AND acqStatus IN {…}) OR (ghlDispoOppId set AND
+dispoStatus ≠ CLOSED)*. Decision logged in §13. The tightening lands as
+a separate inventory-query change after Phase 2 backfill verification.
 
 When a webhook handler runs on `OpportunityDeleted`, it clears the matching
 `*OppId` field. Status values stay intact. If a new opp arrives later for
@@ -273,29 +308,85 @@ PropertyRadar data points are mapped to the right Property columns.
 
 ## 6. Phase 1 — Schema + handlers + safety harness (~2 days)
 
-### Tasks
+### Sequencing (commit boundaries)
 
-1. **Schema migration** (~½ day)
-   - Add new `Property` columns
-   - Add `TenantGhlPipeline` table
-   - Drop deprecated `Tenant` columns
-   - Drop deprecated `Property.status` column (after data migration)
-   - Drop unused enum values
-2. **Webhook handler refactor** (~1 day)
-   - Replace `handleOpportunityStageChanged` with three lane-aware paths
-   - Add `OpportunityCreated` handler (creates property + opp ID record)
-   - Add `OpportunityDeleted` handler (clears matching `*OppId`)
-   - Stage map updated for renames + no-op rules
-   - Update queries gain pipeline filter to enforce lane isolation
-3. **Token mutex on `getGHLClient`** (~1 hour)
-   - Closes audit gap C.3
-   - Prevents race conditions during long-running backfills
-4. **Settings UI updates** (~½ day)
-   - Pipeline picker rebuilt — list of pipelines per track instead of single trigger stage
-   - Add "manage listening pipelines" admin page or inline in Settings
-5. **Visibility filter logic** (~few hours)
-   - Inventory query updated to use new visibility rules
-   - "Show archived" toggle on inventory page
+Phase 1 ships in **two commits**, each atomic and independently
+verifiable. The original "first commit = migration only" target is
+relaxed because dropping `Property.status` + 3 legacy `Property` columns
+breaks the TypeScript build for ~53 read sites — those swaps must ride
+in the same commit as the column drop, otherwise prod doesn't compile.
+
+**Commit 1 — Schema migration + read-site swaps (no behavior change):**
+
+1. Prisma migration: new Property columns, new TenantGhlPipeline table,
+   data copy from `status` to `acqStatus`/`longtermStatus`, retype
+   `dispoStatus` to new `DispoStatus` enum (with `DISPO_CLOSED → CLOSED`
+   in the cast), drop `Property.status` + `Property.ghlPipelineId` +
+   `Property.ghlPipelineStage` + `Property.stageEnteredAt`, drop
+   `PropertyStatus` enum. Reverse migration kept in
+   `prisma/migrations/<ts>_phase1_multi_pipeline/down.sql`.
+2. Backfill `tenant_ghl_pipelines` rows from existing
+   `Tenant.propertyPipelineId` + `Tenant.dispoPipelineId` (one row per
+   non-null value, track set per source field). `Tenant` columns
+   themselves stay until commit 2.
+3. Read-site swaps: every reference to dropped fields rewritten to use
+   the new per-lane equivalents. Webhook handler keeps single-trigger
+   logic but writes to the new field names. Inventory query updated to
+   the §4 status-presence visibility rule.
+4. `npx tsc --noEmit` exit 0.
+
+**Commit 2 — Lane-aware handler + Settings + Tenant cleanup:**
+
+5. Webhook handler refactor — three lane-aware paths
+   (`OpportunityCreate` / `OpportunityUpdate` / `OpportunityDelete`,
+   matching real GHL event names — note the plan's earlier "ed"
+   spelling was wrong). Pipeline filter on stage updates per §0
+   decision #2 (strict-lane writes).
+6. Settings UI — pipeline picker rebuilt as "list of pipelines per
+   track" sourced from `tenant_ghl_pipelines`. Writes go to the new
+   table, not to dropped `Tenant.*PipelineId` columns.
+7. Token mutex on `getGHLClient` (closes audit gap C.3).
+8. "Show archived" toggle on inventory.
+9. Second migration drops `Tenant.propertyPipelineId`,
+   `Tenant.propertyTriggerStage`, `Tenant.dispoPipelineId`,
+   `Tenant.dispoTriggerStage`. Read sites for these (settings UI,
+   onboarding, `app/api/tenants/config`, `lib/db/settings.ts`,
+   `lib/ghl/webhooks.ts`) are rewritten in this commit.
+10. `npx tsc --noEmit` exit 0.
+
+### Tasks (legacy view — preserved for cross-reference)
+
+1. **Schema migration** (~½ day) — see commit 1 above
+2. **Webhook handler refactor** (~1 day) — see commit 2
+3. **Token mutex on `getGHLClient`** (~1 hour) — see commit 2
+4. **Settings UI updates** (~½ day) — see commit 2
+5. **Visibility filter logic** (~few hours) — split: status-presence
+   rule lands in commit 1; "Show archived" toggle lands in commit 2
+
+### Webhook event name correction
+
+GHL's actual event names are `OpportunityCreate`, `OpportunityUpdate`,
+`OpportunityDelete` (no trailing *d*). The plan's earlier `Created` /
+`Deleted` references were incorrect; corrected throughout this section.
+`OpportunityStageChanged` is also valid as an alias for
+`OpportunityUpdate` in some GHL configurations — both must be handled.
+
+### Pipelines not in `tenant_ghl_pipelines`
+
+When a webhook arrives for a pipeline that isn't registered in
+`tenant_ghl_pipelines`, the handler logs an `INFO` audit row
+(`ghl.webhook.unlistened_pipeline`) and returns. No property creation,
+no status update. Important during the GHL-side JV pipeline removal
+window — those events can keep arriving and we should ignore them
+silently rather than creating ghost rows.
+
+### `Property.ghlSyncLocked` semantics under three lanes
+
+The existing `ghlSyncLocked` boolean continues to lock **all three
+lanes** (single-flag carry-forward). When set, none of the
+`acqStatus` / `dispoStatus` / `longtermStatus` fields are updated by
+the webhook handler. Per-lane locking would be a follow-up if the
+split-pair workflow needs it.
 
 ### Deliverables
 
@@ -642,6 +733,35 @@ without affecting subsequent ones — phases are independently shippable.
 - 2026-05-05: Reverse sync gated by feature flag, default off. Reason:
   changes the surface that GHL trusts; opt-in lets Corey verify on a
   small subset before turning on globally.
+- 2026-05-06: Phase 1 visibility uses status-presence (loosened from
+  the original `ghl{Acq,Dispo,Longterm}OppId`-set rule). Reason:
+  existing rows have no opp IDs at migration time (today's
+  `Property.ghlPipelineId` is a *pipeline* ID, not an opp ID);
+  visibility based on the status column instead keeps existing
+  properties visible after Phase 1 ships. The opp-ID-based rule
+  tightens after Phase 2 backfill populates the new columns.
+- 2026-05-06: Dedicated `DispoStatus` enum created (not reuse of
+  legacy `PropertyStatus`). Reason: `Property.status` column dropped
+  in Phase 1, the old enum has no remaining columns referencing it;
+  splitting the enum into `AcqStatus` / `DispoStatus` /
+  `LongtermStatus` gives type safety per lane. `DISPO_CLOSED → CLOSED`
+  rename happens in the same `ALTER TABLE … TYPE` cast.
+- 2026-05-06: Three legacy `Property` columns dropped in Phase 1
+  migration: `ghlPipelineId`, `ghlPipelineStage`, `stageEnteredAt`.
+  Reason: each is superseded by per-lane equivalents (`ghl{Acq,Dispo,
+  Longterm}OppId` — note opp not pipeline, `ghl{Acq,Dispo,Longterm}
+  StageName`, `{acq,dispo,longterm}StageEnteredAt`). Keeping the
+  legacy columns as deprecated would invite bit-rot.
+- 2026-05-06: `pipelineName` NOT added to `tenant_ghl_pipelines`.
+  Reason: inventory cards use a hard-coded lane label ("Sales
+  Process" / "Dispo" / "Follow Up") rather than the tenant's actual
+  GHL pipeline name. If multi-tenant rollout requires per-tenant
+  pipeline naming later, the column is a 5-minute add.
+- 2026-05-06: Phase 1 ships in two commits, not one. Reason: dropping
+  `Property.status` + 3 legacy columns breaks the TS build for ~53
+  read sites; they must ride together. Lane-aware handler refactor
+  + Settings UI + Tenant column drops ride in commit 2 so each
+  commit is independently verifiable on prod.
 
 ---
 

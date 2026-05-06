@@ -7,6 +7,7 @@ import { redirect, notFound } from 'next/navigation'
 import { PropertyDetailClient } from '@/components/inventory/property-detail-client'
 import type { UserRole } from '@/types/roles'
 import { hasPermission } from '@/types/roles'
+import { effectiveStatus, effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export default async function PropertyDetailPage({
   params,
@@ -27,11 +28,12 @@ export default async function PropertyDetailPage({
       where: { id: params.propertyId, tenantId },
       select: {
         id: true, address: true, city: true, state: true, zip: true,
-        status: true, dispoStatus: true, createdAt: true, updatedAt: true,
+        ...PROPERTY_LANE_SELECT,
+        createdAt: true, updatedAt: true,
         arv: true, askingPrice: true, mao: true, contractPrice: true,
         assignmentFee: true, offerPrice: true, repairCost: true, wholesalePrice: true,
         currentOffer: true, highestOffer: true, acceptedPrice: true, finalProfit: true,
-        fieldSources: true, ghlContactId: true, ghlPipelineId: true, ghlPipelineStage: true,
+        fieldSources: true, ghlContactId: true,
         assignedToId: true, leadSource: true,
         beds: true, baths: true, sqft: true, yearBuilt: true, lotSize: true,
         propertyType: true, occupancy: true, lockboxCode: true,
@@ -236,7 +238,7 @@ export default async function PropertyDetailPage({
         city: property.city,
         state: property.state,
         zip: property.zip,
-        status: property.status,
+        status: effectiveStatus(property),
         arv: property.arv?.toString() ?? null,
         askingPrice: property.askingPrice?.toString() ?? null,
         mao: property.mao?.toString() ?? null,
@@ -450,7 +452,7 @@ export default async function PropertyDetailPage({
         })),
         auditLogs: [],
         leadSource: property.leadSource,
-        ghlStageName: property.ghlPipelineStage,
+        ghlStageName: effectiveStageName(property),
         milestones: milestones.map(m => ({
           id: 'id' in m ? m.id : undefined,
           type: m.type as string,

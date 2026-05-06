@@ -18,6 +18,7 @@ import { db } from '@/lib/db/client'
 import type { Prisma } from '@prisma/client'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
+import { effectiveStatus } from '@/lib/property-status'
 const STORY_MODEL = 'claude-sonnet-4-6'
 const MAX_CALLS_IN_CONTEXT = 10
 const MAX_TOKENS = 700
@@ -92,7 +93,7 @@ export async function generatePropertyStory(
   const bd = ((property.zillowData as Record<string, unknown> | null)?.batchData ?? {}) as Record<string, unknown>
   const dealIntel = (property.dealIntel ?? {}) as Record<string, unknown>
 
-  const userPrompt = buildStoryPrompt(property, bd, dealIntel)
+  const userPrompt = buildStoryPrompt({ ...property, status: effectiveStatus(property) }, bd, dealIntel)
 
   try {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')

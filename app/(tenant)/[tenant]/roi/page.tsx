@@ -19,12 +19,16 @@ export default async function RoiPage({ params, searchParams }: { params: { tena
     db.property.groupBy({
       by: ['leadSource'],
       where: { tenantId, leadSource: { not: null } },
-      _count: true,
+      _count: { _all: true },
     }),
     db.property.groupBy({
       by: ['leadSource'],
-      where: { tenantId, leadSource: { not: null }, status: 'SOLD' },
-      _count: true,
+      where: {
+        tenantId,
+        leadSource: { not: null },
+        OR: [{ acqStatus: 'CLOSED' }, { dispoStatus: 'CLOSED' }],
+      },
+      _count: { _all: true },
     }),
   ])
 
@@ -36,8 +40,8 @@ export default async function RoiPage({ params, searchParams }: { params: { tena
     const monthlyCosts = costs.filter(c => c.source === source)
     const totalSpend = monthlyCosts.reduce((sum, c) => sum + Number(c.cost), 0)
     const currentCost = monthlyCosts.find(c => c.month === currentMonth && c.year === currentYear)
-    const leads = propertiesBySource.find(p => p.leadSource === source)?._count ?? 0
-    const deals = soldBySource.find(p => p.leadSource === source)?._count ?? 0
+    const leads = propertiesBySource.find(p => p.leadSource === source)?._count._all ?? 0
+    const deals = soldBySource.find(p => p.leadSource === source)?._count._all ?? 0
 
     return {
       source,

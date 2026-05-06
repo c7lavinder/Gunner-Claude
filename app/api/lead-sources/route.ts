@@ -31,7 +31,7 @@ export const GET = withTenant(async (_req, ctx) => {
     }),
     db.property.groupBy({
       by: ['leadSource'],
-      where: { tenantId, leadSource: { not: null }, status: 'SOLD' },
+      where: { tenantId, leadSource: { not: null }, OR: [{ acqStatus: 'CLOSED' }, { dispoStatus: 'CLOSED' }] },
       _count: true,
     }),
   ])

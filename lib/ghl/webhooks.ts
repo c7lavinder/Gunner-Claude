@@ -487,7 +487,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     // Entering dispo: set dispoStatus (never touch acq status).
     const existing = await db.property.findFirst({
       where: { tenantId, ghlContactId: oppData.contactId },
-      select: { id: true, address: true, status: true },
+      select: { id: true, address: true, acqStatus: true },
     })
     if (existing) {
       // Respect the per-property sync lock — user may have paused sync on one
@@ -501,9 +501,13 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
       } else {
         await db.property.update({
           where: { id: existing.id },
-          data: { dispoStatus: 'IN_DISPOSITION', stageEnteredAt: new Date() },
+          data: {
+            dispoStatus: 'IN_DISPOSITION',
+            dispoStageEnteredAt: new Date(),
+            ghlDispoStageName: resolvedStageName ?? stageId,
+          },
         })
-        console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → dispoStatus=IN_DISPOSITION (acq stays ${existing.status})`)
+        console.log(`[GHL Webhook] Dispo trigger: ${existing.address} → dispoStatus=IN_DISPOSITION (acq stays ${existing.acqStatus ?? '—'})`)
       }
     } else {
       await createPropertyFromContact(tenantId, oppData.contactId, {
@@ -515,7 +519,7 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
 
     const propForMilestone = existing ?? await db.property.findFirst({
       where: { tenantId, ghlContactId: oppData.contactId },
-      select: { id: true, status: true },
+      select: { id: true, acqStatus: true },
     })
     if (propForMilestone) {
       const { getCentralDayBounds } = await import('@/lib/dates')
@@ -527,9 +531,9 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
         'UNDER_CONTRACT': ['LEAD', 'UNDER_CONTRACT'],
         'OFFER_MADE': ['LEAD', 'OFFER_MADE'],
         'APPOINTMENT_SET': ['LEAD', 'APPOINTMENT_SET'],
-        'SOLD': ['LEAD', 'UNDER_CONTRACT', 'CLOSED'],
+        'CLOSED': ['LEAD', 'UNDER_CONTRACT', 'CLOSED'],
       }
-      const acqStatus = (existing ?? propForMilestone).status ?? ''
+      const acqStatus = (existing ?? propForMilestone).acqStatus ?? ''
       const neededMilestones = ACQ_STATUS_TO_MILESTONES[acqStatus] ?? ['LEAD']
       for (const mType of neededMilestones) {
         const exists = await db.propertyMilestone.findFirst({
@@ -564,39 +568,50 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     const { getAppStage } = await import('@/lib/ghl-stage-map')
     const appStage = stageName ? getAppStage(stageName) : null
 
+    // Per-lane mapping (Phase 1 of GHL multi-pipeline redesign).
+    // Note: SOLD → CLOSED, DISPO_CLOSED → CLOSED renames per plan §3.
     const APP_STAGE_TO_STATUS: Record<string, string> = {
       'acquisition.new_lead': 'NEW_LEAD',
       'acquisition.appt_set': 'APPOINTMENT_SET',
       'acquisition.offer_made': 'OFFER_MADE',
       'acquisition.contract': 'UNDER_CONTRACT',
-      'acquisition.closed': 'SOLD',
+      'acquisition.closed': 'CLOSED',
       'disposition.new_deal': 'IN_DISPOSITION',
       'disposition.pushed_out': 'DISPO_PUSHED',
       'disposition.offers_received': 'DISPO_OFFERS',
       'disposition.contracted': 'DISPO_CONTRACTED',
-      'disposition.closed': 'DISPO_CLOSED',
+      'disposition.closed': 'CLOSED',
       'longterm.follow_up': 'FOLLOW_UP',
-      // SOLD maps to DEAD per business rule (sold = done = dead pipeline)
       'longterm.dead': 'DEAD',
     }
 
     const newStatus = appStage ? APP_STAGE_TO_STATUS[appStage] : null
-    const isDispoStage = appStage?.startsWith('disposition')
+    const lane = appStage?.startsWith('disposition')
+      ? 'disposition'
+      : appStage?.startsWith('longterm')
+      ? 'longterm'
+      : 'acquisition'
+    const now = new Date()
+    const stageLabel = stageName ?? stageId
 
-    // Dispo stages → dispoStatus. Acq/longterm stages → status. Never cross-contaminate.
+    // Strict-lane writes per plan §0 decision #2: each pipeline writes only
+    // to its own lane column. Acquisition writes acqStatus + acq stage name +
+    // acq entered-at; same shape per lane.
     const updateData: Record<string, unknown> = {}
 
-    if (isDispoStage) {
-      if (newStatus) {
+    if (newStatus) {
+      if (lane === 'disposition') {
         updateData.dispoStatus = newStatus
-        updateData.stageEnteredAt = new Date()
-      }
-    } else {
-      updateData.ghlPipelineStage = stageName ?? stageId
-      updateData.ghlPipelineId = oppData.pipelineId
-      if (newStatus) {
-        updateData.status = newStatus
-        updateData.stageEnteredAt = new Date()
+        updateData.dispoStageEnteredAt = now
+        updateData.ghlDispoStageName = stageLabel
+      } else if (lane === 'longterm') {
+        updateData.longtermStatus = newStatus
+        updateData.longtermStageEnteredAt = now
+        updateData.ghlLongtermStageName = stageLabel
+      } else {
+        updateData.acqStatus = newStatus
+        updateData.acqStageEnteredAt = now
+        updateData.ghlAcqStageName = stageLabel
       }
     }
 
@@ -613,23 +628,23 @@ async function handleOpportunityStageChanged(tenantId: string, event: GHLWebhook
     // Auto-create ALL milestones required for this status (backfill any gaps).
     // A property at OFFER_MADE should have: LEAD, APPOINTMENT_SET, OFFER_MADE.
     // If it jumped from NEW_LEAD to OFFER_MADE, the intermediate ones get created here.
-    if (newStatus) {
-      const STATUS_REQUIRED_MILESTONES: Record<string, string[]> = {
-        'NEW_LEAD': ['LEAD'],
-        'CONTACTED': ['LEAD'],
-        'APPOINTMENT_SET': ['LEAD', 'APPOINTMENT_SET'],
-        'APPOINTMENT_COMPLETED': ['LEAD', 'APPOINTMENT_SET'],
-        'OFFER_MADE': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE'],
-        'UNDER_CONTRACT': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT'],
-        'SOLD': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED'],
-        'IN_DISPOSITION': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW'],
-        'DISPO_PUSHED': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED'],
-        'DISPO_OFFERS': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED'],
-        'DISPO_CONTRACTED': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED'],
-        'DISPO_CLOSED': ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED'],
-        'FOLLOW_UP': ['LEAD'],
+    // Keyed by appStage (not raw status) so acq/dispo CLOSED don't collide.
+    if (newStatus && appStage) {
+      const APPSTAGE_REQUIRED_MILESTONES: Record<string, string[]> = {
+        'acquisition.new_lead':   ['LEAD'],
+        'acquisition.appt_set':   ['LEAD', 'APPOINTMENT_SET'],
+        'acquisition.offer_made': ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE'],
+        'acquisition.contract':   ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT'],
+        'acquisition.closed':     ['LEAD', 'APPOINTMENT_SET', 'OFFER_MADE', 'UNDER_CONTRACT', 'CLOSED'],
+        'disposition.new_deal':       ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW'],
+        'disposition.pushed_out':     ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED'],
+        'disposition.offers_received':['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED'],
+        'disposition.contracted':     ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED'],
+        'disposition.closed':         ['LEAD', 'UNDER_CONTRACT', 'DISPO_NEW', 'DISPO_PUSHED', 'DISPO_OFFER_RECEIVED', 'DISPO_CONTRACTED', 'DISPO_CLOSED'],
+        'longterm.follow_up': ['LEAD'],
+        'longterm.dead': [],
       }
-      const requiredMilestones = STATUS_REQUIRED_MILESTONES[newStatus] ?? []
+      const requiredMilestones = APPSTAGE_REQUIRED_MILESTONES[appStage] ?? []
       if (requiredMilestones.length > 0) {
         try {
           const prop = await db.property.findFirst({

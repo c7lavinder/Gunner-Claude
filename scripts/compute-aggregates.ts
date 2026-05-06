@@ -22,8 +22,13 @@ import { db } from '../lib/db/client'
 import type { Prisma } from '@prisma/client'
 
 // Property statuses that count as "closed with us" vs "dead"
-const CLOSED_STATUSES = new Set(['SOLD', 'DISPO_CLOSED'])
-const DEAD_STATUSES = new Set(['DEAD'])
+// Phase 1 of GHL multi-pipeline redesign: status moved from a single
+// PropertyStatus column to per-lane acqStatus / dispoStatus / longtermStatus.
+// Closed = either lane reached CLOSED. Walked = longterm DEAD.
+const isClosed = (p: { acqStatus?: string | null; dispoStatus?: string | null }): boolean =>
+  p.acqStatus === 'CLOSED' || p.dispoStatus === 'CLOSED'
+const isWalked = (p: { longtermStatus?: string | null }): boolean =>
+  p.longtermStatus === 'DEAD'
 
 // Map Claude-extracted trust step to a composite 0-100 trust score. Simple
 // ordinal projection — we can blend with rapportScore / responseRate later
@@ -70,8 +75,12 @@ async function computeSellerAggregates(): Promise<SellerResult[]> {
         select: {
           property: {
             select: {
-              status: true,
-              stageEnteredAt: true,
+              acqStatus: true,
+              dispoStatus: true,
+              longtermStatus: true,
+              acqStageEnteredAt: true,
+              dispoStageEnteredAt: true,
+              longtermStageEnteredAt: true,
               market: { select: { name: true } },
               propertyMarkets: true,
               createdAt: true,
@@ -81,8 +90,8 @@ async function computeSellerAggregates(): Promise<SellerResult[]> {
       })
 
       const totalPropertiesOwned = propertySellers.length
-      const closed = propertySellers.filter(ps => CLOSED_STATUSES.has(ps.property.status))
-      const walked = propertySellers.filter(ps => DEAD_STATUSES.has(ps.property.status))
+      const closed = propertySellers.filter(ps => isClosed(ps.property))
+      const walked = propertySellers.filter(ps => isWalked(ps.property))
       const totalDealsClosed = closed.length
       const totalDealsWalked = walked.length
       const closeRate = totalPropertiesOwned > 0 ? totalDealsClosed / totalPropertiesOwned : null
@@ -98,10 +107,14 @@ async function computeSellerAggregates(): Promise<SellerResult[]> {
         }
       }
 
-      // Last close date = latest stageEnteredAt among closed properties
+      // Last close date = latest stage-entered-at among closed properties.
+      // Use the lane that closed (dispo if dispoStatus='CLOSED', else acq).
       let lastDealClosedDate: Date | null = null
       for (const ps of closed) {
-        const t = ps.property.stageEnteredAt ?? ps.property.createdAt
+        const closedAt = ps.property.dispoStatus === 'CLOSED'
+          ? ps.property.dispoStageEnteredAt
+          : ps.property.acqStageEnteredAt
+        const t = closedAt ?? ps.property.createdAt
         if (!lastDealClosedDate || t > lastDealClosedDate) lastDealClosedDate = t
       }
 
@@ -287,7 +300,7 @@ async function computePartnerAggregates(): Promise<PartnerResult[]> {
         select: {
           role: true,
           createdAt: true,
-          property: { select: { status: true } },
+          property: { select: { acqStatus: true, dispoStatus: true } },
         },
       })
 
@@ -303,7 +316,7 @@ async function computePartnerAggregates(): Promise<PartnerResult[]> {
         else if (role === 'taking_to_clients' || role === 'we_sold_them_this') dealsTakenFromUsCount++
         else if (role === 'jv_partner') jvHistoryCount++
 
-        if (l.property?.status && CLOSED_STATUSES.has(l.property.status)) {
+        if (l.property && isClosed(l.property)) {
           dealsClosedWithUsCount++
           if (!lastDealDate || l.createdAt > lastDealDate) lastDealDate = l.createdAt
         }

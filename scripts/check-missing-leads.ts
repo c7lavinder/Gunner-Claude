@@ -10,7 +10,7 @@ async function main() {
   for (const term of searchTerms) {
     const props = await db.property.findMany({
       where: { address: { contains: term, mode: 'insensitive' } },
-      select: { id: true, address: true, createdAt: true, status: true },
+      select: { id: true, address: true, createdAt: true, acqStatus: true, dispoStatus: true, longtermStatus: true },
     })
 
     for (const p of props) {

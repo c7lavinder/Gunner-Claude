@@ -7,6 +7,7 @@ import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { isRoleAtLeast } from '@/types/roles'
 import type { UserRole } from '@/types/roles'
+import { effectiveStatus, effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 const VALID_TABS = ['dials', 'leads', 'appointments', 'messages', 'tasks', 'stages'] as const
 type AuditTab = typeof VALID_TABS[number]
@@ -75,8 +76,7 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         take: 500,
         select: {
           id: true, createdAt: true, address: true, city: true, state: true,
-          leadSource: true, status: true, tcpScore: true,
-          ghlPipelineStage: true,
+          leadSource: true, ...PROPERTY_LANE_SELECT, tcpScore: true,
           market: { select: { name: true } },
           sellers: { select: { seller: { select: { name: true } } }, take: 1 },
         },
@@ -86,9 +86,9 @@ export const GET = withTenant(async (req: NextRequest, ctx) => {
         createdAt: p.createdAt,
         address: [p.address, p.city, p.state].filter(Boolean).join(', '),
         leadSource: p.leadSource,
-        status: p.status,
+        status: effectiveStatus(p),
         tcpScore: p.tcpScore,
-        ghlStage: p.ghlPipelineStage,
+        ghlStage: effectiveStageName(p),
         market: p.market?.name ?? null,
         sellerName: p.sellers[0]?.seller?.name ?? null,
       }))

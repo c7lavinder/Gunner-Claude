@@ -4,7 +4,7 @@ import { forbiddenResponse } from '@/lib/auth/session'
 import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { hasPermission, type UserRole } from '@/types/roles'
-import { PropertyStatus } from '@prisma/client'
+import type { AcqStatus } from '@prisma/client'
 import { z } from 'zod'
 import { enrichPropertyWithAI } from '@/lib/ai/enrich-property'
 import { splitCombinedAddressIfNeeded } from '@/lib/properties'
@@ -53,8 +53,8 @@ export const POST = withTenant(async (request, ctx) => {
           city: standardizeCity(rawCity),
           state: standardizeState(rawState),
           zip: standardizeZip(rawZip ?? ''),
-          status: status as PropertyStatus,
-          stageEnteredAt: new Date(),
+          acqStatus: status as AcqStatus,
+          acqStageEnteredAt: new Date(),
           arv: arv ? parseFloat(arv) : null,
           askingPrice: askingPrice ? parseFloat(askingPrice) : null,
           mao: mao ? parseFloat(mao) : null,

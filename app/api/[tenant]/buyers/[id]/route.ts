@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { withTenant } from '@/lib/api/withTenant'
+import { PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 type Params = { tenant: string; id: string }
 
@@ -20,7 +21,7 @@ export const GET = withTenant<Params>(async (_req, ctx, params) => {
               address: true,
               city: true,
               state: true,
-              status: true,
+              ...PROPERTY_LANE_SELECT,
               arv: true,
               askingPrice: true,
             },
