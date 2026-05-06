@@ -32,6 +32,7 @@
 import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
 import { enrichProperty } from '../lib/enrichment/enrich-property'
+import { resolveMarketForZip } from '../lib/properties'
 
 // Flags (env or CLI):
 //   ENRICH_PENDING_BATCH_SIZE / no flag   default 100 rows per run
@@ -139,6 +140,17 @@ async function main() {
         // inventory's Source filter shows the real lead source (PPL / Texts
         // / Form / PPC / Dialer / etc.) instead of NULL.
         if (contact.source) propertyUpdate.leadSource = contact.source
+        // Resolve the market the moment we know the ZIP — same call the
+        // regular create path uses (lib/properties.ts:138). Without this
+        // the inventory page reads "Missing Market" on every backfill row.
+        if (zip) {
+          try {
+            const marketId = await resolveMarketForZip(tenant.id, zip)
+            if (marketId) propertyUpdate.marketId = marketId
+          } catch {
+            // Market resolution is best-effort; the cron will retry.
+          }
+        }
 
         await db.property.update({
           where: { id: row.id, tenantId: tenant.id },
