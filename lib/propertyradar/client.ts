@@ -18,9 +18,16 @@ import type { BatchDataPropertyResult } from '@/lib/batchdata/client'
 
 const BASE_URL = 'https://api.propertyradar.com/v1'
 
+// Marker so the orchestrator can distinguish "missing config" from "API
+// failure / no match" in audit logs. lookupProperty re-throws this case
+// so runWith captures it as slot.error rather than silently nulling.
+class PropertyRadarConfigError extends Error {
+  constructor(message: string) { super(message); this.name = 'PropertyRadarConfigError' }
+}
+
 function getApiKey(): string {
   const key = process.env.PROPERTYRADAR_API_KEY
-  if (!key) throw new Error('PROPERTYRADAR_API_KEY not configured')
+  if (!key) throw new PropertyRadarConfigError('PROPERTYRADAR_API_KEY not configured on this environment')
   return key
 }
 
@@ -128,6 +135,12 @@ export async function lookupProperty(
 
     return normalize(summary, detail, persons)
   } catch (err) {
+    // Surface config errors so they appear in the orchestrator's audit log
+    // payload as result.propertyRadar.error instead of being silently
+    // collapsed into matched=false. Missing API key is the difference between
+    // "search returned no match" (correct) and "we never made the call"
+    // (operational failure that should alert).
+    if (err instanceof PropertyRadarConfigError) throw err
     console.error('[PropertyRadar] lookup failed:', err instanceof Error ? err.message : err)
     return null
   }
