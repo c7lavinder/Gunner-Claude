@@ -33,6 +33,7 @@ import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
 import { enrichProperty } from '../lib/enrichment/enrich-property'
 import { resolveMarketForZip } from '../lib/properties'
+import { normalizeLeadSource } from '../lib/lead-source-normalize'
 
 // Flags (env or CLI):
 //   ENRICH_PENDING_BATCH_SIZE / no flag   default 100 rows per run
@@ -138,8 +139,11 @@ async function main() {
         if (zip) propertyUpdate.zip = zip
         // Carry the GHL contact's source onto the Property + Seller so the
         // inventory's Source filter shows the real lead source (PPL / Texts
-        // / Form / PPC / Dialer / etc.) instead of NULL.
-        if (contact.source) propertyUpdate.leadSource = contact.source
+        // / Form / PPC / Dialer / JV / Agent) instead of NULL. Normalize
+        // first — GHL has free-form values (e.g. "SMS" / "cold call -
+        // initial call" / "InvestorLift") that map to canonical buckets.
+        const normalizedSource = normalizeLeadSource(contact.source)
+        if (normalizedSource) propertyUpdate.leadSource = normalizedSource
         // Resolve the market the moment we know the ZIP — same call the
         // regular create path uses (lib/properties.ts:138). Without this
         // the inventory page reads "Missing Market" on every backfill row.
@@ -176,7 +180,7 @@ async function main() {
           if (contact.city) sellerUpdate.mailingCity = contact.city
           if (contact.state) sellerUpdate.mailingState = contact.state
           if (contact.postalCode) sellerUpdate.mailingZip = contact.postalCode
-          if (contact.source) sellerUpdate.leadSource = contact.source
+          if (normalizedSource) sellerUpdate.leadSource = normalizedSource
 
           if (Object.keys(sellerUpdate).length > 0) {
             await db.seller.update({

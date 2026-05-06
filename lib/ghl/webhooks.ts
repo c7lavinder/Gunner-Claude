@@ -1031,10 +1031,25 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
         }
       }
 
-      // Update seller name/phone/email if changed
+      // Sync the GHL contact's source onto the Property's leadSource,
+      // collapsed through the canonical normalizer so we don't leak GHL's
+      // free-form values (SMS / cold call - initial call / InvestorLift)
+      // into Gunner's Source filter dropdown.
+      const { normalizeLeadSource } = await import('@/lib/lead-source-normalize')
+      const normalizedSource = normalizeLeadSource(contact.source)
+      const propertyForSource = await db.property.findFirst({
+        where: { tenantId, ghlContactId: contactId },
+        select: { id: true, leadSource: true },
+      })
+      if (propertyForSource && normalizedSource && normalizedSource !== propertyForSource.leadSource) {
+        await db.property.update({ where: { id: propertyForSource.id }, data: { leadSource: normalizedSource } })
+        console.log(`[GHL Webhook] Property ${propertyForSource.id} leadSource → ${normalizedSource}`)
+      }
+
+      // Update seller name/phone/email/source if changed
       const seller = await db.seller.findFirst({
         where: { tenantId, ghlContactId: contactId },
-        select: { id: true, name: true, phone: true, email: true },
+        select: { id: true, name: true, phone: true, email: true, leadSource: true },
       })
       if (seller) {
         const newName = `${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim()
@@ -1042,6 +1057,7 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
         if (newName && newName !== seller.name) sellerUpdates.name = newName
         if (contact.phone && contact.phone !== seller.phone) sellerUpdates.phone = contact.phone
         if (contact.email && contact.email !== seller.email) sellerUpdates.email = contact.email
+        if (normalizedSource && normalizedSource !== seller.leadSource) sellerUpdates.leadSource = normalizedSource
         if (Object.keys(sellerUpdates).length > 0) {
           await db.seller.update({ where: { id: seller.id }, data: sellerUpdates })
           console.log(`[GHL Webhook] Seller ${seller.id} updated: ${JSON.stringify(sellerUpdates)}`)
