@@ -62,6 +62,196 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 73 — Inventory data-quality cleanup + GHL drift fixes (2026-05-06 → 2026-05-07)
+
+Following Session 72's Phase 5 close, owner started reading the live
+inventory page and found wrong numbers + 22,863 "data issues". This
+session was an end-to-end cleanup pass — eight commits, most of the
+work driven by what the page surfaced.
+
+**Inventory chip counts (commits `84cc6dc`, `4e06b3d`)**
+
+- Default visibility filter loosened: was `acqStatus IS NOT NULL OR
+  (dispoStatus IS NOT NULL AND ≠ CLOSED)` — hid all longterm-only
+  rows + dispo CLOSED rows. Now shows any row with at least one lane
+  status set. "Show archived" still reveals truly empty rows.
+- `statusCounts` reduce was ignoring `longtermStatus` and counting
+  acq + dispo asymmetrically. Now lane-aware on the server: each
+  lane increments its own chip independently.
+- `STATUS_TO_APP_STAGE` in `types/property.ts` still keyed on the
+  pre-Phase-1 enum names (`SOLD`, `DISPO_CLOSED`). Phase 1 renamed
+  both to `CLOSED` so the lookup returned undefined and the Closed
+  chips on both lanes read 0. Replaced with three per-lane maps
+  (`ACQ_STATUS_TO_STAGE` / `DISPO_` / `LONGTERM_`) that disambiguate
+  acq.closed vs dispo.closed.
+- Client filter now matches all 3 lanes lane-aware.
+
+**Stale lane statuses (commit `8c57eac`)**
+
+Owner reported NEW_LEAD=80 / UNDER_CONTRACT=133 vs GHL's 50 / 15.
+Two layered bugs feeding the same drift:
+
+  1. Phase 1 schema migration mapped every old `Property.status` to
+     `acqStatus` regardless of where the contact's GHL opp had moved
+     since (133 of 261 acq-lane rows were stale ghosts).
+  2. Webhook `processLaneOppEvent` returned early on a strict-lane
+     no-op (e.g. SP opp moves to "Trash"), preserving the OLD
+     `acqStatus` value forever instead of clearing it.
+
+Fix: `processLaneOppEvent` no-op branch now clears the source lane
+fields. Plus one-shot `scripts/deep-resync-ghl-lanes.ts` walks every
+opp in every active pipeline and rebuilds lane statuses from GHL
+truth — 154 cleared-no-opp + 16 cleared-null-res + 8 aligned. Acq
+chip counts now match GHL exactly: 50 / 13 / 5 / 15 / 24.
+
+**Lead source taxonomy + DB cleanup (commit `f829e97`)**
+
+GHL ships free-form `contact.source` values (SMS / Mass Calls /
+Voicemail / cold call - initial call / InvestorLift / form
+submission / etc.) — they leaked into Gunner's Source filter
+dropdown alongside the canonical 5 (Dialer / Texts / Form / PPC /
+PPL).
+
+- New `lib/lead-source-normalize.ts` collapses GHL values to the
+  canonical 7 buckets (Dialer / Texts / Form / PPC / PPL / JV /
+  Agent — JV consolidated InvestorLift + JV Partner per owner).
+- `scripts/normalize-lead-sources.ts` ran one-shot: 549 Property +
+  534 Seller rows updated.
+- `scripts/enrich-pending.ts` cron now normalizes when pulling
+  `contact.source` from GHL.
+- `lib/ghl/webhooks.ts handleContactChange` now syncs source on
+  ContactUpdate webhooks (closes the open question owner asked:
+  "are sources synced to GHL so if changed in GHL they change in
+  here?" — yes, they are now, via `contact.updated` events).
+- `scripts/refill-missing-sources.ts` swept the 828 still-NULL rows
+  by re-fetching their GHL contacts: confirmed 828/828 had no
+  `source` set in GHL itself.
+- Per owner request: 840 Property + 976 Seller NULL leadSource
+  rows flipped to `Dialer` (one-shot DB update). Fallback semantics
+  for new contacts unchanged — null source still surfaces as
+  "Missing Source" on the data-quality panel.
+
+**Markets backfill (commits `70a2cda` + `f98f6f3`)**
+
+Phase 3 cron filled in zip but never called `resolveMarketForZip`,
+so 7,409 properties had a zip but no market.
+
+- `scripts/enrich-pending.ts` now calls `resolveMarketForZip` after
+  setting zip; same logic the regular create path uses
+  (`lib/properties.ts:138`).
+- `scripts/backfill-markets.ts` walks every Property where
+  `marketId IS NULL AND zip != ''`, loads tenant markets in-memory
+  once (avoids 1,420 per-zip findFirst roundtrips), groups zips by
+  target marketId, and issues ONE updateMany per market with
+  `WHERE zip IN (...)`. v1 was per-zip (~25 min wall); v2 grouped
+  by marketId (8.1 sec). All 7,409 backfilled.
+
+**Bogus lead sources cleanup (commit `84cc6dc`)**
+
+`leadSource='backfill'` (7,727 Property rows) and `'reconciliation'`
+(1) polluted the Source dropdown alongside real values (PPL / Texts
+/ etc.). NULL'd live + scrubbed from `scripts/backfill-ghl-pipelines
+.ts` and `scripts/reconcile-ghl-pipelines.ts` so future runs leave
+leadSource alone (Phase 3 cron pulls the real value from
+`contact.source`).
+
+**Contacts page address rendering (commit `84cc6dc`)**
+
+`/contacts` formatted property addresses as `${addr}, ${city},
+${state}` which produced `, , ` for empty-placeholder stubs. Now
+skips the address string entirely when address is empty.
+
+**Empty-address property cleanup (commit `c8fe3e3`)**
+
+127 stub Property rows with `address=''` deleted per owner
+("delete the ones with missing addresses"). Then patched
+`scripts/reconcile-ghl-pipelines.ts:fixMissingProperty` to fetch
+the GHL contact first and skip creating a Property if
+`contact.address1` is empty — otherwise reconciliation would
+re-create them tomorrow. Self-correcting: the day GHL gains an
+address for the contact, next reconciliation pass picks it up.
+
+Verified live: full sweep across 8,665 opps:
+  missing_property_skipped: 125 (GHL has no address — stay deleted)
+  missing_property_fixed:    49 (GHL has address — recreated)
+  stale_status_fixed:         22
+
+**Bulk-drain enrichment (commit `e07b2dd`)**
+
+`scripts/enrich-pending.ts` got `--concurrency`, `--skip-enrich`,
+`--max-runs` flags so the same script doubles as a one-shot drain
+without burning vendor budget. Used twice this session to drain
+the Phase 2 backfill stubs from 8,112 pending → 0.
+
+**Live state at session-73 close (verified):**
+
+- Total properties: 8,075
+- pendingEnrichment=true: 0
+- Empty address: 49 (recently created by reconciliation, will fill
+  in within minutes via Phase 3 cron)
+- NULL leadSource: 0 (all backfill-era nulls flipped to Dialer per
+  owner; future null-source contacts still surface as "Missing
+  Source" for manual GHL tagging)
+- All inventory chip counts match GHL exactly
+- Reconciliation cron will not recreate empty-address stubs
+
+**Files touched this session:**
+
+- NEW: `lib/lead-source-normalize.ts`,
+  `scripts/deep-resync-ghl-lanes.ts`,
+  `scripts/normalize-lead-sources.ts`,
+  `scripts/refill-missing-sources.ts`,
+  `scripts/backfill-markets.ts`
+- Modified: `lib/ghl/webhooks.ts` (clear-on-no-op + source sync),
+  `scripts/enrich-pending.ts` (flags + market resolve + source
+  normalize),
+  `scripts/backfill-ghl-pipelines.ts` (drop bogus leadSource),
+  `scripts/reconcile-ghl-pipelines.ts` (drop bogus leadSource +
+  skip-no-address),
+  `app/(tenant)/[tenant]/inventory/page.tsx` (visibility filter +
+  lane-aware stageCounts + longtermStatus passthrough),
+  `app/(tenant)/[tenant]/contacts/page.tsx` (skip empty address
+  string),
+  `components/inventory/inventory-client.tsx` (lane-aware filter
+  + status type)
+
+**Commits this session (in order):**
+
+  84cc6dc — fix(inventory): show longterm + drop bogus sources
+  8c57eac — fix(ghl): clear stale lane on non-matching stage moves
+  4e06b3d — fix(inventory): closed chips show 0
+  e07b2dd — feat(enrich): --skip-enrich + --concurrency + --max-runs
+  70a2cda — fix(market): resolve marketId during enrich-pending
+  f98f6f3 — perf(market): bulk-update by marketId, not per-zip
+  f829e97 — feat(sources): canonical taxonomy + ContactUpdate sync
+  c8fe3e3 — fix(reconcile): skip missing-property when no address1
+
+**What's left (next session):**
+
+The GHL multi-pipeline redesign plan is closed. Inventory
+data-quality is at its floor. No active blockers beyond the manual
+verification list in `docs/plans/ghl-multi-pipeline-bulletproof.md`
+§12 (live opp test, lane isolation test, deletion test, reverse
+sync test, JV intake test — owner runs at convenience).
+
+Likely next-session candidate: **Phase 3 catch-up cron heartbeat
+audit row** (Bug #23) — every existing cron should write
+`cron.<name>.started` and `.finished` audit rows per AGENTS.md
+Background Worker Conventions. Currently only
+`process_recording_jobs` does. The two new crons added in Sessions
+72-73 (`enrich-pending`, `reconcile-ghl-pipelines`) inherit the
+same gap.
+
+**First prompt for new session:**
+
+> Read `PROGRESS.md` Session 73 to catch up. The GHL multi-pipeline
+> plan is fully shipped. The remaining open thread is Bug #23 —
+> background workers don't write heartbeat audit rows. Add
+> `cron.<name>.started` and `.finished` writes to `enrich-pending`,
+> `reconcile-ghl-pipelines`, and the other 4 daily crons. See
+> `docs/OPERATIONS.md` "Cron heartbeat coverage status" table for
+> the gap list.
+
 ### Session 72 — GHL multi-pipeline plan: Phases 3, 4, 5 shipped end-to-end (2026-05-06)
 
 Phase 2 closed earlier the same session (Session 71 below). Owner

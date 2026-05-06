@@ -247,7 +247,7 @@ delete-after) lives in [`scripts/REGISTRY.md`](../scripts/REGISTRY.md) — keep 
 file updated alongside this section when scripts land or rot. Categorized:
 
 ### Recurring crons (referenced by `railway.toml`)
-- `poll-calls.ts`, `audit.ts`, `kpi-snapshot.ts`, `generate-profiles.ts`, `regenerate-stories.ts`, `compute-aggregates.ts`
+- `poll-calls.ts`, `audit.ts`, `kpi-snapshot.ts`, `generate-profiles.ts`, `regenerate-stories.ts`, `compute-aggregates.ts`, `enrich-pending.ts` (Phase 3 catch-up, every 5 min — flags `--concurrency` / `--skip-enrich` / `--max-runs` for one-shot drains), `reconcile-ghl-pipelines.ts` (Phase 4.1 daily 4am UTC — skips creating Property when GHL contact has no `address1` per Session 73 owner choice).
 
 ### Background worker entry point (manual debug only)
 - `process-recording-jobs.ts` — older standalone driver, importable for manual `npx tsx` invocation. Same logic as `lib/grading-processor.ts` (the in-process driver). HTTP wrapper at `app/api/cron/process-recording-jobs/route.ts` is the preferred manual trigger surface.
@@ -281,6 +281,11 @@ file updated alongside this section when scripts land or rot. Categorized:
 - `reenrich-today.ts` — re-run enrichment for today's leads.
 - `regenerate-stories.ts` — Property Story regen (also a cron).
 - `split-existing-doubles.ts` — split combined-address properties (companion to the Session-41-era auto-split feature).
+- `backfill-ghl-pipelines.ts` — Phase 2 one-shot bulk-stub backfill from GHL opps (cursor-resumable, ran 2026-05-06 to seed 7,553 stubs).
+- `deep-resync-ghl-lanes.ts` — Session 73: walks every opp in every active pipeline and rebuilds Property lane statuses from GHL truth (clears stale acqStatus / dispoStatus / longtermStatus left behind by Phase 1 migration + strict-lane no-op semantics). One-shot; re-run if chip counts diverge from GHL again.
+- `backfill-markets.ts` — Session 73: walks `Property where marketId IS NULL AND zip != ''`, groups by target marketId, issues one bulk updateMany per market. Ran live 8.1 sec, 7,409 rows. Re-run if a future migration drops marketIds.
+- `normalize-lead-sources.ts` — Session 73: collapses GHL free-form `contact.source` strings via `lib/lead-source-normalize.ts` to the canonical 7 buckets (Dialer / Texts / Form / PPC / PPL / JV / Agent). Re-run after a GHL-side rename or new source variant.
+- `refill-missing-sources.ts` — Session 73: re-fetches the GHL contact for every Property where `leadSource IS NULL` and writes back via the normalizer. Useful when adding a new alias to `lead-source-normalize.ts` to retroactively pick up matching values.
 
 ### Seed + setup (one-shot, idempotent at install time)
 - `seed.ts`, `seed-markets.ts`, `seed-appointment-types.ts` — DB seeding.
