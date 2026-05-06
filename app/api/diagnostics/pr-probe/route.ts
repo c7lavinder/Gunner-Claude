@@ -26,6 +26,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const tenantSlug = url.searchParams.get('tenant')
   const propertyId = url.searchParams.get('propertyId')
+  // Purchase=1 actually materializes the record (debits 1 credit). Default
+  // to 0 (preview, no credit) for safety; pass ?purchase=1 to verify real
+  // data flow through the matching path.
+  const purchase = url.searchParams.get('purchase') === '1' ? 1 : 0
   if (!tenantSlug) {
     return NextResponse.json({ error: 'Missing ?tenant=<slug>' }, { status: 400 })
   }
@@ -67,7 +71,7 @@ export async function GET(req: Request) {
   }
 
   // Phase 1 — raw search call with full diagnostics
-  const searchUrl = `${PR_BASE}/properties?Purchase=0&Limit=1`
+  const searchUrl = `${PR_BASE}/properties?Purchase=${purchase}&Limit=1`
   const startedAt = Date.now()
   let searchStatus = 0
   let searchBodyText = ''
