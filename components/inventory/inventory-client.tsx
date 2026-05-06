@@ -15,9 +15,32 @@ import { PriceMatrixCard, ComputedSpreadCard } from './property-detail-client'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
 
+// Lane-aware status → stage maps. The shared STATUS_TO_APP_STAGE in
+// types/property.ts collapses dispo CLOSED + acq CLOSED into one bucket
+// (both use the string "CLOSED" post-Phase 1) and cannot disambiguate.
+// Each lane's map below is canonical for that lane only.
+const ACQ_STATUS_TO_STAGE: Record<string, AppStage> = {
+  NEW_LEAD: 'acquisition.new_lead',
+  APPOINTMENT_SET: 'acquisition.appt_set',
+  OFFER_MADE: 'acquisition.offer_made',
+  UNDER_CONTRACT: 'acquisition.contract',
+  CLOSED: 'acquisition.closed',
+}
+const DISPO_STATUS_TO_STAGE: Record<string, AppStage> = {
+  IN_DISPOSITION: 'disposition.new_deal',
+  DISPO_PUSHED: 'disposition.pushed_out',
+  DISPO_OFFERS: 'disposition.offers_received',
+  DISPO_CONTRACTED: 'disposition.contracted',
+  CLOSED: 'disposition.closed',
+}
+const LONGTERM_STATUS_TO_STAGE: Record<string, AppStage> = {
+  FOLLOW_UP: 'longterm.follow_up',
+  DEAD: 'longterm.dead',
+}
+
 interface Property {
   id: string; address: string; city: string; state: string; zip: string
-  status: string; dispoStatus: string | null; longtermStatus: string | null; arv: string | null; askingPrice: string | null
+  status: string; acqStatus: string | null; dispoStatus: string | null; longtermStatus: string | null; arv: string | null; askingPrice: string | null
   mao: string | null; contractPrice: string | null; assignmentFee: string | null
   currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
   offerTypes: string[]
@@ -108,9 +131,9 @@ function DistressBadge({
   )
 }
 
-export function InventoryClient({ properties: initialProperties, statusCounts, tenantSlug, canManage, ghlLocationId, showArchived }: {
+export function InventoryClient({ properties: initialProperties, stageCounts: stageCountsProp, tenantSlug, canManage, ghlLocationId, showArchived }: {
   properties: Property[]
-  statusCounts: Record<string, number>
+  stageCounts: Record<string, number>
   tenantSlug: string
   canManage: boolean
   ghlLocationId?: string
@@ -148,14 +171,10 @@ export function InventoryClient({ properties: initialProperties, statusCounts, t
     setVisibleCount(50)
   }, [search, selectedStage, selectedMarket, selectedSource, dataQualityFilter])
 
-  // Convert DB status counts to AppStage counts
-  const stageCounts: Partial<Record<AppStage, number>> = {}
-  for (const [dbStatus, count] of Object.entries(statusCounts)) {
-    const appStage = STATUS_TO_APP_STAGE[dbStatus]
-    if (appStage) {
-      stageCounts[appStage] = (stageCounts[appStage] ?? 0) + count
-    }
-  }
+  // Stage counts arrive lane-aware from the server (acq.closed and
+  // dispo.closed have separate buckets). Cast through Partial<Record>
+  // for the chip component's typed map shape.
+  const stageCounts = stageCountsProp as Partial<Record<AppStage, number>>
 
   // Filter properties
   const filtered = properties.filter((p) => {
@@ -165,12 +184,13 @@ export function InventoryClient({ properties: initialProperties, statusCounts, t
     if (dataQualityFilter === 'source') return !p.leadSource
     if (dataQualityFilter === 'stage') return !p.ghlStageName && p.status === 'NEW_LEAD'
     if (selectedStage) {
-      // Match on any of the three lanes — a property may have, e.g.,
-      // acqStatus=NEW_LEAD AND longtermStatus=FOLLOW_UP, in which case
-      // both the new-lead chip and the follow-up chip should keep it.
-      const acqStage = p.status ? STATUS_TO_APP_STAGE[p.status] : null
-      const dispoStage = p.dispoStatus ? STATUS_TO_APP_STAGE[p.dispoStatus] : null
-      const longtermStage = p.longtermStatus ? STATUS_TO_APP_STAGE[p.longtermStatus] : null
+      // Match on any of the three lanes lane-aware — both `acqStatus=CLOSED`
+      // and `dispoStatus=CLOSED` use the same string, so the shared
+      // STATUS_TO_APP_STAGE map can't disambiguate. Lane-aware lookups fix
+      // both the dispo Closed chip (was reading 0) and the acq Closed chip.
+      const acqStage = p.acqStatus ? ACQ_STATUS_TO_STAGE[p.acqStatus] : null
+      const dispoStage = p.dispoStatus ? DISPO_STATUS_TO_STAGE[p.dispoStatus] : null
+      const longtermStage = p.longtermStatus ? LONGTERM_STATUS_TO_STAGE[p.longtermStatus] : null
       if (acqStage !== selectedStage && dispoStage !== selectedStage && longtermStage !== selectedStage) return false
     }
     if (selectedMarket) {

@@ -27,21 +27,20 @@ export default async function InventoryPage({
 
   const canViewAll = hasPermission(role, 'properties.view.all')
 
-  // Phase 1 visibility (plan §4) — Session 73 fix: include longterm
-  // alongside acq + dispo. After the Phase 2 backfill loaded ~7,700
-  // longterm-only properties from the GHL Follow Up pipeline, the
-  // original "acq OR dispo" rule hid all of them by default and the
-  // FOLLOW_UP / DEAD chip counts read 0. Default visibility now =
-  // any lane status set. Dispo CLOSED stays hidden (it's a finished
-  // deal you sold). ?archived=1 still flips to "show everything"
-  // including dispo CLOSED and orphan rows with no status anywhere.
+  // Phase 1 visibility (plan §4) — Session 73 fix: show any row with at
+  // least one lane status set, regardless of value. Earlier rule hid
+  // dispoStatus=CLOSED which made the dispo Closed chip read 0 even
+  // when 100+ deals had completed. Owner wants closed deals visible
+  // alongside active ones. "Show archived" still reveals truly empty
+  // rows (no lane status anywhere — should be near-zero after the
+  // 2026-05-06 deep resync).
   const showArchived = searchParams?.archived === '1'
   const visibilityFilter = showArchived
     ? {}
     : {
         OR: [
           { acqStatus: { not: null } },
-          { AND: [{ dispoStatus: { not: null } }, { dispoStatus: { not: 'CLOSED' as const } }] },
+          { dispoStatus: { not: null } },
           { longtermStatus: { not: null } },
         ],
       }
@@ -93,17 +92,39 @@ export default async function InventoryPage({
     throw err
   }
 
-  // Status counts for filter chips — count each lane independently so a
-  // property in two lanes (e.g. acq=NEW_LEAD + longterm=FOLLOW_UP) shows
-  // up under BOTH chips. Earlier version only counted acq + dispo and
-  // ignored longterm entirely, which meant FOLLOW_UP / DEAD chips read
-  // zero even after the Phase 2 backfill loaded ~7,700 longterm rows.
-  const statusCounts = properties.reduce<Record<string, number>>((acc, p) => {
-    if (p.acqStatus) acc[p.acqStatus] = (acc[p.acqStatus] ?? 0) + 1
-    if (p.dispoStatus) acc[p.dispoStatus] = (acc[p.dispoStatus] ?? 0) + 1
-    if (p.longtermStatus) acc[p.longtermStatus] = (acc[p.longtermStatus] ?? 0) + 1
-    return acc
-  }, {})
+  // Stage counts for the chip tabs — built lane-aware so each pipeline's
+  // CLOSED rolls into ITS OWN Closed chip. The previous design routed
+  // through STATUS_TO_APP_STAGE which collapsed acq CLOSED + dispo CLOSED
+  // into one bucket and silently dropped both because the map's stale
+  // SOLD / DISPO_CLOSED keys never matched the new CLOSED string.
+  const ACQ_STATUS_TO_STAGE: Record<string, string> = {
+    NEW_LEAD: 'acquisition.new_lead',
+    APPOINTMENT_SET: 'acquisition.appt_set',
+    OFFER_MADE: 'acquisition.offer_made',
+    UNDER_CONTRACT: 'acquisition.contract',
+    CLOSED: 'acquisition.closed',
+  }
+  const DISPO_STATUS_TO_STAGE: Record<string, string> = {
+    IN_DISPOSITION: 'disposition.new_deal',
+    DISPO_PUSHED: 'disposition.pushed_out',
+    DISPO_OFFERS: 'disposition.offers_received',
+    DISPO_CONTRACTED: 'disposition.contracted',
+    CLOSED: 'disposition.closed',
+  }
+  const LONGTERM_STATUS_TO_STAGE: Record<string, string> = {
+    FOLLOW_UP: 'longterm.follow_up',
+    DEAD: 'longterm.dead',
+  }
+  const stageCounts: Record<string, number> = {}
+  const bump = (stage: string | undefined) => {
+    if (!stage) return
+    stageCounts[stage] = (stageCounts[stage] ?? 0) + 1
+  }
+  for (const p of properties) {
+    if (p.acqStatus) bump(ACQ_STATUS_TO_STAGE[p.acqStatus])
+    if (p.dispoStatus) bump(DISPO_STATUS_TO_STAGE[p.dispoStatus])
+    if (p.longtermStatus) bump(LONGTERM_STATUS_TO_STAGE[p.longtermStatus])
+  }
 
   // Get GHL location ID for CRM links
   const tenant = await db.tenant.findUnique({
@@ -139,6 +160,7 @@ export default async function InventoryPage({
         state: p.state,
         zip: p.zip,
         status: effectiveStatus(p),
+        acqStatus: p.acqStatus,
         dispoStatus: p.dispoStatus,
         longtermStatus: p.longtermStatus,
         arv: p.arv?.toString() ?? null,
@@ -187,7 +209,7 @@ export default async function InventoryPage({
         taxDelinquent: p.taxDelinquent,
         foreclosureStatus: p.foreclosureStatus,
       }))}
-      statusCounts={statusCounts}
+      stageCounts={stageCounts}
       tenantSlug={params.tenant}
       canManage={hasPermission(role, 'inventory.manage')}
       ghlLocationId={tenant?.ghlLocationId ?? undefined}
