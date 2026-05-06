@@ -33,7 +33,35 @@ import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
 import { enrichProperty } from '../lib/enrichment/enrich-property'
 
+// Flags (env or CLI):
+//   ENRICH_PENDING_BATCH_SIZE / no flag   default 100 rows per run
+//   --concurrency N                       N rows in flight at once
+//                                         (cron tick = 1 sequential by default)
+//   --skip-enrich                         skip multi-vendor enrichment (PR/BD/
+//                                         Google/CourtListener); just fill in
+//                                         address + Seller + leadSource. Use
+//                                         this for one-shot drains where
+//                                         vendor data can come later via the
+//                                         scheduled cron.
+//   --max-runs N                          fetch + drain up to N batches in
+//                                         this single invocation (default 1).
+//                                         Only useful with --skip-enrich for
+//                                         a manual catch-up sweep.
+const args = process.argv.slice(2)
 const BATCH_SIZE = parseInt(process.env.ENRICH_PENDING_BATCH_SIZE ?? '100', 10)
+const CONCURRENCY = (() => {
+  const i = args.indexOf('--concurrency')
+  return i >= 0 ? Math.max(1, parseInt(args[i + 1] ?? '1', 10)) : 1
+})()
+const SKIP_ENRICH = args.includes('--skip-enrich')
+const MAX_RUNS = (() => {
+  const i = args.indexOf('--max-runs')
+  return i >= 0 ? Math.max(1, parseInt(args[i + 1] ?? '1', 10)) : 1
+})()
+const TENANT_ARG = (() => {
+  const i = args.indexOf('--tenant')
+  return i >= 0 ? args[i + 1] : undefined
+})()
 
 interface RunStats {
   contactsFetched: number
@@ -47,13 +75,15 @@ interface RunStats {
 
 async function main() {
   const startedAt = Date.now()
-  const tenantSlug = process.argv[2]
-  console.log(`[enrich-pending] starting batch=${BATCH_SIZE} tenant=${tenantSlug ?? 'all'}`)
+  console.log(
+    `[enrich-pending] starting batch=${BATCH_SIZE} tenant=${TENANT_ARG ?? 'all'} ` +
+    `concurrency=${CONCURRENCY} skipEnrich=${SKIP_ENRICH} maxRuns=${MAX_RUNS}`
+  )
 
   const tenants = await db.tenant.findMany({
     where: {
       ghlAccessToken: { not: null },
-      ...(tenantSlug ? { slug: tenantSlug } : {}),
+      ...(TENANT_ARG ? { slug: TENANT_ARG } : {}),
     },
     select: { id: true, slug: true, name: true },
   })
@@ -61,6 +91,7 @@ async function main() {
   const totals: RunStats = { contactsFetched: 0, propertiesUpdated: 0, sellersUpdated: 0, enrichmentRan: 0, contactsMissing: 0, noAddress: 0, errors: 0 }
 
   for (const tenant of tenants) {
+   for (let runIdx = 0; runIdx < MAX_RUNS; runIdx++) {
     const pending = await db.property.findMany({
       where: { tenantId: tenant.id, pendingEnrichment: true, ghlContactId: { not: null } },
       select: { id: true, ghlContactId: true, address: true },
@@ -69,14 +100,13 @@ async function main() {
     })
 
     if (pending.length === 0) {
-      console.log(`[enrich-pending] tenant=${tenant.slug} — no pending rows`)
-      continue
+      console.log(`[enrich-pending] tenant=${tenant.slug} — no pending rows (run ${runIdx + 1})`)
+      break
     }
 
-    console.log(`[enrich-pending] tenant=${tenant.slug} — ${pending.length} pending`)
+    console.log(`[enrich-pending] tenant=${tenant.slug} run ${runIdx + 1} — ${pending.length} pending`)
     const ghl = await getGHLClient(tenant.id)
-
-    for (const row of pending) {
+    const processOne = async (row: typeof pending[number]) => {
       try {
         const contact = await ghl.getContact(row.ghlContactId!)
         totals.contactsFetched++
@@ -88,7 +118,7 @@ async function main() {
             data: { pendingEnrichment: false },
           })
           totals.contactsMissing++
-          continue
+          return
         }
 
         const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('../lib/address')
@@ -147,11 +177,12 @@ async function main() {
 
         // Trigger multi-vendor enrichment if we now have an address.
         // PR is subscription (free per call). BD has internal $15/day cap.
-        // Google is ~$0.017/call.
-        if (address) {
+        // Google is ~$0.017/call. Skipped during one-shot drains
+        // (--skip-enrich) — vendor data fills in later via the cron.
+        if (address && !SKIP_ENRICH) {
           await enrichProperty(row.id, tenant.id, { skipTrace: false })
           totals.enrichmentRan++
-        } else {
+        } else if (!address) {
           totals.noAddress++
         }
       } catch (err) {
@@ -173,6 +204,17 @@ async function main() {
         }).catch(() => {})
       }
     }
+
+    // Run the batch in parallel chunks of CONCURRENCY.
+    for (let i = 0; i < pending.length; i += CONCURRENCY) {
+      const chunk = pending.slice(i, i + CONCURRENCY)
+      await Promise.all(chunk.map(processOne))
+    }
+    process.stderr.write(
+      `  [run ${runIdx + 1}] fetched=${totals.contactsFetched} updated=${totals.propertiesUpdated} ` +
+      `sellersUpdated=${totals.sellersUpdated} noAddr=${totals.noAddress} missing=${totals.contactsMissing} errors=${totals.errors}\n`
+    )
+   }
   }
 
   const durationSec = ((Date.now() - startedAt) / 1000).toFixed(1)
