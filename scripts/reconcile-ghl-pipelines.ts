@@ -210,6 +210,34 @@ async function fixMissingProperty(
   const fields = laneFieldsFor(resolution.lane)
   const now = new Date()
 
+  // Skip-no-address policy (owner choice 2026-05-07): if the GHL contact
+  // has no address1, don't create a stub Property. Otherwise reconciliation
+  // would re-create the empty-address rows the team just deleted in 24h
+  // forever. Self-correcting — the day GHL gains an address for the
+  // contact, the next reconciliation pass picks it up and creates the row.
+  try {
+    const ghl = await getGHLClient(tenantId)
+    const contact = await ghl.getContact(opp.contactId)
+    if (!contact || !contact.address1 || contact.address1.trim() === '') {
+      await db.auditLog.create({
+        data: {
+          tenantId,
+          action: 'reconciliation.missing_property_skipped',
+          resource: 'property',
+          severity: 'INFO',
+          source: 'SYSTEM',
+          payload: { ...discrepancy, skipped: true, reason: 'ghl_contact_no_address' },
+        },
+      }).catch(() => {})
+      return
+    }
+  } catch (err) {
+    // If we can't even fetch the contact, fall through to the original
+    // create path so we at least track the lane state. Reconciliation
+    // can clean up address later.
+    console.error(`  [warn] getContact failed for ${opp.contactId}: ${err instanceof Error ? err.message : err}`)
+  }
+
   // Create stub Property + Seller (same shape as Phase 2 backfill).
   const seller = await db.seller.findFirst({
     where: { tenantId, ghlContactId: opp.contactId },
