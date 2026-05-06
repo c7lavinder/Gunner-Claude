@@ -711,8 +711,30 @@ async function processLaneOppEvent(
 
   const resolution = resolvedStageName ? await resolveLaneAndStatus(track, resolvedStageName) : null
   if (!resolution) {
-    // Strict-lane NO-OP — paired opp expected in another pipeline.
-    console.log(`[GHL Webhook] No-op stage move (track=${track}, stage=${stageLabel})`)
+    // The opp's current stage doesn't resolve to a status for this track
+    // (e.g. SP at "Trash" → longterm.dead, or FU at "Purchased" →
+    // acquisition.closed). Per strict-lane (plan §0 #2), this pipeline
+    // doesn't write to other lanes — but it MUST clear its own source
+    // lane so the chip counts don't carry stale acq/dispo/longterm
+    // values forever. The destination lane (if any) is owned by the
+    // canonical pipeline for that lane and will set its own values
+    // when its webhook fires for the same contact.
+    const existing = await db.property.findFirst({
+      where: { tenantId, ghlContactId: oppData.contactId },
+      select: { id: true, ghlSyncLocked: true },
+    })
+    if (!existing || existing.ghlSyncLocked) {
+      console.log(`[GHL Webhook] No-op stage move (track=${track}, stage=${stageLabel}) — no clear needed`)
+      return
+    }
+    const clearPayload: Record<string, unknown> =
+      track === 'acquisition'
+        ? { acqStatus: null, acqStageEnteredAt: null, ghlAcqStageName: null, ghlAcqOppId: null }
+        : track === 'disposition'
+          ? { dispoStatus: null, dispoStageEnteredAt: null, ghlDispoStageName: null, ghlDispoOppId: null }
+          : { longtermStatus: null, longtermStageEnteredAt: null, ghlLongtermStageName: null, ghlLongtermOppId: null }
+    await db.property.update({ where: { id: existing.id, tenantId }, data: clearPayload })
+    console.log(`[GHL Webhook] Cleared ${track} lane (stage moved off ${track} → ${stageLabel})`)
     return
   }
 
