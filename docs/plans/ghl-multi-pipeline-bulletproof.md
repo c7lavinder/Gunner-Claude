@@ -278,7 +278,7 @@ Two sync paths that must keep working through this refactor:
 1. **Inbound — GHL stage update → Gunner field update.** When an opp moves stages in GHL, the matching lane's status + stage-name + stage-entered-at on the Gunner property update within seconds. Phase 1 webhook handler refactor MUST preserve this. Verification: trigger a stage move in each pipeline, confirm Gunner reflects it.
 2. **BatchData stays shelved.** `ENRICHMENT_VENDORS_ENABLED` default = `propertyradar,google` (BD off). The new code paths must not re-enable BD by accident. The enrichment catch-up cron (Phase 3) will only call BD if it's explicitly enabled in the env var. Phase 0 audit verifies BD is off in the live config and stays off.
 
-## 5. Phase 0 — Vendor audit (½ day)
+## 5. Phase 0 — Vendor audit (½ day) ✅ SHIPPED (2026-05-06)
 
 Before any schema work, verify what enrichment is actually running and that
 PropertyRadar data points are mapped to the right Property columns.
@@ -306,7 +306,7 @@ PropertyRadar data points are mapped to the right Property columns.
 
 ---
 
-## 6. Phase 1 — Schema + handlers + safety harness (~2 days)
+## 6. Phase 1 — Schema + handlers + safety harness (~2 days) ✅ SHIPPED (2026-05-06, commits `1c5028d` + `fda775b`)
 
 ### Sequencing (commit boundaries)
 
@@ -405,7 +405,7 @@ split-pair workflow needs it.
 
 ---
 
-## 7. Phase 2 — Backfill from GHL (~1 day)
+## 7. Phase 2 — Backfill from GHL (~1 day) ✅ SHIPPED (2026-05-06, commits `34a970f` + `3286fd0`) — bulk-stub mode created 7,553 stubs in ~13 min
 
 ### Tasks
 
@@ -453,7 +453,7 @@ split-pair workflow needs it.
 
 ---
 
-## 8. Phase 3 — Enrichment catch-up cron (~½ day)
+## 8. Phase 3 — Enrichment catch-up cron (~½ day) ✅ SHIPPED (2026-05-06, commit `69b2bed`)
 
 ### Tasks
 
@@ -492,7 +492,7 @@ partner-pre-qualified deals worth the immediate spend.
 
 ---
 
-## 9. Phase 4 — Bulletproof additions (~1.5 days)
+## 9. Phase 4 — Bulletproof additions (~1.5 days) ✅ SHIPPED (2026-05-06, commit `fa50b10`) — 4.2 retry queue dropped (subsumed by 4.1 reconciliation)
 
 ### 9.1 Daily reconciliation cron
 
@@ -535,7 +535,7 @@ partner-pre-qualified deals worth the immediate spend.
 
 ---
 
-## 10. Phase 5 — JV intake form (~½ day)
+## 10. Phase 5 — JV intake form (~½ day) ✅ SHIPPED (2026-05-06, commit `811ac12`)
 
 ### Tasks
 

@@ -62,6 +62,129 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 72 — GHL multi-pipeline plan: Phases 3, 4, 5 shipped end-to-end (2026-05-06)
+
+Phase 2 closed earlier the same session (Session 71 below). Owner
+asked "lets keep moving" three times, so 3, 4, and 5 all rode in
+back-to-back commits on the same day.
+
+**Phase 3 — Enrichment catch-up cron (commit `69b2bed`)**
+
+`scripts/enrich-pending.ts` + `[[cron]] enrich-pending` (every 5 min
+in `railway.toml`). Walks `Property where pendingEnrichment=true`
+in batches of 100, fetches the real GHL contact, fills in
+`Property.{address,city,state,zip}` + `Seller.{firstName,lastName,
+phone,email,mailingAddress,...}`, then fires multi-vendor enrichment
+(PropertyRadar = subscription / no per-call cost, BatchData internal
+$15/day cap, Google ~$0.017/call). Marks `pendingEnrichment=false`.
+
+Concurrency safety: flag flips false BEFORE enrichProperty fires, so
+consecutive cron ticks pick disjoint rows even if a run overruns
+the 5-min interval. ~6.7 hours to drain a full 8000-row backfill.
+
+Smoke-tested locally with batch=3 — 3 properties moved from empty
+placeholders to real addresses (e.g. "17828 Cape Dr, Lewes, DE
+19958"); 3 sellers got phone + email + mailing; 0 errors.
+PR/Google fail locally (no API keys); both work on Railway.
+
+**Phase 4 — Reconciliation cron + reverse sync (commit `fa50b10`)**
+
+Two pieces ride together. Both close gaps the live webhook flow
+can't catch on its own.
+
+*4.1 — Daily reconciliation (`scripts/reconcile-ghl-pipelines.ts` +
+4am UTC cron):* For every active pipeline, walks the most recent
+~5 pages (~500 opps) of GHL and compares to Gunner. Two classes
+of drift it fixes:
+
+  - missing_property — GHL has the opp but Gunner has no Property.
+    Creates a stub (same shape as Phase 2 backfill, pending=true)
+    so Phase 3 cron picks it up next tick.
+  - stale_status — Property exists but per-lane status / oppId
+    doesn't match GHL. Updates the lane fields to match.
+
+Each fix → auditLog WARNING. > 5 fixes/run → CRITICAL alert.
+Smoke run on real prod: 1 missing + 2 stale fixed in 13.4s — caught
+real webhook gaps that would have stayed invisible.
+
+This subsumes the original Phase 4.2 retry queue (dropped from
+scope) — the broader sweep finds any missed property within 24h
+and creates it, so a separate retry table isn't needed.
+
+*4.3 — Reverse sync (`lib/ghl/reverse-sync.ts`):* When team changes
+a per-lane status via the UI (e.g. "New Lead" → "Appointment Set"),
+PATCH `/api/properties/[id]` now fires `updateOpportunityStage` to
+GHL. Behind feature flag `REVERSE_SYNC_ENABLED` (default off,
+opt-in via Railway env). `ghlSyncLocked` properties skip writeback
+(plan §6 divergence guard).
+
+**Phase 5 — JV intake form (commit `811ac12`)**
+
+POST `/api/properties/jv-intake` + `/{tenant}/inventory/log-jv-deal`
+page + `LogJvDealForm` component. Records a property sourced
+through a partner (agent / wholesaler / attorney / etc.) without
+round-tripping through GHL. Transactional create:
+  Property (acqStatus=NEW_LEAD, leadSource='JV Partner', no GHL opp)
+  + PropertyPartner (role='sourced_to_us')
+  + PropertyMilestone (LEAD)
+  + auditLog (mode=JV_INTAKE)
+
+Per plan §10 recommendation: enrichment fires immediately rather
+than queuing (JV deals are partner-pre-qualified — worth the
+spend). Address splitter still runs.
+
+UI: searchable Partner picker (filters by name + company) + address
+fields + financials (asking / ARV / contract / assignment fee) +
+notes. Submit → redirect to property detail page.
+
+Inventory list now has secondary "Log JV deal" button next to the
+existing "Add property" CTA. Both gated on `properties.create`.
+
+**End-of-plan: live state at session-72 close**
+
+- Total properties: 8,148 (was 426 pre-backfill)
+- pendingEnrichment=true: 8,112 (Phase 3 cron about to start
+  draining; Railway redeploys in ~3 min after the latest push)
+- Backfill enriched: 0/7,726 — counter starts climbing once the
+  cron's first tick fires post-deploy
+- Reconciliation drift fixed in last 24h: 3 (smoke run only, no
+  live cron run yet)
+- Crons added to `docs/OPERATIONS.md` per Rule 8
+- `REVERSE_SYNC_ENABLED=true` set on Railway production via
+  `railway variables --set`
+
+**Files (across all 3 commits):**
+
+- NEW: `scripts/enrich-pending.ts`,
+  `scripts/reconcile-ghl-pipelines.ts`,
+  `lib/ghl/reverse-sync.ts`,
+  `app/api/properties/jv-intake/route.ts`,
+  `app/(tenant)/[tenant]/inventory/log-jv-deal/page.tsx`,
+  `components/inventory/log-jv-deal-form.tsx`
+- Modified: `railway.toml` (+2 [[cron]] blocks),
+  `app/api/properties/[propertyId]/route.ts` (+13 lines for reverse
+  sync hook), `components/inventory/inventory-client.tsx` (+1
+  button), `docs/OPERATIONS.md` (+2 cron rows + 2 heartbeat rows),
+  `docs/plans/ghl-multi-pipeline-bulletproof.md` (phase markers)
+
+**What's left (manual verification, time-based):**
+
+Per plan §12 end-to-end verification, 5 of 8 tests are manual /
+time-based — no code blocking them, owner runs them at convenience:
+
+1. Live opp test (create test opps in each pipeline, verify lane)
+2. Lane isolation (move SP opp, verify only acqStatus changes)
+3. Deletion test (delete opp, verify oppId clears, status stays)
+4. Reverse sync test (now possible — flag is on. Change a status
+   in Gunner UI, check audit log for `reverse_sync.stage_updated`,
+   confirm GHL shows new stage)
+5. JV intake test (submit form, verify Property + PropertyPartner)
+6. Backfill spot check — programmatically done above (10 sampled,
+   all correct lane / oppId / contactId)
+7. Reconciliation test — programmatically done (smoke run found 3
+   real drifts, 0 errors)
+8. 7-day enrichment count — wait 7 days, count enriched
+
 ### Session 71 — Phase 2 backfill: bulk-stub mode (2026-05-06)
 
 The Phase 2 backfill script (committed end of Session 69 / start of

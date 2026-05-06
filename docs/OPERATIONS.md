@@ -29,6 +29,8 @@ Live in `railway.toml`. Healthcheck at `[PRODUCTION_URL]/api/health`.
 | `weekly-profiles` | `0 3 * * 0` (Sun 3am UTC) | `npx tsx scripts/generate-profiles.ts` | Auto-generate per-rep coaching profiles from last week's calls. |
 | `regenerate-stories` | `0 7 * * *` (daily 7am UTC) | `npx tsx scripts/regenerate-stories.ts` | Regen Property Stories for properties touched by edits / milestone changes / buyer activity / blasts that didn't go through the grading path. |
 | `compute-aggregates` | `0 4 * * *` (daily 4am UTC) | `npx tsx scripts/compute-aggregates.ts` | Seller portfolio rollup + voice analytics + buyer funnel metrics from `PropertyBuyerStage` + **Partner cross-portfolio counters** (Session 67 Phase 2 close — `dealsSourcedToUsCount` / `dealsTakenFromUsCount` / `dealsClosedWithUsCount` / `jvHistoryCount` / `lastDealDate` per Partner, derived from PropertyPartner.role + Property.status). After KPI snapshot, before story regen. |
+| `enrich-pending` | `*/5 * * * *` (every 5 min) | `npx tsx scripts/enrich-pending.ts` | Phase 3 catch-up enrichment. Walks `Property where pendingEnrichment=true`, fetches the real GHL contact, fills in `Property.{address,city,state,zip}` + `Seller.{firstName,lastName,phone,email,mailingAddress,...}`, then fires multi-vendor enrichment (PropertyRadar = subscription, BatchData $15/day cap, Google ~$0.017/call). Batch=100/run; ~6.7h to drain a full Phase 2 backfill (~8000 stubs). |
+| `reconcile-ghl-pipelines` | `0 4 * * *` (daily 4am UTC) | `npx tsx scripts/reconcile-ghl-pipelines.ts` | Phase 4.1 nightly drift fixer. Walks recent ~5 pages of each registered pipeline, compares to Gunner state, creates missing Property stubs, fixes stale lane statuses. Logs auditLog WARNING per fix; CRITICAL if > 5 fixes in one run. Catches dropped/silently-failing webhooks within 24h. |
 
 ### HTTP cron wrappers (manual + external trigger surface)
 
@@ -55,6 +57,8 @@ loop) has heartbeats today.
 | `weekly-profiles` | ❌ — Bug #23 |
 | `regenerate-stories` | ❌ — Bug #23 |
 | `compute-aggregates` | ❌ — Bug #23 |
+| `enrich-pending` | ❌ — Bug #23 |
+| `reconcile-ghl-pipelines` | ❌ — Bug #23 |
 
 ---
 
