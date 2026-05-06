@@ -64,6 +64,17 @@ name = "regenerate-stories"
 schedule = "0 7 * * *"
 command = "npx tsx scripts/regenerate-stories.ts"
 
+# Cron job: enrichment catch-up for Phase 2 backfill stub rows.
+# Walks Property where pendingEnrichment=true (~8000 stubs after the 2026-05-06
+# Phase 2 backfill), fetches the real GHL contact, fills in address + Seller
+# fields, then fires multi-vendor enrichment (PropertyRadar subscription =
+# free per call; BatchData internal $15/day cap; Google ~$0.017/call).
+# 100 rows per run × every 5 min = ~6.7 hours to drain a full backfill.
+[[cron]]
+name = "enrich-pending"
+schedule = "*/5 * * * *"
+command = "npx tsx scripts/enrich-pending.ts"
+
 # Cron job: nightly aggregate computation across Sellers + Buyers.
 # Seller portfolio (deals owned / closed / walked, close rate, last close),
 # call voice aggregates (trust arc, primary emotion, energy trend,
