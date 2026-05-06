@@ -366,8 +366,143 @@ but leaner.
 
 ## Next Session — exact first task
 
-**First task:** Start **Phase 1** of the GHL multi-pipeline redesign.
-Phase 0 (vendor audit + PR API key fix) closed 2026-05-06.
+**First task:** Phase 2 of the GHL multi-pipeline redesign — backfill
+from GHL. Phases 0 + 1 are closed.
+
+**Read first:**
+
+1. [docs/plans/ghl-multi-pipeline-bulletproof.md](docs/plans/ghl-multi-pipeline-bulletproof.md)
+   §0 (anti-drift discipline) + §7 (Phase 2 spec)
+2. PROGRESS.md Session 70 (below) — Phase 1 close, what shipped
+3. CLAUDE.md Rule 8
+
+**First prompt to paste into a new Claude session:**
+
+> Continue from Session 70 close. Phase 1 of the GHL multi-pipeline
+> redesign is fully done — schema split + per-lane status columns +
+> lane-aware webhook handler + new Settings UI + Show archived toggle
+> all live and verified on prod. Plan is at
+> `docs/plans/ghl-multi-pipeline-bulletproof.md`. Phase 2 = backfill
+> from GHL (~1 day): script that paginates opps from each registered
+> pipeline, finds-or-creates Property + Seller, sets the matching
+> *OppId / lane status without running enrichment (Phase 3 catch-up
+> cron handles enrichment over time within daily budget). See plan §7.
+> Build a dry-run mode first.
+
+**Phase 2 sub-tasks (from plan §7):**
+
+1. Backfill script at `scripts/backfill-ghl-pipelines.ts`
+2. `BackfillCursor` table for resumability on partial failure
+3. Dry-run mode (`--dry-run`) reports counts without writing
+4. Throttle to ~5 GHL API calls/sec
+5. Per-tenant per-pipeline progress checkpointing
+6. Audit log entry per property created: `enrich.property.deferred_backfill`
+
+**Phase 1 final live state:**
+
+- ✅ 426 properties in DB, lane statuses populated correctly
+- ✅ 111 visible by default in inventory (acqStatus set OR active dispo)
+- ✅ 315 archived (longterm-only / dead / fully-closed)
+- ✅ 2 tenant_ghl_pipelines rows: 1 acquisition + 1 disposition
+  registered. Long-term track empty until owner adds the Follow Up
+  pipeline via Settings → Pipeline tab.
+- ✅ Lane-aware handler live — listens to all registered pipelines,
+  writes per-lane, ignores unlistened pipelines, handles
+  OpportunityCreate / OpportunityUpdate / OpportunityDelete.
+- ✅ Token mutex on getGHLClient closes audit gap C.3.
+- ✅ Settings UI rebuilt as list-of-pipelines-per-track.
+- ✅ "Show archived" toggle live on inventory.
+- ✅ Legacy Tenant pipeline columns dropped.
+
+### Session 70 — Phase 1 multi-pipeline redesign shipped end-to-end (2026-05-06)
+
+Two commits, both verified live on Railway.
+
+**Commit 1 — `1c5028d` `feat(schema): phase 1 multi-pipeline — per-lane status columns`:**
+
+- Schema migration `20260506000000_phase1_multi_pipeline`:
+  - 12 new Property cols (acqStatus, longtermStatus, ghl{Acq,Dispo,
+    Longterm}{OppId,StageName}, {acq,dispo,longterm}StageEnteredAt,
+    pendingEnrichment)
+  - New `DispoStatus` enum (was reused PropertyStatus); dispoStatus
+    column retyped with DISPO_CLOSED → CLOSED rename in same cast
+  - Drop Property.{status, ghlPipelineId, ghlPipelineStage,
+    stageEnteredAt} + drop PropertyStatus enum
+  - Create `tenant_ghl_pipelines` + backfill from existing
+    Tenant.{property,dispo}_pipeline_id (one row per non-null)
+  - Reverse migration in `down.sql`
+- New helper: `lib/property-status.ts` — `effectiveStatus`,
+  `effectiveLane`, `effectiveStageName`, `effectiveStageEnteredAt`,
+  `isVisibleInInventory`, `isClosedDeal`, `isDeadDeal`,
+  `PROPERTY_LANE_SELECT`
+- Read-site sweep: ~30 files updated via subagent (233 tsc errors → 50
+  → hand-fixed remaining 50 in webhooks.ts / properties.ts /
+  properties/[id]/route.ts + 5 scripts) → 0
+- Plan locked the four resolutions in §3 (DispoStatus enum, drop 3
+  legacy Property cols), §4 (visibility loosened to status-presence),
+  §6 (two-commit Phase 1 sequencing), §13 (6 new decisions logged)
+
+**Commit 2 — `fda775b` `feat(ghl): phase 1 commit 2 — lane-aware webhook + multi-pipeline settings`:**
+
+- Webhook handler refactored to three lane-aware paths
+  (`handleOpportunityCreate` / `handleOpportunityUpdate` /
+  `handleOpportunityDelete`); pipeline → track lookup via
+  `tenant_ghl_pipelines`. Strict-lane writes per plan §0 #2 with the
+  one allowed cross-lane exception (SP at "1 Month Follow Up" →
+  longtermStatus). Unlistened pipeline → log + ignore.
+- Token mutex on `getGHLClient` (per-tenant `clientLocks` Map). Closes
+  audit gap C.3.
+- Settings UI rebuilt: Pipeline tab now shows three sections
+  (Acquisition / Disposition / Long-term Follow Up) each with a list
+  of registered pipelines + Add/Remove. New API at
+  `/api/tenants/ghl-pipelines` (GET/POST) and
+  `/api/tenants/ghl-pipelines/[id]` (DELETE). Onboarding pipeline
+  picker rewritten to register the chosen pipeline as the acquisition
+  track.
+- Inventory: "Show archived" toggle. Default visibility =
+  status-presence per plan §4. `?archived=1` URL param flips to
+  show-everything.
+- Migration `20260506100000_phase1_drop_legacy_tenant_pipeline_cols`:
+  drops `tenants.{property,dispo}_{pipeline_id,trigger_stage}` (4
+  cols). Reverse migration in `down.sql` with best-effort backfill
+  from `tenant_ghl_pipelines`.
+
+**Files touched this session (Session 70):**
+
+- Migration files (new): `prisma/migrations/20260506000000_phase1_multi_pipeline/{migration,down}.sql`
+- Migration files (new): `prisma/migrations/20260506100000_phase1_drop_legacy_tenant_pipeline_cols/{migration,down}.sql`
+- New API: `app/api/tenants/ghl-pipelines/{route,[id]/route}.ts`
+- New helper: `lib/property-status.ts`
+- Modified: `prisma/schema.prisma`, `lib/ghl/webhooks.ts`,
+  `lib/ghl/client.ts`, `lib/properties.ts`, `lib/db/settings.ts`,
+  `types/index.ts`, `components/settings/settings-client.tsx`,
+  `components/inventory/inventory-client.tsx`,
+  `app/(tenant)/[tenant]/inventory/page.tsx`,
+  `app/(tenant)/[tenant]/settings/page.tsx`,
+  `app/(auth)/onboarding/onboarding-client.tsx`,
+  `app/api/tenants/config/route.ts`,
+  + ~30 read-site rewrites across pages / API routes / lib / scripts
+  (full list in commit `1c5028d`)
+- Plan: `docs/plans/ghl-multi-pipeline-bulletproof.md` §3, §4, §6, §13
+
+**Live state at session-70 close (verified via Railway):**
+
+- 426 total properties; 111 active visible by default; 315 archived
+  (accessible via "Show archived" toggle)
+- 2 tenant_ghl_pipelines rows (acquisition + disposition); long-term
+  track empty until Corey adds Follow Up pipeline via Settings UI
+- All 49 migrations applied, healthcheck succeeded on both deploys
+
+**What didn't get done (deferred):**
+
+- Phase 2 backfill (creating Property rows for every existing GHL opp
+  that doesn't have a matching Property yet). Pure additive — no
+  blocking issue from skipping.
+- Phase 3 enrichment catch-up cron (~½ day)
+- Phase 4 reconciliation cron + retry queue + reverse sync (~1.5 days)
+- Phase 5 JV intake form (~½ day)
+
+**Original first task (Session 69 close):** Start Phase 1 — done.
 
 **Read first (in this order, all the way through):**
 
