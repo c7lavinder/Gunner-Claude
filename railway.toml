@@ -64,6 +64,19 @@ name = "regenerate-stories"
 schedule = "0 7 * * *"
 command = "npx tsx scripts/regenerate-stories.ts"
 
+# Cron job: nightly GHL ↔ Gunner reconciliation (Phase 4.1).
+# Walks the most recent ~5 pages of each registered pipeline and compares
+# to Gunner's Property table. Fixes two classes of drift:
+#   - GHL has the opp but Gunner has no Property row → creates a stub
+#     (Phase 3 catch-up cron will enrich it next tick)
+#   - Property exists but the lane status doesn't match GHL → updates it
+# Each fix gets an auditLog WARNING. > 5 fixes/run logs CRITICAL.
+# Catches dropped webhooks (intentional or transient) within 24h.
+[[cron]]
+name = "reconcile-ghl-pipelines"
+schedule = "0 4 * * *"
+command = "npx tsx scripts/reconcile-ghl-pipelines.ts"
+
 # Cron job: enrichment catch-up for Phase 2 backfill stub rows.
 # Walks Property where pendingEnrichment=true (~8000 stubs after the 2026-05-06
 # Phase 2 backfill), fetches the real GHL contact, fills in address + Seller

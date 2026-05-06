@@ -11,6 +11,7 @@ import { z } from 'zod'
 import { awardPropertyXP } from '@/lib/gamification/xp'
 import type { UserRole } from '@/types/roles'
 import { splitCombinedAddressIfNeeded } from '@/lib/properties'
+import { syncStatusToGHL, laneForStatus } from '@/lib/ghl/reverse-sync'
 
 const updateSchema = z.object({
   address: z.string().min(1).optional(),
@@ -338,6 +339,18 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
         payload: JSON.parse(JSON.stringify(parsed.data)) as Prisma.InputJsonValue,
       },
     })
+
+    // Reverse sync (Phase 4.3) — push the new status back to GHL so the
+    // CRM stays in sync. Behind REVERSE_SYNC_ENABLED feature flag (default
+    // off). Fire-and-forget — never blocks the user's UI action.
+    if (status && status !== effectiveStatus(property)) {
+      const closedHint: 'acquisition' | 'disposition' = property.dispoStatus ? 'disposition' : 'acquisition'
+      const lane = laneForStatus(status, closedHint)
+      if (lane) {
+        syncStatusToGHL({ tenantId: ctx.tenantId, propertyId: params.propertyId, lane, newStatus: status })
+          .catch(err => console.error('[reverse-sync] failed:', err))
+      }
+    }
 
     // If this PATCH set the address to a combined pattern (rare via form, more
     // common via AI extraction / GHL sync), split it here. No-op if the address
