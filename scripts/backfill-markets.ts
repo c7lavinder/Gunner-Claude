@@ -113,17 +113,28 @@ async function main() {
       continue
     }
 
-    let bulkUpdates = 0
+    // Group zips by their target marketId so we issue ONE updateMany per
+    // unique market (a few rows) instead of one per unique zip (1,400+
+    // rows × ~150ms each = 5+ minutes). The shape is
+    // `WHERE tenantId AND marketId IS NULL AND zip IN (...)` — Postgres
+    // handles the IN list cleanly even at thousands of values.
+    const marketIdToZips = new Map<string, string[]>()
     for (const [zip, marketId] of zipToMarketId) {
       if (!marketId) continue
+      const arr = marketIdToZips.get(marketId) ?? []
+      arr.push(zip)
+      marketIdToZips.set(marketId, arr)
+    }
+    process.stderr.write(`  ${marketIdToZips.size} unique markets to bulk-update\n`)
+
+    let bulkUpdates = 0
+    for (const [marketId, zips] of marketIdToZips) {
       const r = await db.property.updateMany({
-        where: { tenantId: tenant.id, marketId: null, zip },
+        where: { tenantId: tenant.id, marketId: null, zip: { in: zips } },
         data: { marketId },
       })
       bulkUpdates += r.count
-      if (bulkUpdates % 500 < r.count && bulkUpdates > 0) {
-        process.stderr.write(`    updated ${bulkUpdates} so far\n`)
-      }
+      process.stderr.write(`    market ${marketId.slice(0, 10)} → ${r.count} rows updated (cum=${bulkUpdates})\n`)
     }
     totalUpdated += bulkUpdates
     const stillNull = await db.property.count({
