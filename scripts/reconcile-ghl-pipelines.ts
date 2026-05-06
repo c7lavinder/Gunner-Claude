@@ -222,7 +222,9 @@ async function fixMissingProperty(
         tenantId,
         name: opp.name || 'Unknown',
         ghlContactId: opp.contactId,
-        leadSource: 'reconciliation',
+        // No leadSource here — reconciliation is a recovery mechanism,
+        // not a source. The Phase 3 catch-up cron will populate the
+        // real source from the GHL contact custom fields.
       },
       select: { id: true },
     })
@@ -235,7 +237,6 @@ async function fixMissingProperty(
       ghlContactId: opp.contactId,
       address: '', city: '', state: '', zip: '',
       pendingEnrichment: true,
-      leadSource: 'reconciliation',
       [fields.status]: resolution.status,
       [fields.oppId]: opp.id,
       [fields.stage]: stageName,

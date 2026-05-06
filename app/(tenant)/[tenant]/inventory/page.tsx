@@ -27,10 +27,14 @@ export default async function InventoryPage({
 
   const canViewAll = hasPermission(role, 'properties.view.all')
 
-  // Phase 1 visibility (plan §4): default to active properties only —
-  // acqStatus set (any value) OR dispoStatus set & not CLOSED. The
-  // ?archived=1 query param flips to "show everything" so the user can
-  // find longterm-only / dead / fully-closed rows that are normally hidden.
+  // Phase 1 visibility (plan §4) — Session 73 fix: include longterm
+  // alongside acq + dispo. After the Phase 2 backfill loaded ~7,700
+  // longterm-only properties from the GHL Follow Up pipeline, the
+  // original "acq OR dispo" rule hid all of them by default and the
+  // FOLLOW_UP / DEAD chip counts read 0. Default visibility now =
+  // any lane status set. Dispo CLOSED stays hidden (it's a finished
+  // deal you sold). ?archived=1 still flips to "show everything"
+  // including dispo CLOSED and orphan rows with no status anywhere.
   const showArchived = searchParams?.archived === '1'
   const visibilityFilter = showArchived
     ? {}
@@ -38,6 +42,7 @@ export default async function InventoryPage({
         OR: [
           { acqStatus: { not: null } },
           { AND: [{ dispoStatus: { not: null } }, { dispoStatus: { not: 'CLOSED' as const } }] },
+          { longtermStatus: { not: null } },
         ],
       }
 
@@ -88,13 +93,15 @@ export default async function InventoryPage({
     throw err
   }
 
-  // Status counts for filter chips — properties with dispoStatus count in BOTH pipelines
+  // Status counts for filter chips — count each lane independently so a
+  // property in two lanes (e.g. acq=NEW_LEAD + longterm=FOLLOW_UP) shows
+  // up under BOTH chips. Earlier version only counted acq + dispo and
+  // ignored longterm entirely, which meant FOLLOW_UP / DEAD chips read
+  // zero even after the Phase 2 backfill loaded ~7,700 longterm rows.
   const statusCounts = properties.reduce<Record<string, number>>((acc, p) => {
-    const primary = effectiveStatus(p)
-    acc[primary] = (acc[primary] ?? 0) + 1
-    if (p.dispoStatus && p.dispoStatus !== primary) {
-      acc[p.dispoStatus] = (acc[p.dispoStatus] ?? 0) + 1
-    }
+    if (p.acqStatus) acc[p.acqStatus] = (acc[p.acqStatus] ?? 0) + 1
+    if (p.dispoStatus) acc[p.dispoStatus] = (acc[p.dispoStatus] ?? 0) + 1
+    if (p.longtermStatus) acc[p.longtermStatus] = (acc[p.longtermStatus] ?? 0) + 1
     return acc
   }, {})
 
@@ -133,6 +140,7 @@ export default async function InventoryPage({
         zip: p.zip,
         status: effectiveStatus(p),
         dispoStatus: p.dispoStatus,
+        longtermStatus: p.longtermStatus,
         arv: p.arv?.toString() ?? null,
         askingPrice: p.askingPrice?.toString() ?? null,
         mao: p.mao?.toString() ?? null,

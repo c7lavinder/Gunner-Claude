@@ -290,7 +290,10 @@ async function backfillPipeline(opts: {
             tenantId: opts.tenantId,
             name: r.opp.name || 'Unknown',
             ghlContactId: r.opp.contactId!,
-            leadSource: 'backfill',
+            // No leadSource set here — backfill is a *mechanism*, not a
+            // source. Real sources (PPL / Texts / Form / PPC / Dialer)
+            // come from GHL contact custom fields and are populated by
+            // the Phase 3 enrichment catch-up cron.
           }))
         if (newSellers.length > 0) {
           await db.seller.createMany({ data: newSellers, skipDuplicates: true })
@@ -316,7 +319,9 @@ async function backfillPipeline(opts: {
           state: '',
           zip: '',
           pendingEnrichment: true,
-          leadSource: 'backfill',
+          // No leadSource set — backfill is a mechanism, not a source.
+          // The Phase 3 enrichment cron populates leadSource from the
+          // GHL contact's source custom field.
           ...laneUpdatePayload(r.lane, r.status, r.stageName, r.opp.id, now, true),
         }))
         await db.property.createMany({ data: newPropertyRows, skipDuplicates: true })

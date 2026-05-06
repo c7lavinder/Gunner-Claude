@@ -75,7 +75,13 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
           leadSource: s.leadSource, totalCallCount: s.totalCallCount,
           lastContactDate: s.lastContactDate?.toISOString() ?? null,
           createdAt: s.createdAt.toISOString(),
-          propertyAddress: prop ? `${prop.address}, ${prop.city}, ${prop.state}` : null,
+          // Stub properties created by the Phase 2 backfill have empty
+          // address/city/state until the Phase 3 catch-up cron enriches
+          // them. Render `null` for those rows instead of ", , " so the
+          // contacts list doesn't show empty commas.
+          propertyAddress: prop?.address
+            ? [prop.address, prop.city, prop.state].filter(Boolean).join(', ')
+            : null,
           propertyId: prop?.id ?? null,
           market: prop?.market?.name ?? null,
         }

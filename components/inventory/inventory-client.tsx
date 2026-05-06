@@ -17,7 +17,7 @@ import type { AppStage } from '@/types/property'
 
 interface Property {
   id: string; address: string; city: string; state: string; zip: string
-  status: string; dispoStatus: string | null; arv: string | null; askingPrice: string | null
+  status: string; dispoStatus: string | null; longtermStatus: string | null; arv: string | null; askingPrice: string | null
   mao: string | null; contractPrice: string | null; assignmentFee: string | null
   currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
   offerTypes: string[]
@@ -165,9 +165,13 @@ export function InventoryClient({ properties: initialProperties, statusCounts, t
     if (dataQualityFilter === 'source') return !p.leadSource
     if (dataQualityFilter === 'stage') return !p.ghlStageName && p.status === 'NEW_LEAD'
     if (selectedStage) {
-      const acqStage = STATUS_TO_APP_STAGE[p.status]
+      // Match on any of the three lanes — a property may have, e.g.,
+      // acqStatus=NEW_LEAD AND longtermStatus=FOLLOW_UP, in which case
+      // both the new-lead chip and the follow-up chip should keep it.
+      const acqStage = p.status ? STATUS_TO_APP_STAGE[p.status] : null
       const dispoStage = p.dispoStatus ? STATUS_TO_APP_STAGE[p.dispoStatus] : null
-      if (acqStage !== selectedStage && dispoStage !== selectedStage) return false
+      const longtermStage = p.longtermStatus ? STATUS_TO_APP_STAGE[p.longtermStatus] : null
+      if (acqStage !== selectedStage && dispoStage !== selectedStage && longtermStage !== selectedStage) return false
     }
     if (selectedMarket) {
       if (p.market !== selectedMarket) return false

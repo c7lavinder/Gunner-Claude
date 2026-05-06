@@ -105,6 +105,10 @@ async function main() {
         if (city) propertyUpdate.city = city
         if (state) propertyUpdate.state = state
         if (zip) propertyUpdate.zip = zip
+        // Carry the GHL contact's source onto the Property + Seller so the
+        // inventory's Source filter shows the real lead source (PPL / Texts
+        // / Form / PPC / Dialer / etc.) instead of NULL.
+        if (contact.source) propertyUpdate.leadSource = contact.source
 
         await db.property.update({
           where: { id: row.id, tenantId: tenant.id },
@@ -130,6 +134,7 @@ async function main() {
           if (contact.city) sellerUpdate.mailingCity = contact.city
           if (contact.state) sellerUpdate.mailingState = contact.state
           if (contact.postalCode) sellerUpdate.mailingZip = contact.postalCode
+          if (contact.source) sellerUpdate.leadSource = contact.source
 
           if (Object.keys(sellerUpdate).length > 0) {
             await db.seller.update({
