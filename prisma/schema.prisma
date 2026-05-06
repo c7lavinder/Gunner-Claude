@@ -2422,6 +2422,34 @@ model BugReport {
   @@map("bug_reports")
 }
 
+// Backfill cursor — Phase 2 of GHL multi-pipeline redesign. One row per
+// (tenant, GHL pipeline) tracking how far the backfill script has walked
+// the GHL opportunity list. Resumable on partial failure. See plan §7.
+model BackfillCursor {
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  tenantId          String    @map("tenant_id")
+  ghlPipelineId     String    @map("ghl_pipeline_id")
+  // GHL pagination cursor — null means "start from the beginning."
+  // searchOpportunities returns meta.startAfter (timestamp) +
+  // meta.startAfterId (the last opp's id). Both are needed to fetch
+  // the next page; we store both so a resume picks up where it left off.
+  nextStartAfterTs  BigInt?   @map("next_start_after_ts")
+  nextStartAfterId  String?   @map("next_start_after_id")
+  isCompleted       Boolean   @default(false) @map("is_completed")
+  // Counts accumulated across all run invocations for this cursor.
+  oppsScanned       Int       @default(0) @map("opps_scanned")
+  propertiesCreated Int       @default(0) @map("properties_created")
+  propertiesLinked  Int       @default(0) @map("properties_linked")
+  sellersCreated    Int       @default(0) @map("sellers_created")
+  errorsLogged      Int       @default(0) @map("errors_logged")
+  lastRunAt         DateTime? @map("last_run_at")
+
+  @@unique([tenantId, ghlPipelineId])
+  @@map("backfill_cursors")
+}
+
 // Listening pipelines per tenant — replaces the single
 // Tenant.propertyPipelineId / Tenant.dispoPipelineId model. One row per
 // (tenant, GHL pipeline). Track tells the webhook handler which lane
