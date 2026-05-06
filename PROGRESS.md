@@ -366,55 +366,145 @@ but leaner.
 
 ## Next Session — exact first task
 
-**First task:** Live verification of the Partner feature (Session 67
-shipped end-to-end but no real-data click-through yet). Run this on
-the production Railway URL with a real property + GHL contact, then
-report results.
+**First task:** Start **Phase 1** of the GHL multi-pipeline redesign.
+Phase 0 (vendor audit + PR API key fix) closed 2026-05-06.
+
+**Read first (in this order, all the way through):**
+
+1. [docs/plans/ghl-multi-pipeline-bulletproof.md](docs/plans/ghl-multi-pipeline-bulletproof.md)
+   — the full 600-line plan. **§0 (Anti-drift discipline) is mandatory.**
+2. PROGRESS.md Session 69 (below) — Phase 0 close, what shipped today.
+3. PROGRESS.md Session 68 — disposition refactor that just landed.
+4. CLAUDE.md Rule 8 (Living Map Discipline) — touch SYSTEM_MAP /
+   OPERATIONS in same commit as any module / page / cron / API change.
 
 **First prompt to paste into a new Claude session:**
 
-> Continue from Session 67 close. The Partner contact-type feature
-> shipped end-to-end across 5 commits today (`bb94f97` → `e2c3fbf`
-> → `91a549a` → `2cbc57f` → `e1a5eb2`). I'm about to click through
-> the live flow. Read `PROGRESS.md` Session 67, walk me through the
-> 4-step verification below, and listen for anything that doesn't
-> behave as documented.
+> Continue from Session 69 close. Phase 0 of the GHL multi-pipeline
+> redesign is done — PropertyRadar API key set on Railway, full
+> enrichment path verified live. Plan is at
+> `docs/plans/ghl-multi-pipeline-bulletproof.md`. Read §0 (anti-drift
+> discipline) first, then §6 (Phase 1 spec). Phase 1 is ~2 days:
+> schema migration + handler refactor + safety harness. Do not
+> deviate from the locked decisions in §0. Start with the schema
+> migration as the first commit; that's reversible if anything looks
+> off. Confirm the migration plan before running it against prod.
 
-**Verification steps Corey clicks through (read SYSTEM_MAP "Partners"
-section + PROGRESS.md Session 67 to understand expected shapes):**
+**Phase 1 sub-tasks (from plan §6, in order):**
 
-1. **Property-detail link path.** Open a real property at
-   `/{tenant}/inventory/{propertyId}`. Click the new **Partners**
-   tab (between Buyers and Outreach). Click **+ Link Partner**.
-   Search a known GHL contact. Pick one or more types. Save.
-   Expected: card appears in the linked-partners list with type
-   badges + per-deal facts row.
-2. **Standalone list.** Visit `/{tenant}/partners`. Expected: row
-   for the just-linked partner; on-deals count = 1; type chips +
-   counts populated.
-3. **Contacts page tab.** Visit `/{tenant}/contacts` → click
-   **Partners** tab. Expected: same row, 10 columns including
-   "On deals = 1".
-4. **Detail page.** Click the partner's name from any of the 3
-   surfaces. Expected: routes to `/{tenant}/partners/{id}` —
-   header, identity card, performance counters (mostly zero
-   pre-rollup), conditional brokerage / wholesaler cards based on
-   selected types, deal-history table with the property listed.
-   Click **Edit partner**, change a field, **Save** — confirm the
-   read view reflects the change.
+1. **Schema migration** (~½ day)
+   - New `Property` columns: `acqStatus`, `longtermStatus`,
+     `ghlAcqOppId`, `ghlDispoOppId`, `ghlLongtermOppId`,
+     `ghlAcqStageName`, `ghlDispoStageName`, `ghlLongtermStageName`,
+     `acqStageEnteredAt`, `dispoStageEnteredAt`,
+     `longtermStageEnteredAt`, `pendingEnrichment`
+   - New `TenantGhlPipeline` table (replaces `*TriggerStage`/
+     `*PipelineId` on `Tenant`)
+   - Drop deprecated `Tenant.propertyTriggerStage`,
+     `Tenant.dispoTriggerStage`, `Tenant.propertyPipelineId`,
+     `Tenant.dispoPipelineId`
+   - Drop deprecated `Property.status` enum values: `CONTACTED`,
+     `APPOINTMENT_COMPLETED`, rename `SOLD` → `CLOSED`
+   - Migration of existing rows per plan §3 mapping table
+2. **Webhook handler refactor** (~1 day) — three lane-aware paths,
+   `OpportunityCreated` + `OpportunityStageChanged` +
+   `OpportunityDeleted` events, pipeline-filter on stage updates.
+3. **Token mutex on `getGHLClient`** (~1 hour) — closes audit gap C.3,
+   prevents race conditions during long-running backfill (Phase 2).
+4. **Settings UI updates** (~½ day) — pipeline picker rebuilt as
+   "list of pipelines per track."
+5. **Visibility filter logic** (~few hours) — inventory query updated
+   per plan §4 rules + "Show archived" toggle.
 
-**Counter rollup check (defer until next morning if 4am UTC hasn't
-hit yet):** Trigger `scripts/compute-aggregates.ts` manually or wait
-for the cron. Re-load the partner detail page — `dealsSourcedToUsCount`
-or whichever counter matches the role you set should be 1.
+**Phase 1 verification (non-negotiable per plan §0):**
 
-**After verification passes:**
-- Blocker #2 verification ritual (still pending from Session 65 —
-  six high-stakes Role Assistant tools, drive UI, read
-  `/api/diagnostics/high-stakes-audit`).
-- Optional: GHL tag-discovery aid for partners ("show me GHL contacts
-  tagged 'agent' that aren't yet in Gunner"). Per D-046 not
-  canonical, but useful as a discovery tool. ~1 hour build.
+- `npx tsc --noEmit` exit 0
+- Trigger an opp creation in each of the three pipelines (test contact
+  in GHL), verify the right lane fields populate
+- Trigger an opp deletion, verify only the matching `*OppId` clears,
+  status values stay
+- Confirm existing properties (~72 in last 7d) still appear correctly
+  in inventory
+
+**After Phase 1 ships:** verify, then Phase 2 (backfill from GHL —
+~1 day, runs after Phase 1 schema is verified live).
+
+**Live state at session-69 close:**
+
+- ✅ Disposition refactor (Session 68) shipped + verified
+- ✅ PropertyRadar API key set on Railway, full enrichment path
+  verified end-to-end (commit `8036931`)
+- ✅ PR client visibility fix shipped (commit `0918495`) — missing-key
+  surfaces as audit-log error, not silent matched=0
+- ✅ Diagnostic endpoint at `/api/diagnostics/pr-probe` left in place
+  (token-gated). Modes: default = read-only probe; `?purchase=1` =
+  real PR data; `?enrich=1` = full orchestrator path
+- ✅ Plan committed at `docs/plans/ghl-multi-pipeline-bulletproof.md`
+- ⚠️ 65 properties created in last 7 days have low fill rate (PR was
+  broken when ingested). Will catch up via Phase 3 cron OR can be
+  re-enriched manually via the existing per-property "Re-enrich" button.
+
+### Session 69 — Phase 0 close + plan committed (2026-05-06)
+
+Two pieces today:
+
+**1. Phase 0 vendor audit (the GHL multi-pipeline redesign).**
+
+Discovered via diagnostic probe that PropertyRadar was firing 65/65
+times in last 7 days but matching 0/65 — silently returning no data.
+Cause: `PROPERTYRADAR_API_KEY` was never set on Railway. The PR
+client's outer try/catch swallowed the "not configured" exception,
+collapsing every call to `matched=false` with no error field.
+
+Resolution:
+- Built `/api/diagnostics/pr-probe` token-gated diagnostic endpoint
+  (commit `be81279`). Token-gated via `DIAGNOSTIC_TOKEN`. Modes
+  documented in route file header.
+- Used Railway CLI to confirm the missing env var (35 vars present;
+  PR was the only enrichment vendor without a key).
+- Set `PROPERTYRADAR_API_KEY` on Railway via `railway variables --set`
+  (key value provided by owner, scrubbed from all docs/code).
+- Verified end-to-end via `?purchase=1&enrich=1`: PR matches, real
+  data lands in typed Property columns.
+- Shipped `PropertyRadarConfigError` marker class (commit `0918495`)
+  so future missing-key situations propagate as audit-log errors
+  instead of silently collapsing.
+- Diagnostic endpoint extended with `?purchase=1` and `?enrich=1`
+  flags (commits `6e53f9d`, `8036931`).
+
+Net effect: every new property webhook now gets full PR enrichment
+(PR + Google + AI). Pre-fix only AI estimates landed (~5
+fields/property). Post-fix expect ~50-80 PR-derived columns plus
+Google address verification + Street View image.
+
+**2. Plan committed to repo** (this commit).
+
+The 6-day GHL Multi-Pipeline Redesign + Bulletproof Bundle plan
+(spec'd 2026-05-05, Phase 0 closed 2026-05-06) is now at
+`docs/plans/ghl-multi-pipeline-bulletproof.md`. Includes:
+
+- §0 Anti-drift discipline (locked decisions + rules of engagement)
+- §1-§4 Architecture (per-pipeline behavior, stage maps, schema,
+  visibility rules, UI constraints, sync requirements)
+- §5-§10 Six-phase build plan with effort estimates + verification
+  blocks per phase
+- §11 Open Issues (Phase 0 audit findings + post-fix verification log)
+- §12 Verification + rollback per phase
+- §13 Decisions log (10 locked decisions with rationale + dates)
+- §14 Owner sign-off checklist
+
+**Files touched this session:**
+
+- `app/api/diagnostics/pr-probe/route.ts` (new — diagnostic endpoint)
+- `lib/propertyradar/client.ts` (added `PropertyRadarConfigError`)
+- `docs/plans/ghl-multi-pipeline-bulletproof.md` (new — committed plan)
+- `PROGRESS.md` (this entry + Next Session updated)
+- `docs/OPERATIONS.md` (diagnostic endpoint added to admin tools)
+- `docs/SYSTEM_MAP.md` (no changes — Phase 1 will touch it)
+
+**Outstanding before Phase 1:**
+
+- None. Plan is locked, PR is working, schema work can begin.
 
 **Side-finding (deferred to backlog):** `PropertySeller.role` field at
 `prisma/schema.prisma:1046` defaults to `"Seller"` but is **never read
