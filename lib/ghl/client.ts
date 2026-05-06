@@ -376,7 +376,11 @@ export class GHLClient {
   async searchOpportunities(pipelineId: string, limit = 100, startAfterTs?: number, startAfterId?: string) {
     let url = `/opportunities/search?location_id=${this.locationId}&pipeline_id=${pipelineId}&limit=${limit}`
     if (startAfterTs && startAfterId) url += `&startAfter=${startAfterTs}&startAfterId=${startAfterId}`
-    return this.request<{ opportunities: Array<{ id: string; contactId: string; name: string; stageId: string; status: string }>; meta?: { total?: number; startAfter?: number; startAfterId?: string } }>('GET', url)
+    // GHL's opp shape uses pipelineStageId (not stageId). Old code paths
+    // that read .stageId silently get undefined. Both names typed as
+    // optional so callers pick the right one (webhook handler reads
+    // pipelineStageId || stageId for back-compat across GHL API versions).
+    return this.request<{ opportunities: Array<{ id: string; contactId: string; name: string; pipelineStageId?: string; stageId?: string; status: string }>; meta?: { total?: number; startAfter?: number; startAfterId?: string } }>('GET', url)
   }
 
   async getAllPipelineContacts(pipelineId: string): Promise<string[]> {
@@ -413,7 +417,8 @@ export class GHLClient {
       for (const opp of opps) {
         if (opp.contactId && !seen.has(opp.contactId)) {
           seen.add(opp.contactId)
-          all.push(opp)
+          // Normalize: GHL returns pipelineStageId on the wire, not stageId.
+          all.push({ ...opp, stageId: opp.pipelineStageId ?? opp.stageId ?? '' })
         }
       }
       startAfterTs = result.meta?.startAfter

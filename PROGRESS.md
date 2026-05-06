@@ -62,6 +62,105 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 71 — Phase 2 backfill: bulk-stub mode (2026-05-06)
+
+The Phase 2 backfill script (committed end of Session 69 / start of
+Session 70 in stub form) was the obvious next step after Phase 1
+shipped — back-fill a Property row for every existing GHL opportunity
+that didn't already have one. First run on real prod data exposed how
+slow the original approach was: per-opp `getContact` + ~10 sequential
+DB writes per create = ~10–12 sec per Property. Five-figure numbers
+of Follow Up contacts × 12 sec = many hours wall time. Owner pushback
+("This is taking way too long. I need a better and quicker way to
+get them all created") forced a rewrite.
+
+**Two iterations on speed.**
+
+1. **Per-page parallelism** (`--concurrency 10` flag, hoisted dynamic
+   imports out of the hot loop, dedup opps by contactId per page so
+   parallel workers don't race to create dupes). Got ~3× faster but
+   still throttled by GHL token mutex + Prisma connection limits.
+   Throughput peaked around 13 creates/min — too slow.
+2. **Bulk-stub mode** — the actual fix. The CREATE branch now skips
+   `getContact` entirely and bulk-inserts via `prisma.createMany`:
+   - 1× `findMany` to detect existing sellers per page
+   - 1× `createMany` for new sellers (name from `opp.name`,
+     `ghlContactId` set, `leadSource: 'backfill'`)
+   - 1× `findMany` to pick up auto-generated seller IDs
+   - 1× `createMany` for new properties (empty `address`/`city`/
+     `state`/`zip` placeholders, `pendingEnrichment: true`,
+     per-lane status/oppId/stage/enteredAt populated)
+   - 1× `findMany` to pick up auto-generated property IDs
+   - 1× `createMany` for the `property_sellers` join rows
+   - 1× `createMany` for audit logs (mode=`stub`)
+
+   That's 7 DB calls per page of 100 opps instead of ~1000. No GHL
+   API call per create. Pace: ~10 sec/page = ~7700 stubs in ~13 min
+   wall time for Follow Up.
+
+**Visibility safety net.** Stub rows have empty address fields,
+which would normally be ugly in inventory. Phase 1 already shipped
+the `pendingEnrichment` filter — those rows are hidden from the
+default inventory view and only surface behind the "Show archived"
+toggle. The Phase 3 catch-up cron (deferred, next session) walks
+`pendingEnrichment=true` rows and fills in real address / phone /
+email from GHL + PropertyRadar within the $15/day budget.
+
+**Owner override on plan §1.** Original plan said Follow Up should
+skip when no Property row exists ("we never started a deal"). Owner
+overrode: "in the follow up pipeline there is thousands, need a
+better way and process to get them all created" — so the longterm
+lane creates stubs for every Follow Up contact even if Acquisition
+never touched them. The mirror change landed in
+`lib/ghl/webhooks.ts:processLaneOppEvent` so live webhook events
+follow the same rule going forward.
+
+**Three pre-existing bugs caught and fixed during the run:**
+
+- Multi-address splitter recursion (Knob Creek case): `lib/properties.ts`
+  recursed infinitely when a contact's `address1` contained a combined
+  address (`"508 & 512 Cassie Ln"`). Added `_overrideAddress` guard
+  in the trigger context so recursive calls skip the splitter.
+- Enrichment fired during backfill creates: original
+  `createPropertyFromContact` always fired PR + AI enrichment. Each
+  enrichment is ~$0.30 — backfilling 7700+ stubs would have spent
+  $2300 unintended. Added `skipEnrichment` + `markPendingEnrichment`
+  flags on the trigger context; backfill sets both, live webhook does
+  not.
+- `searchOpportunities` typing: GHL returns `pipelineStageId`, the
+  client returned a typed shape using `stageId`. All page fetches
+  silently filtered every opp as "missing fields." Both names now
+  typed as optional in `lib/ghl/client.ts`; callers read
+  `opp.pipelineStageId ?? opp.stageId`.
+
+**Files touched (all on main):**
+
+- `scripts/backfill-ghl-pipelines.ts` — bulk-stub rewrite + dedup +
+  cursor resume, `--concurrency` flag (still wired for future
+  link-update parallelism)
+- `lib/properties.ts` — `skipEnrichment` / `markPendingEnrichment`
+  / `_overrideAddress` context flags
+- `lib/ghl/webhooks.ts` — longterm-create override (plan §1)
+- `lib/ghl/client.ts` — `pipelineStageId` / `stageId` typing fix +
+  per-tenant `clientLocks` mutex (already shipped Session 70)
+
+**Live state at session-71 close (fill in after run completes):**
+
+- TBD properties total; TBD stub rows from this backfill
+- All 3 lanes (acq / dispo / longterm) backfilled — cursors marked
+  completed in `backfill_cursors`
+- Ready for Phase 3 (enrichment catch-up cron)
+
+**Next session — Phase 3:**
+
+Build the enrichment catch-up cron. Walk `Property where
+pendingEnrichment=true`, call `getContact` from GHL, populate real
+`address` / `city` / `state` / `zip` + matching Seller fields
+(`phone`, `email`, `mailingAddress`, etc.), trigger PR enrichment
+on the now-real address, mark `pendingEnrichment=false`. Budget
+gate: stop after `$15/day` of PR spend (~50 properties/day).
+Resume tomorrow. ETA ~½ day.
+
 ### Session 67 — Partner contact-type table, Phase 1 (2026-05-04)
 
 Corey opened with an architectural question: "at the very base of this

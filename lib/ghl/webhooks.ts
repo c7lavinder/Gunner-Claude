@@ -727,28 +727,11 @@ async function processLaneOppEvent(
   })
 
   if (!existing) {
-    // No property yet for this contact. Behavior per plan §1 target:
-    //   - Acquisition: ALWAYS create
-    //   - Disposition: rare — create
-    //   - Longterm: SKIP + LOG (paired SP opp expected to have created one)
-    if (lane === 'longterm') {
-      await db.auditLog.create({
-        data: {
-          tenantId,
-          action: 'ghl.webhook.longterm_no_property',
-          resource: 'webhook',
-          severity: 'WARNING',
-          source: 'GHL_WEBHOOK',
-          payload: {
-            contactId: oppData.contactId,
-            pipelineId: oppData.pipelineId,
-            stage: stageLabel,
-          } as Prisma.InputJsonValue,
-        },
-      }).catch(() => {})
-      console.log(`[GHL Webhook] Longterm stage move skipped — no property for contact ${oppData.contactId}`)
-      return
-    }
+    // No property yet for this contact. All three lanes create when no
+    // property exists. Owner override 2026-05-06 — long-term-only leads
+    // are real pipeline state and should land in Gunner inventory.
+    // Visibility filter (plan §4) keeps them out of the default view
+    // unless "Show archived" is on, so they don't clutter day-to-day work.
 
     // Create property + apply lane payload.
     await createPropertyFromContact(tenantId, oppData.contactId, {

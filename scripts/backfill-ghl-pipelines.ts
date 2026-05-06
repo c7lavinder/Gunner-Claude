@@ -35,6 +35,7 @@
 
 import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
+import { getAppStage } from '../lib/ghl-stage-map'
 
 type Lane = 'acquisition' | 'disposition' | 'longterm'
 
@@ -43,22 +44,24 @@ interface Args {
   tenantSlug?: string
   reset: boolean
   maxPages: number
+  concurrency: number
 }
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2)
-  const args: Args = { dryRun: false, reset: false, maxPages: 200 }
+  const args: Args = { dryRun: false, reset: false, maxPages: 200, concurrency: 10 }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--dry-run') args.dryRun = true
     else if (a === '--reset') args.reset = true
     else if (a === '--tenant') args.tenantSlug = argv[++i]
     else if (a === '--max-pages') args.maxPages = parseInt(argv[++i] ?? '200', 10)
+    else if (a === '--concurrency') args.concurrency = Math.max(1, parseInt(argv[++i] ?? '10', 10))
   }
   return args
 }
 
-const SLEEP_MS = 200 // 5 req/sec
+const SLEEP_MS = 200 // 5 req/sec between PAGE fetches (not between per-opp work)
 const PAGE_SIZE = 100
 
 function sleep(ms: number) {
@@ -83,11 +86,10 @@ const APP_STAGE_TO_STATUS: Record<string, string> = {
 // Resolve lane + status for a pipeline+stage. Mirrors the live-webhook
 // lib/ghl/webhooks.ts:resolveLaneAndStatus rule. Returns null for
 // strict-lane NO-OPs (e.g. SP at "4 Month FU").
-async function resolveLaneAndStatus(
+function resolveLaneAndStatus(
   track: Lane,
   stageName: string,
-): Promise<{ lane: Lane; status: string; appStage: string } | null> {
-  const { getAppStage } = await import('../lib/ghl-stage-map')
+): { lane: Lane; status: string; appStage: string } | null {
   const appStage = getAppStage(stageName)
 
   if (track === 'acquisition') {
@@ -153,6 +155,7 @@ async function backfillPipeline(opts: {
   stageNameById: Map<string, string>
   dryRun: boolean
   maxPages: number
+  concurrency: number
 }): Promise<RunStats> {
   const stats: RunStats = {
     oppsScanned: 0, propertiesCreated: 0, propertiesLinked: 0, sellersCreated: 0, errorsLogged: 0, noOps: 0,
@@ -180,65 +183,169 @@ async function backfillPipeline(opts: {
     const opps = result.opportunities ?? []
     if (opps.length === 0) break
 
-    for (const opp of opps) {
-      stats.oppsScanned++
-      if (!opp.contactId || !opp.id || !opp.stageId) continue
+    // Batch lookup: resolve all existing Property rows for this page's
+    // contactIds in a single findMany. Avoids N×100ms of sequential
+    // findFirst calls. Critical for Follow Up's 8000+ opps.
+    const contactIds = [...new Set(opps.map(o => o.contactId).filter((c): c is string => !!c))]
+    const existingRows = contactIds.length > 0
+      ? await db.property.findMany({
+          where: { tenantId: opts.tenantId, ghlContactId: { in: contactIds } },
+          select: { id: true, ghlContactId: true, ghlAcqOppId: true, ghlDispoOppId: true, ghlLongtermOppId: true },
+        })
+      : []
+    const existingByContactId = new Map(existingRows.map(r => [r.ghlContactId, r]))
 
-      const stageName = opts.stageNameById.get(opp.stageId) ?? opp.stageId
-      const resolution = await resolveLaneAndStatus(opts.track, stageName)
+    // Count every opp from the page once (parallel workers below should
+    // not re-bump this counter or it races).
+    stats.oppsScanned += opps.length
+
+    // Dedupe opps by contactId within this page. GHL's "multiple opps per
+    // contact" pattern (esp. JV flows) would otherwise have N parallel
+    // workers race to create the same Property for the same contact.
+    // Pick the first opp per contact as canonical for create; ignore the
+    // rest (their lane fields are the same in this pipeline anyway).
+    const seen = new Set<string>()
+    const dedupedOpps: typeof opps = []
+    for (const o of opps) {
+      const stageId = o.pipelineStageId ?? o.stageId
+      if (!o.contactId || !o.id || !stageId) continue
+      if (seen.has(o.contactId)) continue
+      seen.add(o.contactId)
+      dedupedOpps.push(o)
+    }
+
+    // ── Partition deduped opps into LINK (already have a Property row) and
+    // CREATE (need a stub row). Per opp we resolve lane/status first; opps
+    // that resolve to null (strict-lane no-ops) drop out of both buckets.
+    type ResolvedOpp = {
+      opp: typeof opps[number]
+      stageName: string
+      lane: Lane
+      status: string
+    }
+    const toLink: ResolvedOpp[] = []
+    const toCreate: ResolvedOpp[] = []
+    for (const opp of dedupedOpps) {
+      const stageId = opp.pipelineStageId ?? opp.stageId
+      if (!opp.contactId || !opp.id || !stageId) continue
+      const stageName = opts.stageNameById.get(stageId) ?? stageId
+      const resolution = resolveLaneAndStatus(opts.track, stageName)
       if (!resolution) {
         stats.noOps++
         continue
       }
+      const r: ResolvedOpp = { opp, stageName, lane: resolution.lane, status: resolution.status }
+      if (existingByContactId.has(opp.contactId)) toLink.push(r)
+      else toCreate.push(r)
+    }
 
-      try {
-        // Find or create Property + Seller via the same idempotent path
-        // the live webhook uses. createPropertyFromContact dedups by
-        // (tenantId, ghlContactId), so re-runs are safe.
-        const existing = await db.property.findFirst({
-          where: { tenantId: opts.tenantId, ghlContactId: opp.contactId },
-          select: { id: true, ghlAcqOppId: true, ghlDispoOppId: true, ghlLongtermOppId: true },
-        })
+    if (opts.dryRun) {
+      stats.propertiesLinked += toLink.length
+      stats.propertiesCreated += toCreate.length
+    } else {
+      const now = new Date()
 
-        if (opts.dryRun) {
-          if (existing) stats.propertiesLinked++
-          else stats.propertiesCreated++
-          continue
-        }
-
-        const now = new Date()
-        const payload = laneUpdatePayload(resolution.lane, resolution.status, stageName, opp.id, now, true /* pendingEnrichment */)
-
-        if (existing) {
-          await db.property.update({
-            where: { id: existing.id, tenantId: opts.tenantId },
-            data: payload,
-          })
-          stats.propertiesLinked++
-        } else {
-          // Create Seller (dedup by ghlContactId) + Property
-          const { createPropertyFromContact } = await import('../lib/properties')
-          await createPropertyFromContact(opts.tenantId, opp.contactId, {
-            ghlPipelineId: opts.ghlPipelineId,
-            ghlPipelineStage: stageName,
-            opportunitySource: 'backfill',
-          })
-          // Re-fetch to apply lane payload
-          const created = await db.property.findFirst({
-            where: { tenantId: opts.tenantId, ghlContactId: opp.contactId },
-            select: { id: true },
-          })
-          if (created) {
+      // ── Bulk LINK: parallel updates in chunks. updateMany can't take
+      // per-row data so we still issue one update per row — but without
+      // any GHL calls these are fast (~30-80ms each).
+      const concurrency = opts.concurrency
+      for (let i = 0; i < toLink.length; i += concurrency) {
+        const chunk = toLink.slice(i, i + concurrency)
+        await Promise.all(chunk.map(async ({ opp, stageName, lane, status }) => {
+          const existing = existingByContactId.get(opp.contactId!)
+          if (!existing) return
+          try {
             await db.property.update({
-              where: { id: created.id, tenantId: opts.tenantId },
-              data: payload,
+              where: { id: existing.id, tenantId: opts.tenantId },
+              data: laneUpdatePayload(lane, status, stageName, opp.id, now, true),
             })
-            stats.propertiesCreated++
+            stats.propertiesLinked++
+          } catch (err) {
+            stats.errorsLogged++
+            console.error(`    [link error] opp ${opp.id}:`, err instanceof Error ? err.message : err)
+          }
+        }))
+      }
+
+      // ── Bulk CREATE: stub rows. No getContact, no enrichment, placeholder
+      // address fields. pendingEnrichment=true marks them for the Phase 3
+      // catch-up cron which fills in real address/email/phone over time.
+      // Creates run as 4 bulk createMany calls per page (sellers, properties,
+      // property_sellers join, audit logs) instead of 14+ DB calls per opp.
+      if (toCreate.length > 0) {
+        // 1) Existing sellers for these contacts (avoid dup seller rows).
+        const createContactIds = toCreate.map(r => r.opp.contactId!)
+        const existingSellers = await db.seller.findMany({
+          where: { tenantId: opts.tenantId, ghlContactId: { in: createContactIds } },
+          select: { id: true, ghlContactId: true },
+        })
+        const sellerByContact = new Map(existingSellers.map(s => [s.ghlContactId, s.id]))
+
+        // 2) Build new seller rows for contacts without one. Name comes from
+        // the GHL opportunity name (already known — no extra API call).
+        const newSellers = toCreate
+          .filter(r => !sellerByContact.has(r.opp.contactId!))
+          .filter((r, idx, arr) => arr.findIndex(x => x.opp.contactId === r.opp.contactId) === idx)
+          .map(r => ({
+            tenantId: opts.tenantId,
+            name: r.opp.name || 'Unknown',
+            ghlContactId: r.opp.contactId!,
+            leadSource: 'backfill',
+          }))
+        if (newSellers.length > 0) {
+          await db.seller.createMany({ data: newSellers, skipDuplicates: true })
+          // Refetch to capture autogenerated IDs for the join below.
+          const refetched = await db.seller.findMany({
+            where: { tenantId: opts.tenantId, ghlContactId: { in: newSellers.map(s => s.ghlContactId) } },
+            select: { id: true, ghlContactId: true },
+          })
+          for (const s of refetched) {
+            if (s.ghlContactId) sellerByContact.set(s.ghlContactId, s.id)
           }
         }
 
-        await db.auditLog.create({
-          data: {
+        // 3) Build new property rows. Address fields use empty strings —
+        // schema requires NOT NULL but the inventory UI hides
+        // pendingEnrichment rows behind "Show archived" so the empty
+        // address never surfaces to users until enrichment lands.
+        const newPropertyRows = toCreate.map(r => ({
+          tenantId: opts.tenantId,
+          ghlContactId: r.opp.contactId!,
+          address: '',
+          city: '',
+          state: '',
+          zip: '',
+          pendingEnrichment: true,
+          leadSource: 'backfill',
+          ...laneUpdatePayload(r.lane, r.status, r.stageName, r.opp.id, now, true),
+        }))
+        await db.property.createMany({ data: newPropertyRows, skipDuplicates: true })
+
+        // 4) Refetch the just-created properties to capture their IDs.
+        const createdProperties = await db.property.findMany({
+          where: { tenantId: opts.tenantId, ghlContactId: { in: createContactIds } },
+          select: { id: true, ghlContactId: true },
+        })
+        const propertyByContact = new Map(createdProperties.map(p => [p.ghlContactId, p.id]))
+
+        // 5) Bulk-insert property_sellers join rows. skipDuplicates handles
+        // re-runs that already linked the same pair.
+        const joins = toCreate
+          .map(r => {
+            const propertyId = propertyByContact.get(r.opp.contactId!)
+            const sellerId = sellerByContact.get(r.opp.contactId!)
+            if (!propertyId || !sellerId) return null
+            return { propertyId, sellerId, isPrimary: true, role: 'Seller' }
+          })
+          .filter((j): j is NonNullable<typeof j> => j !== null)
+        if (joins.length > 0) {
+          await db.propertySeller.createMany({ data: joins, skipDuplicates: true })
+        }
+
+        // 6) Bulk audit log. Severity INFO; "deferred" because enrichment
+        // hasn't happened yet.
+        await db.auditLog.createMany({
+          data: toCreate.map(r => ({
             tenantId: opts.tenantId,
             action: 'enrich.property.deferred_backfill',
             resource: 'property',
@@ -246,29 +353,36 @@ async function backfillPipeline(opts: {
             source: 'SYSTEM',
             payload: {
               pipelineId: opts.ghlPipelineId, pipelineName: opts.pipelineName,
-              track: opts.track, oppId: opp.id, contactId: opp.contactId,
-              stage: stageName, lane: resolution.lane, status: resolution.status,
+              track: opts.track, oppId: r.opp.id, contactId: r.opp.contactId,
+              stage: r.stageName, lane: r.lane, status: r.status,
+              mode: 'stub',
             },
-          },
+          })),
         }).catch(() => {})
-      } catch (err) {
-        stats.errorsLogged++
-        console.error(`    [error] opp ${opp.id} contact ${opp.contactId}:`, err instanceof Error ? err.message : err)
-        await db.auditLog.create({
-          data: {
-            tenantId: opts.tenantId,
-            action: 'backfill.property.failed',
-            resource: 'property',
-            severity: 'ERROR',
-            source: 'SYSTEM',
-            payload: { pipelineId: opts.ghlPipelineId, oppId: opp.id, contactId: opp.contactId, error: err instanceof Error ? err.message : 'unknown' },
-          },
-        }).catch(() => {})
+
+        // Count successful creates (those new to existingByContactId) and
+        // update local cache so cross-page dedup works.
+        for (const r of toCreate) {
+          const cid = r.opp.contactId!
+          if (!existingByContactId.has(cid) && propertyByContact.has(cid)) {
+            stats.propertiesCreated++
+            existingByContactId.set(cid, {
+              id: propertyByContact.get(cid)!,
+              ghlContactId: cid,
+              ghlAcqOppId: null,
+              ghlDispoOppId: null,
+              ghlLongtermOppId: null,
+            })
+          }
+        }
       }
     }
 
     startAfterTs = result.meta?.startAfter
     startAfterId = result.meta?.startAfterId
+
+    // Per-page progress (writes to stderr so it flushes through bash buffering).
+    process.stderr.write(`    [page ${page + 1}] scanned=${stats.oppsScanned} created=${stats.propertiesCreated} linked=${stats.propertiesLinked} no-ops=${stats.noOps} errors=${stats.errorsLogged}\n`)
 
     // Save cursor + counts after each page (resumable)
     if (!opts.dryRun) {
@@ -314,7 +428,7 @@ async function backfillPipeline(opts: {
 
 async function main() {
   const args = parseArgs()
-  console.log(`[backfill] dryRun=${args.dryRun} tenant=${args.tenantSlug ?? 'all'} reset=${args.reset} maxPages=${args.maxPages}`)
+  console.log(`[backfill] dryRun=${args.dryRun} tenant=${args.tenantSlug ?? 'all'} reset=${args.reset} maxPages=${args.maxPages} concurrency=${args.concurrency}`)
 
   if (args.reset && !args.dryRun) {
     const r = await db.backfillCursor.deleteMany({})
@@ -356,6 +470,7 @@ async function main() {
         stageNameById,
         dryRun: args.dryRun,
         maxPages: args.maxPages,
+        concurrency: args.concurrency,
       })
       console.log(`    scanned=${stats.oppsScanned} created=${stats.propertiesCreated} linked=${stats.propertiesLinked} no-ops=${stats.noOps} errors=${stats.errorsLogged}`)
       totals.oppsScanned += stats.oppsScanned

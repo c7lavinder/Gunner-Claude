@@ -15,6 +15,19 @@ interface PropertyTriggerContext {
   ghlPipelineId?: string
   ghlPipelineStage?: string
   opportunitySource?: string
+  // Phase 2 backfill: skip enrichment so 8000+ row scan doesn't spend
+  // ~$55+ in PR credits all at once. Phase 3 catch-up cron handles
+  // enrichment over time within daily budget. Default false → live
+  // webhook path keeps firing enrichment as before.
+  skipEnrichment?: boolean
+  // When skipEnrichment is true, callers typically also want to mark
+  // pendingEnrichment=true so the catch-up cron picks the row up.
+  markPendingEnrichment?: boolean
+  // Internal — used by the multi-address splitter to feed the singular
+  // address into the recursive call. Presence of this key short-circuits
+  // the multi-address detection (otherwise we'd recurse forever because
+  // contact.address1 is still the combined string).
+  _overrideAddress?: string
 }
 
 export async function createPropertyFromContact(
@@ -35,7 +48,10 @@ export async function createPropertyFromContact(
 
     // Detect multi-address patterns at creation time:
     //   "410 & 114 Ideal Valley Rd", "123/456 Main St", "2716 and 2720 Enterprise Ave"
-    const multiAddressMatch = matchCombinedAddress(rawAddress)
+    // Skip the detection if we're already inside the splitter's recursive
+    // call (context._overrideAddress set) — otherwise the recursion never
+    // terminates because contact.address1 is still the combined string.
+    const multiAddressMatch = !context._overrideAddress ? matchCombinedAddress(rawAddress) : null
     if (multiAddressMatch) {
       const { num1, num2, streetName } = multiAddressMatch
       const addr1 = `${num1} ${streetName}`
@@ -46,18 +62,18 @@ export async function createPropertyFromContact(
       const id1 = await createPropertyFromContact(tenantId, ghlContactId, {
         ...context,
         _overrideAddress: standardizeStreet(addr1),
-      } as PropertyTriggerContext & { _overrideAddress?: string })
+      })
 
       // Create second property with modified address (same contact)
-      const id2 = await createPropertyFromContact(tenantId, ghlContactId, {
+      await createPropertyFromContact(tenantId, ghlContactId, {
         ...context,
         _overrideAddress: standardizeStreet(addr2),
-      } as PropertyTriggerContext & { _overrideAddress?: string })
+      })
 
       return id1 // return first property ID
     }
 
-    const address = (context as { _overrideAddress?: string })._overrideAddress ?? standardizeStreet(rawAddress)
+    const address = context._overrideAddress ?? standardizeStreet(rawAddress)
 
     // Deduplicate: check by ghlContactId + address (one contact CAN have multiple properties)
     const existingByContactAndAddress = await db.property.findFirst({
@@ -197,6 +213,7 @@ export async function createPropertyFromContact(
         longtermStageEnteredAt: longtermStatus ? now : null,
         assignedToId,
         marketId,
+        ...(context.markPendingEnrichment ? { pendingEnrichment: true } : {}),
       },
     })
 
@@ -275,7 +292,7 @@ export async function createPropertyFromContact(
     // can tell (after the fact) whether enrichment ran for a given lead.
     // Earlier fire-and-forget with dynamic import() was silently dropping
     // invocations — 77% of last-week's leads had zero vendor data.
-    if (address) {
+    if (address && !context.skipEnrichment) {
       const enrichStart = Date.now()
       db.auditLog.create({
         data: {
@@ -327,9 +344,11 @@ export async function createPropertyFromContact(
     }
 
     // AI auto-enrichment (fire-and-forget — estimates ARV, repair, rental, neighborhood)
-    enrichPropertyWithAI(property.id, tenantId).catch(err =>
-      console.error('[Property] AI enrich failed:', err instanceof Error ? err.message : err)
-    )
+    if (!context.skipEnrichment) {
+      enrichPropertyWithAI(property.id, tenantId).catch(err =>
+        console.error('[Property] AI enrich failed:', err instanceof Error ? err.message : err)
+      )
+    }
 
     return property.id
   } catch (err) {
