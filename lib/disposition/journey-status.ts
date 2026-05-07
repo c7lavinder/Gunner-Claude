@@ -23,12 +23,14 @@ export interface JourneyStatus {
 export interface JourneyInputs {
   status: string                           // Property.status enum
   address: string | null
-  askingPrice: string | null               // Decimal-as-string
   arv: string | null                       // Decimal-as-string
-  description: string | null
-  assignmentFee: string | null             // Decimal-as-string
   hasPhotos: boolean                       // Property has at least one photo
   hasSellerLinked: boolean                 // PropertySeller exists
+  // Session 77 readiness gates (replaces askingPrice/description/
+  // assignmentFee — those moved into Section 2 of the journey).
+  hasContract: boolean                     // dispoStatus is set & not CLOSED → property is in dispo lane
+  hasDispoManager: boolean                 // PropertyTeamMember with role=DISPOSITION_MANAGER exists
+  propertyDetailsAllFilled: boolean        // every field in lib/disposition/property-details-readiness.ts
   blastsSentCount: number                  // # of DealBlast rows
   buyersMatchedCount: number               // # of buyers added to this deal
   responsesCount: number                   // # of inbound buyer responses
@@ -38,16 +40,20 @@ export interface JourneyInputs {
 
 export function computeJourneyStatus(p: JourneyInputs): JourneyStatus {
   // ── Section 1 — Deal info readiness ────────────────────────────────
-  // Field list deferred per plan; sane default = the fields a buyer
-  // needs to see in a blast. Tune once live.
+  // Six gates (Session 77 spec): address, seller linked, contract
+  // (in dispo lane), property details (every field — see
+  // lib/disposition/property-details-readiness.ts), photos, dispo
+  // manager assigned. ARV stays because it's the single most-asked
+  // number in a blast; askingPrice + description + assignment fee
+  // moved to Section 2 (those are dispo-team inputs, not acq handoff).
   const required = [
     !!p.address,
-    !!p.askingPrice,
-    !!p.arv,
-    !!p.description,
-    !!p.assignmentFee,
-    p.hasPhotos,
     p.hasSellerLinked,
+    p.hasContract,
+    p.propertyDetailsAllFilled,
+    !!p.arv,
+    p.hasPhotos,
+    p.hasDispoManager,
   ]
   const filled = required.filter(Boolean).length
   const section1: SectionStatus =

@@ -14,6 +14,7 @@ import {
   InlineTextArea,
   type PropertyDetail,
 } from '@/components/inventory/property-detail-client'
+import { Section2Artifacts } from './section-2-artifacts'
 
 export function Section2DealBlast({
   property,
@@ -55,6 +56,9 @@ export function Section2DealBlast({
     dealBlastArvOverride: property.dealBlastArvOverride,
     dealBlastContractOverride: property.dealBlastContractOverride,
     dealBlastAssignmentFeeOverride: property.dealBlastAssignmentFeeOverride,
+    // Session 77 — investor-facing asking. Treated as a "primary" key here,
+    // not an override (there's no seller-asking fallback to strike through).
+    dispoAskingPrice: property.dispoAskingPrice,
   })
   const [savingOverride, setSavingOverride] = useState(false)
 
@@ -258,38 +262,62 @@ export function Section2DealBlast({
         onSaved={handleBlastFieldSaved}
       />
 
+      {/* Session 77 — three generators (description, listing-site post,
+          FB post). No send button — sending lives in Section 3 (Match
+          buyers). */}
+      <Section2Artifacts
+        propertyId={property.id}
+        initialArtifacts={property.dispoArtifacts}
+        hasDispoManager={property.propertyTeam.some(t => t.role === 'DISPOSITION_MANAGER')}
+        hasDescription={!!description}
+        onArtifactSaved={(kind, text) => {
+          // Description doubles as the Property.description field below in
+          // the deal summary. Keep them in sync when the AI generates one
+          // (or the rep edits the artifact and saves).
+          if (kind === 'description') {
+            setDescription(text)
+          }
+        }}
+      />
+
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Summary</p>
-          <p className="text-[8px] text-txt-muted italic">Click a value to set a blast override</p>
+          <p className="text-[8px] text-txt-muted italic">Asking is what we ask the investor — distinct from seller&apos;s ask on Overview. Click any value to edit.</p>
         </div>
         <div className="p-3">
         <div className="grid grid-cols-4 gap-3">
+          {/* Order: Contract → Asking → ARV → Assignment Fee.
+              Contract is sourced from Overview (seller's contract price);
+              Asking is filled HERE (investor-facing dispoAskingPrice);
+              ARV / Assignment Fee keep the override pattern. */}
           {([
-            { key: 'askingPrice', overrideKey: 'dealBlastAskingOverride', label: 'Asking', value: property.askingPrice, color: 'text-txt-primary' },
-            { key: 'arv', overrideKey: 'dealBlastArvOverride', label: 'ARV', value: property.arv, color: 'text-semantic-green' },
-            { key: 'contractPrice', overrideKey: 'dealBlastContractOverride', label: 'Contract', value: property.contractPrice, color: 'text-txt-primary' },
+            { key: 'contractPrice', overrideKey: 'dealBlastContractOverride', label: 'Contract', value: property.contractPrice, color: 'text-txt-primary', isPrimaryWrite: false },
+            { key: 'dispoAskingPrice', overrideKey: 'dispoAskingPrice', label: 'Asking', value: null, color: 'text-txt-primary', isPrimaryWrite: true },
+            { key: 'arv', overrideKey: 'dealBlastArvOverride', label: 'ARV', value: property.arv, color: 'text-semantic-green', isPrimaryWrite: false },
             { key: 'assignmentFee', overrideKey: 'dealBlastAssignmentFeeOverride', label: 'Assignment Fee',
               value: property.assignmentFee ?? (property.acceptedPrice && property.contractPrice ? String(Number(property.acceptedPrice) - Number(property.contractPrice)) : null),
-              color: 'text-semantic-amber' },
+              color: 'text-semantic-amber', isPrimaryWrite: false },
           ] as const).map(field => {
             const source = property.fieldSources?.[field.key]
             const overrideValue = overrides[field.overrideKey]
             const displayValue = overrideValue ?? field.value
             const hasOverride = overrideValue !== null && overrideValue !== undefined
             const isEditing = editingField === field.overrideKey
-            const cardClass = hasOverride
+            // Asking writes directly to its own field — no "override" semantics.
+            // Suppress the OVERRIDE tag + strikethrough fallback for primary-write cards.
+            const cardClass = (!field.isPrimaryWrite && hasOverride)
               ? 'bg-amber-50 border-[0.5px] border-amber-300'
               : source === 'api' ? 'bg-purple-50 border-[0.5px] border-purple-300'
               : source === 'ai' ? 'bg-blue-50 border-[0.5px] border-blue-300'
               : source === 'user' ? 'bg-green-50 border-[0.5px] border-green-300'
               : 'bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)]'
-            const tag = hasOverride ? 'OVERRIDE'
+            const tag = (!field.isPrimaryWrite && hasOverride) ? 'OVERRIDE'
               : source === 'api' ? 'API'
               : source === 'ai' ? 'AI'
               : source === 'user' ? 'EDITED'
               : null
-            const tagColor = hasOverride ? 'text-amber-400'
+            const tagColor = (!field.isPrimaryWrite && hasOverride) ? 'text-amber-400'
               : source === 'api' ? 'text-purple-400'
               : source === 'ai' ? 'text-blue-400'
               : source === 'user' ? 'text-green-400'
@@ -320,7 +348,7 @@ export function Section2DealBlast({
                     <button
                       onClick={() => { saveDealOverride(field.overrideKey, '') }}
                       className="text-[8px] text-txt-muted hover:text-red-500"
-                      title="Clear override"
+                      title={field.isPrimaryWrite ? 'Clear value' : 'Clear override'}
                     >
                       <X size={9} />
                     </button>
@@ -336,18 +364,19 @@ export function Section2DealBlast({
                     {fmt(displayValue)}
                   </p>
                 )}
-                {hasOverride && field.value && (
+                {!field.isPrimaryWrite && hasOverride && field.value && (
                   <p className="text-[8px] text-txt-muted line-through">{fmt(field.value)}</p>
                 )}
               </div>
             )
           })}
         </div>
-        {(property.beds || property.baths || property.sqft) && (
+        {(property.beds || property.baths || property.sqft || property.propertyType) && (
           <div className="flex items-center gap-3 mt-2 text-[10px] text-txt-secondary">
             {property.beds && <span>{property.beds} bed</span>}
             {property.baths && <span>{property.baths} bath</span>}
             {property.sqft && <span>{property.sqft.toLocaleString()} sqft</span>}
+            {property.propertyType && <span>{property.propertyType}</span>}
             {property.yearBuilt && <span>Built {property.yearBuilt}</span>}
           </div>
         )}
@@ -367,11 +396,12 @@ export function Section2DealBlast({
             source={descriptionSource}
           />
         </div>
-        {(property.repairEstimate || property.rentalEstimate || property.floodZone) && (
+        {/* Session 77 — repair + rental dropped from this strip; repair lives
+            in Property Details panel above and rental is moved to the Data
+            tab. Flood stays — it's investor-relevant context. */}
+        {property.floodZone && (
           <div className="flex items-center gap-3 mt-2 text-[9px] text-txt-secondary">
-            {property.repairEstimate && <span>Repair Est: <strong>${Number(property.repairEstimate).toLocaleString()}</strong></span>}
-            {property.rentalEstimate && <span>Rental Est: <strong>${Number(property.rentalEstimate).toLocaleString()}/mo</strong></span>}
-            {property.floodZone && <span>Flood: <strong>{property.floodZone}</strong></span>}
+            <span>Flood: <strong>{property.floodZone}</strong></span>
           </div>
         )}
         <div className="flex items-center gap-2 mt-2">

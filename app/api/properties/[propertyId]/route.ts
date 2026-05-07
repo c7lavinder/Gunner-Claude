@@ -98,6 +98,9 @@ const updateSchema = z.object({
   dealBlastArvOverride: z.string().nullable().optional(),
   dealBlastContractOverride: z.string().nullable().optional(),
   dealBlastAssignmentFeeOverride: z.string().nullable().optional(),
+  // Session 77 — investor-facing asking (Section 2 of Disposition Journey).
+  // Distinct from askingPrice above which is the seller's asking from Overview.
+  dispoAskingPrice: z.string().nullable().optional(),
   // GHL sync toggle — when true, webhook stage updates skip this property.
   ghlSyncLocked: z.boolean().optional(),
   // Alt offer types (Novation / Subto / Partnership / custom) — Cash stays in
@@ -151,6 +154,8 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     photosLink,
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
+    // Session 77 — investor-facing asking
+    dispoAskingPrice,
     market: marketName,
     ghlSyncLocked,
     offerTypes,
@@ -308,6 +313,8 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),
           ...(dealBlastContractOverride !== undefined && { dealBlastContractOverride: dealBlastContractOverride ? parseFloat(dealBlastContractOverride) : null }),
           ...(dealBlastAssignmentFeeOverride !== undefined && { dealBlastAssignmentFeeOverride: dealBlastAssignmentFeeOverride ? parseFloat(dealBlastAssignmentFeeOverride) : null }),
+          // Session 77 — investor-facing asking
+          ...(dispoAskingPrice !== undefined && { dispoAskingPrice: dispoAskingPrice ? parseFloat(dispoAskingPrice) : null }),
           // Merged inside the transaction above under pg_advisory_xact_lock —
           // prevents concurrent-PATCH clobber on { fieldName: "ai" | "user" }.
           ...(mergedFieldSources !== undefined && { fieldSources: mergedFieldSources }),

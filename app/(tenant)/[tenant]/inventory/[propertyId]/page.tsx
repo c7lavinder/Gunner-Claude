@@ -48,6 +48,9 @@ export default async function PropertyDetailPage({
         deedDate: true, aiEnrichmentStatus: true, aiEnrichmentError: true,
         dealBlastAskingOverride: true, dealBlastArvOverride: true,
         dealBlastContractOverride: true, dealBlastAssignmentFeeOverride: true,
+        // Session 77
+        dispoAskingPrice: true,
+        dispoArtifacts: true,
         customFields: true, marketId: true,
         // v1.1 Wave 5 — manualBuyerIds dropped. Manual buyers live as
         // PropertyBuyerStage rows with source='manual'.
@@ -140,6 +143,14 @@ export default async function PropertyDetailPage({
           orderBy: { createdAt: 'asc' },
         },
         assignedTo: { select: { id: true, name: true, role: true } },
+        // Session 77 — PropertyTeamMember rows drive Section 1 "Disposition
+        // Manager assigned" readiness gate + supply the dispo manager's
+        // name/phone for the closing block of all 3 generated artifacts.
+        teamMembers: {
+          include: {
+            user: { select: { id: true, name: true, phone: true, role: true } },
+          },
+        },
         market: { select: { name: true } },
         calls: {
           orderBy: { createdAt: 'desc' },
@@ -164,8 +175,21 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound()
 
-  // Fetch milestones for pipeline display — from PropertyMilestone table + KPI entries
-  const [dbMilestones, kpiEntries] = await Promise.all([
+  // Disposition Journey counts — fed into the 5-section status engine in
+  // lib/disposition/journey-status.ts. Pre-Session-77 these were hardcoded
+  // to 0 in disposition-journey.tsx, which made Section 2/3/4 stuck at
+  // 'not_started' until the rep opened a section. Counted here once at
+  // page-load so the journey badges are correct on first paint.
+  const [
+    dbMilestones,
+    kpiEntries,
+    photoCount,
+    blastsSentCount,
+    buyersMatchedCount,
+    responsesCount,
+    offersLoggedCount,
+    offersAcceptedCount,
+  ] = await Promise.all([
     db.propertyMilestone.findMany({
       where: { propertyId: params.propertyId, tenantId },
       orderBy: { createdAt: 'asc' },
@@ -179,6 +203,12 @@ export default async function PropertyDetailPage({
       orderBy: { createdAt: 'asc' },
       select: { payload: true, createdAt: true },
     }),
+    db.propertyPhoto.count({ where: { propertyId: params.propertyId, tenantId } }),
+    db.dealBlast.count({ where: { propertyId: params.propertyId, tenantId, status: 'sent' } }),
+    db.propertyBuyerStage.count({ where: { propertyId: params.propertyId, tenantId } }),
+    db.propertyBuyerStage.count({ where: { propertyId: params.propertyId, tenantId, responseIntent: { not: null } } }),
+    db.outreachLog.count({ where: { propertyId: params.propertyId, tenantId, type: 'offer' } }),
+    db.outreachLog.count({ where: { propertyId: params.propertyId, tenantId, type: 'offer', offerStatus: 'Accepted' } }),
   ])
 
   // Map KPI entry types to milestone types
@@ -474,6 +504,28 @@ export default async function PropertyDetailPage({
           userName: m.user?.name ?? 'Unknown',
           createdAt: m.createdAt.toISOString(),
         })),
+        // Disposition Journey counts (Session 77) — drives Section 1-5 status badges.
+        photoCount,
+        blastsSentCount,
+        buyersMatchedCount,
+        responsesCount,
+        offersLoggedCount,
+        offersAcceptedCount,
+        // Session 77 — PropertyTeamMember rows for this property. Distinct
+        // from `teamMembers` above (which is the tenant @mention list).
+        // Drives Section 1 "Disposition Manager assigned" readiness gate +
+        // supplies the dispo manager's name/phone for generated artifacts.
+        propertyTeam: property.teamMembers.map((tm) => ({
+          id: tm.id,
+          userId: tm.user.id,
+          userName: tm.user.name,
+          userPhone: tm.user.phone,
+          role: tm.role,
+          source: tm.source,
+        })),
+        // Session 77 — investor-facing asking + generated artifacts blob.
+        dispoAskingPrice: property.dispoAskingPrice?.toString() ?? null,
+        dispoArtifacts: (property.dispoArtifacts ?? {}) as Record<string, unknown>,
         partners: property.partners.map((pp) => ({
           id: pp.partner.id,
           name: pp.partner.name,

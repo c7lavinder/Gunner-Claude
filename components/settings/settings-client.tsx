@@ -21,6 +21,12 @@ interface TenantInfo {
   // WRITES TO: tenants.grading_materials (String?)
   // READ BY: lib/ai/grading.ts → buildGradingSystemPrompt()
   gradingMaterials: string
+  // Session 77 — funding link used in the closing block of all 3
+  // dispo artifacts (description, listing, social).
+  // WRITES TO: tenants.disposition_funding_link (String?)
+  // API ENDPOINT: PATCH /api/tenants/config
+  // READ BY: lib/ai/dispo-generators.ts → buildPrompt()
+  dispositionFundingLink: string
   // WRITES TO: tenants.config (Json) → { projectTypes: string[] }
   // READ BY: property detail page → Project Type tag row options
   config: Record<string, unknown>
@@ -781,8 +787,13 @@ export function SettingsClient({
       {/* Markets */}
       {tab === 'markets' && <MarketsTab />}
 
-      {/* Inventory — Project Types */}
-      {tab === 'inventory' && <ProjectTypesTab tenantConfig={tenant.config} />}
+      {/* Inventory — Project Types + Disposition Funding Link */}
+      {tab === 'inventory' && (
+        <div className="space-y-6">
+          <DispositionFundingLinkSection initialUrl={tenant.dispositionFundingLink} />
+          <ProjectTypesTab tenantConfig={tenant.config} />
+        </div>
+      )}
 
       {/* Knowledge — Scripts, Standards, Training Materials */}
       {tab === 'knowledge' && <KnowledgeTab tenantSlug={tenant.slug} />}
@@ -1442,6 +1453,63 @@ function BulkRegradeButton({ tenantSlug }: { tenantSlug: string }) {
 // READ BY: property detail page → Project Type tag row options
 
 const DEFAULT_PROJECT_TYPES = ['Fix and Flip', 'Rental', 'Retail', 'Land', 'New Build', 'Commercial', 'Multi-Family']
+
+// ─── Disposition Funding Link (Session 77) ───────────────────────────
+// Single-field setting — the franchise / funding URL inserted into the
+// closing block of every generated dispo artifact (description, listing
+// post, social post). Defaults to the New Again Houses franchise site
+// at the schema level; per-tenant override here.
+function DispositionFundingLinkSection({ initialUrl }: { initialUrl: string }) {
+  const [url, setUrl] = useState(initialUrl)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  async function save() {
+    setSaving(true)
+    setMsg('')
+    try {
+      const res = await fetch('/api/tenants/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dispositionFundingLink: url || null }),
+      })
+      if (res.ok) setMsg('Saved!')
+      else setMsg('Failed to save')
+    } catch { setMsg('Network error') }
+    setSaving(false)
+    setTimeout(() => setMsg(''), 2000)
+  }
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-5 space-y-4">
+      <div>
+        <h3 className="text-ds-label font-semibold text-txt-primary">Disposition Funding Link</h3>
+        <p className="text-ds-fine text-txt-muted mt-0.5">
+          URL appended to the closing block of every generated disposition artifact (description, listing post, social post). Default points to the New Again Houses franchise site.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://franchise.newagainhouses.com/"
+          className="flex-1 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[10px] px-4 py-[9px] text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+        />
+        <button
+          onClick={save}
+          disabled={saving}
+          className="bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-4 py-[9px] rounded-[10px] transition-colors"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+
+      {msg && <p className={`text-ds-fine font-medium ${msg === 'Saved!' ? 'text-semantic-green' : 'text-semantic-red'}`}>{msg}</p>}
+    </div>
+  )
+}
 
 function ProjectTypesTab({ tenantConfig }: { tenantConfig: Record<string, unknown> }) {
   const saved = Array.isArray(tenantConfig.projectTypes) ? tenantConfig.projectTypes as string[] : DEFAULT_PROJECT_TYPES

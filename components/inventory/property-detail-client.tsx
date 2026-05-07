@@ -21,6 +21,7 @@ import { FloatingDropdown } from '@/components/ui/FloatingDropdown'
 import { DispositionJourney } from '@/components/disposition/journey/disposition-journey'
 import { PropertyPhotosPanel } from '@/components/inventory/property-photos-panel'
 import { PropertyDocumentsPanel } from '@/components/inventory/property-documents-panel'
+import { CompsPanel } from '@/components/inventory/comps-panel'
 
 const GHL_STAGE_COLORS: Record<string, string> = {
   'New Lead (1)': 'bg-sky-100 text-sky-700',
@@ -219,6 +220,34 @@ export interface PropertyDetail {
   dispoStatus: string | null
   teamMembers: Array<{ id: string; name: string }>
   messages: Array<{ id: string; text: string; mentions: Array<{ id: string; name: string }>; userId: string | null; userName: string; createdAt: string }>
+  // Disposition Journey counts (Session 77) — server-counted in the page
+  // query so the 5-section status badges are correct on first paint
+  // (previously these were hardcoded to 0 in disposition-journey.tsx,
+  // which made Sections 2/3/4/5 always render 'not_started' until the rep
+  // expanded a section and the inner component fetched its own data).
+  photoCount: number
+  blastsSentCount: number
+  buyersMatchedCount: number
+  responsesCount: number
+  offersLoggedCount: number
+  offersAcceptedCount: number
+  // Session 77 — PropertyTeamMember rows for this property (Section 1
+  // dispo manager gate + closing-block contact). Distinct from
+  // `teamMembers` below which is the tenant-wide @mention list.
+  propertyTeam: Array<{
+    id: string
+    userId: string
+    userName: string
+    userPhone: string | null
+    role: string  // ADMIN, LEAD_MANAGER, ACQUISITION_MANAGER, DISPOSITION_MANAGER, etc.
+    source: string  // manual, call, milestone
+  }>
+  // Session 77 — investor-facing asking (Section 2 cards), distinct from
+  // askingPrice above which is the seller's asking from Overview.
+  dispoAskingPrice: string | null
+  // Session 77 — generated artifacts (description, listing-site post,
+  // FB post). Filled by Section 2 generators; persists across reload.
+  dispoArtifacts: Record<string, unknown>
   // v1.1 Session 67 Phase 2 — Partners on this deal (agents, wholesalers,
   // attorneys, etc). Loaded by app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx
   // and rendered by the Partners tab. See components/inventory/partners-tab.tsx.
@@ -4405,6 +4434,8 @@ function ResearchTab({
           <DataPropertyAssessment
             propertyId={property.id} vals={liveVals} sources={sources} onSaved={onSaved}
           />
+          {/* Session 77 — manual comps. Feeds the Section 2 listing-site generator. */}
+          <CompsPanel propertyId={property.id} />
         </>
       )}
 

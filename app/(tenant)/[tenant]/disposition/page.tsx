@@ -69,15 +69,23 @@ export default async function DispositionPage({ params }: { params: { tenant: st
   const rows: DispositionRow[] = properties.map(p => {
     const offers = offerCounts.get(p.id) ?? { logged: 0, accepted: 0 }
     const status = effectiveStatus(p)
+    // Portfolio page only consumes journey.stage (the aggregate bucket
+    // for grouping rows) — it does NOT render the Section 1 readiness
+    // checklist. The 3 Session 77 readiness gates (hasContract /
+    // hasDispoManager / propertyDetailsAllFilled) only feed Section 1
+    // status which we don't display here, so we pass `true` to keep
+    // the portfolio query lean (no need to load 26 detail fields +
+    // PropertyTeamMember rows per property). The detailed readiness
+    // view lives on the per-property page.
     const inputs: JourneyInputs = {
       status,
       address: p.address,
-      askingPrice: p.askingPrice ? p.askingPrice.toString() : null,
       arv: p.arv ? p.arv.toString() : null,
-      description: p.description,
-      assignmentFee: p.assignmentFee ? p.assignmentFee.toString() : null,
       hasPhotos: !!p.googlePhotoThumbnailUrl,
       hasSellerLinked: p._count.sellers > 0,
+      hasContract: true,
+      hasDispoManager: true,
+      propertyDetailsAllFilled: true,
       blastsSentCount: p._count.dealBlasts,
       buyersMatchedCount: p._count.buyerStages,
       responsesCount: 0,

@@ -20,6 +20,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         id: true, name: true, slug: true,
         ghlLocationId: true, onboardingCompleted: true,
         callTypes: true, callResults: true, gradingMaterials: true,
+        dispositionFundingLink: true,
         config: true,
       },
     }),
@@ -50,6 +51,7 @@ export default async function SettingsPage({ params }: { params: { tenant: strin
         callTypes,
         callResults: tenant.callResults as string[],
         gradingMaterials: tenant.gradingMaterials ?? '',
+        dispositionFundingLink: tenant.dispositionFundingLink ?? '',
         config: (tenant.config ?? {}) as Record<string, unknown>,
       }}
       teamMembers={teamMembers.map((u) => ({

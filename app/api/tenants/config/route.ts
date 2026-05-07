@@ -15,6 +15,10 @@ const configSchema = z.object({
   callTypes: z.array(z.string()).optional(),
   callResults: z.union([z.array(z.string()), z.record(z.array(z.string()))]).optional(),
   gradingMaterials: z.string().optional(),
+  // Session 77 — funding link used in the closing block of all 3
+  // dispo artifacts (description, listing post, social post). Empty
+  // string clears it back to schema default.
+  dispositionFundingLink: z.string().nullable().optional(),
   config: z.record(z.unknown()).optional(),
 })
 
@@ -25,6 +29,7 @@ export const GET = withTenant(async (_req, ctx) => {
     select: {
       id: true, slug: true,
       callTypes: true, callResults: true, gradingMaterials: true,
+      dispositionFundingLink: true,
       config: true,
     },
   })

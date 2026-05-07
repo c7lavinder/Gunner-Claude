@@ -18,6 +18,7 @@ import {
   firstActiveSection,
   type JourneyInputs,
 } from '@/lib/disposition/journey-status'
+import { checkPropertyDetailsReadiness } from '@/lib/disposition/property-details-readiness'
 
 export function DispositionJourney({
   property,
@@ -28,26 +29,29 @@ export function DispositionJourney({
   tenantSlug: string
   onJumpToTab: (tabKey: 'overview' | 'data') => void
 }) {
-  // Map PropertyDetail → JourneyInputs. Some counts (blasts, buyers,
-  // responses) aren't on PropertyDetail today — defaulting to 0 means
-  // those sections start at 'not_started' and update as the user works
-  // inside them. Real-time counts are a future polish.
-  const inputs: JourneyInputs = useMemo(() => ({
-    status: property.status,
-    address: property.address,
-    askingPrice: property.askingPrice,
-    arv: property.arv,
-    description: property.description,
-    assignmentFee: property.assignmentFee,
-    hasPhotos: !!property.googlePhotoThumbnailUrl,
-    hasSellerLinked: (property.sellers?.length ?? 0) > 0,
-    blastsSentCount: 0,
-    buyersMatchedCount: 0,
-    responsesCount: 0,
-    offersLoggedCount:
-      property.lastOfferDate || property.currentOffer || property.highestOffer ? 1 : 0,
-    offersAcceptedCount: property.acceptedPrice ? 1 : 0,
-  }), [property])
+  // Map PropertyDetail → JourneyInputs. Counts are server-computed in the
+  // page query (see app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx)
+  // so the 5-section status badges are accurate on first paint without
+  // each section having to fetch its own data first.
+  const inputs: JourneyInputs = useMemo(() => {
+    const detailsCheck = checkPropertyDetailsReadiness(property)
+    return {
+      status: property.status,
+      address: property.address,
+      arv: property.arv,
+      hasPhotos: property.photoCount > 0,
+      hasSellerLinked: (property.sellers?.length ?? 0) > 0,
+      // Session 77 readiness gates
+      hasContract: !!property.dispoStatus && property.dispoStatus !== 'CLOSED',
+      hasDispoManager: property.propertyTeam.some(t => t.role === 'DISPOSITION_MANAGER'),
+      propertyDetailsAllFilled: detailsCheck.allFilled,
+      blastsSentCount: property.blastsSentCount,
+      buyersMatchedCount: property.buyersMatchedCount,
+      responsesCount: property.responsesCount,
+      offersLoggedCount: property.offersLoggedCount,
+      offersAcceptedCount: property.offersAcceptedCount,
+    }
+  }, [property])
 
   const status = useMemo(() => computeJourneyStatus(inputs), [inputs])
 
