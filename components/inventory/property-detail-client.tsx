@@ -663,19 +663,11 @@ export function PropertyDetailClient({
               <ContactsSection propertyId={property.id} tenantSlug={tenantSlug} initialSellers={property.sellers} />
               <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />
               <InlineAI propertyId={property.id} />
-              {/* Full Property Details panel — duplicate of the persistent panel
-                  above the tab bar. Both render the same component with the
-                  same shared vals/sources/handleSaved, so edits in either
-                  surface update the other in real time. */}
-              <PropertyDetailsPanel
-                propertyId={property.id}
-                vals={vals}
-                sources={sources}
-                altPrices={altPrices}
-                offerTypes={offerTypes}
-                onSaved={handleSaved}
-                onArraySaved={handleArraySaved}
-                onAltSaved={handleAltSaved}
+              {/* Property Profile — basics + numbers, DataCard-style, two-way
+                  synced with the persistent panel above via shared vals/sources. */}
+              <DataPropertyProfile
+                propertyId={property.id} vals={vals} sources={sources}
+                onSaved={handleSaved} onArraySaved={handleArraySaved}
                 projectTypeOptions={projectTypeOptions}
               />
               {/* ── Suggestion banner (only when there are pending) ── */}
@@ -702,6 +694,11 @@ export function PropertyDetailClient({
               <MlsPanel property={property} />
               {/* ── Vendor intel (BatchData motivation + PR flags + owner portfolio + foreclosure trustee) ── */}
               <VendorIntelPanel property={property} />
+              {/* Property Assessment — condition + intangibles + location/market,
+                  DataCard-style. Two-way synced with the persistent panel above. */}
+              <DataPropertyAssessment
+                propertyId={property.id} vals={vals} sources={sources} onSaved={handleSaved}
+              />
               {/* ── Deed / mortgage / lien history (vendor blobs) ── */}
               <HistoryPanel property={property} />
               {/* ── Property Data (existing research content) ── */}
@@ -3919,6 +3916,318 @@ function HistoryPanel({ property }: { property: PropertyDetail }) {
             </table>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Data-tab editable cell ──────────────────────────────────────────────────
+// Renders in the same purple/green/blue DataCard style used by the rest of the
+// Data tab (so the new Property Profile + Assessment sections look native), but
+// reads + writes through the same canonical vals/sources/onSaved as the
+// persistent Property Details panel. Edits sync both directions instantly.
+
+function EditablePropertyCard({
+  label, field, value, source, propertyId, onSaved,
+  type = 'text', options, suffix, formatter,
+}: {
+  label: string
+  field: string
+  value: string | number | null
+  source?: string | null
+  propertyId: string
+  onSaved: (field: string, val: string | number | null, src: string) => void
+  type?: 'text' | 'number' | 'select' | 'currency'
+  options?: string[]
+  suffix?: string
+  formatter?: (v: string | number) => string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const bg = source === 'api' ? 'bg-purple-50 border-[0.5px] border-purple-200'
+    : source === 'ai' ? 'bg-blue-50 border-[0.5px] border-blue-200'
+    : source === 'user' ? 'bg-green-50 border-[0.5px] border-green-200'
+    : 'bg-surface-secondary'
+  const labelClr = source === 'api' ? 'text-purple-600' : source === 'ai' ? 'text-blue-600' : source === 'user' ? 'text-green-600' : 'text-txt-muted'
+  const hasVal = value != null && value !== ''
+  const valueClr = source === 'api' ? 'text-purple-800' : source === 'ai' ? 'text-blue-800' : source === 'user' ? 'text-green-800' : hasVal ? 'text-txt-primary' : 'text-txt-muted'
+  const tag = source === 'api' ? 'API' : source === 'ai' ? 'AI' : source === 'user' ? 'EDITED' : null
+  const tagClr = source === 'api' ? 'text-purple-400' : source === 'ai' ? 'text-blue-400' : 'text-green-400'
+
+  const display = hasVal
+    ? (formatter ? formatter(value as string | number)
+       : type === 'currency' ? `$${Number(value).toLocaleString()}`
+       : typeof value === 'number' ? value.toLocaleString()
+       : String(value))
+    : '—'
+  const displayWithSuffix = display !== '—' && suffix ? `${display} ${suffix}` : display
+
+  async function save(val: string | number | null) {
+    if (saving) return
+    setSaving(true)
+    try {
+      const has = val != null && val !== ''
+      const payloadVal = type === 'currency' && has ? String(val) : val
+      await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: payloadVal, fieldSources: { [field]: has ? 'user' : '' } }),
+      })
+      onSaved(field, val, has ? 'user' : '')
+    } catch {}
+    setSaving(false)
+    setEditing(false)
+  }
+
+  if (type === 'select') {
+    return (
+      <div className={`rounded-[8px] px-3 py-2 relative ${bg}`}>
+        {tag && <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${tagClr}`}>{tag}</span>}
+        <p className={`text-[8px] font-semibold uppercase tracking-wider ${labelClr}`}>{label}</p>
+        <select
+          value={hasVal ? String(value) : ''}
+          onChange={e => save(e.target.value || null)}
+          disabled={saving}
+          className={`w-full bg-transparent border-0 outline-none cursor-pointer text-ds-fine font-semibold mt-0.5 ${valueClr}`}
+        >
+          <option value="">—</option>
+          {(options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    )
+  }
+
+  if (editing) {
+    const inputType = type === 'number' || type === 'currency' ? 'number' : 'text'
+    return (
+      <div className={`rounded-[8px] px-3 py-2 ${bg}`}>
+        <p className={`text-[8px] font-semibold uppercase tracking-wider ${labelClr}`}>{label}</p>
+        <input
+          autoFocus type={inputType} value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={() => {
+            const raw = editValue.trim()
+            const next = (type === 'number') ? (raw ? Number(raw) : null) : (raw || null)
+            save(next)
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          disabled={saving}
+          className="w-full bg-white border-[0.5px] border-green-300 rounded px-1.5 py-0.5 text-ds-fine font-semibold mt-0.5 focus:outline-none"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      onClick={() => {
+        setEditValue(hasVal ? String(value) : '')
+        setEditing(true)
+      }}
+      className={`rounded-[8px] px-3 py-2 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group relative ${bg}`}
+    >
+      {tag && <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${tagClr}`}>{tag}</span>}
+      <p className={`text-[8px] font-semibold uppercase tracking-wider ${labelClr}`}>{label}</p>
+      <p className={`text-ds-fine font-semibold mt-0.5 ${valueClr}`}>
+        {displayWithSuffix}
+        <Pencil size={7} className="inline ml-1 opacity-0 group-hover:opacity-100 text-txt-muted transition-opacity" />
+      </p>
+    </div>
+  )
+}
+
+// ─── Data-tab Property Profile ───────────────────────────────────────────────
+// DataCard-style mirror of the Specs / Details / Numbers half of the persistent
+// Property Details panel. Mounted near the top of the Data tab. Two-way sync
+// via shared vals/sources from the parent.
+
+function DataPropertyProfile({
+  propertyId, vals, sources, onSaved, onArraySaved, projectTypeOptions,
+}: {
+  propertyId: string
+  vals: SharedVals
+  sources: Record<string, string>
+  onSaved: (field: string, val: string | number | null, src?: string) => void
+  onArraySaved: (field: string, vals: string[]) => void
+  projectTypeOptions?: string[]
+}) {
+  const projectTypeJoined = vals.projectType.length > 0 ? vals.projectType.join(', ') : null
+  const marketsJoined = vals.propertyMarkets.length > 0 ? vals.propertyMarkets.join(', ') : null
+  const projectTypeOpts = projectTypeOptions ?? PROJECT_TYPE_OPTIONS
+
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Profile</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">API</span>
+          <span className="text-[7px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">AI</span>
+          <span className="text-[7px] font-bold text-green-500 bg-green-50 px-1 py-0.5 rounded">EDITED</span>
+        </div>
+      </div>
+      {/* Specs */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3">
+        <EditablePropertyCard label="Beds" field="beds" value={vals.beds} source={sources.beds} propertyId={propertyId} onSaved={onSaved} type="number" />
+        <EditablePropertyCard label="Baths" field="baths" value={vals.baths} source={sources.baths} propertyId={propertyId} onSaved={onSaved} type="number" />
+        <EditablePropertyCard label="Sqft" field="sqft" value={vals.sqft} source={sources.sqft} propertyId={propertyId} onSaved={onSaved} type="number" />
+        <EditablePropertyCard label="Lot Size" field="lotSize" value={vals.lotSize} source={sources.lotSize} propertyId={propertyId} onSaved={onSaved} />
+        <EditablePropertyCard label="Year Built" field="yearBuilt" value={vals.yearBuilt} source={sources.yearBuilt} propertyId={propertyId} onSaved={onSaved} type="number" />
+      </div>
+      {/* Details */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 px-3 pb-3">
+        <EditablePropertyCard label="Type" field="propertyType" value={vals.propertyType} source={sources.propertyType} propertyId={propertyId} onSaved={onSaved} type="select" options={PROPERTY_TYPE_OPTIONS} />
+        <EditablePropertyCard label="Occupancy" field="occupancy" value={vals.occupancy} source={sources.occupancy} propertyId={propertyId} onSaved={onSaved} type="select" options={['Vacant', 'Owner', 'Renter', 'Squatter', 'Family']} />
+        <EditablePropertyCard label="Access" field="lockboxCode" value={vals.lockboxCode} source={sources.lockboxCode} propertyId={propertyId} onSaved={onSaved} />
+        {/* Project Type + Market are multi-tag; render as comma-joined read-only
+            here, fully editable in the persistent panel above. Click opens a
+            dropdown that replaces the list with a single-selection edit. */}
+        <MultiTagDataCard label="Project Type" field="projectType" values={vals.projectType} options={projectTypeOpts} sources={sources} propertyId={propertyId} onSaved={onArraySaved} display={projectTypeJoined} />
+        <MultiTagDataCard label="Markets" field="propertyMarkets" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']} sources={sources} propertyId={propertyId} onSaved={onArraySaved} display={marketsJoined} />
+      </div>
+      {/* Numbers */}
+      <div className="border-t border-[rgba(0,0,0,0.04)]">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
+          <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Numbers</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-3">
+          <EditablePropertyCard label="ARV" field="arv" value={vals.arv} source={sources.arv} propertyId={propertyId} onSaved={onSaved} type="currency" />
+          <EditablePropertyCard label="Construction Est" field="constructionEstimate" value={vals.constructionEstimate} source={sources.constructionEstimate} propertyId={propertyId} onSaved={onSaved} type="currency" />
+          <EditablePropertyCard label="MAO" field="mao" value={vals.mao} source={sources.mao} propertyId={propertyId} onSaved={onSaved} type="currency" />
+          <EditablePropertyCard label="Asking Price" field="askingPrice" value={vals.askingPrice} source={sources.askingPrice} propertyId={propertyId} onSaved={onSaved} type="currency" />
+          <EditablePropertyCard label="Risk Factor" field="riskFactor" value={vals.riskFactor} source={sources.riskFactor} propertyId={propertyId} onSaved={onSaved} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Multi-tag DataCard variant — toggle a tag on/off via a dropdown click. Shares
+// the same DataCard look as EditablePropertyCard so the section reads cleanly.
+function MultiTagDataCard({
+  label, field, values, options, sources, propertyId, onSaved, display,
+}: {
+  label: string
+  field: string
+  values: string[]
+  options: string[]
+  sources: Record<string, string>
+  propertyId: string
+  onSaved: (field: string, vals: string[]) => void
+  display: string | null
+}) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const source = sources[field] ?? null
+
+  const bg = source === 'api' ? 'bg-purple-50 border-[0.5px] border-purple-200'
+    : source === 'ai' ? 'bg-blue-50 border-[0.5px] border-blue-200'
+    : source === 'user' ? 'bg-green-50 border-[0.5px] border-green-200'
+    : 'bg-surface-secondary'
+  const labelClr = source === 'api' ? 'text-purple-600' : source === 'ai' ? 'text-blue-600' : source === 'user' ? 'text-green-600' : 'text-txt-muted'
+  const valueClr = source === 'api' ? 'text-purple-800' : source === 'ai' ? 'text-blue-800' : source === 'user' ? 'text-green-800' : display ? 'text-txt-primary' : 'text-txt-muted'
+  const tag = source === 'api' ? 'API' : source === 'ai' ? 'AI' : source === 'user' ? 'EDITED' : null
+  const tagClr = source === 'api' ? 'text-purple-400' : source === 'ai' ? 'text-blue-400' : 'text-green-400'
+
+  async function toggle(opt: string) {
+    if (saving) return
+    setSaving(true)
+    const next = values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]
+    try {
+      await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: next, fieldSources: { [field]: 'user' } }),
+      })
+      onSaved(field, next)
+    } catch {}
+    setSaving(false)
+  }
+
+  return (
+    <div className="relative">
+      <div
+        onClick={() => setOpen(o => !o)}
+        className={`rounded-[8px] px-3 py-2 cursor-pointer hover:ring-1 hover:ring-gunner-red/20 transition-all group relative ${bg}`}
+      >
+        {tag && <span className={`absolute top-1 right-1.5 text-[7px] font-bold uppercase ${tagClr}`}>{tag}</span>}
+        <p className={`text-[8px] font-semibold uppercase tracking-wider ${labelClr}`}>{label}</p>
+        <p className={`text-ds-fine font-semibold mt-0.5 truncate ${valueClr}`}>{display ?? '—'}</p>
+      </div>
+      {open && (
+        <div className="absolute z-10 mt-1 w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.12)] rounded-[8px] shadow-lg max-h-48 overflow-y-auto">
+          {options.map(o => {
+            const on = values.includes(o)
+            return (
+              <button
+                key={o}
+                onClick={() => toggle(o)}
+                disabled={saving}
+                className={`block w-full text-left px-3 py-1.5 text-ds-fine hover:bg-surface-secondary transition-colors ${on ? 'font-semibold text-gunner-red' : 'text-txt-primary'}`}
+              >
+                {on ? '✓ ' : ''}{o}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Data-tab Property Assessment ────────────────────────────────────────────
+// Condition + Intangibles + Location & Market in DataCard style. Same shared
+// state as the persistent panel above.
+
+function DataPropertyAssessment({
+  propertyId, vals, sources, onSaved,
+}: {
+  propertyId: string
+  vals: SharedVals
+  sources: Record<string, string>
+  onSaved: (field: string, val: string | number | null, src?: string) => void
+}) {
+  return (
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+      <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Assessment</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">API</span>
+          <span className="text-[7px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded">AI</span>
+          <span className="text-[7px] font-bold text-green-500 bg-green-50 px-1 py-0.5 rounded">EDITED</span>
+        </div>
+      </div>
+      {/* Condition */}
+      <div className="px-3 pt-3">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Condition</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <EditablePropertyCard label="Roof" field="roofCondition" value={vals.roofCondition} source={sources.roofCondition} propertyId={propertyId} onSaved={onSaved} />
+          <EditablePropertyCard label="Windows" field="windowsCondition" value={vals.windowsCondition} source={sources.windowsCondition} propertyId={propertyId} onSaved={onSaved} />
+          <EditablePropertyCard label="Siding" field="sidingCondition" value={vals.sidingCondition} source={sources.sidingCondition} propertyId={propertyId} onSaved={onSaved} />
+          <EditablePropertyCard label="Exterior" field="exteriorCondition" value={vals.exteriorCondition} source={sources.exteriorCondition} propertyId={propertyId} onSaved={onSaved} />
+        </div>
+      </div>
+      {/* Intangibles — Plus / Neutral / Negative dropdowns */}
+      <div className="px-3 pt-3">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Intangibles</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <EditablePropertyCard label="Comp Risk" field="comparableRisk" value={vals.comparableRisk} source={sources.comparableRisk} propertyId={propertyId} onSaved={onSaved} type="select" options={INTANGIBLE_OPTIONS} />
+          <EditablePropertyCard label="Basement" field="basementStatus" value={vals.basementStatus} source={sources.basementStatus} propertyId={propertyId} onSaved={onSaved} type="select" options={INTANGIBLE_OPTIONS} />
+          <EditablePropertyCard label="Curb Appeal" field="curbAppeal" value={vals.curbAppeal} source={sources.curbAppeal} propertyId={propertyId} onSaved={onSaved} type="select" options={INTANGIBLE_OPTIONS} />
+          <EditablePropertyCard label="Neighbors" field="neighborsGrade" value={vals.neighborsGrade} source={sources.neighborsGrade} propertyId={propertyId} onSaved={onSaved} type="select" options={INTANGIBLE_OPTIONS} />
+          <EditablePropertyCard label="Parking" field="parkingType" value={vals.parkingType} source={sources.parkingType} propertyId={propertyId} onSaved={onSaved} type="select" options={INTANGIBLE_OPTIONS} />
+          <EditablePropertyCard label="Yard" field="yardGrade" value={vals.yardGrade} source={sources.yardGrade} propertyId={propertyId} onSaved={onSaved} type="select" options={INTANGIBLE_OPTIONS} />
+        </div>
+      </div>
+      {/* Location & Market */}
+      <div className="px-3 pt-3 pb-3">
+        <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider mb-2">Location &amp; Market</p>
+        <div className="grid grid-cols-2 gap-3">
+          <EditablePropertyCard label="Location Grade" field="locationGrade" value={vals.locationGrade} source={sources.locationGrade} propertyId={propertyId} onSaved={onSaved} type="select" options={LOCATION_GRADE_OPTIONS} />
+          <EditablePropertyCard label="Market Risk" field="marketRisk" value={vals.marketRisk} source={sources.marketRisk} propertyId={propertyId} onSaved={onSaved} type="select" options={MARKET_RISK_OPTIONS} />
+        </div>
       </div>
     </div>
   )
