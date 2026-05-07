@@ -141,6 +141,11 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     // Deal Intel
     propertyCondition,
     riskFactor,
+    // Condition + intangibles + location/market grades — free-form strings,
+    // dropdowns in the UI but stored as strings so the schema stays flexible.
+    roofCondition, windowsCondition, sidingCondition, exteriorCondition,
+    comparableRisk, basementStatus, curbAppeal, neighborsGrade, parkingType, yardGrade,
+    locationGrade, marketRisk,
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
     market: marketName,
@@ -281,6 +286,19 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           // Deal Intel
           ...(propertyCondition !== undefined && { propertyCondition }),
           ...(riskFactor !== undefined && { riskFactor }),
+          // Condition + intangibles + location/market grades
+          ...(roofCondition !== undefined && { roofCondition }),
+          ...(windowsCondition !== undefined && { windowsCondition }),
+          ...(sidingCondition !== undefined && { sidingCondition }),
+          ...(exteriorCondition !== undefined && { exteriorCondition }),
+          ...(comparableRisk !== undefined && { comparableRisk }),
+          ...(basementStatus !== undefined && { basementStatus }),
+          ...(curbAppeal !== undefined && { curbAppeal }),
+          ...(neighborsGrade !== undefined && { neighborsGrade }),
+          ...(parkingType !== undefined && { parkingType }),
+          ...(yardGrade !== undefined && { yardGrade }),
+          ...(locationGrade !== undefined && { locationGrade }),
+          ...(marketRisk !== undefined && { marketRisk }),
           // Deal Blast overrides
           ...(dealBlastAskingOverride !== undefined && { dealBlastAskingOverride: dealBlastAskingOverride ? parseFloat(dealBlastAskingOverride) : null }),
           ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),

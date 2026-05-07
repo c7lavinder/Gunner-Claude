@@ -690,7 +690,7 @@ export function PropertyDetailClient({
               {/* ── Deed / mortgage / lien history (vendor blobs) ── */}
               <HistoryPanel property={property} />
               {/* ── Property Data (existing research content) ── */}
-              <ResearchTab property={property} />
+              <ResearchTab property={property} liveVals={vals} />
             </div>
           )}
           {activeTab === 'activity' && (
@@ -3911,7 +3911,11 @@ function HistoryPanel({ property }: { property: PropertyDetail }) {
 
 // ─── Research Tab (Property Data Section) ────────────────────────────────────
 
-function ResearchTab({ property }: { property: PropertyDetail }) {
+function ResearchTab({ property, liveVals }: { property: PropertyDetail; liveVals?: SharedVals }) {
+  // Prefer live edited values from PropertyDetailsPanel over the server-fetched
+  // property prop, so edits made in the persistent panel show up here without a
+  // page reload. Falls back to property.* when liveVals isn't passed.
+  const liveArv = liveVals?.arv ?? property.arv
   const [researching, setResearching] = useState(false)
   const [research, setResearch] = useState<Record<string, unknown> | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -4075,10 +4079,10 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
           <DataCard label="APN" value={fmtStr(bd.apn)} fieldKey="apn" />
         </div>
         {/* AI Estimates + Flood Zone */}
-        {(property.repairEstimate || property.rentalEstimate || property.floodZone || property.neighborhoodSummary) && (
+        {(liveArv || property.repairEstimate || property.rentalEstimate || property.floodZone || property.neighborhoodSummary) && (
           <div className="border-t border-[rgba(0,0,0,0.04)] p-3 space-y-2">
             <div className="grid grid-cols-3 gap-3">
-              {property.arv && <DataCard label="ARV" value={fmt$(property.arv)} highlight />}
+              {liveArv && <DataCard label="ARV" value={fmt$(liveArv)} highlight />}
               {property.repairEstimate && <DataCard label="Repair Estimate" value={fmt$(property.repairEstimate)} highlight />}
               {property.rentalEstimate && <DataCard label="Rental Estimate" value={`${fmt$(property.rentalEstimate)}/mo`} highlight />}
               {property.floodZone && <DataCard label="Flood Zone" value={property.floodZone} highlight />}
