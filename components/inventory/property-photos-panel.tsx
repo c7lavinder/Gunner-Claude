@@ -3,7 +3,9 @@
 // Drag-and-drop photo upload + auto-categorized grid.
 //
 // Behavior:
-// - Drop or click to add JPEG / PNG / WEBP / HEIC files (HEIC → JPEG in browser).
+// - Drop or click to add JPEG / PNG / WEBP / HEIC files. HEIC is converted
+//   to JPEG SERVER-SIDE (heic-convert) so the browser never has to deal
+//   with iPhone HEIC variants — the upload just works.
 // - 25MB / file limit; bigger files surface an inline error.
 // - Each photo shows "Classifying…" until Claude vision lands a category,
 //   then snaps into a section (Front / Exterior / Kitchen / Bathroom / Living
@@ -82,15 +84,6 @@ export function PropertyPhotosPanel({
     return () => clearInterval(t)
   }, [photos, load])
 
-  async function convertHeicIfNeeded(file: File): Promise<File> {
-    const isHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)
-    if (!isHeic) return file
-    const heic2any = (await import('heic2any')).default
-    const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 }) as Blob
-    const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg')
-    return new File([blob], newName, { type: 'image/jpeg' })
-  }
-
   async function handleFiles(fileList: FileList | File[]) {
     const incoming = Array.from(fileList)
     if (incoming.length === 0) return
@@ -99,8 +92,10 @@ export function PropertyPhotosPanel({
     setUploading(true)
     setUploadProgress({ done: 0, total: incoming.length })
 
-    // Upload in batches of 5 for parallelism without flooding.
-    const BATCH = 5
+    // Upload in batches of 3 for parallelism without flooding the server's
+    // HEIC conversion (CPU-heavy). Smaller batches also keep memory in check
+    // for big iPhone bursts.
+    const BATCH = 3
     const localErrors: string[] = []
     let done = 0
     for (let i = 0; i < incoming.length; i += BATCH) {
@@ -111,13 +106,12 @@ export function PropertyPhotosPanel({
             localErrors.push(`${file.name}: too large (max 25MB)`)
             return
           }
-          const converted = await convertHeicIfNeeded(file)
           const fd = new FormData()
-          fd.append('files', converted)
+          fd.append('files', file)
           const res = await fetch(`/api/properties/${propertyId}/photos`, { method: 'POST', body: fd })
           if (!res.ok) {
             const body = await res.json().catch(() => ({}))
-            localErrors.push(`${file.name}: ${body.error ?? `upload failed (${res.status})`}`)
+            localErrors.push(`${file.name}: ${body.error ?? `upload failed (HTTP ${res.status})`}`)
             return
           }
           const body = await res.json()
@@ -125,7 +119,9 @@ export function PropertyPhotosPanel({
             if (r.error) localErrors.push(`${r.filename}: ${r.error}`)
           }
         } catch (err) {
-          localErrors.push(`${file.name}: ${err instanceof Error ? err.message : 'upload failed'}`)
+          const msg = err instanceof Error ? err.message : 'network error'
+          console.error('[photos panel] upload error:', file.name, err)
+          localErrors.push(`${file.name}: ${msg}`)
         } finally {
           done += 1
           setUploadProgress({ done, total: incoming.length })
