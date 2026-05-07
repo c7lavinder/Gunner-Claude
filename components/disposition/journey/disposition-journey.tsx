@@ -18,7 +18,7 @@ import {
   firstActiveSection,
   type JourneyInputs,
 } from '@/lib/disposition/journey-status'
-import { checkPropertyDetailsReadiness } from '@/lib/disposition/property-details-readiness'
+import { checkPropertyDetailsReadiness, isDispoManagerRole } from '@/lib/disposition/property-details-readiness'
 
 export function DispositionJourney({
   property,
@@ -43,7 +43,7 @@ export function DispositionJourney({
       hasSellerLinked: (property.sellers?.length ?? 0) > 0,
       // Session 77 readiness gates
       hasContract: !!property.dispoStatus && property.dispoStatus !== 'CLOSED',
-      hasDispoManager: property.propertyTeam.some(t => t.role === 'DISPOSITION_MANAGER'),
+      hasDispoManager: property.propertyTeam.some(t => isDispoManagerRole(t.role)),
       propertyDetailsAllFilled: detailsCheck.allFilled,
       blastsSentCount: property.blastsSentCount,
       buyersMatchedCount: property.buyersMatchedCount,

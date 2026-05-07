@@ -19,7 +19,12 @@ export interface PropertyDetailsSnapshot {
   constructionEstimate: string | null
   mao: string | null
   riskFactor: string | null
-  propertyCondition: string | null
+  // propertyCondition is intentionally NOT in this snapshot — it's a top-
+  // level summary string that has no dedicated UI in the persistent
+  // Property Details panel (only the 4 sub-conditions below have edit
+  // cells). It's filled by AI / vendor enrichment, not by the rep typing
+  // it in. Including it forced a "Property condition" gate the rep
+  // couldn't clear from the panel. (Session 77 hotfix on 2026-05-08.)
   roofCondition: string | null
   windowsCondition: string | null
   sidingCondition: string | null
@@ -53,7 +58,6 @@ const FIELDS: FieldSpec[] = [
   { label: 'Construction estimate', filled: p => !!p.constructionEstimate },
   { label: 'MAO',                  filled: p => !!p.mao },
   { label: 'Risk factor',          filled: p => !!p.riskFactor },
-  { label: 'Property condition',   filled: p => !!p.propertyCondition },
   { label: 'Roof',                 filled: p => !!p.roofCondition },
   { label: 'Windows',              filled: p => !!p.windowsCondition },
   { label: 'Siding',               filled: p => !!p.sidingCondition },
@@ -67,6 +71,17 @@ const FIELDS: FieldSpec[] = [
   { label: 'Location grade',       filled: p => !!p.locationGrade },
   { label: 'Market risk',          filled: p => !!p.marketRisk },
 ]
+
+// Role-string normalizer for the Section 1 "Disposition Manager assigned"
+// gate. The PropertyTeamMember UI writes pretty strings ("Disposition
+// Manager"); some other call sites use the User-role enum form
+// ("DISPOSITION_MANAGER"). Compare normalized: lowercased, non-letters
+// stripped. Returns true for any flavor of "disposition manager" and
+// nothing else.
+export function isDispoManagerRole(role: string | null | undefined): boolean {
+  if (!role) return false
+  return role.toLowerCase().replace(/[^a-z]/g, '') === 'dispositionmanager'
+}
 
 export function checkPropertyDetailsReadiness(p: PropertyDetailsSnapshot): {
   allFilled: boolean

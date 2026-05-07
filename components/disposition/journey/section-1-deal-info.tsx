@@ -21,7 +21,7 @@
 import { useState } from 'react'
 import { Check, X, ArrowRight, ChevronDown, ChevronRight } from 'lucide-react'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
-import { checkPropertyDetailsReadiness } from '@/lib/disposition/property-details-readiness'
+import { checkPropertyDetailsReadiness, isDispoManagerRole } from '@/lib/disposition/property-details-readiness'
 
 type JumpTarget = 'overview' | 'data'
 
@@ -123,7 +123,7 @@ export function Section1DealInfo({
 
 function computeItems(p: PropertyDetail): RequiredItem[] {
   const detailsCheck = checkPropertyDetailsReadiness(p)
-  const dispoManagerAssigned = p.propertyTeam.some(t => t.role === 'DISPOSITION_MANAGER')
+  const dispoManagerAssigned = p.propertyTeam.some(t => isDispoManagerRole(t.role))
   const inDispoLane = !!p.dispoStatus && p.dispoStatus !== 'CLOSED'
 
   return [

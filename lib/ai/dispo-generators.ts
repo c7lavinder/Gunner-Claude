@@ -23,6 +23,7 @@ import { db } from '@/lib/db/client'
 import { Prisma } from '@prisma/client'
 import { anthropic } from '@/config/anthropic'
 import { logFailure } from '@/lib/audit'
+import { isDispoManagerRole } from '@/lib/disposition/property-details-readiness'
 
 const DISPO_MODEL = 'claude-sonnet-4-6'
 const MAX_TOKENS = 1500
@@ -185,18 +186,20 @@ async function loadContext(propertyId: string, tenantId: string): Promise<DispoC
       },
       // Tenant funding link
       tenant: { select: { dispositionFundingLink: true } },
-      // Property team — pick the Disposition Manager
+      // Property team — load all members; we filter for the Dispo Manager
+      // role in JS via isDispoManagerRole() because the role string can
+      // be 'DISPOSITION_MANAGER' OR 'Disposition Manager' depending on
+      // which UI saved it (legacy + current).
       teamMembers: {
-        where: { role: 'DISPOSITION_MANAGER' },
         include: { user: { select: { name: true, phone: true } } },
-        take: 1,
       },
     },
   })
 
   if (!property) return null
 
-  const dispoManager = property.teamMembers[0]?.user
+  const dispoManagerMember = property.teamMembers.find(tm => isDispoManagerRole(tm.role))
+  const dispoManager = dispoManagerMember?.user
   const arv = (property.dealBlastArvOverride ?? property.arv)?.toString() ?? null
 
   return {

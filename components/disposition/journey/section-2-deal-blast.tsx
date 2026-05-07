@@ -16,6 +16,7 @@ import {
   type PropertyDetail,
 } from '@/components/inventory/property-detail-client'
 import { Section2Artifacts } from './section-2-artifacts'
+import { isDispoManagerRole } from '@/lib/disposition/property-details-readiness'
 
 export function Section2DealBlast({
   property,
@@ -112,7 +113,7 @@ export function Section2DealBlast({
       <Section2Artifacts
         propertyId={property.id}
         initialArtifacts={property.dispoArtifacts}
-        hasDispoManager={property.propertyTeam.some(t => t.role === 'DISPOSITION_MANAGER')}
+        hasDispoManager={property.propertyTeam.some(t => isDispoManagerRole(t.role))}
         hasDescription={!!description}
         onArtifactSaved={(kind, text) => {
           // Description doubles as the Property.description field below in
