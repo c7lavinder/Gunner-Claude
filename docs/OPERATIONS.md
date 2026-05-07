@@ -214,7 +214,11 @@ app/api/
 ├── milestones/      Milestone CRUD
 ├── notifications/   In-app notifications
 ├── properties/      Property CRUD outside tenant scope (blast, story,
-│                    re-enrich, research, skip-trace)
+│                    re-enrich, research, skip-trace, photos, documents).
+│                    Session 76: photos route handles HEIC→JPEG via
+│                    heic-convert + Claude Haiku vision auto-categorization;
+│                    documents route is a flat upload list. Storage in
+│                    Supabase via lib/storage/property-assets.ts.
 ├── sellers/         Seller CRUD outside tenant scope (skip-trace)
 ├── stripe/          Checkout + webhook
 ├── tasks/           Task CRUD
@@ -383,6 +387,9 @@ Plus 5 priority items in AUDIT_PLAN: P3 (model fragmentation), P4 (`/tasks/` del
 | 2026-05-01 | `20260501151510_v1_1_wave_5_property_strip` | **DESTRUCTIVE** — v1.1 Wave 5 cutover. Drops 24 columns + 2 indexes. Property: ownerPhone/Email/Type/ownershipLengthYears + secondOwner* + ownerFirstName1/2 + ownerLastName1/2 + ownerPortfolio* + ownerPortfolioJson + seniorOwner + deceasedOwner + cashBuyerOwner + manualBuyerIds + @@index([seniorOwner]) + @@index([deceasedOwner]). Buyer: matchLikelihoodScore. Pre-cutover snapshot: `pg_dump --no-owner --no-acl $DIRECT_URL` → 160 MB SQL file. Read-path migration shipped same commit (VendorIntelPanel → primarySeller; dual-write turn-off in lib/batchdata/enrich.ts). Post-cutover grep `property\.\(ownerPhone\|...\)` returned 0 hits. Q3 keeps absenteeOwner + absenteeOwnerInState + samePropertyMailing + mailingAddressVacant on Property. |
 | 2026-05-04 | `20260504000000_add_agent_wholesaler` | **Session 67 Phase 1 — superseded ~1h later by the next migration.** Originally created 4 tables: `agents`, `wholesalers`, `property_agents`, `property_wholesalers`. Architectural pivot to unified Partner shape happened mid-session before any data was written; left in history because the migration was already deployed to production. |
 | 2026-05-04 | `20260504010000_replace_agent_wholesaler_with_partner` | **Session 67 Phase 1 (final shape).** Drops the 4 empty tables from the prior migration (CASCADE — zero data loss because no UI / API ever wrote to them) and creates `partners` + `property_partners`. `Partner.types` is a JSON array allowing one row to carry multiple roles (agent + wholesaler + attorney etc.). `PropertyPartner.role` is a free string capturing the per-deal role. 2 indexes, 3 foreign keys. Plan: `~/.claude/plans/at-te-he-very-base-mellow-pixel.md`. |
+| 2026-05-07 | `20260507185111_add_property_photos_and_documents` | **Session 76 — photos + documents feature.** Creates `property_photos` and `property_documents` tables, both cascade-delete from `properties`. PropertyPhoto carries `storage_path`, `filename`, `mime_type`, `size`, `category` (front/exterior/kitchen/bathroom/living/basement/other/uncategorized), `classification_status` (pending/done/failed), `sort_order`, plus tenant/property/uploadedBy FKs. PropertyDocument is the same shape minus the classification fields (flat list, no AI categorization). Storage backed by two new private Supabase buckets `property-photos` and `property-documents` auto-created on first upload via `lib/storage/property-assets.ts`. |
+| 2026-05-07 | `20260507194052_add_property_photos_link` | **Session 76.** Adds `Property.photosLink` (text, nullable) — external folder URL (Google Drive / Dropbox / etc.) surfaced in the photos panel header for "see more photos elsewhere". |
+| 2026-05-07 | `20260507204352_add_property_photo_starred` | **Session 76.** Adds `PropertyPhoto.is_starred` (boolean, default false). One starred "cover" photo per property; enforced server-side in `app/api/properties/[propertyId]/photos/[photoId]/route.ts` PATCH — single transaction unstars all siblings before starring the target. Starred photo sorts first in its category in the photos panel grid. |
 
 ---
 

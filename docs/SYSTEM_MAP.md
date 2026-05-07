@@ -225,6 +225,16 @@ See "AI Layer" section below. Lives in `lib/ai/`.
   - `lib/realestateapi/client.ts` — fallback.
   - `lib/google/client.ts` — Street View / imagery.
   - `lib/storage/supabase.ts` — Supabase blob storage for vendor images.
+  - `lib/storage/property-assets.ts` (Session 76) — generalizes the
+    Supabase storage pattern for user-uploaded property photos +
+    documents. Two private buckets `property-photos` and
+    `property-documents`, auto-created on first use. Used by the photos
+    + documents routes under `/api/properties/[id]/`.
+  - `lib/ai/photo-classifier.ts` (Session 76) — Claude Haiku 4.5 vision
+    classifies user-uploaded photos into front/exterior/kitchen/bathroom/
+    living/basement/other. Fire-and-forget after upload (~$0.001/photo).
+    UI polls until `classificationStatus` flips from `pending` to
+    `done`/`failed`.
 
 Per-vendor isolation: vendor failures do not take down the orchestrator.
 
