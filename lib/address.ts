@@ -100,10 +100,15 @@ export function standardizeState(raw: string): string {
   return STATE_NAME_TO_ABBR[trimmed.toLowerCase()] ?? trimmed
 }
 
-/** Standardize zip to 5 digits */
+/** Standardize zip to 5 digits. Pads 3- or 4-digit values with leading
+ *  zeros — Northeast zips (NJ, MA, NH, ME, RI, VT, CT) start with 0 and
+ *  are routinely truncated by spreadsheets / GHL imports. */
 export function standardizeZip(raw: string): string {
   if (!raw) return ''
   const digits = raw.replace(/\D/g, '')
+  if (digits.length === 0) return ''
+  if (digits.length === 4) return '0' + digits
+  if (digits.length === 3) return '00' + digits
   return digits.slice(0, 5)
 }
 

@@ -87,6 +87,31 @@ function isUnitListAmpersand(rawStreet: string): boolean {
 }
 
 /**
+ * Split a unit list ("Apt R6, D2, & G2") into N streets sharing the same
+ * base. One Property per unit — owner walks each unit independently.
+ *
+ *   "320 Welch Rd Apt R6, D2, & G2"
+ *     → ["320 Welch Rd Apt R6", "320 Welch Rd Apt D2", "320 Welch Rd Apt G2"]
+ *
+ * Returns null if the string doesn't match the expected shape (caller falls
+ * back to the no-split path).
+ */
+function splitUnitList(rawStreet: string): string[] | null {
+  // Match: <base ending in indicator-keyword + space> <units-list>
+  const m = rawStreet.match(/^(.+?\b(?:apt|apartment|ste|suite|unit|lot|bldg|building|fl|floor|rm|room)\.?\s+)(.+)$/i)
+  if (!m) return null
+  const base = m[1].trim()
+  const unitsText = m[2].trim()
+  // Split on , or & (with whitespace tolerance)
+  const units = unitsText
+    .split(/\s*[,&]+\s*/)
+    .map(u => u.trim())
+    .filter(Boolean)
+  if (units.length <= 1) return null
+  return units.map(u => `${base} ${u}`)
+}
+
+/**
  * Split a multi-property street into separate canonical streets.
  * Examples:
  *   "4506 & 4510 & 4502 & 0 Prospect Rd"
@@ -98,13 +123,16 @@ function isUnitListAmpersand(rawStreet: string): boolean {
  *   "1011&1013 40th Ave E"
  *     → ["1011 40th Ave E", "1013 40th Ave E"]
  *   "320 Welch Rd Apt R6, D2, & G2"
- *     → ["320 Welch Rd Apt R6, D2, & G2"]   (unit list, no split)
+ *     → ["320 Welch Rd Apt R6", "320 Welch Rd Apt D2", "320 Welch Rd Apt G2"]
  */
 export function splitStreets(rawStreet: string): string[] {
   const trimmed = rawStreet.trim()
   if (!trimmed) return []
   if (!/&/.test(trimmed)) return [trimmed]
-  if (isUnitListAmpersand(trimmed)) return [trimmed]
+  if (isUnitListAmpersand(trimmed)) {
+    const unitSplits = splitUnitList(trimmed)
+    return unitSplits ?? [trimmed]
+  }
 
   // Normalize: replace any `,` that sits between two number-bearing tokens with ` & `
   // so "1427 9th St,1622 12th St & 1530 2nd St" becomes
@@ -177,8 +205,93 @@ export function parsePropertyAddress(
   rawState: string | null | undefined,
   rawZip: string | null | undefined,
 ): ParsedAddress {
+  const addr = (rawAddress ?? '').trim()
+
+  // Pre-pass A: `///` (or `//`) separator — multi-property string where
+  // EACH segment carries its own city/state/zip embedded. Common owner
+  // shape: "700 Fowler St Old Hickory, Tn 37138 /// 809 E Old Hickory
+  // Blvd Madison, Tn 37115" — both segments live on one Property row
+  // with city/state/zip fields representing only one of them. Each
+  // segment becomes an independent ParsedAddressPart (no shared
+  // city/state/zip).
+  if (/\/\/+/.test(addr)) {
+    const segments = addr.split(/\s*\/\/+\s*/).map(s => s.trim()).filter(Boolean)
+    if (segments.length > 1) {
+      const parts = segments.map(seg =>
+        // Recurse with empty rawCity/rawState/rawZip so the parser uses
+        // ONLY what's embedded in the segment. Falls back to row-level
+        // values only when a segment lacks its own.
+        parsePropertyAddress(seg, null, null, null),
+      )
+      // Backfill: if any segment came out with empty city/state/zip,
+      // borrow from row-level fields (rawCity/rawState/rawZip) so the
+      // segment isn't worse off than the original row.
+      const cleanRawCity = standardizeCity(rawCity ?? '')
+      const cleanRawState = standardizeState(rawState ?? '')
+      const cleanRawZip = standardizeZip(rawZip ?? '')
+      const filled = parts.map(p => ({
+        primary: {
+          street: p.primary.street,
+          city: p.primary.city || cleanRawCity,
+          state: p.primary.state || cleanRawState,
+          zip: p.primary.zip || cleanRawZip,
+        },
+        splits: p.splits.map(s => ({
+          street: s.street,
+          city: s.city || cleanRawCity,
+          state: s.state || cleanRawState,
+          zip: s.zip || cleanRawZip,
+        })),
+      }))
+      return {
+        primary: filled[0].primary,
+        splits: [
+          ...filled[0].splits,
+          ...filled.slice(1).flatMap(f => [f.primary, ...f.splits]),
+        ],
+      }
+    }
+  }
+
+  // Pre-pass B: dual-city case — rawCity contains "&" AND the address has
+  // two street-number-led segments jammed together (with a space, no `&`).
+  // Pair them index-wise. Owner shape: address="2025 Rose St 36580 Bismark
+  // St", city="Carleton & New Boston", state="MI", zip="48117".
+  if ((rawCity ?? '').includes('&')) {
+    const cityParts = (rawCity ?? '').split(/\s*&\s*/).map(s => s.trim()).filter(Boolean)
+    if (cityParts.length >= 2) {
+      // Find positions where a new street starts: a digit-led token
+      // following at least one space. Anchor on " <number><space>".
+      const streetStarts: number[] = [0]
+      const re = /\s(\d+\s+)/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(addr)) !== null) {
+        streetStarts.push(m.index + 1)
+      }
+      if (streetStarts.length === cityParts.length) {
+        // Slice the address into N segments aligned with cityParts
+        const streetSegments: string[] = []
+        for (let i = 0; i < streetStarts.length; i++) {
+          const start = streetStarts[i]
+          const end = i + 1 < streetStarts.length ? streetStarts[i + 1] : addr.length
+          streetSegments.push(addr.slice(start, end).trim())
+        }
+        const parts = streetSegments.map((seg, i) =>
+          parsePropertyAddress(seg, cityParts[i], rawState ?? null, rawZip ?? null),
+        )
+        return {
+          primary: parts[0].primary,
+          splits: [
+            ...parts[0].splits,
+            ...parts.slice(1).flatMap(p => [p.primary, ...p.splits]),
+          ],
+        }
+      }
+    }
+  }
+
   // Combine all four fields, dedup whitespace/commas.
-  const pieces = [rawAddress, rawCity ?? '', rawState ?? '', rawZip ?? '']
+  const pieces = [addr, rawCity ?? '', rawState ?? '', rawZip ?? '']
     .map((p) => (p ?? '').trim())
     .filter(Boolean)
   const canon = tidyCanonical(pieces.join(', '))
@@ -257,7 +370,15 @@ export function parsePropertyAddress(
     preState = preState.replace(new RegExp(`\\b${zip}(?:-\\d{4})?\\b`, 'g'), '')
   }
   if (stateAbbr) {
-    preState = preState.replace(new RegExp(`\\b${stateAbbr}\\b\\.?`, 'gi'), '')
+    // Conservative strip — only remove residue occurrences of the state
+    // abbreviation that look like state-position remnants (followed by a
+    // comma, end-of-string, or a 5-digit zip). A naive global strip
+    // corrupts streets where the abbreviation is part of a highway name
+    // ("Nc Hwy 222 W" or "Sr 31"); the lookahead avoids those.
+    preState = preState.replace(
+      new RegExp(`\\b${stateAbbr}\\b\\.?(?=\\s*,|\\s*$|\\s+\\d{5}\\b)`, 'gi'),
+      '',
+    )
   }
   preState = tidyCanonical(preState).replace(/[,\s]+$/, '').replace(/^[,\s]+/, '').trim()
   // Set `state` (uppercase abbreviation) for downstream — kept as a plain

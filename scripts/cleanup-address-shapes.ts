@@ -28,6 +28,11 @@ const args = process.argv.slice(2)
 const APPLY = args.includes('--apply')
 const ONLY_AMP = args.includes('--only-amp')
 const ONLY_NO_MARKET = args.includes('--only-no-market')
+// --scan-all: ignore the targeting OR-clause and run the parser on EVERY
+// row, updating any row where the parser would produce a different
+// {address, city, state, zip} than the row currently has. Use this to
+// catch new pathological shapes that the targeted clauses miss.
+const SCAN_ALL = args.includes('--scan-all')
 const TENANT_SLUG = (() => {
   const i = args.indexOf('--tenant')
   return i >= 0 ? args[i + 1] : undefined
@@ -52,14 +57,33 @@ async function main() {
   })
 
   for (const tenant of tenants) {
-    // Build the OR query against the two row sets we care about.
-    const orClauses: Prisma.PropertyWhereInput[] = []
-    if (!ONLY_AMP) orClauses.push({ marketId: null })
-    if (!ONLY_NO_MARKET) orClauses.push({ address: { contains: '&' } })
-    if (orClauses.length === 0) continue
+    // Build the OR query against the row sets we care about. --scan-all
+    // bypasses targeting and runs the parser against every Property in
+    // the tenant — slower but catches every pathological shape including
+    // zip-in-street where the structured fields are already set,
+    // duplicate-comma cities, "///" separator, dual-city "&", etc.
+    const where: Prisma.PropertyWhereInput = SCAN_ALL
+      ? { tenantId: tenant.id }
+      : (() => {
+          const orClauses: Prisma.PropertyWhereInput[] = []
+          if (!ONLY_AMP) orClauses.push({ marketId: null })
+          if (!ONLY_NO_MARKET) orClauses.push({ address: { contains: '&' } })
+          if (!ONLY_NO_MARKET) orClauses.push({ address: { contains: '/' } })
+          // City contains comma (e.g. "Indianapolis, In 46203, IN 46203")
+          if (!ONLY_NO_MARKET) orClauses.push({ city: { contains: ',' } })
+          // Address has a 5-digit zip embedded (Pattern A — even when
+          // structured fields are already set, the address column can
+          // still be redundant junk like "1723 Whitney Dr Hanover Park,
+          // Il 60133"). Postgres doesn't have a regex `contains` shortcut
+          // in Prisma so we approximate with a broad `mode:'insensitive'`
+          // string match; the parser then determines whether anything
+          // actually changes.
+          if (!ONLY_NO_MARKET) orClauses.push({ address: { contains: ', ', mode: 'insensitive' } })
+          return { tenantId: tenant.id, OR: orClauses }
+        })()
 
     const candidates = await db.property.findMany({
-      where: { tenantId: tenant.id, OR: orClauses },
+      where,
       select: {
         id: true,
         address: true,
@@ -75,6 +99,15 @@ async function main() {
         ghlAcqOppId: true,
         ghlDispoOppId: true,
         ghlLongtermOppId: true,
+        // Stage names + entered-at need to copy onto splits too — skipping
+        // them produced data-quality "Missing Stage" hits (Session 75
+        // follow-up).
+        ghlAcqStageName: true,
+        ghlDispoStageName: true,
+        ghlLongtermStageName: true,
+        acqStageEnteredAt: true,
+        dispoStageEnteredAt: true,
+        longtermStageEnteredAt: true,
         assignedToId: true,
       },
       orderBy: { createdAt: 'asc' },
@@ -189,6 +222,12 @@ async function main() {
               acqStatus: row.acqStatus,
               dispoStatus: row.dispoStatus,
               longtermStatus: row.longtermStatus,
+              ghlAcqStageName: row.ghlAcqStageName,
+              ghlDispoStageName: row.ghlDispoStageName,
+              ghlLongtermStageName: row.ghlLongtermStageName,
+              acqStageEnteredAt: row.acqStageEnteredAt,
+              dispoStageEnteredAt: row.dispoStageEnteredAt,
+              longtermStageEnteredAt: row.longtermStageEnteredAt,
               pendingEnrichment: false,
             },
           })
