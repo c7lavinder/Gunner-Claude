@@ -178,6 +178,55 @@ have those fields extracted on the way in. The cleanup script remains
 on disk for one-shot DB sweeps if drift ever reappears (e.g. after a
 schema change that bypasses the ingest path).
 
+**Follow-up: split-children GHL linkage.** After the cleanup script
+ran, owner flagged 136 properties without a linked `ghlContactId`.
+Root cause: `cleanup-address-shapes.ts` had been deliberately
+designed to leave splits "independent of GHL until owner re-links
+them manually" — the inline comment at lines 175-194 calls this out.
+That default was wrong for the live data shape: every split child
+shares its parent's seller (one seller / one GHL contact / multiple
+properties is the normal Gunner data model), so leaving them
+unlinked broke their visibility under the Sellers tab and their
+inheritance of contact-driven workflows. New script
+`scripts/link-unlinked-splits.ts` walks `cleanup.address_split`
+audit rows, picks the matching unlinked child for each split, and
+back-fills `ghlContactId` + mirrors the parent's `PropertySeller`
+rows (`isPrimary=false`). Companion diagnostic
+`diagnose-unlinked-splits.ts`. Ran live: **136 children linked, 136
+seller rows created, 0 failures.** Final state of
+`Property where ghlContactId IS NULL`: 138 → **2** (the remaining
+two are duplicate rows for `1915 S Main St` Springfield TN that
+predate this session — likely manual JV-intake test data).
+
+**Follow-up: missing street numbers.** Owner also asked about rows
+where the address has no leading digit ("Hawkwood Ln", "Van Buren
+St", etc.). New diagnostic `scripts/diagnose-missing-street-
+numbers.ts` found **54 such rows in `new-again-houses`**, bucketed
+into:
+
+  - 45 street-name only
+  - 4 directional-prefix only
+  - 2 legitimate `Lot N <name>` (skipped from the fixer)
+  - 3 other (PO box, parcel ID, junk)
+
+Fixer at `scripts/fix-missing-street-numbers.ts` re-fetches the GHL
+contact for each candidate and the parser. After the safety gate
+(only single-property GHL addresses where the tail matches the
+existing Gunner value), **0 of 52 rows were safely auto-fixable**:
+
+  - 48 — GHL also has the same no-number value (data missing at the
+    source).
+  - 3 — GHL has a multi-property string where the parser correctly
+    extracts another no-number street.
+  - 1 — would have been a false-positive (overwriting `Van Buren St`
+    with the parent's `1810 Wagon Wheel Dr`).
+
+Conclusion: these 54 rows need manual review. Gunner can't synthesize
+a street number that doesn't exist anywhere upstream. The diagnostic
+is in `scripts/diagnose-missing-street-numbers.ts` so the owner can
+re-pull the list any time and decide which to fix in GHL vs. accept
+as-is (lot-only entries are legitimate).
+
 **Next session (no specific carry-forward):**
 
   - Open candidates: Bug #16, #18, #22, #24, #25 (carry-forward list
