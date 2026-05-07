@@ -33,6 +33,7 @@
 import { db } from '../lib/db/client'
 import { getGHLClient } from '../lib/ghl/client'
 import { getAppStage } from '../lib/ghl-stage-map'
+import { withCronHeartbeat } from '../lib/cron-heartbeat'
 
 type Lane = 'acquisition' | 'disposition' | 'longterm'
 
@@ -402,9 +403,11 @@ async function main() {
     `scanned=${totals.oppsScanned} missingFixed=${totals.missingPropertyFixed} ` +
     `staleFixed=${totals.staleStatusFixed} noOps=${totals.noOps} errors=${totals.errors}`
   )
+
+  return totals
 }
 
-main()
+withCronHeartbeat('reconcile_ghl_pipelines', main)
   .catch(err => {
     console.error('[reconcile] fatal:', err)
     process.exit(1)

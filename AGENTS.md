@@ -266,8 +266,31 @@ re-introduction of a second worker, not active double-grading prevention.
 ### Mandatory observability for workers
 
 **Every worker iteration MUST write heartbeat audit rows** so silent outages are
-visible within one cycle. Established pattern (lives inside `runX()` in
-`lib/<name>-processor.ts`):
+visible within one cycle.
+
+**For one-shot `[[cron]]` scripts** (the default for new crons), wrap `main`
+with `withCronHeartbeat()` from `lib/cron-heartbeat.ts` (Session 74):
+
+```typescript
+import { withCronHeartbeat } from '@/lib/cron-heartbeat'
+
+async function main() { /* … */ return stats }
+
+withCronHeartbeat('my_cron', main)
+  .catch(err => { console.error(err); process.exit(1) })
+  .finally(() => db.$disconnect())
+```
+
+The helper writes `started` before `fn()`, `finished` (with `durationMs`
++ `stats`) on success, and `failed` (with `durationMs` + error message)
+on throw — then re-throws so the outer `.catch` keeps exit-code-1
+semantics. Use snake_case for `<name>` to match the
+`process_recording_jobs` / `regenerate_stories` precedents.
+
+**For long-running in-process workers** (the `runX()` pattern in
+`lib/<name>-processor.ts`), inline the audit-row writes — `withCronHeartbeat`
+is single-shot and would only fire once per process. Reference:
+`lib/grading-processor.ts:33-41` (start) and `:231-240` (finish):
 
 ```typescript
 // At the top of runX(), BEFORE the main try block:

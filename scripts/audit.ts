@@ -8,6 +8,7 @@ import { execSync } from 'child_process'
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { anthropic } from '@/config/anthropic'
+import { withCronHeartbeat } from '@/lib/cron-heartbeat'
 
 const ROOT = process.cwd()
 
@@ -138,9 +139,13 @@ Respond with valid JSON only:
   const warnings = results.filter((r) => r.status === 'WARN').length
   console.log(`\nTotal: ${failures} failures, ${warnings} warnings`)
 
+  // Throw on failures so withCronHeartbeat records `.failed` (the outer
+  // .catch below converts back to exit code 1).
   if (failures > 0) {
-    process.exit(1)
+    throw new Error(`Audit failed with ${failures} check(s) failing`)
   }
+
+  return { failures, warnings, checks: results.length }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -184,7 +189,7 @@ interface AIReview {
 }
 
 // Run
-runAudit().catch((err) => {
+withCronHeartbeat('daily_audit', runAudit).catch((err) => {
   console.error('Audit failed:', err)
   process.exit(1)
 })

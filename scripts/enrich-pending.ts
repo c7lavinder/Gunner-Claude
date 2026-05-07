@@ -34,6 +34,7 @@ import { getGHLClient } from '../lib/ghl/client'
 import { enrichProperty } from '../lib/enrichment/enrich-property'
 import { resolveMarketForZip } from '../lib/properties'
 import { normalizeLeadSource } from '../lib/lead-source-normalize'
+import { withCronHeartbeat } from '../lib/cron-heartbeat'
 
 // Flags (env or CLI):
 //   ENRICH_PENDING_BATCH_SIZE / no flag   default 100 rows per run
@@ -240,9 +241,11 @@ async function main() {
     `sellersUpdated=${totals.sellersUpdated} enrichmentRan=${totals.enrichmentRan} ` +
     `noAddress=${totals.noAddress} contactsMissing=${totals.contactsMissing} errors=${totals.errors}`
   )
+
+  return totals
 }
 
-main()
+withCronHeartbeat('enrich_pending', main)
   .catch(err => {
     console.error('[enrich-pending] fatal:', err)
     process.exit(1)

@@ -20,6 +20,7 @@
 
 import { db } from '../lib/db/client'
 import type { Prisma } from '@prisma/client'
+import { withCronHeartbeat } from '../lib/cron-heartbeat'
 
 // Property statuses that count as "closed with us" vs "dead"
 // Phase 1 of GHL multi-pipeline redesign: status moved from a single
@@ -374,26 +375,10 @@ async function main() {
 
   console.log(`[Aggregates] Done in ${Math.round(durationMs / 1000)}s: ${JSON.stringify(summary)}`)
 
-  // Audit log — landing a single row per run for traceability.
-  try {
-    const anyTenant = await db.tenant.findFirst({ select: { id: true } })
-    if (anyTenant) {
-      await db.auditLog.create({
-        data: {
-          tenantId: anyTenant.id,
-          action: 'cron.compute_aggregates.finished',
-          resource: 'system',
-          payload: summary as unknown as Prisma.InputJsonValue,
-          source: 'SYSTEM',
-        },
-      })
-    }
-  } catch (err) {
-    console.error('[Aggregates] Audit log write failed:', err instanceof Error ? err.message : err)
-  }
+  return summary
 }
 
-main()
+withCronHeartbeat('compute_aggregates', main)
   .catch(err => {
     console.error('[Aggregates] Fatal error:', err)
     process.exit(1)

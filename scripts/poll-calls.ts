@@ -15,6 +15,7 @@ import { getGHLClient } from '../lib/ghl/client'
 import { syncGHLUsers } from '../lib/ghl/sync-users'
 import { fetchCallRecording } from '../lib/ghl/fetch-recording'
 import { logFailure } from '../lib/audit'
+import { withCronHeartbeat } from '../lib/cron-heartbeat'
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com'
 const MIN_CALL_DURATION_FOR_GRADING = 45
@@ -462,13 +463,16 @@ async function pollCalls() {
     })
     if (recentPoll) {
       console.log(`[poll-calls] Recent poll detected (${recentPoll.updatedAt.toISOString()}) — exiting cleanly`)
-      process.exit(0)
+      // Return rather than process.exit so withCronHeartbeat writes the
+      // .finished row. Lock-skip is a normal outcome, not a failure.
+      return { skipped: 'lock_held' as const }
     }
     lockAcquired = true
     console.log('[poll-calls] Lock acquired — starting poll')
   } catch (err) {
-    console.error('[poll-calls] Failed to check lock:', err instanceof Error ? err.message : err)
-    process.exit(1)
+    // Throw rather than process.exit(1) so withCronHeartbeat writes the
+    // .failed row. The outer .catch in pollCallsEntry converts back to exit 1.
+    throw new Error(`Lock check failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 
   try {
@@ -479,7 +483,7 @@ async function pollCalls() {
 
     if (tenants.length === 0) {
       console.log('[poll-calls] No tenants')
-      process.exit(0)
+      return { skipped: 'no_tenants' as const }
     }
 
     for (const tenant of tenants) {
@@ -570,14 +574,20 @@ async function pollCalls() {
     console.log(`[poll-calls] Complete.`)
   } catch (err) {
     console.error('[poll-calls] Fatal:', err instanceof Error ? err.message : err)
-    process.exit(1)
+    // Re-throw so withCronHeartbeat records `.failed`.
+    throw err
   } finally {
     if (lockAcquired) {
       console.log('[poll-calls] Complete — lock expires in 45s')
     }
   }
 
-  process.exit(0)
+  return { skipped: null }
 }
 
-pollCalls()
+withCronHeartbeat('poll_calls', pollCalls)
+  .catch(err => {
+    console.error('[poll-calls] fatal:', err instanceof Error ? err.message : err)
+    process.exit(1)
+  })
+  .finally(() => process.exit(0))

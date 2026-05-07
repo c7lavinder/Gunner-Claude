@@ -23,7 +23,7 @@ Live in `railway.toml`. Healthcheck at `[PRODUCTION_URL]/api/health`.
 
 | Name | Schedule | Command | Purpose |
 |---|---|---|---|
-| `poll-calls` | `* * * * *` (every 1 min) | `npx tsx scripts/poll-calls.ts` | GHL call ingestion safety net. Per-user `/conversations/search`. Has self-expiring 45s timestamp lock on `tenant.lastCallExportCursor.updatedAt` (Session 35 — replaced leaky pg_advisory_lock); no `cron.<name>.started/finished` audit row heartbeat — Bug #23. |
+| `poll-calls` | `* * * * *` (every 1 min) | `npx tsx scripts/poll-calls.ts` | GHL call ingestion safety net. Per-user `/conversations/search`. Has self-expiring 45s timestamp lock on `tenant.lastCallExportCursor.updatedAt` (Session 35 — replaced leaky pg_advisory_lock). Heartbeats `cron.poll_calls.started/.finished` via `lib/cron-heartbeat.ts` (Session 74). |
 | `daily-audit` | `0 2 * * *` (2am UTC) | `npx tsx scripts/audit.ts` | Self-audit agent — code review of recent changes. |
 | `daily-kpi-snapshot` | `0 0 * * *` (midnight UTC) | `npx tsx scripts/kpi-snapshot.ts` | Snapshot per-rep KPIs to `kpi_snapshots` table for trend charts. |
 | `weekly-profiles` | `0 3 * * 0` (Sun 3am UTC) | `npx tsx scripts/generate-profiles.ts` | Auto-generate per-rep coaching profiles from last week's calls. |
@@ -44,21 +44,42 @@ GET + POST both supported. Use for external cron / uptime monitor / debug curl.
 ### Cron heartbeat coverage status
 
 Per AGENTS.md Background Worker Conventions, every worker iteration MUST write
-`cron.<name>.started` and `cron.<name>.finished` audit rows. **Bug #23 in
-PROGRESS** tracks the gap: only `process_recording_jobs` (in-process worker
-loop) has heartbeats today.
+`cron.<name>.started` and `cron.<name>.finished` audit rows. **Bug #23 closed
+2026-05-07 (Session 74)** — `lib/cron-heartbeat.ts` exposes
+`withCronHeartbeat(name, fn)` and every `[[cron]]` script in `railway.toml`
+plus the in-process grading loop now writes `started` / `finished` (and
+`failed` on throw). Cron action names use snake_case
+(`poll_calls`, `daily_kpi_snapshot`, `reconcile_ghl_pipelines`, …) so they
+match the existing `process_recording_jobs` and `regenerate_stories`
+precedents.
 
-| Cron | Heartbeat in audit_logs? |
-|---|---|
-| `process_recording_jobs` (via `runGradingProcessor`) | ✅ `cron.process_recording_jobs.started` / `.finished` |
-| `poll-calls` | ❌ — Bug #23 |
-| `daily-audit` | ❌ — Bug #23 |
-| `daily-kpi-snapshot` | ❌ — Bug #23 |
-| `weekly-profiles` | ❌ — Bug #23 |
-| `regenerate-stories` | ❌ — Bug #23 |
-| `compute-aggregates` | ❌ — Bug #23 |
-| `enrich-pending` | ❌ — Bug #23 |
-| `reconcile-ghl-pipelines` | ❌ — Bug #23 |
+| Cron | Heartbeat in audit_logs? | Source |
+|---|---|---|
+| `process_recording_jobs` (via `runGradingProcessor`) | ✅ inline | `lib/grading-processor.ts` (Session 38) |
+| `poll_calls` | ✅ via helper | `scripts/poll-calls.ts` |
+| `daily_audit` | ✅ via helper | `scripts/audit.ts` |
+| `daily_kpi_snapshot` | ✅ via helper | `scripts/kpi-snapshot.ts` |
+| `weekly_profiles` | ✅ via helper | `scripts/generate-profiles.ts` |
+| `regenerate_stories` | ✅ via helper | `scripts/regenerate-stories.ts` |
+| `compute_aggregates` | ✅ via helper | `scripts/compute-aggregates.ts` |
+| `enrich_pending` | ✅ via helper | `scripts/enrich-pending.ts` |
+| `reconcile_ghl_pipelines` | ✅ via helper | `scripts/reconcile-ghl-pipelines.ts` |
+
+Pattern for any new cron:
+
+```ts
+import { withCronHeartbeat } from '@/lib/cron-heartbeat'
+
+async function main() { /* … */ return stats }
+
+withCronHeartbeat('my_cron', main)
+  .catch(err => { console.error(err); process.exit(1) })
+  .finally(() => db.$disconnect())
+```
+
+The helper writes `cron.<name>.started` before `fn()`, `cron.<name>.finished`
+on success (with `durationMs` + return-value `stats`), and `cron.<name>.failed`
+on throw (then re-throws so the outer `.catch` sets exit code 1).
 
 ---
 
@@ -415,23 +436,48 @@ Healthy: mostly `success`, low `failed`, no stuck `received` or `processing`.
 A non-zero `failed` count or any stuck `processing` rows older than ~5 min
 warrant inspection of `error_reason` on the affected rows.
 
-### Output-table verification for heartbeat-less crons
+### Cron heartbeat liveness — universal query
 
-Until Bug #23 lands heartbeat audit rows on the other 6 crons, the only way
-to verify they ran is to inspect their output tables. One example for
-`daily-kpi-snapshot`:
+After Session 74 (Bug #23 close), every cron writes the same shape of audit
+rows. Single query covers all of them:
 
 ```sql
--- ADMIN: tenant-spanning. Confirm daily KPI snapshot ran.
--- Healthy: a row per active tenant per day, 0-2 day lag.
-SELECT MAX(snapshot_date), COUNT(DISTINCT tenant_id)
-FROM kpi_snapshots
-WHERE snapshot_date > NOW() - INTERVAL '7 days';
+-- ADMIN: tenant-spanning. Heartbeat audit rows are written with tenantId=NULL.
+SELECT
+  split_part(action, '.', 2) AS cron_name,
+  split_part(action, '.', 3) AS phase,
+  COUNT(*)::int AS count,
+  MAX(created_at) AS last_seen,
+  EXTRACT(EPOCH FROM (NOW() - MAX(created_at)))::int AS seconds_since
+FROM audit_logs
+WHERE action LIKE 'cron.%'
+  AND created_at > NOW() - INTERVAL '24 hours'
+GROUP BY 1, 2
+ORDER BY 1, 2;
 ```
 
-Same pattern applies to the other heartbeat-less crons: pick a table they
-write to and check `MAX(updated_at) / MAX(created_at)` plus a row-count
-sanity check. Replace these with proper heartbeat queries once Bug #23 closes.
+`phase` is `started` / `finished` / `failed`.
+
+Steady-state expectations per cron (matches `railway.toml`):
+
+| `cron_name` | `started` cadence |
+|---|---|
+| `process_recording_jobs` | every 60s |
+| `poll_calls` | every 60s |
+| `enrich_pending` | every 5 min |
+| `compute_aggregates` / `reconcile_ghl_pipelines` | once daily 4am UTC |
+| `daily_kpi_snapshot` | once daily 0am UTC |
+| `daily_audit` | once daily 2am UTC |
+| `regenerate_stories` | once daily 7am UTC |
+| `weekly_profiles` | once weekly Sun 3am UTC |
+
+Diagnosis:
+
+| Symptom | Reading |
+|---|---|
+| `started` count > expected `finished` count | Worker crashing mid-run — search `audit_logs WHERE severity='ERROR' AND action LIKE 'cron.<name>.failed'` |
+| `started` row missing entirely past expected window | Cron not firing — Railway scheduler issue |
+| Most-recent `last_seen` older than the cadence | Worker stalled — investigate |
 
 ---
 

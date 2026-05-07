@@ -5,6 +5,7 @@
 
 import { PrismaClient } from '@prisma/client'
 import { startOfDay, startOfWeek, startOfMonth } from 'date-fns'
+import { withCronHeartbeat } from '../lib/cron-heartbeat'
 
 const db = new PrismaClient()
 
@@ -111,8 +112,9 @@ async function main() {
   }
 
   console.log(`\n✅ Done — ${snapshotCount} user snapshots across ${tenants.length} tenants`)
+  return { tenants: tenants.length, snapshots: snapshotCount }
 }
 
-main()
+withCronHeartbeat('daily_kpi_snapshot', main)
   .catch(console.error)
   .finally(() => db.$disconnect())

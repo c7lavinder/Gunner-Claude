@@ -13,8 +13,8 @@
 // Cost target: 150 × ~$0.015 ≈ $2.25/day max.
 
 import { db } from '../lib/db/client'
-import type { Prisma } from '@prisma/client'
 import { generatePropertyStory } from '../lib/ai/generate-property-story'
+import { withCronHeartbeat } from '../lib/cron-heartbeat'
 
 const MAX_PER_RUN = 150
 const ACTIVITY_LOOKBACK_DAYS = 30
@@ -75,20 +75,9 @@ async function main() {
 
   console.log(`[Story Cron] Done in ${Date.now() - startedAt}ms — ${counts.success} success, ${counts.skipped} skipped, ${counts.error} error`)
 
-  await db.auditLog.create({
-    data: {
-      tenantId: null,
-      action: 'cron.regenerate_stories.finished',
-      resource: 'system',
-      source: 'SYSTEM',
-      severity: counts.error > 0 ? 'WARNING' : 'INFO',
-      payload: {
-        candidates: candidates.length,
-        ...counts,
-        durationMs: Date.now() - startedAt,
-      } as unknown as Prisma.InputJsonValue,
-    },
-  }).catch(() => {})
+  return { candidates: candidates.length, ...counts }
 }
 
-main().catch(console.error).finally(() => process.exit(0))
+withCronHeartbeat('regenerate_stories', main)
+  .catch(console.error)
+  .finally(() => process.exit(0))
