@@ -2510,6 +2510,11 @@ model PropertyPhoto {
 
   sortOrder Int @default(0) @map("sort_order")
 
+  // The "main" / cover photo for this property. Starred photo sorts first
+  // in the photos grid. Only one starred photo per property at a time —
+  // starring a new one unstars the previous in the same transaction.
+  isStarred Boolean @default(false) @map("is_starred")
+
   @@index([propertyId])
   @@index([tenantId])
   @@map("property_photos")

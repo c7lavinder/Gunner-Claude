@@ -2,25 +2,24 @@
 // components/inventory/property-photos-panel.tsx
 // Drag-and-drop photo upload + auto-categorized grid.
 //
-// Behavior:
-// - Drop or click to add JPEG / PNG / WEBP / HEIC files. HEIC is converted
-//   to JPEG SERVER-SIDE (heic-convert) so the browser never has to deal
-//   with iPhone HEIC variants — the upload just works.
-// - 25MB / file limit; bigger files surface an inline error.
-// - Each photo shows "Classifying…" until Claude vision lands a category,
-//   then snaps into a section (Front / Exterior / Kitchen / Bathroom / Living
-//   / Basement / Other).
-// - Tiny thumbnails — click any photo to open a fullscreen lightbox with
-//   arrow-key + on-screen nav between every photo on the property.
-// - Each category section is independently collapsible.
-// - "Download all" button bundles every photo into a single zip via JSZip
-//   in the browser (no server load).
-// - Header carries an editable external photos link (Google Drive / Dropbox).
+// - Drop or click to add JPEG / PNG / WEBP / HEIC. Server converts HEIC to
+//   JPEG via heic-convert (libheif/wasm) so the browser stays simple.
+// - 25MB / file. Each photo classifies into Front / Exterior / Kitchen /
+//   Bathroom / Living / Basement / Other via Claude vision.
+// - Starred ("cover") photo always renders first in the grid. One star per
+//   property; starring a new one auto-unstars the previous.
+// - Sections are collapsed by default. "Expand all" / "Collapse all"
+//   toggles every section in one click.
+// - Tiny thumbnails — click any to open a fullscreen lightbox with arrow-
+//   key + on-screen nav. Body scroll locks while the lightbox is open.
+// - Per-section delete + star buttons, "Download all" zips everything,
+//   header carries an editable external photos link.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Upload, Loader2, Trash2, X, ChevronLeft, ChevronRight, ChevronDown,
-  Download, Link as LinkIcon, ExternalLink, Pencil, Check,
+  Download, Link as LinkIcon, ExternalLink, Pencil, Check, Star,
+  ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react'
 
 interface Photo {
@@ -30,6 +29,7 @@ interface Photo {
   size: number
   category: string | null
   classificationStatus: string | null
+  isStarred: boolean
   createdAt: string
   url: string | null
 }
@@ -68,13 +68,32 @@ export function PropertyPhotosPanel({
   const [errors, setErrors] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  // Track explicitly-expanded sections (set membership). Default: empty =
+  // every section collapsed. Persists per property so the user's view
+  // survives page reloads.
+  const storageKey = `photos:expanded:${propertyId}`
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [downloading, setDownloading] = useState(false)
   const [photosLink, setPhotosLink] = useState<string | null>(initialPhotosLink ?? null)
   const [editingLink, setEditingLink] = useState(false)
   const [linkDraft, setLinkDraft] = useState(initialPhotosLink ?? '')
   const [savingLink, setSavingLink] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  // Hydrate expanded state from localStorage on mount (client-only).
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null
+      if (raw) setExpanded(new Set(JSON.parse(raw) as string[]))
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey])
+
+  function persistExpanded(next: Set<string>) {
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(Array.from(next)))
+    } catch {}
+  }
 
   const load = useCallback(async () => {
     try {
@@ -99,6 +118,14 @@ export function PropertyPhotosPanel({
     return () => clearInterval(t)
   }, [photos, load])
 
+  // Lock body scroll while the lightbox is open. Restored on close + unmount.
+  useEffect(() => {
+    if (lightboxIndex == null) return
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = original }
+  }, [lightboxIndex])
+
   async function handleFiles(fileList: FileList | File[]) {
     const incoming = Array.from(fileList)
     if (incoming.length === 0) return
@@ -107,8 +134,6 @@ export function PropertyPhotosPanel({
     setUploading(true)
     setUploadProgress({ done: 0, total: incoming.length })
 
-    // 6 in parallel — server can handle the HEIC concurrency without OOM,
-    // and total wall time scales with this number when most files are HEIC.
     const BATCH = 6
     const localErrors: string[] = []
     let done = 0
@@ -159,13 +184,31 @@ export function PropertyPhotosPanel({
     }
   }
 
+  async function toggleStar(id: string, current: boolean) {
+    // Optimistic update — flip locally so the UI snaps even if the server is
+    // a beat behind. Server reconciles the "only one starred" invariant.
+    setPhotos(prev => prev.map(p => {
+      if (p.id === id) return { ...p, isStarred: !current }
+      if (!current && p.isStarred) return { ...p, isStarred: false }
+      return p
+    }))
+    const res = await fetch(`/api/properties/${propertyId}/photos/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isStarred: !current }),
+    })
+    if (!res.ok) {
+      // Revert on failure by reloading from server.
+      load()
+    }
+  }
+
   async function downloadAll() {
     if (photos.length === 0 || downloading) return
     setDownloading(true)
     try {
       const JSZip = (await import('jszip')).default
       const zip = new JSZip()
-      // Fetch + add each photo. Group folders by category for easy browsing.
       const downloads = photos.map(async p => {
         if (!p.url) return
         try {
@@ -215,8 +258,9 @@ export function PropertyPhotosPanel({
     }
   }
 
-  // Group photos by category in the canonical order.
-  const grouped = CATEGORY_ORDER
+  // Group photos by category in the canonical order. Starred photos sort
+  // first within their category (server already orders them that way).
+  const grouped = useMemo(() => CATEGORY_ORDER
     .map(cat => ({
       key: cat,
       label: CATEGORY_LABEL[cat],
@@ -225,7 +269,31 @@ export function PropertyPhotosPanel({
         return c === cat
       }),
     }))
-    .filter(g => g.photos.length > 0)
+    .filter(g => g.photos.length > 0), [photos])
+
+  function toggleSection(key: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      persistExpanded(next)
+      return next
+    })
+  }
+
+  function expandAll() {
+    const next = new Set(grouped.map(g => g.key))
+    setExpanded(next)
+    persistExpanded(next)
+  }
+
+  function collapseAll() {
+    const next = new Set<string>()
+    setExpanded(next)
+    persistExpanded(next)
+  }
+
+  const allExpanded = grouped.length > 0 && grouped.every(g => expanded.has(g.key))
 
   const lightboxPhoto = lightboxIndex != null ? photos[lightboxIndex] : null
 
@@ -241,7 +309,6 @@ export function PropertyPhotosPanel({
     return () => window.removeEventListener('keydown', handler)
   }, [lightboxIndex, photos.length])
 
-  // No photos uploaded yet AND a Street View URL is available → show fallback.
   const showStreetViewFallback = !loading && photos.length === 0 && !!fallbackStreetViewUrl
 
   return (
@@ -310,6 +377,16 @@ export function PropertyPhotosPanel({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {grouped.length > 0 && (
+            <button
+              onClick={allExpanded ? collapseAll : expandAll}
+              className="text-[10px] font-semibold text-txt-secondary hover:text-gunner-red px-2 py-1 rounded-[6px] flex items-center gap-1 transition-colors border-[0.5px] border-[rgba(0,0,0,0.12)] hover:border-gunner-red"
+              title={allExpanded ? 'Collapse all sections' : 'Expand all sections'}
+            >
+              {allExpanded ? <ChevronsDownUp size={10} /> : <ChevronsUpDown size={10} />}
+              {allExpanded ? 'Collapse all' : 'Expand all'}
+            </button>
+          )}
           {photos.length > 0 && (
             <button
               onClick={downloadAll}
@@ -383,25 +460,26 @@ export function PropertyPhotosPanel({
         </div>
       )}
 
-      {/* Categorized grid */}
+      {/* Categorized grid — every section collapsed by default. */}
       {!loading && photos.length > 0 && (
-        <div className="p-3 space-y-3">
+        <div className="p-3 space-y-2">
           {grouped.map(group => {
-            const isCollapsed = !!collapsed[group.key]
+            const isOpen = expanded.has(group.key)
             return (
               <div key={group.key} className="border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[8px] overflow-hidden">
                 <button
-                  onClick={() => setCollapsed(c => ({ ...c, [group.key]: !c[group.key] }))}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 bg-surface-secondary hover:bg-surface-tertiary transition-colors"
+                  type="button"
+                  onClick={() => toggleSection(group.key)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 bg-surface-secondary hover:bg-surface-tertiary transition-colors text-left"
                 >
                   <ChevronDown
                     size={11}
-                    className={`text-txt-muted transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+                    className={`text-txt-muted transition-transform ${isOpen ? '' : '-rotate-90'}`}
                   />
                   <span className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em]">{group.label}</span>
                   <span className="text-[10px] text-txt-muted">({group.photos.length})</span>
                 </button>
-                {!isCollapsed && (
+                {isOpen && (
                   <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1 p-1.5">
                     {group.photos.map(p => {
                       const idx = photos.findIndex(x => x.id === p.id)
@@ -409,7 +487,7 @@ export function PropertyPhotosPanel({
                       return (
                         <div
                           key={p.id}
-                          className="aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-pointer"
+                          className={`aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-pointer ${p.isStarred ? 'ring-2 ring-amber-400' : ''}`}
                           onClick={() => setLightboxIndex(idx)}
                         >
                           {p.url ? (
@@ -422,6 +500,20 @@ export function PropertyPhotosPanel({
                               <Loader2 size={10} className="text-white animate-spin" />
                             </div>
                           )}
+                          {/* Persistent star indicator when starred */}
+                          {p.isStarred && (
+                            <div className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-amber-400 text-white pointer-events-none">
+                              <Star size={9} fill="currentColor" />
+                            </div>
+                          )}
+                          {/* Hover actions */}
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleStar(p.id, p.isStarred) }}
+                            className={`absolute top-0.5 left-0.5 p-0.5 rounded-full ${p.isStarred ? 'opacity-0' : 'bg-black/60 text-white opacity-0 group-hover:opacity-100'} transition-opacity`}
+                            title={p.isStarred ? 'Unstar' : 'Star (set as cover photo)'}
+                          >
+                            <Star size={9} />
+                          </button>
                           <button
                             onClick={e => { e.stopPropagation(); deletePhoto(p.id) }}
                             className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
@@ -474,7 +566,8 @@ export function PropertyPhotosPanel({
               <ChevronRight size={32} />
             </button>
           )}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-[11px]">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-[11px] flex items-center gap-2">
+            {lightboxPhoto.isStarred && <Star size={11} fill="currentColor" className="text-amber-400" />}
             {lightboxIndex! + 1} / {photos.length} · {lightboxPhoto.filename}
           </div>
         </div>

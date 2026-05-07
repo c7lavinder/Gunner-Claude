@@ -149,11 +149,12 @@ export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) 
 
   const photos = await db.propertyPhoto.findMany({
     where: { propertyId: params.propertyId, tenantId: ctx.tenantId },
-    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    // Starred photo (cover) always first, then by sortOrder/createdAt.
+    orderBy: [{ isStarred: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
     select: {
       id: true, filename: true, mimeType: true, size: true,
       category: true, classificationStatus: true,
-      storagePath: true, createdAt: true,
+      storagePath: true, createdAt: true, isStarred: true,
     },
   })
 
@@ -164,6 +165,7 @@ export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) 
     size: p.size,
     category: p.category,
     classificationStatus: p.classificationStatus,
+    isStarred: p.isStarred,
     createdAt: p.createdAt.toISOString(),
     url: await getSignedPhotoUrl(p.storagePath),
   })))
