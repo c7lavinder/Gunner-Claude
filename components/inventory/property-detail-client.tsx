@@ -4237,10 +4237,6 @@ function ResearchTab({
   onArraySaved?: (field: string, vals: string[]) => void
   projectTypeOptions?: string[]
 }) {
-  // Prefer live edited values from PropertyDetailsPanel over the server-fetched
-  // property prop, so edits made in the persistent panel show up here without a
-  // page reload. Falls back to property.* when liveVals isn't passed.
-  const liveArv = liveVals?.arv ?? property.arv
   const [researching, setResearching] = useState(false)
   const [research, setResearch] = useState<Record<string, unknown> | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -4420,12 +4416,11 @@ function ResearchTab({
           <DataCard label="Confidence" value={bd.confidenceScore != null ? `${bd.confidenceScore}%` : '—'} fieldKey="confidenceScore" />
           <DataCard label="APN" value={fmtStr(bd.apn)} fieldKey="apn" />
         </div>
-        {/* AI Estimates + Flood Zone */}
-        {(liveArv || property.repairEstimate || property.rentalEstimate || property.floodZone || property.neighborhoodSummary) && (
+        {/* AI Estimates + Flood Zone — ARV + Repair Estimate live in the
+            Property Profile section above, so they're omitted here. */}
+        {(property.rentalEstimate || property.floodZone || property.neighborhoodSummary) && (
           <div className="border-t border-[rgba(0,0,0,0.04)] p-3 space-y-2">
             <div className="grid grid-cols-3 gap-3">
-              {liveArv && <DataCard label="ARV" value={fmt$(liveArv)} highlight />}
-              {property.repairEstimate && <DataCard label="Repair Estimate" value={fmt$(property.repairEstimate)} highlight />}
               {property.rentalEstimate && <DataCard label="Rental Estimate" value={`${fmt$(property.rentalEstimate)}/mo`} highlight />}
               {property.floodZone && <DataCard label="Flood Zone" value={property.floodZone} highlight />}
             </div>
