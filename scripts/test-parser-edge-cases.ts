@@ -72,6 +72,47 @@ const cases: TestCase[] = [
     expectPrimary: { street: '2025 Rose St', city: 'Carleton', state: 'MI', zip: '48117' },
     expectSplits: [{ street: '36580 Bismark St', city: 'New Boston', state: 'MI', zip: '48117' }],
   },
+  {
+    label: 'NEW-7 — slash separator at start ("802/810 Butler Rd")',
+    in: { addr: '802/810 Butler Rd', city: 'Portland', state: 'TN', zip: '37148' },
+    expectPrimary: { street: '802 Butler Rd', city: 'Portland', state: 'TN', zip: '37148' },
+    expectSplits: [{ street: '810 Butler Rd', city: 'Portland', state: 'TN', zip: '37148' }],
+  },
+  {
+    label: 'NEW-8 — slash separator with single digits ("9/11 Brown Ave")',
+    in: { addr: '9/11 Brown Ave', city: 'Amesbury', state: 'MA', zip: '01913' },
+    expectPrimary: { street: '9 Brown Ave', city: 'Amesbury', state: 'MA', zip: '01913' },
+    expectSplits: [{ street: '11 Brown Ave', city: 'Amesbury', state: 'MA', zip: '01913' }],
+  },
+  {
+    label: 'NEW-9 — fractional address NOT split ("310 1/2 Carpenter St")',
+    in: { addr: '310 1/2 Carpenter St', city: 'Mount Pleasant', state: 'TN', zip: '38474' },
+    expectPrimary: { street: '310 1/2 Carpenter St', city: 'Mount Pleasant', state: 'TN', zip: '38474' },
+  },
+  {
+    label: 'NEW-10 — comma-only apt unit list ("Apt B11, F6")',
+    in: { addr: '370 Wallace Rd Apt B11, F6', city: 'Nashville', state: 'TN', zip: '37211' },
+    expectPrimary: { street: '370 Wallace Rd Apt B11', city: 'Nashville', state: 'TN', zip: '37211' },
+    expectSplits: [{ street: '370 Wallace Rd Apt F6', city: 'Nashville', state: 'TN', zip: '37211' }],
+  },
+  {
+    label: 'NEW-11 — "and" separator ("217 And 219 Dunnaway St")',
+    in: { addr: '217 And 219 Dunnaway St', city: 'Shelbyville', state: 'TN', zip: '37160' },
+    expectPrimary: { street: '217 Dunnaway St', city: 'Shelbyville', state: 'TN', zip: '37160' },
+    expectSplits: [{ street: '219 Dunnaway St', city: 'Shelbyville', state: 'TN', zip: '37160' }],
+  },
+  {
+    label: 'NEW-12 — space-jammed twin streets, same name',
+    in: { addr: '1803 S Westmoreland Dr 1811 S Westmoreland Dr', city: 'Orlando', state: 'FL', zip: '32805' },
+    expectPrimary: { street: '1803 S Westmoreland Dr', city: 'Orlando', state: 'FL', zip: '32805' },
+    expectSplits: [{ street: '1811 S Westmoreland Dr', city: 'Orlando', state: 'FL', zip: '32805' }],
+  },
+  {
+    label: 'NEW-13 — space-jammed twin streets, different names',
+    in: { addr: '4306 Spann Ave 1912 S Emerson Ave', city: 'Indianapolis', state: 'IN', zip: '46203' },
+    expectPrimary: { street: '4306 Spann Ave', city: 'Indianapolis', state: 'IN', zip: '46203' },
+    expectSplits: [{ street: '1912 S Emerson Ave', city: 'Indianapolis', state: 'IN', zip: '46203' }],
+  },
 ]
 
 let pass = 0, fail = 0

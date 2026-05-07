@@ -87,6 +87,18 @@ function isUnitListAmpersand(rawStreet: string): boolean {
 }
 
 /**
+ * Detect comma-or-ampersand-separated unit lists ("Apt B11, F6" or
+ * "Apt R6, D2, & G2"). Returns true when the street contains a unit
+ * indicator followed by at least one comma or ampersand somewhere after.
+ */
+function hasUnitList(rawStreet: string): boolean {
+  const m = rawStreet.match(/\b(apt|apartment|ste|suite|unit|lot|bldg|building|fl|floor|rm|room)\b/i)
+  if (!m) return false
+  const after = rawStreet.slice(m.index! + m[0].length)
+  return /[,&]/.test(after)
+}
+
+/**
  * Split a unit list ("Apt R6, D2, & G2") into N streets sharing the same
  * base. One Property per unit — owner walks each unit independently.
  *
@@ -128,6 +140,65 @@ function splitUnitList(rawStreet: string): string[] | null {
 export function splitStreets(rawStreet: string): string[] {
   const trimmed = rawStreet.trim()
   if (!trimmed) return []
+
+  // Slash separator: "<num1>/<num2> <street suffix>" — common owner
+  // shorthand for two adjacent properties ("9/11 Brown Ave",
+  // "802/810 Butler Rd"). Only trip when the slash sits in the FIRST
+  // numeric token (anchored to start) so fractional addresses like
+  // "310 1/2 Carpenter St" remain untouched.
+  const slashMatch = trimmed.match(/^(\d+)\s*\/\s*(\d+)\s+(.+)$/)
+  if (slashMatch && !/&/.test(trimmed)) {
+    return [`${slashMatch[1]} ${slashMatch[3]}`, `${slashMatch[2]} ${slashMatch[3]}`]
+  }
+
+  // "And" separator at the start: "<num1> and <num2> <street suffix>" —
+  // owner shorthand identical in intent to `&` ("217 And 219 Dunnaway St").
+  const andMatch = trimmed.match(/^(\d+)\s+and\s+(\d+)\s+(.+)$/i)
+  if (andMatch) {
+    return [`${andMatch[1]} ${andMatch[3]}`, `${andMatch[2]} ${andMatch[3]}`]
+  }
+
+  // Space-jammed twin streets: "<addr1 with suffix> <num> <addr2>" — a
+  // street suffix (Dr, Ave, St, etc.) immediately followed by another
+  // digit-led token. Owner shape: "1803 S Westmoreland Dr 1811 S
+  // Westmoreland Dr" or "4306 Spann Ave 1912 S Emerson Ave".
+  //
+  // CRITICAL: each candidate part must ITSELF end with a street suffix
+  // — otherwise we'd shred "131 County Rd 1228" (where "Rd" is part of
+  // the road designation and "1228" is the road number) into two
+  // fragments. "Rd" intentionally excluded from the boundary list for
+  // the same reason. "St" and "Ct" are common-enough as standalone
+  // suffixes that the both-halves-end-with-suffix gate covers them.
+  const SUFFIX_TOKEN = /\b(?:St|Ave|Dr|Ln|Blvd|Ct|Cir|Pl|Ter|Trl|Pike|Pkwy|Way|Loop)\b/i
+  const SUFFIX_BOUNDARY = /\b(?:St|Ave|Dr|Ln|Blvd|Ct|Cir|Pl|Ter|Trl|Pike|Pkwy|Way|Loop)\b\s+(?=\d)/i
+  if (SUFFIX_BOUNDARY.test(trimmed) && !/&|\sand\s/i.test(trimmed)) {
+    const parts: string[] = []
+    let rest = trimmed
+    while (true) {
+      const m = SUFFIX_BOUNDARY.exec(rest)
+      if (!m) {
+        parts.push(rest.trim())
+        break
+      }
+      const cut = m.index + m[0].length
+      parts.push(rest.slice(0, cut).trim())
+      rest = rest.slice(cut).trim()
+    }
+    if (
+      parts.length > 1 &&
+      parts.every(p => /^\d/.test(p) && SUFFIX_TOKEN.test(p))
+    ) {
+      return parts
+    }
+  }
+
+  // Unit list (comma- or ampersand-separated, "Apt B11, F6" or "Apt R6,
+  // D2, & G2"). Each unit becomes its own row.
+  if (hasUnitList(trimmed)) {
+    const unitSplits = splitUnitList(trimmed)
+    if (unitSplits) return unitSplits
+  }
+
   if (!/&/.test(trimmed)) return [trimmed]
   if (isUnitListAmpersand(trimmed)) {
     const unitSplits = splitUnitList(trimmed)
