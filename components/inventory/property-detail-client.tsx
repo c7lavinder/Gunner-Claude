@@ -663,13 +663,6 @@ export function PropertyDetailClient({
               <ContactsSection propertyId={property.id} tenantSlug={tenantSlug} initialSellers={property.sellers} />
               <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />
               <InlineAI propertyId={property.id} />
-              {/* Property Profile — basics + numbers, DataCard-style, two-way
-                  synced with the persistent panel above via shared vals/sources. */}
-              <DataPropertyProfile
-                propertyId={property.id} vals={vals} sources={sources}
-                onSaved={handleSaved} onArraySaved={handleArraySaved}
-                projectTypeOptions={projectTypeOptions}
-              />
               {/* ── Suggestion banner (only when there are pending) ── */}
               {pendingSuggestionCount > 0 && (
                 <div className="flex items-center justify-between px-4 py-3 bg-[#EEEDFE] border border-[#AFA9EC] rounded-[12px]">
@@ -694,15 +687,14 @@ export function PropertyDetailClient({
               <MlsPanel property={property} />
               {/* ── Vendor intel (BatchData motivation + PR flags + owner portfolio + foreclosure trustee) ── */}
               <VendorIntelPanel property={property} />
-              {/* Property Assessment — condition + intangibles + location/market,
-                  DataCard-style. Two-way synced with the persistent panel above. */}
-              <DataPropertyAssessment
-                propertyId={property.id} vals={vals} sources={sources} onSaved={handleSaved}
-              />
               {/* ── Deed / mortgage / lien history (vendor blobs) ── */}
               <HistoryPanel property={property} />
-              {/* ── Property Data (existing research content) ── */}
-              <ResearchTab property={property} liveVals={vals} />
+              {/* ── Property Data (research header + Profile + Assessment + research cards) ── */}
+              <ResearchTab
+                property={property} liveVals={vals} sources={sources}
+                onSaved={handleSaved} onArraySaved={handleArraySaved}
+                projectTypeOptions={projectTypeOptions}
+              />
             </div>
           )}
           {activeTab === 'activity' && (
@@ -4235,7 +4227,16 @@ function DataPropertyAssessment({
 
 // ─── Research Tab (Property Data Section) ────────────────────────────────────
 
-function ResearchTab({ property, liveVals }: { property: PropertyDetail; liveVals?: SharedVals }) {
+function ResearchTab({
+  property, liveVals, sources, onSaved, onArraySaved, projectTypeOptions,
+}: {
+  property: PropertyDetail
+  liveVals?: SharedVals
+  sources?: Record<string, string>
+  onSaved?: (field: string, val: string | number | null, src?: string) => void
+  onArraySaved?: (field: string, vals: string[]) => void
+  projectTypeOptions?: string[]
+}) {
   // Prefer live edited values from PropertyDetailsPanel over the server-fetched
   // property prop, so edits made in the persistent panel show up here without a
   // page reload. Falls back to property.* when liveVals isn't passed.
@@ -4385,6 +4386,23 @@ function ResearchTab({ property, liveVals }: { property: PropertyDetail; liveVal
         <span className="text-[9px] font-semibold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Edited</span>
         <span className="text-[9px] text-txt-muted">Click any field to edit</span>
       </div>
+
+      {/* Property Profile + Assessment — DataCard-styled mirrors of the
+          persistent Property Details panel, two-way synced via shared
+          vals/sources. Only render when the editing context is provided
+          (i.e. mounted from inside the Data tab where it's wired up). */}
+      {liveVals && sources && onSaved && onArraySaved && (
+        <>
+          <DataPropertyProfile
+            propertyId={property.id} vals={liveVals} sources={sources}
+            onSaved={onSaved} onArraySaved={onArraySaved}
+            projectTypeOptions={projectTypeOptions}
+          />
+          <DataPropertyAssessment
+            propertyId={property.id} vals={liveVals} sources={sources} onSaved={onSaved}
+          />
+        </>
+      )}
 
       {/* Valuation */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
