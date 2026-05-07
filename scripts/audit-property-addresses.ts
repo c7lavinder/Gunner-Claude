@@ -72,7 +72,7 @@ interface Finding {
   row: Row
 }
 
-function checkRow(row: Row, dupeIndex: Map<string, string[]>): Finding[] {
+function checkRow(row: Row, dupeIndex: Map<string, string[]>, reviewedIds: Set<string>): Finding[] {
   const findings: Finding[] = []
   const addr = (row.address ?? '').trim()
   const city = (row.city ?? '').trim()
@@ -95,8 +95,9 @@ function checkRow(row: Row, dupeIndex: Map<string, string[]>): Finding[] {
     return findings // bail early, other checks aren't useful
   }
 
-  // E002 — no leading street number
-  if (!/^\d/.test(addr) && !/^lot\s+\d/i.test(addr)) {
+  // E002 — no leading street number (suppressed if owner has marked this
+  // row as reviewed via scripts/mark-no-number-rows-reviewed.ts)
+  if (!/^\d/.test(addr) && !/^lot\s+\d/i.test(addr) && !reviewedIds.has(row.id)) {
     findings.push({ code: 'E002', desc: 'no leading street number', parserWouldFix: false, row })
   }
 
@@ -223,9 +224,17 @@ async function main() {
       dupeIndex.set(canon, arr)
     }
 
+    // Pull every cleanup.address_reviewed audit row for this tenant —
+    // owner-confirmed rows that should be suppressed from E002.
+    const reviewedAudits = await db.auditLog.findMany({
+      where: { tenantId: tenant.id, action: 'cleanup.address_reviewed' },
+      select: { resourceId: true },
+    })
+    const reviewedIds = new Set(reviewedAudits.map(a => a.resourceId).filter((id): id is string => id !== null))
+
     const findings: Finding[] = []
     for (const r of rows) {
-      findings.push(...checkRow(r, dupeIndex))
+      findings.push(...checkRow(r, dupeIndex, reviewedIds))
     }
 
     const filtered = ONLY_CODE ? findings.filter(f => f.code === ONLY_CODE) : findings
