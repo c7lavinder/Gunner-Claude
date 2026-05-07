@@ -18,7 +18,6 @@ import { formatPhone, titleCase } from '@/lib/format'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
 import { FloatingDropdown } from '@/components/ui/FloatingDropdown'
-import { ContactsPanel } from '@/components/inventory/contacts-panel'
 import { DispositionJourney } from '@/components/disposition/journey/disposition-journey'
 
 const GHL_STAGE_COLORS: Record<string, string> = {
@@ -246,8 +245,9 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof Home }> = [
   { key: 'data',        label: 'Data',        icon: SearchIcon },
   // The Disposition tab mounts the 5-section <DispositionJourney> — it
   // replaces the prior Sellers / Buyers / Partners / Outreach / Deal
-  // Blast tabs, which collapsed into Section 2-5 of the journey + the
-  // <ContactsPanel> shown at the top of Overview and Data tabs.
+  // Blast tabs, which collapsed into Section 2-5 of the journey. The
+  // canonical contacts surface is the Contacts/Team/AI stack inside the
+  // Overview, Activity, and Data tabs (ContactsSection + TeamSection + InlineAI).
   { key: 'disposition', label: 'Disposition', icon: Megaphone },
 ]
 
@@ -648,22 +648,21 @@ export function PropertyDetailClient({
         {/* Tab content */}
         <div className="p-5">
           {activeTab === 'overview' && (
-            <div className="space-y-4">
-              <ContactsPanel property={property} tenantSlug={tenantSlug} />
-              <OverviewTab
-                property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug}
-                runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg}
-                ghlContactId={ghlContactId} projectTypeOptions={projectTypeOptions}
-                vals={vals} sources={sources} altPrices={altPrices} offerTypes={offerTypes}
-                onSaved={handleSaved} onArraySaved={handleArraySaved} onAltSaved={handleAltSaved}
-                onOfferTypesChange={handleOfferTypesChange}
-              />
-            </div>
+            <OverviewTab
+              property={property} dom={dom} domColor={domColor} tenantSlug={tenantSlug}
+              runGhlAction={runGhlAction} sending={sending} actionMsg={actionMsg}
+              ghlContactId={ghlContactId} projectTypeOptions={projectTypeOptions}
+              vals={vals} sources={sources} altPrices={altPrices} offerTypes={offerTypes}
+              onSaved={handleSaved} onArraySaved={handleArraySaved} onAltSaved={handleAltSaved}
+              onOfferTypesChange={handleOfferTypesChange}
+            />
           )}
           {activeTab === 'data' && (
             <div className="space-y-6">
-              {/* ── Contacts panel (replaces DataContactsSection) ───── */}
-              <ContactsPanel property={property} tenantSlug={tenantSlug} />
+              {/* Contacts / Team / AI — same stack used in Overview + Activity */}
+              <ContactsSection propertyId={property.id} tenantSlug={tenantSlug} initialSellers={property.sellers} />
+              <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />
+              <InlineAI propertyId={property.id} />
               {/* ── Suggestion banner (only when there are pending) ── */}
               {pendingSuggestionCount > 0 && (
                 <div className="flex items-center justify-between px-4 py-3 bg-[#EEEDFE] border border-[#AFA9EC] rounded-[12px]">
@@ -1509,6 +1508,12 @@ function InlineText({
 
 const PROJECT_TYPE_OPTIONS = ['Fix and Flip', 'Rental', 'Retail', 'Land', 'New Build', 'Commercial', 'Multi-Family']
 const PROPERTY_TYPE_OPTIONS = ['House', 'Land', 'Multi-Family', 'Commercial', 'Condo', 'Townhome', 'Mobile Home', 'Other']
+// Intangibles are sentiment-only — each row is + (Plus), neutral, or − (Negative).
+const INTANGIBLE_OPTIONS = ['Plus', 'Neutral', 'Negative']
+// Location grade is a 1–5 score within the property's zip code (3 ≈ typical).
+const LOCATION_GRADE_OPTIONS = ['1', '2', '3', '4', '5']
+// Market risk is a categorical assessment — defaults to none (unset).
+const MARKET_RISK_OPTIONS = ['Low', 'Medium', 'High']
 
 // ─── Grid Detail Cell ──────────────────────────────────────────────────────
 // Used inside the property details grid — click to edit in-place
@@ -2642,7 +2647,7 @@ function CompactDetailCell({
 
   if (editing && type !== 'select') {
     return (
-      <div className="flex items-center justify-between gap-2 h-[28px]">
+      <div className="flex items-center justify-between gap-2 h-[24px]">
         <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
         <input
           autoFocus type={type === 'number' ? 'number' : 'text'} value={editValue}
@@ -2677,7 +2682,7 @@ function CompactDetailCell({
 
   if (type === 'select') {
     return (
-      <div className="flex items-center justify-between gap-2 h-[28px]">
+      <div className="flex items-center justify-between gap-2 h-[24px]">
         <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
         <FloatingDropdown
           open={dropdownOpen}
@@ -2705,7 +2710,7 @@ function CompactDetailCell({
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 h-[28px]">
+    <div className="flex items-center justify-between gap-2 h-[24px]">
       <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
       {pill}
     </div>
@@ -2767,7 +2772,7 @@ function CompactMultiTag({
     : 'bg-surface-secondary text-txt-secondary'
 
   return (
-    <div className="flex items-center justify-between gap-2 h-[28px]">
+    <div className="flex items-center justify-between gap-2 h-[24px]">
       <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
       {/* Right side: pills + Add button. flex-nowrap + overflow-hidden keeps the
           row at a fixed height no matter how many tags are entered — content
@@ -2949,7 +2954,7 @@ function NumbersColumn({
             const display = computedRiskFactor()
             const ai = sourceStyles('ai')
             return (
-              <div key={f.key} className="flex items-center justify-between gap-2 h-[28px]" title="(Construction + Max Offer) / ARV">
+              <div key={f.key} className="flex items-center justify-between gap-2 h-[24px]" title="(Construction + Max Offer) / ARV">
                 <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
                 {display ? (
                   <span className={`inline-flex items-center text-ds-fine font-medium px-2 py-0.5 rounded-[6px] ${ai.bg} ${ai.value}`}>
@@ -2973,7 +2978,7 @@ function NumbersColumn({
 
           if (isEditing) {
             return (
-              <div key={f.key} className="flex items-center justify-between gap-2 h-[28px]">
+              <div key={f.key} className="flex items-center justify-between gap-2 h-[24px]">
                 <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
                 <input
                   autoFocus
@@ -2993,7 +2998,7 @@ function NumbersColumn({
           }
 
           return (
-            <div key={f.key} className="flex items-center justify-between gap-2 h-[28px]">
+            <div key={f.key} className="flex items-center justify-between gap-2 h-[24px]">
               <span className="text-[10px] text-txt-muted font-medium shrink-0">{f.label}</span>
               <button
                 onClick={() => { setEditValue(val ?? ''); setEditingField(f.key) }}
@@ -3084,7 +3089,7 @@ function PropertyDetailsPanel({
 }) {
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-      <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+      <div className="px-4 py-1.5 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
         <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Property Details</p>
         <div className="flex items-center gap-2">
           <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">API</span>
@@ -3093,10 +3098,10 @@ function PropertyDetailsPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)]">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)]">
         {/* Column 1 — Details */}
-        <div className="px-4 py-2">
-          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Details</p>
+        <div className="px-4 py-1">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)]">Details</p>
           <CompactDetailCell label="Type" value={vals.propertyType} field="propertyType" propertyId={propertyId} type="select" options={PROPERTY_TYPE_OPTIONS} source={sources.propertyType} onSaved={onSaved} />
           <CompactMultiTag label="Market" values={vals.propertyMarkets} options={['Nashville', 'Columbia', 'Knoxville', 'Chattanooga']}
             field="propertyMarkets" propertyId={propertyId} allowCustom source={sources.propertyMarkets} onSaved={onArraySaved} />
@@ -3107,8 +3112,8 @@ function PropertyDetailsPanel({
         </div>
 
         {/* Column 2 — Specs */}
-        <div className="px-4 py-2">
-          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Specs</p>
+        <div className="px-4 py-1">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)]">Specs</p>
           <CompactDetailCell label="Beds" value={vals.beds} field="beds" propertyId={propertyId} type="number" source={sources.beds} onSaved={onSaved} />
           <CompactDetailCell label="Baths" value={vals.baths} field="baths" propertyId={propertyId} type="number" source={sources.baths} onSaved={onSaved} />
           <CompactDetailCell label="Sqft" value={vals.sqft} field="sqft" propertyId={propertyId} type="number" source={sources.sqft} suffix="sqft" onSaved={onSaved} />
@@ -3117,7 +3122,7 @@ function PropertyDetailsPanel({
         </div>
 
         {/* Column 3 — Numbers (tabbed per offer type) */}
-        <div className="px-4 py-2">
+        <div className="px-4 py-1">
           <NumbersColumn
             propertyId={propertyId}
             cashValues={{
@@ -3140,32 +3145,32 @@ function PropertyDetailsPanel({
           neighborhood feel. Same 3-col layout as the top tier so visuals
           line up; each field is a free-form string (A-F, 1-10, "Good",
           "Needs replacement", etc.). */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)]">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)]">
         {/* Column 1 — Condition */}
-        <div className="px-4 py-2">
-          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Condition</p>
+        <div className="px-4 py-1">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)]">Condition</p>
           <CompactDetailCell label="Roof" value={vals.roofCondition} field="roofCondition" propertyId={propertyId} source={sources.roofCondition} onSaved={onSaved} />
           <CompactDetailCell label="Windows" value={vals.windowsCondition} field="windowsCondition" propertyId={propertyId} source={sources.windowsCondition} onSaved={onSaved} />
           <CompactDetailCell label="Siding" value={vals.sidingCondition} field="sidingCondition" propertyId={propertyId} source={sources.sidingCondition} onSaved={onSaved} />
           <CompactDetailCell label="Exterior" value={vals.exteriorCondition} field="exteriorCondition" propertyId={propertyId} source={sources.exteriorCondition} onSaved={onSaved} />
         </div>
 
-        {/* Column 2 — Intangibles */}
-        <div className="px-4 py-2">
-          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Intangibles</p>
-          <CompactDetailCell label="Comp Risk" value={vals.comparableRisk} field="comparableRisk" propertyId={propertyId} source={sources.comparableRisk} onSaved={onSaved} />
-          <CompactDetailCell label="Basement" value={vals.basementStatus} field="basementStatus" propertyId={propertyId} source={sources.basementStatus} onSaved={onSaved} />
-          <CompactDetailCell label="Curb Appeal" value={vals.curbAppeal} field="curbAppeal" propertyId={propertyId} source={sources.curbAppeal} onSaved={onSaved} />
-          <CompactDetailCell label="Neighbors" value={vals.neighborsGrade} field="neighborsGrade" propertyId={propertyId} source={sources.neighborsGrade} onSaved={onSaved} />
-          <CompactDetailCell label="Parking" value={vals.parkingType} field="parkingType" propertyId={propertyId} source={sources.parkingType} onSaved={onSaved} />
-          <CompactDetailCell label="Yard" value={vals.yardGrade} field="yardGrade" propertyId={propertyId} source={sources.yardGrade} onSaved={onSaved} />
+        {/* Column 2 — Intangibles (Plus / Neutral / Negative per item) */}
+        <div className="px-4 py-1">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)]">Intangibles</p>
+          <CompactDetailCell label="Comp Risk" value={vals.comparableRisk} field="comparableRisk" propertyId={propertyId} type="select" options={INTANGIBLE_OPTIONS} source={sources.comparableRisk} onSaved={onSaved} />
+          <CompactDetailCell label="Basement" value={vals.basementStatus} field="basementStatus" propertyId={propertyId} type="select" options={INTANGIBLE_OPTIONS} source={sources.basementStatus} onSaved={onSaved} />
+          <CompactDetailCell label="Curb Appeal" value={vals.curbAppeal} field="curbAppeal" propertyId={propertyId} type="select" options={INTANGIBLE_OPTIONS} source={sources.curbAppeal} onSaved={onSaved} />
+          <CompactDetailCell label="Neighbors" value={vals.neighborsGrade} field="neighborsGrade" propertyId={propertyId} type="select" options={INTANGIBLE_OPTIONS} source={sources.neighborsGrade} onSaved={onSaved} />
+          <CompactDetailCell label="Parking" value={vals.parkingType} field="parkingType" propertyId={propertyId} type="select" options={INTANGIBLE_OPTIONS} source={sources.parkingType} onSaved={onSaved} />
+          <CompactDetailCell label="Yard" value={vals.yardGrade} field="yardGrade" propertyId={propertyId} type="select" options={INTANGIBLE_OPTIONS} source={sources.yardGrade} onSaved={onSaved} />
         </div>
 
         {/* Column 3 — Location & Market */}
-        <div className="px-4 py-2">
-          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">Location & Market</p>
-          <CompactDetailCell label="Location Grade" value={vals.locationGrade} field="locationGrade" propertyId={propertyId} source={sources.locationGrade} onSaved={onSaved} />
-          <CompactDetailCell label="Market Risk" value={vals.marketRisk} field="marketRisk" propertyId={propertyId} source={sources.marketRisk} onSaved={onSaved} />
+        <div className="px-4 py-1">
+          <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)]">Location & Market</p>
+          <CompactDetailCell label="Location Grade" value={vals.locationGrade} field="locationGrade" propertyId={propertyId} type="select" options={LOCATION_GRADE_OPTIONS} source={sources.locationGrade} onSaved={onSaved} />
+          <CompactDetailCell label="Market Risk" value={vals.marketRisk} field="marketRisk" propertyId={propertyId} type="select" options={MARKET_RISK_OPTIONS} source={sources.marketRisk} onSaved={onSaved} />
         </div>
       </div>
     </div>
@@ -4189,14 +4194,15 @@ function ResearchTab({ property }: { property: PropertyDetail }) {
         </div>
       </div>
 
-      {/* Tax & Assessment */}
+      {/* Tax & Assessment — overlapping fields prefer canonical Property
+          values so edits made in the Property Details panel show up here. */}
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)]">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Tax & Assessment</p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3">
-          <DataCard label="Tax Assessed Value" value={fmt$(bd.taxAssessedValue)} fieldKey="taxAssessedValue" />
-          <DataCard label="Annual Tax" value={fmt$(bd.annualTaxAmount)} fieldKey="annualTaxAmount" />
+          <DataCard label="Tax Assessed Value" value={fmt$(property.taxAssessment ?? bd.taxAssessedValue)} fieldKey="taxAssessedValue" />
+          <DataCard label="Annual Tax" value={fmt$(property.annualTax ?? bd.annualTaxAmount)} fieldKey="annualTaxAmount" />
           <DataCard label="Tax Year" value={bd.taxYear != null ? String(bd.taxYear) : '—'} fieldKey="taxYear" />
           <DataCard label="Ownership Length" value={bd.ownershipLength != null ? `${bd.ownershipLength} yrs` : '—'} fieldKey="ownershipLength" />
         </div>
