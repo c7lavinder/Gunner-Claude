@@ -129,7 +129,7 @@ export const POST = withTenant(async (request, ctx) => {
     // Auto-split combined addresses (e.g. "508 & 512 Cassie Ln" → two rows).
     const splitResult = await splitCombinedAddressIfNeeded(property.id, ctx.tenantId).catch(err => {
       console.error('[JV Intake] Split check failed:', err)
-      return { splitInto: null as [string, string] | null }
+      return { splitInto: null as string[] | null }
     })
     const returnedId = splitResult.splitInto?.[0] ?? property.id
 

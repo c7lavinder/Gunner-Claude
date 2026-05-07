@@ -26,7 +26,7 @@ async function main() {
     try {
       const result = await splitCombinedAddressIfNeeded(p.id, p.tenantId)
       if (result.splitInto) {
-        console.log(`  ✓ split into ${result.splitInto[0]} + ${result.splitInto[1]}`)
+        console.log(`  ✓ split into ${result.splitInto.length} rows: ${result.splitInto.join(' + ')}`)
       } else {
         console.log(`  ⚠ no split returned — already processed or address changed?`)
       }

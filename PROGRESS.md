@@ -8,7 +8,7 @@
 
 ## Current Status
 
-**Current session**: 74 — Bug #23 closed: cron heartbeat coverage (2026-05-07). Built `lib/cron-heartbeat.ts` shared `withCronHeartbeat(name, fn)` wrapper and applied it to all 8 `[[cron]]` scripts (`poll-calls`, `audit`, `kpi-snapshot`, `generate-profiles`, `regenerate-stories`, `compute-aggregates`, `enrich-pending`, `reconcile-ghl-pipelines`). Combined with the in-process `process_recording_jobs` worker (already heartbeat-equipped since Session 38), all 9 cron actions now write `cron.<name>.started` / `.finished` (and `.failed` on throw) audit rows — silent outages now surface within one cycle. OPERATIONS.md heartbeat coverage table flipped to all-✅; output-table verification block replaced with a universal heartbeat-liveness query. `npx tsc --noEmit` clean. **Previous: Session 73 — Inventory data-quality cleanup + GHL drift fixes (2026-05-06 → 2026-05-07)** — eight commits: lane-aware inventory chip counts, GHL stale-status drift fix (`processLaneOppEvent` now clears source-lane fields on no-op), canonical lead-source taxonomy via new `lib/lead-source-normalize.ts` + `ContactUpdate` webhook sync, market backfill (8.1s for 7,409 props via groupwise updateMany), 127 empty-address property cleanup + reconcile guard so they don't recreate. Live state at close: 0 pendingEnrichment, 0 NULL leadSource, all chip counts match GHL exactly. **Previous: Session 67 — Partner contact-type table Phases 1 + 2 + 3 + 4 + 5 + counter rollup (2026-05-04) — **FULL FEATURE END-TO-END IN ONE SESSION.** Started by adding separate Agent + Wholesaler tables (commit `bb94f97` deployed to Railway). Within the hour Corey said "I think we just need one big database of contacts and then have a contact type which can be a whole array of options" — so dropped the 4 empty tables and replaced with one unified `Partner` table + `PropertyPartner` join. `Partner.types` is a JSON array (`agent` | `wholesaler` | `attorney` | `title` | `lender` | `inspector` | `contractor` | `photographer` | `property_manager` | `other`) — one person can carry multiple types. `PropertyPartner.role` is a free string for the per-deal role. Seller + Buyer **stay as their own typed tables** (200+ specialized fields each — vendor enrichment, TCP scoring, disposition flow all keyed there; merging them would invalidate v1.1 Wave 4-5 work). Two migrations on disk back-to-back: `20260504000000_add_agent_wholesaler` (the now-superseded 4-table shape) + `20260504010000_replace_agent_wholesaler_with_partner` (drops the 4 empty tables CASCADE + creates `partners` + `property_partners`). Zero data loss — no UI / API ever wrote to the intermediate tables. `npx prisma format` clean, `npx prisma generate` clean, `npx tsc --noEmit` exit 0. **Input source is GHL contacts (scattered, not in dedicated pipelines)** — Phase 2 link UX is "find a GHL contact → assign one or more partner types → Gunner creates the row pointing at that ghlContactId". Phase 1 ships zero behavioral change (empty tables). Phases 2-4 follow: property-detail link UX, list/detail pages, contacts-page tab. **Previous: Session 66 — Day Hub consolidation + vendor flag-gating (2026-05-03)** — `/tasks` page consolidated to `/day-hub` with redirect stub for Chris's bookmark; `ENRICHMENT_VENDORS_ENABLED` allowlist gates BatchData / CourtListener / RentCast / RealEstateAPI off by default (PR + Google enabled). — **TWO SIMPLIFICATIONS SHIPPED.** (1) `/{tenant}/tasks` and `/{tenant}/day-hub` were dual surfaces; nav pointed at `/tasks` (the richer page) while docs claimed `/day-hub` was canonical. Consolidated by moving the 3 files (`page.tsx`, `day-hub-client.tsx`, `KpiLedgerModal.tsx`) from `/tasks/` to `/day-hub/` (overwriting the simpler /day-hub variant) and replacing `/tasks/page.tsx` with a tiny `redirect()` stub for Chris's bookmark. Updated 7 internal links across top-nav, dashboard, settings, and 4 admin-only redirect targets to point at `/day-hub` directly. (2) Property-data vendor sprawl gated behind `ENRICHMENT_VENDORS_ENABLED` env allowlist. New `lib/enrichment/vendor-flags.ts` is the single source of truth. Default = `propertyradar,google` (PR primary + Google for Inventory Street View images). The 4 other vendors (BatchData, CourtListener, RentCast, RealEstateAPI) are gated off by default. Setting `ENRICHMENT_VENDORS_ENABLED=propertyradar,google,batchdata,courtlistener` restores pre-Session-66 behavior; `ENRICHMENT_VENDORS_ENABLED=propertyradar` drops Google too (no images on new properties — existing photos remain in DB). Code paths preserved for instant reversibility — schema columns untouched. `npx tsc --noEmit` clean. **Previous: Session 65 — Blocker #2 verification infra (2026-05-02) — HIGH-STAKES AUDIT ENDPOINT SHIPPED + DEPLOY-FAILURE INCIDENT CLOSED.** Plan was to build the verification surface for Blocker #2 (Role Assistant production verification of 6 high-stakes action types) — diagnostic endpoint, ritual doc. While verifying the deploy live, discovered Railway had been silently FAILING all deploys since 2026-05-01 18:56 (the Phase 4 success): Phase 5, Session-64 close, AND today's high-stakes-audit endpoint never made it to production. Root cause: `config/env.ts` strict validation killed `next build` because Railway's build env lacks `GHL_WEBHOOK_SECRET` (and the var was never in runtime env either — schema/use-site mismatch since the use site at `app/api/webhooks/ghl/route.ts:15-19` already treats it as optional). Two fixes: (1) skip `process.exit(1)` during `NEXT_PHASE='phase-production-build'`, (2) make `GHL_WEBHOOK_SECRET` schema optional. Commits: `0c6eb89` (high-stakes-audit endpoint + AUDIT_PLAN.md ritual + OPERATIONS.md cross-link), `3433c21` (env build-phase fix), `7ac5ee7` (env schema fix). Final deploy SUCCESS at 2026-05-02 15:58 UTC; high-stakes-audit endpoint verified live with proper JSON shape. The 4 commits that had been stuck on yesterday's build (Phase 5, session-close, high-stakes-audit, env-build-fix) are now all in production. **Previous: Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — CLEANUP WAVE COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
+**Current session**: 75 — Address parser wired into all GHL ingest paths + 52 missing-market rows cleaned (2026-05-07). Three findings drove this: (1) 52 properties had `marketId=NULL` because zip was stuffed in the address field ("3080 Delta Queen Dr Nashville, Tn 37214") or the state field ("IL 60060"), and the GHL ingest paths only ran `standardizeStreet/City/State/Zip` independently — they never extracted a zip out of a messy address1 string. (2) Multi-property addresses joined by `&` only got split when they matched the narrow `matchCombinedAddress` regex `^(\d+)\s*[&/]\s*(\d+)\s+(.+)$`, which couldn't handle 4-property splits ("4506 & 4510 & 4502 & 0 Prospect Rd") or different-street pairs ("11523 15th St Ct & 11418 16th St"). (3) `lib/address-parse.ts` (built Session 73) handled all of these patterns but was wired into only the one-shot cleanup script — every live ingest path bypassed it. Fix: spliced `parsePropertyAddress` into `createPropertyFromContact` (lib/properties.ts), `handleContactChange` (lib/ghl/webhooks.ts), and the Phase 3 catch-up cron (scripts/enrich-pending.ts); rewrote `splitCombinedAddressIfNeeded` to use the parser's N-way `splitStreets` instead of the 2-way regex. Cleanup applied 165 primary updates + 136 split rows; final state 0 NULL marketId rows, 1 retained `&` row (correctly identified as a unit list, not multi-property). All 6 user-flagged examples verified clean in DB. Parser also got three small fixes: end-anchor the city/state strip on street so streets like "8213 Harrison Bay Rd" in city "Harrison" stop getting mangled to "8213 Bay Rd"; prefer rawCity when state extraction fails AND rawState is invalid (Brentwood/Cole edge); detect trailing directional suffixes (NE/NW/SE/SW/N/S/E/W) so "832 Virginia Ct SE" with no comma keeps "SE" on the street instead of treating it as a 2-letter city. `npx tsc --noEmit` clean. **Previous: Session 74 — Bug #23 closed: cron heartbeat coverage (2026-05-07).** Built `lib/cron-heartbeat.ts` shared `withCronHeartbeat(name, fn)` wrapper and applied it to all 8 `[[cron]]` scripts (`poll-calls`, `audit`, `kpi-snapshot`, `generate-profiles`, `regenerate-stories`, `compute-aggregates`, `enrich-pending`, `reconcile-ghl-pipelines`). Built `lib/cron-heartbeat.ts` shared `withCronHeartbeat(name, fn)` wrapper and applied it to all 8 `[[cron]]` scripts (`poll-calls`, `audit`, `kpi-snapshot`, `generate-profiles`, `regenerate-stories`, `compute-aggregates`, `enrich-pending`, `reconcile-ghl-pipelines`). Combined with the in-process `process_recording_jobs` worker (already heartbeat-equipped since Session 38), all 9 cron actions now write `cron.<name>.started` / `.finished` (and `.failed` on throw) audit rows — silent outages now surface within one cycle. OPERATIONS.md heartbeat coverage table flipped to all-✅; output-table verification block replaced with a universal heartbeat-liveness query. `npx tsc --noEmit` clean. **Previous: Session 73 — Inventory data-quality cleanup + GHL drift fixes (2026-05-06 → 2026-05-07)** — eight commits: lane-aware inventory chip counts, GHL stale-status drift fix (`processLaneOppEvent` now clears source-lane fields on no-op), canonical lead-source taxonomy via new `lib/lead-source-normalize.ts` + `ContactUpdate` webhook sync, market backfill (8.1s for 7,409 props via groupwise updateMany), 127 empty-address property cleanup + reconcile guard so they don't recreate. Live state at close: 0 pendingEnrichment, 0 NULL leadSource, all chip counts match GHL exactly. **Previous: Session 67 — Partner contact-type table Phases 1 + 2 + 3 + 4 + 5 + counter rollup (2026-05-04) — **FULL FEATURE END-TO-END IN ONE SESSION.** Started by adding separate Agent + Wholesaler tables (commit `bb94f97` deployed to Railway). Within the hour Corey said "I think we just need one big database of contacts and then have a contact type which can be a whole array of options" — so dropped the 4 empty tables and replaced with one unified `Partner` table + `PropertyPartner` join. `Partner.types` is a JSON array (`agent` | `wholesaler` | `attorney` | `title` | `lender` | `inspector` | `contractor` | `photographer` | `property_manager` | `other`) — one person can carry multiple types. `PropertyPartner.role` is a free string for the per-deal role. Seller + Buyer **stay as their own typed tables** (200+ specialized fields each — vendor enrichment, TCP scoring, disposition flow all keyed there; merging them would invalidate v1.1 Wave 4-5 work). Two migrations on disk back-to-back: `20260504000000_add_agent_wholesaler` (the now-superseded 4-table shape) + `20260504010000_replace_agent_wholesaler_with_partner` (drops the 4 empty tables CASCADE + creates `partners` + `property_partners`). Zero data loss — no UI / API ever wrote to the intermediate tables. `npx prisma format` clean, `npx prisma generate` clean, `npx tsc --noEmit` exit 0. **Input source is GHL contacts (scattered, not in dedicated pipelines)** — Phase 2 link UX is "find a GHL contact → assign one or more partner types → Gunner creates the row pointing at that ghlContactId". Phase 1 ships zero behavioral change (empty tables). Phases 2-4 follow: property-detail link UX, list/detail pages, contacts-page tab. **Previous: Session 66 — Day Hub consolidation + vendor flag-gating (2026-05-03)** — `/tasks` page consolidated to `/day-hub` with redirect stub for Chris's bookmark; `ENRICHMENT_VENDORS_ENABLED` allowlist gates BatchData / CourtListener / RentCast / RealEstateAPI off by default (PR + Google enabled). — **TWO SIMPLIFICATIONS SHIPPED.** (1) `/{tenant}/tasks` and `/{tenant}/day-hub` were dual surfaces; nav pointed at `/tasks` (the richer page) while docs claimed `/day-hub` was canonical. Consolidated by moving the 3 files (`page.tsx`, `day-hub-client.tsx`, `KpiLedgerModal.tsx`) from `/tasks/` to `/day-hub/` (overwriting the simpler /day-hub variant) and replacing `/tasks/page.tsx` with a tiny `redirect()` stub for Chris's bookmark. Updated 7 internal links across top-nav, dashboard, settings, and 4 admin-only redirect targets to point at `/day-hub` directly. (2) Property-data vendor sprawl gated behind `ENRICHMENT_VENDORS_ENABLED` env allowlist. New `lib/enrichment/vendor-flags.ts` is the single source of truth. Default = `propertyradar,google` (PR primary + Google for Inventory Street View images). The 4 other vendors (BatchData, CourtListener, RentCast, RealEstateAPI) are gated off by default. Setting `ENRICHMENT_VENDORS_ENABLED=propertyradar,google,batchdata,courtlistener` restores pre-Session-66 behavior; `ENRICHMENT_VENDORS_ENABLED=propertyradar` drops Google too (no images on new properties — existing photos remain in DB). Code paths preserved for instant reversibility — schema columns untouched. `npx tsc --noEmit` clean. **Previous: Session 65 — Blocker #2 verification infra (2026-05-02) — HIGH-STAKES AUDIT ENDPOINT SHIPPED + DEPLOY-FAILURE INCIDENT CLOSED.** Plan was to build the verification surface for Blocker #2 (Role Assistant production verification of 6 high-stakes action types) — diagnostic endpoint, ritual doc. While verifying the deploy live, discovered Railway had been silently FAILING all deploys since 2026-05-01 18:56 (the Phase 4 success): Phase 5, Session-64 close, AND today's high-stakes-audit endpoint never made it to production. Root cause: `config/env.ts` strict validation killed `next build` because Railway's build env lacks `GHL_WEBHOOK_SECRET` (and the var was never in runtime env either — schema/use-site mismatch since the use site at `app/api/webhooks/ghl/route.ts:15-19` already treats it as optional). Two fixes: (1) skip `process.exit(1)` during `NEXT_PHASE='phase-production-build'`, (2) make `GHL_WEBHOOK_SECRET` schema optional. Commits: `0c6eb89` (high-stakes-audit endpoint + AUDIT_PLAN.md ritual + OPERATIONS.md cross-link), `3433c21` (env build-phase fix), `7ac5ee7` (env schema fix). Final deploy SUCCESS at 2026-05-02 15:58 UTC; high-stakes-audit endpoint verified live with proper JSON shape. The 4 commits that had been stuck on yesterday's build (Phase 5, session-close, high-stakes-audit, env-build-fix) are now all in production. **Previous: Session 64 — Pre-Scaling Cleanup Wave (2026-05-01) — CLEANUP WAVE COMPLETE.** All 6 waves shipped + applied + verified across Sessions 60-63 (4 calendar days, 2026-04-30 → 2026-05-01). Reliability scorecard dim #8 (Seller/Buyer data model) **moved 4 → 8/10 (target met)**. Sellers + Buyers are now first-class entities with structured names, person flags, portfolio aggregates, motivation + likelihood scores. 117 sellers have populated TCP-equivalent scores; 3,244 calls auto-linked retroactively + runtime hook fires on new graded calls. PropertyBuyerStage.matchScore is the per-property fit (replaces wrong-unit Buyer.matchLikelihoodScore). Schema dual-representation closed by Wave 5 strip (24 columns + 2 indexes dropped).
 **Phase**: ✅ **v1-finish sprint COMPLETE** (2026-04-30, all 7 waves closed). Wave 1 closed Blocker #3 + AUDIT_PLAN P3 (commit `047ca18`). Wave 2 closed P1 + P2 + dashboard drift (commits `98e5e7d` / `525e8b8` / `6fe3010`). **Wave 3 fully closed** (Sessions 47-53, commit `00cb686`): 72 routes migrated, 91/91 tenant-scoped routes on `withTenant`, 38 latent defense gaps fixed, 4 leak classes catalogued in AGENTS.md, 6 Class 4 helpers hardened. **Wave 4 closed** (Session 54, commits `2c256f5` + `3651080`): 17 prod identifiers scrubbed across 9 files, D-044 codified. **Wave 5 partial close** (Session 55, commit `9d6f7ae`): Bug #12 verified-current and closed; P4 (legacy /tasks/ deletion) **DEFERRED — v1.1** with 5-step migration plan documented in AUDIT_PLAN.md. **Wave 6 fully closed** (Sessions 56-58, commits `375354b` + `5e09a20` + `99464bb`): View As hydration race fix shipped + verified live by Corey 2026-04-30 (V1 + V4 PASS). Shape C queued as P6 — v1.1 sprint candidate. **Wave 7 (this session)**: final verification — all 9 v1-launch-ready exit criteria met or explicitly deferred. Reliability scorecard: all 8 dimensions ≥7/10 except item 8 (Seller/Buyer data model = 4/10, the v1.1 redesign target). webhook_logs last 24h: 1558 received, 1 failed (0.06%), 0 stuck. Multi-vendor enrichment live, in-process grading worker live, bug-report system live. **Next: v1.1 sprint — Seller/Buyer integration plan (PLAN FIRST, no code until approved).**
 **App state**: Live on Railway
 **GitHub**: https://github.com/c7lavinder/Gunner-Claude
@@ -61,6 +61,130 @@
 ---
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
+
+### Session 75 — Address parser wired into all GHL ingest paths (2026-05-07)
+
+**The problem.** Inventory had 52 properties with `marketId=NULL` and a
+backlog of multi-property `&`-joined rows that the auto-splitter
+couldn't handle. Owner walked through six concrete examples:
+
+  - `914 N Austin Blvd Apt C8, Oak Park, Il 60302` — full address
+    stuffed into `address1`, with `state="IL"` and `zip=null`. Standard
+    GHL ingest left `zip=null` → `resolveMarketForZip("")` returns null
+    immediately → no market.
+  - `3080 Delta Queen Dr Nashville, Tn 37214` — same shape, all four
+    fields collapsed into `address1`.
+  - `4506 & 4510 & 4502 & 0 Prospect Rd` (Knoxville, TN 37920) —
+    4-property bare-number split. `matchCombinedAddress` regex only
+    matches 2-element splits with the same street name.
+  - `2917 N Custer Rd & 2923 N Custer Rd` (Monroe, MI 48162) — 2-property
+    full-street pair on each side. Regex requires bare numbers on the
+    left side.
+  - `11523 15th St Ct & 11418 16th St` (Milan, IL 61264) — 2-property
+    split with *different* street names.
+  - `217 N Lakeshore Dr` Mundelein "IL 60060" — zip stuffed into the
+    `state` column.
+
+**The diagnosis.** `lib/address-parse.ts` (built Session 73) already
+handled every one of these shapes. But its file header listed five
+"Used by:" callers — `lib/properties.ts`, `lib/ghl/webhooks.ts`,
+`scripts/enrich-pending.ts`, `scripts/reconcile-ghl-pipelines.ts`,
+plus the cleanup script — and `grep -rn "parsePropertyAddress"` found
+exactly **one** real caller: the cleanup script. The header was
+aspirational. Every live GHL-ingest path was running
+`standardizeStreet(contact.address1)` independently, which doesn't
+extract a zip out of a messy string. The 52 stale rows were the
+accumulated drift.
+
+**The fix.** Spliced the parser into the three live ingest paths:
+
+  - `lib/properties.ts` `createPropertyFromContact` — replaced the
+    `standardizeStreet/City/State/Zip` quadruple plus the
+    `matchCombinedAddress` recursion with one `parsePropertyAddress`
+    call. Primary-row creation uses `parsed.primary.{street,city,state,
+    zip}`. Multi-property splits recursively spawn sibling
+    `createPropertyFromContact` calls with a new `_overrideClean` field
+    on `PropertyTriggerContext` (replacing the old `_overrideAddress`)
+    that carries all four parsed components — splits inherit the same
+    clean city/state/zip rather than re-pulling messy fields from
+    contact.
+  - `lib/ghl/webhooks.ts` `handleContactChange` — same swap.
+    `splitCombinedAddressIfNeeded` (called inline for post-update
+    splits) was rewritten to use the parser's N-way `splitStreets`
+    instead of the 2-way regex. Return type changed from
+    `[string, string] | null` to `string[] | null`; updated
+    `app/api/properties/route.ts`, `app/api/properties/jv-intake/
+    route.ts`, and `scripts/split-existing-doubles.ts` to match.
+  - `scripts/enrich-pending.ts` Phase 3 catch-up — same swap.
+
+**Parser improvements during the session.** The dry-run surfaced three
+real bugs in the parser, fixed:
+
+  1. **End-anchor the city/state strip on street.** Old code
+     `street.replace(/\bHarrison\b/gi, '')` mangled streets like
+     `8213 Harrison Bay Rd` in city Harrison → `8213 Bay Rd`. New code
+     only strips when the city/state token sits at the end of the
+     street (residue position) using
+     `[\s,]+\\b<city>\\b\\.?\\s*,?\\s*$`.
+  2. **Prefer rawCity when state extraction fails and rawState is
+     invalid.** Edge case: `address="6825 Nolensville Rd"` city=Brentwood
+     state="Cole" (a person's name, not a state) zip=37027 → parser was
+     latching `city="Cole"` from the rightmost comma slot. Now the
+     city-override condition includes
+     `state === '' && rawStateInvalid`, so rawCity wins.
+  3. **Detect trailing directional suffixes.** Address `832 Virginia Ct
+     SE` with no comma → parser used `Ct` as the last street suffix and
+     took `SE` as the city. New `DIRECTIONALS` set
+     `(n,s,e,w,ne,nw,se,sw)`; if every token after the suffix is a
+     directional, they belong to the street.
+
+**Verification.**
+
+  - `npx tsx scripts/diagnose-missing-markets.ts` → 0 rows in both
+    tenants.
+  - `npx tsx scripts/scan-amp-addresses.ts` → 1 row remaining
+    (`320 Welch Rd Apt R6, D2, & G2`), correctly retained as a
+    `unit list` not a multi-property split.
+  - All 6 owner-flagged examples confirmed clean directly via DB
+    query (Oak Park IL 60302, Nashville 37214, Knoxville 37920 4-row
+    split, Monroe MI 48162 2-row split, Milan IL 61264 2-row split,
+    Mundelein IL 60060).
+  - `npx tsx scripts/cleanup-address-shapes.ts --apply` →
+    165 primary updates + 136 split rows created.
+  - `npx tsc --noEmit` clean.
+
+**Files touched:**
+
+  - Modified: `lib/address-parse.ts` (3 bug fixes), `lib/properties.ts`
+    (createPropertyFromContact uses parser; splitCombinedAddressIfNeeded
+    rewritten N-way; `_overrideAddress` → `_overrideClean`),
+    `lib/ghl/webhooks.ts` (handleContactChange uses parser),
+    `scripts/enrich-pending.ts` (Phase 3 fill-in uses parser),
+    `app/api/properties/route.ts` + `app/api/properties/jv-intake/
+    route.ts` (splitInto type narrowed from `[string, string]` to
+    `string[]`), `scripts/split-existing-doubles.ts` (logging adapted
+    for N-way splits).
+  - PROGRESS.md (this entry), docs/OPERATIONS.md (data-quality status
+    bumped).
+
+**Operational expectation.** Every new GHL contact webhook —
+`OpportunityCreate`, `ContactUpdate`, plus the
+`enrich-pending` cron picking up `pendingEnrichment=true` stub rows —
+now goes through `parsePropertyAddress` before writing
+`address/city/state/zip`. The 52-row regression that drove this
+session shouldn't reappear: any future contact whose `address1`
+contains an embedded zip (or whose `state` column is "IL 60060") will
+have those fields extracted on the way in. The cleanup script remains
+on disk for one-shot DB sweeps if drift ever reappears (e.g. after a
+schema change that bypasses the ingest path).
+
+**Next session (no specific carry-forward):**
+
+  - Open candidates: Bug #16, #18, #22, #24, #25 (carry-forward list
+    from Session 74), or the v1.1 reliability scorecard work.
+  - Manual verification list in
+    `docs/plans/ghl-multi-pipeline-bulletproof.md` §12 still owed by
+    owner at convenience.
 
 ### Session 74 — Bug #23 closed: cron heartbeat coverage (2026-05-07)
 

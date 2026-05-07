@@ -124,11 +124,22 @@ async function main() {
           return
         }
 
-        const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('../lib/address')
-        const address = standardizeStreet(contact.address1 ?? '')
-        const city = standardizeCity(contact.city ?? '')
-        const state = standardizeState(contact.state ?? '')
-        const zip = standardizeZip(contact.postalCode ?? '')
+        // Use the address parser (same as the inventory cleanup script
+        // and the GHL webhook contact-change handler). This unwinds GHL's
+        // pathological shapes — zip embedded in address, city in state
+        // field, etc. — that would otherwise leak straight to the
+        // Property row and leave it with marketId=NULL.
+        const { parsePropertyAddress } = await import('../lib/address-parse')
+        const parsed = parsePropertyAddress(
+          contact.address1 ?? '',
+          contact.city ?? '',
+          contact.state ?? '',
+          contact.postalCode ?? '',
+        )
+        const address = parsed.primary.street
+        const city = parsed.primary.city
+        const state = parsed.primary.state
+        const zip = parsed.primary.zip
 
         // Update Property — only set address fields if GHL has them; otherwise
         // leave the empty placeholders and clear the flag so we don't loop

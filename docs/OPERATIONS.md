@@ -301,7 +301,10 @@ file updated alongside this section when scripts land or rot. Categorized:
 - `flip-failed-to-pending.ts`, `reset-april13-calls.ts`, `reset-processing.ts`, `retry-stuck-calls.ts` — status flippers.
 - `reenrich-today.ts` — re-run enrichment for today's leads.
 - `regenerate-stories.ts` — Property Story regen (also a cron).
-- `split-existing-doubles.ts` — split combined-address properties (companion to the Session-41-era auto-split feature).
+- `split-existing-doubles.ts` — split combined-address properties (companion to the Session-41-era auto-split feature). As of Session 75 it walks `splitCombinedAddressIfNeeded`, which now uses the parser's N-way `splitStreets` — handles 4-property bare-number splits ("4506 & 4510 & 4502 & 0 Prospect Rd") and different-street pairs ("11523 15th St Ct & 11418 16th St"), not just the 2-property same-street regex.
+- `cleanup-address-shapes.ts` — Session 73 / 75: re-parses messy Property addresses using `lib/address-parse.ts` and persists clean fields. Splits multi-property `&` rows into separate rows. Default DRY-RUN; pass `--apply` to persist. Targets two row sets: `marketId IS NULL` (Pattern A + B) and `address contains '&'` (Pattern C). Re-run any time a new pathological shape is discovered in inventory data quality.
+- `diagnose-missing-markets.ts` — Session 73 / 75: dump every Property where `marketId IS NULL`, bucket by pattern. Use first when the data-quality tile shows missing-market rows.
+- `cleanup-empty-address-properties.ts` — Session 73: delete Property rows whose address is empty/NULL. Companion to the reconcile-cron guard so empty-shell stubs don't recreate.
 - `backfill-ghl-pipelines.ts` — Phase 2 one-shot bulk-stub backfill from GHL opps (cursor-resumable, ran 2026-05-06 to seed 7,553 stubs).
 - `deep-resync-ghl-lanes.ts` — Session 73: walks every opp in every active pipeline and rebuilds Property lane statuses from GHL truth (clears stale acqStatus / dispoStatus / longtermStatus left behind by Phase 1 migration + strict-lane no-op semantics). One-shot; re-run if chip counts diverge from GHL again.
 - `backfill-markets.ts` — Session 73: walks `Property where marketId IS NULL AND zip != ''`, groups by target marketId, issues one bulk updateMany per market. Ran live 8.1 sec, 7,409 rows. Re-run if a future migration drops marketIds.
@@ -478,6 +481,47 @@ Diagnosis:
 | `started` count > expected `finished` count | Worker crashing mid-run — search `audit_logs WHERE severity='ERROR' AND action LIKE 'cron.<name>.failed'` |
 | `started` row missing entirely past expected window | Cron not firing — Railway scheduler issue |
 | Most-recent `last_seen` older than the cadence | Worker stalled — investigate |
+
+---
+
+## Address-parser ingest discipline (Session 75)
+
+Every code path that writes `Property.{address, city, state, zip}` from a
+GHL contact MUST go through `parsePropertyAddress` in `lib/address-parse.ts`.
+Calling `standardizeStreet/City/State/Zip` independently on raw GHL fields
+**will** silently leak Pattern A (zip embedded in `address1`), Pattern B
+(no zip anywhere → `marketId=NULL`), and Pattern C (multi-property `&`
+joins) into the DB.
+
+Canonical callers (verified 2026-05-07):
+
+  - `lib/properties.ts` `createPropertyFromContact` — primary live ingest
+    (OpportunityCreate webhook). Multi-property splits recursively spawn
+    sibling rows via the `_overrideClean` context field.
+  - `lib/ghl/webhooks.ts` `handleContactChange` — ContactUpdate webhook.
+    Calls `splitCombinedAddressIfNeeded` post-update for any `&` shape
+    that arrived in the new address.
+  - `lib/properties.ts` `splitCombinedAddressIfNeeded` — uses the
+    parser's N-way `splitStreets` (NOT the legacy `matchCombinedAddress`
+    regex, which only handled 2-property same-street cases).
+  - `scripts/enrich-pending.ts` Phase 3 catch-up — fills in stub rows
+    that were created by `reconcile-ghl-pipelines` reconciliation.
+  - `scripts/cleanup-address-shapes.ts` — one-shot cleanup for any
+    historical drift.
+
+If a future ingest path is added, add it to this list AND wire it
+through the parser in the same commit.
+
+Verification query — should return 0 rows:
+
+```sql
+SELECT COUNT(*) FROM properties WHERE market_id IS NULL;
+```
+
+(Tier 3 of `resolveMarketForZip` lazily creates a "Global" market for
+zips that don't match any tenant market or config bucket — so a NULL
+result means the zip itself is missing, which is what the parser is
+supposed to prevent.)
 
 ---
 

@@ -120,7 +120,7 @@ export const POST = withTenant(async (request, ctx) => {
     // vector at the helper level.
     const splitResult = await splitCombinedAddressIfNeeded(property.id, ctx.tenantId).catch(err => {
       console.error('[Properties POST] Split check failed:', err)
-      return { splitInto: null as [string, string] | null }
+      return { splitInto: null as string[] | null }
     })
     const returnedId = splitResult.splitInto?.[0] ?? property.id
 

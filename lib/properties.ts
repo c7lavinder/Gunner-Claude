@@ -23,11 +23,13 @@ interface PropertyTriggerContext {
   // When skipEnrichment is true, callers typically also want to mark
   // pendingEnrichment=true so the catch-up cron picks the row up.
   markPendingEnrichment?: boolean
-  // Internal — used by the multi-address splitter to feed the singular
-  // address into the recursive call. Presence of this key short-circuits
-  // the multi-address detection (otherwise we'd recurse forever because
-  // contact.address1 is still the combined string).
-  _overrideAddress?: string
+  // Internal — used by the multi-address splitter to feed a singular,
+  // already-parsed address into the recursive call. Presence of this key
+  // short-circuits the parser (otherwise we'd recurse forever because
+  // contact.address1 is still the combined string). Contains the parsed
+  // street/city/state/zip so each split row gets the same clean fields,
+  // not whatever messy raw values the GHL contact has.
+  _overrideClean?: { street: string; city: string; state: string; zip: string }
 }
 
 export async function createPropertyFromContact(
@@ -39,41 +41,43 @@ export async function createPropertyFromContact(
     const ghlClient = await getGHLClient(tenantId)
     const contact = await ghlClient.getContact(ghlContactId)
 
-    // Parse and standardize address from contact
-    const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
-    const rawAddress = contact.address1 ?? ''
-    const city = standardizeCity(contact.city ?? '')
-    const state = standardizeState(contact.state ?? '')
-    const zip = standardizeZip(contact.postalCode ?? '')
+    // Parse messy GHL contact fields into clean { street, city, state, zip }
+    // and split multi-property strings (e.g. "4506 & 4510 Prospect Rd") into
+    // additional rows. parsePropertyAddress handles every pathological shape
+    // we've seen in production (zip-in-street, city-in-state, multi-property
+    // ampersand). When _overrideClean is set we skip the parse — caller is
+    // a recursive split-feed and already has a clean part.
+    const { parsePropertyAddress } = await import('@/lib/address-parse')
+    let address: string
+    let city: string
+    let state: string
+    let zip: string
+    let extraSplits: Array<{ street: string; city: string; state: string; zip: string }> = []
 
-    // Detect multi-address patterns at creation time:
-    //   "410 & 114 Ideal Valley Rd", "123/456 Main St", "2716 and 2720 Enterprise Ave"
-    // Skip the detection if we're already inside the splitter's recursive
-    // call (context._overrideAddress set) — otherwise the recursion never
-    // terminates because contact.address1 is still the combined string.
-    const multiAddressMatch = !context._overrideAddress ? matchCombinedAddress(rawAddress) : null
-    if (multiAddressMatch) {
-      const { num1, num2, streetName } = multiAddressMatch
-      const addr1 = `${num1} ${streetName}`
-      const addr2 = `${num2} ${streetName}`
-      console.log(`[Property] Multi-address detected: "${rawAddress}" → "${addr1}" + "${addr2}"`)
+    if (context._overrideClean) {
+      address = context._overrideClean.street
+      city = context._overrideClean.city
+      state = context._overrideClean.state
+      zip = context._overrideClean.zip
+    } else {
+      const parsed = parsePropertyAddress(
+        contact.address1 ?? '',
+        contact.city ?? '',
+        contact.state ?? '',
+        contact.postalCode ?? '',
+      )
+      address = parsed.primary.street
+      city = parsed.primary.city
+      state = parsed.primary.state
+      zip = parsed.primary.zip
+      extraSplits = parsed.splits
 
-      // Create first property with modified address
-      const id1 = await createPropertyFromContact(tenantId, ghlContactId, {
-        ...context,
-        _overrideAddress: standardizeStreet(addr1),
-      })
-
-      // Create second property with modified address (same contact)
-      await createPropertyFromContact(tenantId, ghlContactId, {
-        ...context,
-        _overrideAddress: standardizeStreet(addr2),
-      })
-
-      return id1 // return first property ID
+      if (extraSplits.length > 0) {
+        console.log(
+          `[Property] Multi-address detected from contact ${ghlContactId}: "${contact.address1}" → ${1 + extraSplits.length} properties`,
+        )
+      }
     }
-
-    const address = context._overrideAddress ?? standardizeStreet(rawAddress)
 
     // Deduplicate: check by ghlContactId + address (one contact CAN have multiple properties)
     const existingByContactAndAddress = await db.property.findFirst({
@@ -350,6 +354,20 @@ export async function createPropertyFromContact(
       )
     }
 
+    // Multi-property splits (e.g. "4506 & 4510 Prospect Rd"). Recursively
+    // create each sibling row using the parser's clean fields — they share
+    // city/state/zip but each gets its own street, lane status copy, GHL
+    // contact link, etc. The recursion guard is _overrideClean (we set it
+    // on each child call), which short-circuits the parser.
+    for (const split of extraSplits) {
+      await createPropertyFromContact(tenantId, ghlContactId, {
+        ...context,
+        _overrideClean: split,
+      }).catch(err => {
+        console.error(`[Property] Sibling create failed for ${split.street}:`, err instanceof Error ? err.message : err)
+      })
+    }
+
     return property.id
   } catch (err) {
     console.error(`[Property] Failed to create from contact ${ghlContactId}:`, err)
@@ -433,19 +451,25 @@ export function matchCombinedAddress(address: string): { num1: string; num2: str
   return { num1: m[1], num2: m[2], streetName: m[3] }
 }
 
-// Split a property whose address currently looks combined (e.g., "2716 & 2720
-// Enterprise Ave") into two new properties, one per address. Preserves every
-// field that matters: stage, dispoStatus, GHL linkage, timestamps, assignee,
-// market, money, enrichment. Duplicates sellers (many-to-many via PropertySeller)
-// and milestones. Deletes the original (cascade cleans up its own seller/
-// milestone rows; the new rows have their own freshly inserted ones).
+// Split a property whose address currently looks combined (e.g.
+// "2716 & 2720 Enterprise Ave", "4506 & 4510 & 4502 & 0 Prospect Rd",
+// "11523 15th St Ct & 11418 16th St") into N new properties, one per
+// address. Preserves every field that matters: stage, dispoStatus, GHL
+// linkage, timestamps, assignee, market, money, enrichment. Duplicates
+// sellers (many-to-many via PropertySeller) and milestones. Deletes the
+// original (cascade cleans up its own seller/milestone rows; the new
+// rows have their own freshly inserted ones).
 //
-// Idempotent: returns { splitInto: null } if the address doesn't match.
+// Uses lib/address-parse.splitStreets — the same parser the cleanup
+// script uses — so this handles 4-property splits and different-street
+// pairs that the prior matchCombinedAddress regex couldn't.
+//
+// Idempotent: returns { splitInto: null } if the address doesn't split.
 // Safe to re-run against an already-split dataset.
 export async function splitCombinedAddressIfNeeded(
   propertyId: string,
   tenantId: string,
-): Promise<{ splitInto: [string, string] | null }> {
+): Promise<{ splitInto: string[] | null }> {
   // Scoped on tenantId — caller is no longer load-bearing for tenant boundary.
   const p = await db.property.findFirst({
     where: { id: propertyId, tenantId },
@@ -455,15 +479,13 @@ export async function splitCombinedAddressIfNeeded(
     },
   })
   if (!p) return { splitInto: null }
-  const match = matchCombinedAddress(p.address)
-  if (!match) return { splitInto: null }
 
-  const { num1, num2, streetName } = match
+  const { splitStreets } = await import('@/lib/address-parse')
   const { standardizeStreet } = await import('@/lib/address')
-  const addr1 = standardizeStreet(`${num1} ${streetName}`)
-  const addr2 = standardizeStreet(`${num2} ${streetName}`)
+  const parts = splitStreets(p.address).map(s => standardizeStreet(s)).filter(Boolean)
+  if (parts.length <= 1) return { splitInto: null }
 
-  // Fields to carry over to both derivative properties. Prisma's JSON output
+  // Fields to carry over to every derivative property. Prisma's JSON output
   // type allows `null`, but its create-input type wants `Prisma.JsonNull` for
   // explicit null. Normalize every JSON-typed column in the copy.
   const { id: _id, createdAt: _ca, updatedAt: _ua, sellers: _s, milestones: _m, address: _a, ...copy } = p as unknown as Record<string, unknown>
@@ -474,17 +496,17 @@ export async function splitCombinedAddressIfNeeded(
   }
 
   const newIds = await db.$transaction(async (tx) => {
-    const a = await tx.property.create({ data: { ...baseData, address: addr1 } as Prisma.PropertyUncheckedCreateInput })
-    const b = await tx.property.create({ data: { ...baseData, address: addr2 } as Prisma.PropertyUncheckedCreateInput })
+    const created: Array<{ id: string; address: string }> = []
+    for (const street of parts) {
+      const row = await tx.property.create({ data: { ...baseData, address: street } as Prisma.PropertyUncheckedCreateInput })
+      created.push({ id: row.id, address: street })
+    }
 
-    // Link all existing sellers to both new properties. The composite PK on
+    // Link all existing sellers to every new property. The composite PK on
     // PropertySeller allows the same seller to link to multiple properties.
     for (const ps of p.sellers) {
       await tx.propertySeller.createMany({
-        data: [
-          { propertyId: a.id, sellerId: ps.sellerId, isPrimary: ps.isPrimary, role: ps.role },
-          { propertyId: b.id, sellerId: ps.sellerId, isPrimary: ps.isPrimary, role: ps.role },
-        ],
+        data: created.map(c => ({ propertyId: c.id, sellerId: ps.sellerId, isPrimary: ps.isPrimary, role: ps.role })),
         skipDuplicates: true,
       })
     }
@@ -492,19 +514,32 @@ export async function splitCombinedAddressIfNeeded(
     // Duplicate milestones so each derivative has its own history.
     for (const ms of p.milestones) {
       await tx.propertyMilestone.createMany({
-        data: [
-          { tenantId: p.tenantId, propertyId: a.id, type: ms.type, createdAt: ms.createdAt, source: ms.source, loggedById: ms.loggedById, notes: ms.notes },
-          { tenantId: p.tenantId, propertyId: b.id, type: ms.type, createdAt: ms.createdAt, source: ms.source, loggedById: ms.loggedById, notes: ms.notes },
-        ],
+        data: created.map(c => ({ tenantId: p.tenantId, propertyId: c.id, type: ms.type, createdAt: ms.createdAt, source: ms.source, loggedById: ms.loggedById, notes: ms.notes })),
       })
     }
 
-    // Audit both new properties + the source delete.
+    // Audit every new property + the source delete.
+    const allIds = created.map(c => c.id)
     await tx.auditLog.createMany({
       data: [
-        { tenantId: p.tenantId, action: 'property.split.created', resource: 'property', resourceId: a.id, source: 'SYSTEM', severity: 'INFO', payload: { from: propertyId, fromAddress: p.address, address: addr1, pairId: b.id } },
-        { tenantId: p.tenantId, action: 'property.split.created', resource: 'property', resourceId: b.id, source: 'SYSTEM', severity: 'INFO', payload: { from: propertyId, fromAddress: p.address, address: addr2, pairId: a.id } },
-        { tenantId: p.tenantId, action: 'property.split.deleted', resource: 'property', resourceId: propertyId, source: 'SYSTEM', severity: 'INFO', payload: { originalAddress: p.address, splitInto: [a.id, b.id] } },
+        ...created.map(c => ({
+          tenantId: p.tenantId,
+          action: 'property.split.created',
+          resource: 'property',
+          resourceId: c.id,
+          source: 'SYSTEM' as const,
+          severity: 'INFO' as const,
+          payload: { from: propertyId, fromAddress: p.address, address: c.address, siblingIds: allIds.filter(id => id !== c.id) } as unknown as Prisma.InputJsonValue,
+        })),
+        {
+          tenantId: p.tenantId,
+          action: 'property.split.deleted',
+          resource: 'property',
+          resourceId: propertyId,
+          source: 'SYSTEM' as const,
+          severity: 'INFO' as const,
+          payload: { originalAddress: p.address, splitInto: allIds } as unknown as Prisma.InputJsonValue,
+        },
       ],
     })
 
@@ -512,10 +547,10 @@ export async function splitCombinedAddressIfNeeded(
     // Scoped: deleteMany with tenantId. Property already validated above; this is DiD.
     await tx.property.deleteMany({ where: { id: propertyId, tenantId } })
 
-    return [a.id, b.id] as [string, string]
+    return allIds
   })
 
-  console.log(`[Property] Split "${p.address}" (${propertyId}) → ${addr1} (${newIds[0]}) + ${addr2} (${newIds[1]})`)
+  console.log(`[Property] Split "${p.address}" (${propertyId}) → ${parts.length} rows: ${newIds.join(', ')}`)
   return { splitInto: newIds }
 }
 

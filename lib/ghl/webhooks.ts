@@ -970,11 +970,21 @@ async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
     })
 
     if (property) {
-      const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
-      const newAddress = standardizeStreet(contact.address1 ?? '')
-      const newCity = standardizeCity(contact.city ?? '')
-      const newState = standardizeState(contact.state ?? '')
-      const newZip = standardizeZip(contact.postalCode ?? '')
+      // Use the same parser the inventory cleanup script uses — handles
+      // GHL's pathological shapes (zip embedded in street, city in state
+      // field, multi-property '&' joins). splitCombinedAddressIfNeeded is
+      // still called below to materialize any sibling rows.
+      const { parsePropertyAddress } = await import('@/lib/address-parse')
+      const parsed = parsePropertyAddress(
+        contact.address1 ?? '',
+        contact.city ?? '',
+        contact.state ?? '',
+        contact.postalCode ?? '',
+      )
+      const newAddress = parsed.primary.street
+      const newCity = parsed.primary.city
+      const newState = parsed.primary.state
+      const newZip = parsed.primary.zip
 
       // Only update fields that GHL now has data for AND Gunner is missing or different
       const updates: Record<string, string> = {}

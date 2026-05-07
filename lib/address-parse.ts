@@ -70,6 +70,11 @@ const STREET_SUFFIX_TOKENS = new Set([
 
 const UNIT_INDICATORS = /\b(apt|apartment|ste|suite|unit|#|lot|bldg|building|fl|floor|rm|room)\b/i
 
+// Cardinal directionals — when these appear as the trailing word in a street
+// with no comma-separated city, they belong to the street, not the city
+// (e.g. "832 Virginia Ct SE" → city is unknown, NOT "SE").
+const DIRECTIONALS = new Set(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'])
+
 /**
  * Detect whether a `&` in the street is separating units (e.g. "Apt R6, D2, & G2")
  * vs. separating distinct properties.
@@ -279,8 +284,18 @@ export function parsePropertyAddress(
       }
     }
     if (lastSuffixIdx >= 0 && lastSuffixIdx < tokens.length - 1) {
-      street = tokens.slice(0, lastSuffixIdx + 1).join(' ')
-      city = tokens.slice(lastSuffixIdx + 1).join(' ')
+      // Tokens after the suffix are candidate city tokens. If they are ALL
+      // directionals (e.g. "Ct SE" where the suffix grabbed "Ct"), they
+      // belong to the street, not the city.
+      const tail = tokens.slice(lastSuffixIdx + 1)
+      const tailIsAllDirectionals = tail.every(t => DIRECTIONALS.has(t.replace(/[.,]/g, '').toLowerCase()))
+      if (tailIsAllDirectionals) {
+        street = preState
+        city = ''
+      } else {
+        street = tokens.slice(0, lastSuffixIdx + 1).join(' ')
+        city = tail.join(' ')
+      }
     } else {
       street = preState
       city = ''
@@ -297,9 +312,15 @@ export function parsePropertyAddress(
   }
 
   // City override: if the parser-extracted city is empty or all-digits
-  // (junk from a misparsed zip), prefer the original rawCity.
+  // (junk from a misparsed zip), prefer the original rawCity. Also prefer
+  // rawCity when state extraction failed AND rawState is invalid — that
+  // means the rightmost-comma fallback latched onto a junk state value
+  // (e.g. canon="… Nolensville Rd, Brentwood, Cole, 37027" → parser
+  // grabbed city="Cole" because state couldn't resolve).
   const cleanRawCity = standardizeCity(rawCity ?? '')
-  if (cleanRawCity && (!city || /^\d+$/.test(city))) {
+  const rawStateForCheck = (rawState ?? '').trim()
+  const rawStateInvalid = rawStateForCheck.length > 0 && !US_STATE_ABBRS.has(standardizeState(rawStateForCheck))
+  if (cleanRawCity && (!city || /^\d+$/.test(city) || (state === '' && rawStateInvalid))) {
     city = cleanRawCity
   }
 
@@ -313,20 +334,28 @@ export function parsePropertyAddress(
     }
   }
 
-  // Strip any leftover authoritative-fields residue from street.
+  // Strip any leftover authoritative-fields residue from the END of street
+  // (where city/state names tend to leak in Pattern-A inputs). End-anchored
+  // only — a global strip would corrupt streets that legitimately contain
+  // the city name (e.g. "8213 Harrison Bay Rd" in city "Harrison").
   // Example: street = "6825 Nolensville Rd Brentwood, Cole" + city="Brentwood"
-  //          + rawState="Cole" (invalid) + zip="37027".
-  // After this block: street = "6825 Nolensville Rd".
+  //          + rawState="Cole" (invalid) → "6825 Nolensville Rd".
   const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  if (city) {
-    street = street.replace(new RegExp(`\\b${escapeRe(city)}\\b\\.?`, 'gi'), '').replace(/\s+/g, ' ').replace(/[,\s]+$/, '').trim()
-  }
-  // If rawState was set but isn't a valid state, strip it from street too
-  // (it's noise — e.g. a person's first name accidentally placed in the
-  // state column).
-  const rawStateTrimmed = (rawState ?? '').trim()
-  if (rawStateTrimmed && !US_STATE_ABBRS.has(standardizeState(rawStateTrimmed))) {
-    street = street.replace(new RegExp(`\\b${escapeRe(rawStateTrimmed)}\\b\\.?`, 'gi'), '').replace(/\s+/g, ' ').replace(/[,\s]+$/, '').trim()
+  // Loop in case both city and rawState are stacked at the end.
+  for (let i = 0; i < 3; i++) {
+    let changed = false
+    if (city) {
+      const re = new RegExp(`[\\s,]+\\b${escapeRe(city)}\\b\\.?\\s*,?\\s*$`, 'i')
+      const next = street.replace(re, '').trim()
+      if (next !== street) { street = next; changed = true }
+    }
+    const rawStateTrimmed = (rawState ?? '').trim()
+    if (rawStateTrimmed && !US_STATE_ABBRS.has(standardizeState(rawStateTrimmed))) {
+      const re = new RegExp(`[\\s,]+\\b${escapeRe(rawStateTrimmed)}\\b\\.?\\s*,?\\s*$`, 'i')
+      const next = street.replace(re, '').trim()
+      if (next !== street) { street = next; changed = true }
+    }
+    if (!changed) break
   }
 
   // Defense-in-depth: only strip the SPECIFIC resolved zip from street, never
