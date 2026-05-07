@@ -19,6 +19,8 @@ import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@
 import type { AppStage } from '@/types/property'
 import { FloatingDropdown } from '@/components/ui/FloatingDropdown'
 import { DispositionJourney } from '@/components/disposition/journey/disposition-journey'
+import { PropertyPhotosPanel } from '@/components/inventory/property-photos-panel'
+import { PropertyDocumentsPanel } from '@/components/inventory/property-documents-panel'
 
 const GHL_STAGE_COLORS: Record<string, string> = {
   'New Lead (1)': 'bg-sky-100 text-sky-700',
@@ -4367,12 +4369,16 @@ function ResearchTab({
         </button>
       </div>
 
-      {/* Street View */}
-      {streetViewUrl && (
-        <div className="rounded-[10px] overflow-hidden border-[0.5px] border-[rgba(0,0,0,0.08)]">
-          <img src={streetViewUrl} alt="Street view" className="w-full h-48 object-cover" />
-        </div>
-      )}
+      {/* Photos panel — Street View shows as fallback when no photos uploaded.
+          See components/inventory/property-photos-panel.tsx. */}
+      <PropertyPhotosPanel
+        propertyId={property.id}
+        fallbackStreetViewUrl={streetViewUrl ?? property.googleStreetViewUrl}
+      />
+
+      {/* Documents — flat list, file-type icons, drag-and-drop upload.
+          See components/inventory/property-documents-panel.tsx. */}
+      <PropertyDocumentsPanel propertyId={property.id} />
 
       {/* Source legend */}
       <div className="flex items-center gap-3">

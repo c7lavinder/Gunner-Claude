@@ -105,6 +105,8 @@ model Tenant {
   bugReports            BugReport[]
   partners              Partner[]
   ghlPipelines          TenantGhlPipeline[]
+  propertyPhotos        PropertyPhoto[]
+  propertyDocuments     PropertyDocument[]
 
   @@map("tenants")
 }
@@ -167,6 +169,8 @@ model User {
   assistantMessages     AssistantMessage[]     @relation("AssistantMessages")
   actionLogs            ActionLog[]            @relation("ActionLogs")
   callReclassifications CallReclassification[] @relation("CallReclassifiedBy")
+  uploadedPhotos        PropertyPhoto[]        @relation("PhotoUploader")
+  uploadedDocuments     PropertyDocument[]     @relation("DocumentUploader")
 
   @@map("users")
 }
@@ -650,6 +654,8 @@ model Property {
   outreachLogs OutreachLog[]
   buyerStages  PropertyBuyerStage[]
   partners     PropertyPartner[]
+  photos       PropertyPhoto[]
+  documents    PropertyDocument[]
 
   @@index([county])
   @@index([apn])
@@ -2466,4 +2472,70 @@ model TenantGhlPipeline {
   @@unique([tenantId, ghlPipelineId])
   @@index([tenantId, track])
   @@map("tenant_ghl_pipelines")
+}
+
+// ─────────────────────────────────────────
+// PROPERTY PHOTOS — uploaded images per property.
+// Bucket: property-photos. category populated async by Claude Haiku
+// vision; classificationStatus tracks pending/done/failed so the UI
+// can show a "Classifying…" state until done.
+// ─────────────────────────────────────────
+
+model PropertyPhoto {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  propertyId String   @map("property_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  uploadedById String? @map("uploaded_by_id")
+  uploadedBy   User?   @relation("PhotoUploader", fields: [uploadedById], references: [id])
+
+  storagePath String @map("storage_path")
+  filename    String
+  mimeType    String @map("mime_type")
+  size        Int
+
+  // Auto-categorization (Claude vision). One of:
+  //   front | exterior | kitchen | bathroom | living | basement | other
+  category             String? @default("uncategorized")
+  classificationStatus String? @default("pending") @map("classification_status") // pending | done | failed
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  @@index([propertyId])
+  @@index([tenantId])
+  @@map("property_photos")
+}
+
+// ─────────────────────────────────────────
+// PROPERTY DOCUMENTS — uploaded files per property (inspections,
+// contracts, agreements, leases, anything else). Bucket:
+// property-documents. Flat list — no categorization.
+// ─────────────────────────────────────────
+
+model PropertyDocument {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  propertyId String   @map("property_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  uploadedById String? @map("uploaded_by_id")
+  uploadedBy   User?   @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  storagePath String @map("storage_path")
+  filename    String
+  mimeType    String @map("mime_type")
+  size        Int
+
+  @@index([propertyId])
+  @@index([tenantId])
+  @@map("property_documents")
 }
