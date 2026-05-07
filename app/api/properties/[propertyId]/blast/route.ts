@@ -303,6 +303,43 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
             data: { blastId: blast.id, buyerId: buyer.id },
           })
 
+          // Session 77 — promote the buyer's kanban stage to 'sent' on
+          // successful send. This is the auto-progression rule: any send
+          // moves the buyer from Matched → Sent in the Section 3 kanban.
+          // upsert because matched-but-no-stage-row is the common case;
+          // PropertyBuyerStage rows are only created lazily on rep action.
+          // Don't downgrade — if the buyer is already 'responded' or
+          // further (e.g. 'interested'), leave the stage alone but still
+          // bump lastBlastSentAt + blastsReceivedCount.
+          try {
+            const existing = await db.propertyBuyerStage.findUnique({
+              where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId: buyer.id } },
+              select: { id: true, stage: true },
+            })
+            const ADVANCED_STAGES = ['responded', 'interested', 'showing_scheduled']
+            const newStage = existing && ADVANCED_STAGES.includes(existing.stage) ? existing.stage : 'sent'
+            await db.propertyBuyerStage.upsert({
+              where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId: buyer.id } },
+              create: {
+                tenantId,
+                propertyId: params.propertyId,
+                buyerId: buyer.id,
+                stage: 'sent',
+                source: 'matched',
+                lastBlastSentAt: new Date(),
+                blastsReceivedCount: 1,
+              },
+              update: {
+                stage: newStage,
+                lastBlastSentAt: new Date(),
+                blastsReceivedCount: { increment: 1 },
+              },
+            })
+          } catch (err) {
+            // Don't fail the send if stage promote fails — log + move on.
+            console.warn(`[Blast] Stage promote failed for buyer ${buyer.id}:`, err instanceof Error ? err.message : err)
+          }
+
           // Small delay to avoid rate limits
           await new Promise(r => setTimeout(r, 100))
         } catch (err) {

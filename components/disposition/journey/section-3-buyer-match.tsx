@@ -1,19 +1,22 @@
 'use client'
 // components/disposition/journey/section-3-buyer-match.tsx
 // Section 3 of the Disposition Journey: Match Buyers.
-// Lifted verbatim from the prior BuyersTab in property-detail-client.tsx.
-// Buyer matching kanban (matched / responded / interested), match scores,
-// add-buyer flow. Status = In progress when buyers exist; Done is left to
-// the rep (not auto — buyers come in over time).
+// Kanban (Matched / Sent / Responded). Per Session 77 spec: this is
+// the operational dispatch center — sending happens here (per-card
+// or bulk), auto-progression promotes buyers Matched → Sent on send,
+// Sent → Responded when a reply lands.
+// Status = In progress when any buyer exists on the property.
 
 import { useState, useEffect } from 'react'
 import {
   Search as SearchIcon, Users, Loader2, Plus, MapPin, X,
-  MessageSquare, Pencil, ChevronLeft, ChevronRight, Send,
+  Pencil, ChevronLeft, ChevronRight, Send, Upload,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/toaster'
 import { formatPhone, titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
+import { BulkAddModal } from './bulk-add-modal'
+import { SendModal } from './send-modal'
 
 export function Section3BuyerMatch({
   property,
@@ -29,7 +32,12 @@ export function Section3BuyerMatch({
     notes: string | null; matchScore: number; scoreBreakdown?: string
     ghlContactId?: string | null; maxBuyPrice?: number | null; verifiedFunding?: boolean
   }
-  type KanbanStage = 'matched' | 'responded' | 'interested'
+  // Session 77 — kanban columns: Matched / Sent / Responded.
+  // 'interested' + 'showing_scheduled' values still exist in the DB
+  // (they live in Section 4's kanban) but they're not surfaced as
+  // columns here. A buyer in 'interested' or 'showing_scheduled'
+  // appears in Section 4, not Section 3.
+  type KanbanStage = 'matched' | 'sent' | 'responded'
 
   const [buyers, setBuyers] = useState<BuyerItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -56,9 +64,11 @@ export function Section3BuyerMatch({
   const [editForm, setEditForm] = useState({ name: '', phone: '', email: '', tier: '', markets: '', maxBuyPrice: '', verifiedFunding: false, notes: '' })
   const [editSaving, setEditSaving] = useState(false)
 
-  const [smsTarget, setSmsTarget] = useState<{ name: string; phone: string; ghlContactId: string | null } | null>(null)
-  const [smsMessage, setSmsMessage] = useState('')
-  const [smsSending, setSmsSending] = useState(false)
+  // Session 77 — replaced ad-hoc SMS modal with the SendModal which
+  // handles artifact pick + channel + recipient list. The free-form
+  // single-buyer text path now goes through SendModal's "custom" mode.
+  const [sendTargets, setSendTargets] = useState<BuyerItem[] | null>(null)
+  const [showBulkAdd, setShowBulkAdd] = useState(false)
 
   const [buyerSearch, setBuyerSearch] = useState('')
   const [activeMarketFilter, setActiveMarketFilter] = useState<string | null>(null)
@@ -67,6 +77,7 @@ export function Section3BuyerMatch({
     priority: 'bg-amber-100 text-amber-700',
     qualified: 'bg-green-100 text-green-700',
     jv: 'bg-blue-100 text-blue-700',
+    realtor: 'bg-fuchsia-100 text-fuchsia-700',
     unqualified: 'bg-gray-100 text-gray-500',
     halted: 'bg-red-100 text-red-500',
   }
@@ -203,8 +214,8 @@ export function Section3BuyerMatch({
 
   const COLUMNS: { key: KanbanStage; label: string }[] = [
     { key: 'matched', label: 'Matched' },
+    { key: 'sent', label: 'Sent' },
     { key: 'responded', label: 'Responded' },
-    { key: 'interested', label: 'Interested' },
   ]
 
   function getBuyerStage(buyerId: string): KanbanStage {
@@ -229,8 +240,12 @@ export function Section3BuyerMatch({
     }).catch(() => {})
   }
 
-  const prevStageMap: Record<KanbanStage, KanbanStage | null> = { matched: null, responded: 'matched', interested: 'responded' }
-  const nextStageMap: Record<KanbanStage, KanbanStage | null> = { matched: 'responded', responded: 'interested', interested: null }
+  // Session 77 — kanban transitions for the 3 visible columns.
+  // 'sent' is normally reached automatically (when a blast is sent
+  // through SendModal → /api/properties/[id]/blast → upsert stage='sent').
+  // The arrow buttons let the rep manually correct the stage if needed.
+  const prevStageMap: Record<KanbanStage, KanbanStage | null> = { matched: null, sent: 'matched', responded: 'sent' }
+  const nextStageMap: Record<KanbanStage, KanbanStage | null> = { matched: 'sent', sent: 'responded', responded: null }
 
   function scoreBadgeColor(score: number): string {
     if (score >= 90) return 'bg-red-100 text-red-700'
@@ -287,28 +302,9 @@ export function Section3BuyerMatch({
     setEditSaving(false)
   }
 
-  async function sendSms() {
-    if (!smsTarget?.phone || !smsMessage.trim()) return
-    if (!window.confirm(`Send SMS to ${smsTarget.name ?? smsTarget.phone}?\n\n"${smsMessage.slice(0, 100)}${smsMessage.length > 100 ? '...' : ''}"`)) return
-    setSmsSending(true)
-    try {
-      const res = await fetch('/api/ghl/actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'send_sms', contactId: smsTarget.ghlContactId ?? smsTarget.phone, message: smsMessage }),
-      })
-      if (res.ok) {
-        toast(`SMS sent to ${smsTarget.name ?? smsTarget.phone}`, 'success')
-        setSmsTarget(null)
-        setSmsMessage('')
-      } else {
-        toast('Failed to send SMS', 'error')
-      }
-    } catch {
-      toast('Failed to send SMS', 'error')
-    }
-    setSmsSending(false)
-  }
+  // Session 77 — replaced bespoke single-buyer SMS by SendModal which
+  // covers SMS + email + 4 artifact options + recipient picker. The
+  // legacy sendSms() / smsTarget state was removed.
 
   if (property.propertyMarkets.length === 0) {
     return (
@@ -337,6 +333,11 @@ export function Section3BuyerMatch({
           {syncMsg && <p className="text-[10px] text-txt-muted mt-0.5">{syncMsg}</p>}
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setShowBulkAdd(true)} disabled={loading}
+            className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors disabled:opacity-50">
+            <Upload size={11} />
+            Bulk Add
+          </button>
           <button onClick={async () => { const ok = await runSync(); if (ok) matchBuyers() }} disabled={loading}
             className="text-ds-fine font-medium text-semantic-purple hover:text-semantic-purple/80 flex items-center gap-1 transition-colors disabled:opacity-50">
             {loading && syncMsg ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
@@ -535,10 +536,23 @@ export function Section3BuyerMatch({
                           Added <span className="text-[9px] font-normal ml-0.5">({addedBuyers.filter(b => getBuyerStage(b.id) === 'matched').length})</span>
                         </button>
                       </div>
-                      <button onClick={openAddForm}
-                        className="text-[10px] font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-0.5 transition-colors">
-                        <Plus size={10} /> Add
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={openAddForm}
+                          className="text-[10px] font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-0.5 transition-colors">
+                          <Plus size={10} /> Add
+                        </button>
+                        {/* Session 77 — bulk send to every visible matched buyer.
+                            Disabled when no eligible buyers in the matched column. */}
+                        {colBuyers.length > 0 && (
+                          <button
+                            onClick={() => setSendTargets(colBuyers)}
+                            className="text-[10px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-2 py-0.5 rounded-md inline-flex items-center gap-1 transition-colors"
+                            title="Send to every buyer in the Matched column"
+                          >
+                            <Send size={9} /> Send all ({colBuyers.length})
+                          </button>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -565,11 +579,14 @@ export function Section3BuyerMatch({
                       const next = nextStageMap[currentStage]
                       const intent = buyerIntents[b.id]
                       const isNotInterested = intent === 'not_interested'
+                      // Card style by stage: Sent gets a blue accent (in
+                      // motion), Responded gets amber (rep needs to look at
+                      // it), not-interested replies are dimmed.
                       const cardClasses = isNotInterested
                         ? 'bg-gray-50 opacity-60 rounded-lg border-[0.5px] border-[rgba(0,0,0,0.08)] shadow-sm p-3 transition-shadow'
-                        : col.key === 'interested'
-                          ? 'bg-green-50/30 border-l-2 border-green-400 rounded-lg border-r-[0.5px] border-t-[0.5px] border-b-[0.5px] border-r-[rgba(0,0,0,0.08)] border-t-[rgba(0,0,0,0.08)] border-b-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow'
-                          : col.key === 'responded' && !intent
+                        : col.key === 'sent'
+                          ? 'bg-blue-50/30 border-l-2 border-blue-400 rounded-lg border-r-[0.5px] border-t-[0.5px] border-b-[0.5px] border-r-[rgba(0,0,0,0.08)] border-t-[rgba(0,0,0,0.08)] border-b-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow'
+                          : col.key === 'responded'
                             ? 'bg-amber-50/30 border-l-2 border-amber-400 rounded-lg border-r-[0.5px] border-t-[0.5px] border-b-[0.5px] border-r-[rgba(0,0,0,0.08)] border-t-[rgba(0,0,0,0.08)] border-b-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow'
                             : 'bg-white rounded-lg border-[0.5px] border-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow'
                       return (
@@ -594,12 +611,12 @@ export function Section3BuyerMatch({
                           )}
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => { if (b.phone) setSmsTarget({ name: b.name, phone: b.phone, ghlContactId: b.ghlContactId ?? null }) }}
-                              disabled={!b.phone}
-                              className="flex items-center gap-1 text-[9px] font-medium text-semantic-blue hover:text-semantic-blue/80 bg-blue-50 hover:bg-blue-100 disabled:opacity-40 px-2 py-1 rounded-md transition-colors"
-                              title="Send SMS"
+                              onClick={() => setSendTargets([b])}
+                              disabled={!b.phone && !b.email}
+                              className="flex items-center gap-1 text-[9px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-2 py-1 rounded-md transition-colors"
+                              title="Send artifact (description / listing / social / custom)"
                             >
-                              <MessageSquare size={10} /> Text
+                              <Send size={10} /> Send
                             </button>
                             <button
                               onClick={() => openEditModal(b)}
@@ -672,6 +689,7 @@ export function Section3BuyerMatch({
                   <option value="priority">Priority</option>
                   <option value="qualified">Qualified</option>
                   <option value="jv">JV Partner</option>
+                  <option value="realtor">Realtor</option>
                   <option value="unqualified">Unqualified</option>
                   <option value="halted">Halted</option>
                 </select>
@@ -717,44 +735,46 @@ export function Section3BuyerMatch({
         </div>
       )}
 
-      {smsTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => { setSmsTarget(null); setSmsMessage('') }} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-5 space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center justify-between">
-              <h3 className="text-ds-label font-semibold text-txt-primary">Send SMS</h3>
-              <button onClick={() => { setSmsTarget(null); setSmsMessage('') }} className="text-txt-muted hover:text-txt-secondary"><X size={16} /></button>
-            </div>
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-1">To</label>
-              <p className="text-ds-fine text-txt-primary font-medium">
-                {titleCase(smsTarget.name)} &mdash; {formatPhone(smsTarget.phone)}
-              </p>
-            </div>
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-1">Message</label>
-              <textarea
-                value={smsMessage}
-                onChange={e => setSmsMessage(e.target.value)}
-                rows={4}
-                placeholder={`Hi ${smsTarget.name.split(' ')[0]}, I have a deal at ${property.address}...`}
-                className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30 resize-none"
-              />
-              <p className="text-[9px] text-txt-muted mt-1 text-right">{smsMessage.length} chars</p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => { setSmsTarget(null); setSmsMessage('') }}
-                className="flex-1 border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary text-ds-fine font-medium py-2 rounded-[8px] hover:bg-surface-secondary transition-colors">
-                Cancel
-              </button>
-              <button onClick={sendSms} disabled={smsSending || !smsMessage.trim()}
-                className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors flex items-center justify-center gap-1.5">
-                {smsSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                {smsSending ? 'Sending...' : 'Send'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Session 77 — Bulk Add + Send modals */}
+      {showBulkAdd && (
+        <BulkAddModal
+          propertyId={property.id}
+          onClose={() => setShowBulkAdd(false)}
+          onComplete={() => {
+            // Reload to pick up the new buyers + their PropertyBuyerStage rows.
+            setAddedLoaded(false)
+            setFetched(false)
+            loadAddedBuyers()
+            matchBuyers()
+          }}
+        />
+      )}
+      {sendTargets && (
+        <SendModal
+          propertyId={property.id}
+          propertyAddress={property.address}
+          buyers={sendTargets.map(b => ({
+            id: b.id, name: b.name, phone: b.phone, email: b.email, tier: b.tier,
+          }))}
+          artifacts={{
+            description: (property.dispoArtifacts?.description as string | undefined),
+            listingPost: (property.dispoArtifacts?.listingPost as string | undefined),
+            socialPost: (property.dispoArtifacts?.socialPost as string | undefined),
+          }}
+          onClose={() => setSendTargets(null)}
+          onSent={(sentIds) => {
+            // Optimistic stage promote — server-side promote happens in the
+            // /blast route. Mirror locally so the buyer card jumps Matched
+            // → Sent without waiting for a refetch.
+            setBuyerStages(prev => {
+              const next = { ...prev }
+              for (const id of sentIds) {
+                if (!next[id] || next[id] === 'matched') next[id] = 'sent'
+              }
+              return next
+            })
+          }}
+        />
       )}
     </div>
   )

@@ -101,11 +101,14 @@ export function DispositionJourney({
         index={4}
         title="Track responses"
         status={status.section4}
-        summary="Coming soon"
+        summary={
+          status.section4 === 'in_progress' ? 'Replies in pipeline'
+          : 'No responses yet'
+        }
         expanded={openSection === 4}
         onToggle={() => toggle(4)}
       >
-        <Section4Responses />
+        <Section4Responses property={property} />
       </JourneySection>
 
       <JourneySection

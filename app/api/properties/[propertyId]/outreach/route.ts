@@ -183,6 +183,40 @@ export const POST = withTenant<{ propertyId: string }>(async (req, ctx, params) 
       await syncOfferFields(params.propertyId, ctx.tenantId)
     }
 
+    // Session 77 — fast-forward rule. When a showing or offer is logged
+    // for a buyer, jump their kanban stage all the way to 'showing_scheduled'
+    // (the rightmost Section-4 column) — regardless of where they were.
+    // The log itself surfaces the offer/showing in Section 5; this update
+    // makes sure the Section-3/4 kanban also reflects the buyer's furthest
+    // point in the deal. Match buyer by ghlContactId.
+    if ((type === 'offer' || type === 'showing') && ghlContactId) {
+      try {
+        const buyer = await db.buyer.findFirst({
+          where: { tenantId: ctx.tenantId, ghlContactId },
+          select: { id: true },
+        })
+        if (buyer) {
+          await db.propertyBuyerStage.upsert({
+            where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId: buyer.id } },
+            create: {
+              tenantId: ctx.tenantId,
+              propertyId: params.propertyId,
+              buyerId: buyer.id,
+              stage: 'showing_scheduled',
+              source: 'manual',
+              movedToInterestedAt: new Date(),
+            },
+            update: {
+              stage: 'showing_scheduled',
+              movedToInterestedAt: new Date(),
+            },
+          })
+        }
+      } catch (err) {
+        console.warn(`[Outreach] Fast-forward stage update failed:`, err instanceof Error ? err.message : err)
+      }
+    }
+
     return NextResponse.json({ id: log.id, status: 'success' })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed' }, { status: 500 })

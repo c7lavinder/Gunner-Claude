@@ -206,7 +206,21 @@ export default async function PropertyDetailPage({
     db.propertyPhoto.count({ where: { propertyId: params.propertyId, tenantId } }),
     db.dealBlast.count({ where: { propertyId: params.propertyId, tenantId, status: 'sent' } }),
     db.propertyBuyerStage.count({ where: { propertyId: params.propertyId, tenantId } }),
-    db.propertyBuyerStage.count({ where: { propertyId: params.propertyId, tenantId, responseIntent: { not: null } } }),
+    // Session 77 — Section 4 surfaces any buyer in stages responded /
+    // interested / showing_scheduled (the 3 columns of its kanban). Count
+    // these so the Section 4 readiness badge flips to in_progress as soon
+    // as a buyer lands in any of those stages — including when fast-
+    // forwarded by a showing/offer log without a response.
+    db.propertyBuyerStage.count({
+      where: {
+        propertyId: params.propertyId,
+        tenantId,
+        OR: [
+          { responseIntent: { not: null } },
+          { stage: { in: ['responded', 'interested', 'showing_scheduled'] } },
+        ],
+      },
+    }),
     db.outreachLog.count({ where: { propertyId: params.propertyId, tenantId, type: 'offer' } }),
     db.outreachLog.count({ where: { propertyId: params.propertyId, tenantId, type: 'offer', offerStatus: 'Accepted' } }),
   ])

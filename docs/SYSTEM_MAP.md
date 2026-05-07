@@ -371,28 +371,73 @@ two callers).
   chrome (header bar, status pill, collapse chevron, summary line,
   body slot).
 - `components/disposition/journey/section-1-deal-info.tsx` —
-  Section 1 (Deal info readiness checklist). Surfaces the acq → dispo
-  handoff: required fields with check/X icons, deep-link buttons that
-  jump back to Overview / Data tabs.
+  Section 1 (Deal info readiness checklist). **Session 77 rewrite**:
+  6 gates — address / seller linked / contract (= property in dispo
+  lane) / property details all 26 fields filled / photos / dispo
+  manager assigned. The 26-field check is delegated to
+  `lib/disposition/property-details-readiness.ts` (single source of
+  truth, also consumed by the per-property page); expandable sub-list
+  shows which of the 26 are missing. Deep-link buttons jump to
+  Overview / Data tabs to fix gaps.
 - `components/disposition/journey/section-2-deal-blast.tsx` —
-  Section 2 (Generate deal blast). Lifted verbatim from the prior
-  `DealBlastTab`. Tier selector, email + SMS body generation, send
-  buttons, blast history.
+  Section 2 (Generate deal blast). **Session 77 rewrite**: generation
+  only, no sending. Deal-summary cards reordered Contract → Asking →
+  ARV → Assignment Fee; Asking writes to investor-facing
+  `dispoAskingPrice` (distinct from seller's `askingPrice` on Overview).
+  Footer fact strip adds property type, drops repair+rental est.
+  Mounts `<Section2Artifacts/>` for the 3 generators. The prior tier
+  picker, recipient list, FROM dropdown, per-tier email/SMS editors,
+  blast history were stripped — sending lives in Section 3 now.
+- `components/disposition/journey/section-2-artifacts.tsx` —
+  **Session 77.** 3 generator blocks (description / listing post / FB
+  social post). Each block: Generate button → POST `/api/properties/
+  [id]/dispo-generate` → fills the textarea → debounced PATCH on
+  blur saves manual edits. Persisted on `Property.dispoArtifacts`.
+- `lib/ai/dispo-generators.ts` — **Session 77.** Three generators
+  with locked prompts (owner-supplied). Shared tone rules: no hype
+  words, no emojis, always close with assigned dispo manager + GHL
+  phone. Loads PropertyComp rows + intangibles → infers pros /
+  work-needed for the prompts. claude-sonnet-4-6.
+- `components/inventory/comps-panel.tsx` — **Session 77.** Manual
+  comps CRUD inside the Data tab Property Assessment area. Feeds the
+  listing-site generator's `## Comps` block automatically. No vendor
+  / MLS auto-pull. Backed by `app/api/properties/[id]/comps/` routes.
 - `components/disposition/journey/section-3-buyer-match.tsx` —
-  Section 3 (Match buyers). Lifted from the prior `BuyersTab`.
-  Buyer matching kanban (matched / responded / interested), match
-  scores, add-buyer flow, edit slide-over, SMS compose modal.
+  Section 3 (Match buyers). **Session 77 rewrite**: kanban columns
+  flipped to **Matched / Sent / Responded**. Operational dispatch
+  center — sending happens here. Header has Bulk Add + Sync CRM +
+  Match buttons; Matched-column header has "Add" + "Send all (N)";
+  per-card has Send + Edit + manual move arrows. Realtor is the 5th
+  tier in the color map + edit-buyer dropdown. Mounts `<BulkAddModal/>`
+  and `<SendModal/>`.
+- `components/disposition/journey/bulk-add-modal.tsx` — **Session 77.**
+  Paste-mode bulk add. Phone is the only match key. Phone matches
+  existing GHL contact or DB Buyer → link. No phone match → create
+  GHL contact + Buyer + link. Backed by
+  `app/api/properties/[id]/buyers/bulk-add/route.ts` (up to 500 rows).
+- `components/disposition/journey/send-modal.tsx` — **Session 77.**
+  Picks artifact (description / listing / social / custom) + channel
+  (sms / email) + per-recipient eligibility filter. Calls existing
+  `/api/properties/[id]/blast` route which auto-promotes
+  PropertyBuyerStage to `stage='sent'` on each successful send.
 - `components/disposition/journey/section-4-responses.tsx` —
-  Section 4 placeholder. The unified inbound-response data layer
-  (SMS + email across blast + outreach) is deferred per plan
-  Stage 5; rendered as `not_started` with a "coming soon" empty
-  state.
+  Section 4 (Track responses). **Session 77 rewrite** (was a
+  "coming soon" stub). 3-column kanban: **Responded / Interested /
+  Showing Scheduled**. Backed by `app/api/properties/[id]/section4-
+  buyers/route.ts` which returns PropertyBuyerStage rows in those
+  stages without running the GHL match algo. AI auto-flag-to-
+  interested already ran in `app/api/webhooks/ghl/buyer-response/
+  route.ts` (Haiku 4.5 classifies inbound replies → promotes
+  responseIntent='interested' to stage='interested'); surfaced in
+  Section 4 with a Sparkles "AI auto-flagged" badge.
 - `components/disposition/journey/section-5-offers-showings.tsx` —
   Section 5 (Offers & showings). Lifted from the prior `OutreachTab`,
-  trimmed to the 'offer' and 'showing' sub-tabs only — the 'send'
-  sub-tab is dropped because that work lives in Section 2 now.
-  Includes the inline `<OutreachLogCard>` (offer status pills,
-  showing-date editing).
+  trimmed to the 'offer' and 'showing' sub-tabs only. **Session 77
+  fast-forward rule**: logging an offer or showing in
+  `app/api/properties/[id]/outreach/route.ts` POST upserts the
+  matched buyer's PropertyBuyerStage to `stage='showing_scheduled'`
+  — the buyer card jumps to Section 4's rightmost column regardless
+  of where they were before.
 - `components/inventory/contacts-panel.tsx` — replaces the prior
   Sellers / Buyers / Partners property-detail tabs with a compact
   panel mounted at the top of Overview and Data tabs. Three short
