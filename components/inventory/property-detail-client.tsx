@@ -663,6 +663,21 @@ export function PropertyDetailClient({
               <ContactsSection propertyId={property.id} tenantSlug={tenantSlug} initialSellers={property.sellers} />
               <TeamSection propertyId={property.id} tenantSlug={tenantSlug} />
               <InlineAI propertyId={property.id} />
+              {/* Full Property Details panel — duplicate of the persistent panel
+                  above the tab bar. Both render the same component with the
+                  same shared vals/sources/handleSaved, so edits in either
+                  surface update the other in real time. */}
+              <PropertyDetailsPanel
+                propertyId={property.id}
+                vals={vals}
+                sources={sources}
+                altPrices={altPrices}
+                offerTypes={offerTypes}
+                onSaved={handleSaved}
+                onArraySaved={handleArraySaved}
+                onAltSaved={handleAltSaved}
+                projectTypeOptions={projectTypeOptions}
+              />
               {/* ── Suggestion banner (only when there are pending) ── */}
               {pendingSuggestionCount > 0 && (
                 <div className="flex items-center justify-between px-4 py-3 bg-[#EEEDFE] border border-[#AFA9EC] rounded-[12px]">
