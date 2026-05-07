@@ -91,6 +91,8 @@ const updateSchema = z.object({
   yardGrade: z.string().nullable().optional(),
   locationGrade: z.string().nullable().optional(),
   marketRisk: z.string().nullable().optional(),
+  // External photos folder URL (Google Drive / Dropbox / etc.)
+  photosLink: z.string().nullable().optional(),
   // Deal Blast overrides
   dealBlastAskingOverride: z.string().nullable().optional(),
   dealBlastArvOverride: z.string().nullable().optional(),
@@ -146,6 +148,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     roofCondition, windowsCondition, sidingCondition, exteriorCondition,
     comparableRisk, basementStatus, curbAppeal, neighborsGrade, parkingType, yardGrade,
     locationGrade, marketRisk,
+    photosLink,
     // Deal Blast overrides
     dealBlastAskingOverride, dealBlastArvOverride, dealBlastContractOverride, dealBlastAssignmentFeeOverride,
     market: marketName,
@@ -299,6 +302,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(yardGrade !== undefined && { yardGrade }),
           ...(locationGrade !== undefined && { locationGrade }),
           ...(marketRisk !== undefined && { marketRisk }),
+          ...(photosLink !== undefined && { photosLink }),
           // Deal Blast overrides
           ...(dealBlastAskingOverride !== undefined && { dealBlastAskingOverride: dealBlastAskingOverride ? parseFloat(dealBlastAskingOverride) : null }),
           ...(dealBlastArvOverride !== undefined && { dealBlastArvOverride: dealBlastArvOverride ? parseFloat(dealBlastArvOverride) : null }),

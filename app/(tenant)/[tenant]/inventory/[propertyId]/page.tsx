@@ -61,6 +61,7 @@ export default async function PropertyDetailPage({
         comparableRisk: true, basementStatus: true, curbAppeal: true, neighborsGrade: true,
         parkingType: true, yardGrade: true,
         locationGrade: true, marketRisk: true,
+        photosLink: true,
         // Vendor enrichment fields surfaced in detail UI (MLS panel + distress badge)
         distressScore: true, preForeclosure: true, bankOwned: true,
         inBankruptcy: true, inProbate: true, inDivorce: true,
@@ -325,6 +326,7 @@ export default async function PropertyDetailPage({
         yardGrade: property.yardGrade,
         locationGrade: property.locationGrade,
         marketRisk: property.marketRisk,
+        photosLink: property.photosLink,
         constructionEstimate: property.constructionEstimate?.toString() ?? null,
         // Vendor distress + MLS + Google — rendered by DistressBadge and MlsPanel
         distressScore: property.distressScore,

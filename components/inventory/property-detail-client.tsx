@@ -115,6 +115,7 @@ export interface PropertyDetail {
   yardGrade: string | null
   locationGrade: string | null
   marketRisk: string | null
+  photosLink: string | null
   // Vendor distress + MLS (PropertyRadar + BatchData)
   distressScore: number | null
   preForeclosure: boolean | null
@@ -4374,6 +4375,7 @@ function ResearchTab({
       <PropertyPhotosPanel
         propertyId={property.id}
         fallbackStreetViewUrl={streetViewUrl ?? property.googleStreetViewUrl}
+        initialPhotosLink={property.photosLink}
       />
 
       {/* Documents — flat list, file-type icons, drag-and-drop upload.

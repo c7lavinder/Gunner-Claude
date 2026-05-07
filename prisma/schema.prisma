@@ -644,6 +644,10 @@ model Property {
   // Flexible custom fields per tenant config
   customFields Json @default("{}") @map("custom_fields")
 
+  // External photos link — Google Drive / Dropbox / etc. folder URL.
+  // Surfaced in the photos panel header for "see more photos elsewhere".
+  photosLink String? @map("photos_link")
+
   // Relations
   sellers      PropertySeller[]
   teamMembers  PropertyTeamMember[]

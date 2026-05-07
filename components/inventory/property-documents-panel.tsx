@@ -1,11 +1,11 @@
 'use client'
 // components/inventory/property-documents-panel.tsx
 // Flat document list with file-type icons. Drag-and-drop upload, click to
-// download (signed URL). 50MB / file limit.
+// download (signed URL), inline rename, delete on hover. 50MB / file limit.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Upload, Loader2, Trash2, Download,
+  Upload, Loader2, Trash2, Download, Pencil, Check, X,
   FileText, FileSpreadsheet, FileImage, FileArchive, File as FileIcon,
 } from 'lucide-react'
 
@@ -50,6 +50,9 @@ export function PropertyDocumentsPanel({ propertyId }: { propertyId: string }) {
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [savingRename, setSavingRename] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -75,7 +78,7 @@ export function PropertyDocumentsPanel({ propertyId }: { propertyId: string }) {
 
     const localErrors: string[] = []
     let done = 0
-    const BATCH = 3
+    const BATCH = 4
     for (let i = 0; i < incoming.length; i += BATCH) {
       const batch = incoming.slice(i, i + BATCH)
       await Promise.all(batch.map(async file => {
@@ -115,6 +118,26 @@ export function PropertyDocumentsPanel({ propertyId }: { propertyId: string }) {
     if (!confirm('Delete this document?')) return
     const res = await fetch(`/api/properties/${propertyId}/documents/${id}`, { method: 'DELETE' })
     if (res.ok) setDocs(prev => prev.filter(d => d.id !== id))
+  }
+
+  async function saveRename(id: string) {
+    if (savingRename) return
+    const next = renameDraft.trim()
+    if (!next) { setRenamingId(null); return }
+    setSavingRename(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/documents/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: next }),
+      })
+      if (res.ok) {
+        setDocs(prev => prev.map(d => d.id === id ? { ...d, filename: next } : d))
+        setRenamingId(null)
+      }
+    } finally {
+      setSavingRename(false)
+    }
   }
 
   return (
@@ -179,36 +202,81 @@ export function PropertyDocumentsPanel({ propertyId }: { propertyId: string }) {
         <div className="divide-y divide-[rgba(0,0,0,0.06)]">
           {docs.map(d => {
             const { Icon, color } = iconFor(d.mimeType, d.filename)
+            const renaming = renamingId === d.id
             return (
               <div key={d.id} className="flex items-center gap-3 px-4 py-2 group hover:bg-surface-secondary/50">
                 <Icon size={20} className={`${color} shrink-0`} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium text-txt-primary truncate">{d.filename}</p>
+                  {renaming ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={renameDraft}
+                      onChange={e => setRenameDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveRename(d.id)
+                        if (e.key === 'Escape') setRenamingId(null)
+                      }}
+                      className="w-full px-1.5 py-0.5 text-[12px] font-medium border-[0.5px] border-gunner-red/40 rounded-[4px] focus:outline-none focus:ring-1 focus:ring-gunner-red/30"
+                      disabled={savingRename}
+                    />
+                  ) : (
+                    <p className="text-[12px] font-medium text-txt-primary truncate">{d.filename}</p>
+                  )}
                   <p className="text-[10px] text-txt-muted">
                     {formatSize(d.size)} · {formatDate(d.createdAt)}
                     {d.uploadedByName && <> · uploaded by {d.uploadedByName}</>}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {d.url && (
-                    <a
-                      href={d.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download={d.filename}
-                      className="p-1.5 rounded-[6px] text-txt-muted hover:text-gunner-red hover:bg-white"
-                      title="Download"
-                    >
-                      <Download size={14} />
-                    </a>
+                  {renaming ? (
+                    <>
+                      <button
+                        onClick={() => saveRename(d.id)}
+                        disabled={savingRename}
+                        className="p-1.5 rounded-[6px] text-gunner-red hover:bg-white"
+                        title="Save"
+                      >
+                        {savingRename ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      </button>
+                      <button
+                        onClick={() => setRenamingId(null)}
+                        className="p-1.5 rounded-[6px] text-txt-muted hover:bg-white"
+                        title="Cancel"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => { setRenamingId(d.id); setRenameDraft(d.filename) }}
+                        className="p-1.5 rounded-[6px] text-txt-muted hover:text-gunner-red hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Rename"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      {d.url && (
+                        <a
+                          href={d.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={d.filename}
+                          className="p-1.5 rounded-[6px] text-txt-muted hover:text-gunner-red hover:bg-white"
+                          title="Download"
+                        >
+                          <Download size={14} />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => deleteDoc(d.id)}
+                        className="p-1.5 rounded-[6px] text-txt-muted hover:text-semantic-red hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => deleteDoc(d.id)}
-                    className="p-1.5 rounded-[6px] text-txt-muted hover:text-semantic-red hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete"
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
               </div>
             )
