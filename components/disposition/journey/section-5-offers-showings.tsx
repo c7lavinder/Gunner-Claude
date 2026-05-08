@@ -309,9 +309,9 @@ function ActivityColumn({
       </div>
 
       {logs.length === 0 ? (
-        <div className="bg-white/60 rounded-[10px] p-6 text-center">
+        <div className="bg-white/60 rounded-lg p-6 text-center">
           <Icon size={16} className={`mx-auto mb-1 opacity-40 text-txt-muted`} />
-          <p className="text-[11px] text-txt-muted">No {label.toLowerCase()} yet</p>
+          <p className="text-[10px] text-txt-muted">No {label.toLowerCase()} yet</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -397,10 +397,10 @@ function ActivityCard({
   const sourceColor = l.source === 'AI' ? 'bg-purple-100 text-purple-700' : l.source === 'Blast' ? 'bg-fuchsia-100 text-fuchsia-700' : l.source === 'Auto' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
 
   return (
-    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-3 hover:border-[rgba(0,0,0,0.12)] transition-colors">
-      <div className="flex items-start gap-2.5">
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${iconBg}`}>
-          <Icon size={12} className="text-white" />
+    <div className="bg-white rounded-lg border-[0.5px] border-[rgba(0,0,0,0.08)] shadow-sm p-3 hover:shadow-md transition-shadow">
+      <div className="flex items-start gap-2">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${iconBg}`}>
+          <Icon size={11} className="text-white" />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -408,13 +408,13 @@ function ActivityCard({
             {l.buyerId ? (
               <Link
                 href={`/${tenantSlug}/buyers/${l.buyerId}`}
-                className="text-ds-body font-semibold text-txt-primary hover:text-gunner-red hover:underline truncate"
+                className="text-ds-fine font-semibold text-txt-primary hover:text-gunner-red hover:underline truncate"
                 title="Open buyer page"
               >
                 {titleCase(l.recipientName)}
               </Link>
             ) : (
-              <span className="text-ds-body font-semibold text-txt-primary truncate">{titleCase(l.recipientName)}</span>
+              <span className="text-ds-fine font-semibold text-txt-primary truncate">{titleCase(l.recipientName)}</span>
             )}
             <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${sourceColor}`}>{sourceLabel}</span>
           </div>
@@ -428,7 +428,7 @@ function ActivityCard({
                     className="w-28 bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-ds-fine font-semibold focus:outline-none" />
                 </div>
               ) : (
-                l.offerAmount && <span className="text-ds-body font-bold text-semantic-green">${l.offerAmount.toLocaleString()}</span>
+                l.offerAmount && <span className="text-ds-fine font-bold text-semantic-green">${l.offerAmount.toLocaleString()}</span>
               )}
             </div>
           )}
@@ -454,9 +454,9 @@ function ActivityCard({
 
           {editing ? (
             <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2}
-              className="w-full mt-1.5 bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none resize-none" />
+              className="w-full mt-1.5 bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2.5 py-1.5 text-[10px] focus:outline-none resize-none" />
           ) : (
-            l.notes && <p className="text-ds-fine text-txt-muted mt-1 line-clamp-2">{l.notes}</p>
+            l.notes && <p className="text-[10px] text-txt-muted mt-1 line-clamp-2">{l.notes}</p>
           )}
 
           {/* Status pill + meta + actions, all on one row matching the
