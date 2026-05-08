@@ -17,10 +17,11 @@ import { formatPhone, titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
 import { BulkAddModal } from './bulk-add-modal'
 import { SendModal } from './send-modal'
+import { BuyerEditSlideover } from './buyer-edit-slideover'
 
 export function Section3BuyerMatch({
   property,
-  tenantSlug: _tenantSlug,
+  tenantSlug,
 }: {
   property: PropertyDetail
   tenantSlug: string
@@ -61,8 +62,6 @@ export function Section3BuyerMatch({
   const [leftTab, setLeftTab] = useState<'matched' | 'added'>('matched')
 
   const [editTarget, setEditTarget] = useState<BuyerItem | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', phone: '', email: '', tier: '', markets: '', maxBuyPrice: '', verifiedFunding: false, notes: '' })
-  const [editSaving, setEditSaving] = useState(false)
 
   // Session 77 — replaced ad-hoc SMS modal with the SendModal which
   // handles artifact pick + channel + recipient list. The free-form
@@ -71,7 +70,6 @@ export function Section3BuyerMatch({
   const [showBulkAdd, setShowBulkAdd] = useState(false)
 
   const [buyerSearch, setBuyerSearch] = useState('')
-  const [activeMarketFilter, setActiveMarketFilter] = useState<string | null>(null)
 
   const tierColors: Record<string, string> = {
     priority: 'bg-amber-100 text-amber-700',
@@ -199,17 +197,14 @@ export function Section3BuyerMatch({
 
   const allBuyers: BuyerItem[] = [...addedBuyers, ...buyers.filter(b => !addedBuyers.some(a => a.id === b.id))]
 
-  const uniqueMarkets = [...new Set(allBuyers.flatMap(b => b.markets ?? []))].sort()
-
+  // Session 77 — search-only filter. Market chips dropped (the property has
+  // its own market and buyers were matched against it).
   const searchLower = buyerSearch.toLowerCase()
   const filteredAllBuyers = allBuyers.filter(b => {
-    const matchesSearch = !buyerSearch ||
-      b.name.toLowerCase().includes(searchLower) ||
+    if (!buyerSearch) return true
+    return b.name.toLowerCase().includes(searchLower) ||
       (b.phone ?? '').includes(buyerSearch) ||
       (b.markets ?? []).some(m => m.toLowerCase().includes(searchLower))
-    const matchesMarket = !activeMarketFilter ||
-      (b.markets ?? []).some(m => m.toLowerCase() === activeMarketFilter.toLowerCase())
-    return matchesSearch && matchesMarket
   })
 
   const COLUMNS: { key: KanbanStage; label: string }[] = [
@@ -256,50 +251,18 @@ export function Section3BuyerMatch({
 
   function openEditModal(b: BuyerItem) {
     setEditTarget(b)
-    setEditForm({
-      name: b.name ?? '',
-      phone: b.phone ?? '',
-      email: b.email ?? '',
-      tier: b.tier ?? 'unqualified',
-      markets: (b.markets ?? []).join(', '),
-      maxBuyPrice: b.maxBuyPrice ? String(b.maxBuyPrice) : '',
-      verifiedFunding: b.verifiedFunding ?? false,
-      notes: b.notes ?? '',
-    })
   }
 
-  async function saveEditBuyer() {
+  // Session 77 round 2 — buyer edits go through <BuyerEditSlideover/>.
+  // The slide-over does its own PATCH; we just merge the result locally
+  // so the kanban card updates without a refetch.
+  function applyBuyerPatch(patch: Partial<BuyerItem>) {
     if (!editTarget) return
-    setEditSaving(true)
-    try {
-      await fetch(`/api/buyers/${editTarget.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editForm.name,
-          phone: editForm.phone,
-          email: editForm.email || null,
-          tier: editForm.tier,
-          markets: editForm.markets.split(',').map(m => m.trim()).filter(Boolean),
-          maxBuyPrice: editForm.maxBuyPrice ? Number(editForm.maxBuyPrice) : null,
-          verifiedFunding: editForm.verifiedFunding,
-          notes: editForm.notes || null,
-        }),
-      })
-      const updater = (list: BuyerItem[]) => list.map(b => b.id === editTarget.id ? {
-        ...b,
-        name: editForm.name,
-        phone: editForm.phone,
-        email: editForm.email || null,
-        tier: editForm.tier,
-        markets: editForm.markets.split(',').map(m => m.trim()).filter(Boolean),
-        notes: editForm.notes || null,
-      } : b)
-      setBuyers(updater)
-      setAddedBuyers(updater)
-      setEditTarget(null)
-    } catch {}
-    setEditSaving(false)
+    const updater = (list: BuyerItem[]) => list.map(b =>
+      b.id === editTarget.id ? { ...b, ...patch } as BuyerItem : b
+    )
+    setBuyers(updater)
+    setAddedBuyers(updater)
   }
 
   // Session 77 — replaced bespoke single-buyer SMS by SendModal which
@@ -497,18 +460,10 @@ export function Section3BuyerMatch({
             style={{ borderColor: 'var(--border-medium)' }}
           />
         </div>
-        {uniqueMarkets.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {uniqueMarkets.map(m => (
-              <button key={m} onClick={() => setActiveMarketFilter(activeMarketFilter === m ? null : m)}
-                className={`text-[10px] font-medium px-2.5 py-1 rounded-full transition-colors ${
-                  activeMarketFilter === m ? 'bg-gunner-red text-white' : 'bg-surface-tertiary text-txt-secondary hover:bg-surface-secondary'
-                }`}>
-                {m}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Session 77 — market chip-row removed. The property already has
+            an assigned market; buyers shown here matched on that market
+            (or are nationwide). Clicking 5 chips to filter by market never
+            made sense in a per-property view. */}
       </div>
 
       {loading && !fetched ? (
@@ -603,7 +558,13 @@ export function Section3BuyerMatch({
                             <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 capitalize ${tierColors[b.tier] ?? tierColors.unqualified}`}>
                               {b.tier}
                             </span>
-                            <span className="text-ds-fine font-semibold text-txt-primary truncate flex-1">{titleCase(b.name)}</span>
+                            <a
+                              href={`/${tenantSlug}/buyers/${b.id}`}
+                              className="text-ds-fine font-semibold text-txt-primary truncate flex-1 hover:text-gunner-red hover:underline"
+                              title="Open buyer page"
+                            >
+                              {titleCase(b.name)}
+                            </a>
                             <span className="text-[9px] text-txt-muted shrink-0 truncate max-w-[70px]">{(b.markets ?? []).slice(0, 2).join(', ')}</span>
                           </div>
                           {b.phone && (
@@ -657,82 +618,33 @@ export function Section3BuyerMatch({
       )}
 
       {editTarget && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setEditTarget(null)} />
-          <div className="relative w-full max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right">
-            <div className="sticky top-0 bg-white border-b border-[rgba(0,0,0,0.06)] px-5 py-4 flex items-center justify-between">
-              <h3 className="text-ds-label font-semibold text-txt-primary">Edit Buyer &mdash; {titleCase(editTarget.name)}</h3>
-              <button onClick={() => setEditTarget(null)} className="text-txt-muted hover:text-txt-secondary"><X size={16} /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-[9px] text-txt-muted uppercase block mb-1">Name</label>
-                <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[9px] text-txt-muted uppercase block mb-1">Phone</label>
-                  <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
-                    className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
-                </div>
-                <div>
-                  <label className="text-[9px] text-txt-muted uppercase block mb-1">Email</label>
-                  <input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
-                </div>
-              </div>
-              <div>
-                <label className="text-[9px] text-txt-muted uppercase block mb-1">Tier</label>
-                <select value={editForm.tier} onChange={e => setEditForm(f => ({ ...f, tier: e.target.value }))}
-                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none">
-                  <option value="priority">Priority</option>
-                  <option value="qualified">Qualified</option>
-                  <option value="jv">JV Partner</option>
-                  <option value="realtor">Realtor</option>
-                  <option value="unqualified">Unqualified</option>
-                  <option value="halted">Halted</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[9px] text-txt-muted uppercase block mb-1">Markets (comma separated)</label>
-                <input value={editForm.markets} onChange={e => setEditForm(f => ({ ...f, markets: e.target.value }))}
-                  placeholder="Nashville, Chattanooga"
-                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
-              </div>
-              <div>
-                <label className="text-[9px] text-txt-muted uppercase block mb-1">Max Buy Price</label>
-                <input value={editForm.maxBuyPrice} onChange={e => setEditForm(f => ({ ...f, maxBuyPrice: e.target.value }))}
-                  type="number" placeholder="250000"
-                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30" />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={editForm.verifiedFunding}
-                    onChange={e => setEditForm(f => ({ ...f, verifiedFunding: e.target.checked }))}
-                    className="accent-gunner-red" />
-                  <span className="text-ds-fine text-txt-secondary">Verified Funding</span>
-                </label>
-              </div>
-              <div>
-                <label className="text-[9px] text-txt-muted uppercase block mb-1">Notes</label>
-                <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                  rows={3}
-                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/30 resize-none" />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setEditTarget(null)}
-                  className="flex-1 border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary text-ds-fine font-medium py-2.5 rounded-[8px] hover:bg-surface-secondary transition-colors">
-                  Cancel
-                </button>
-                <button onClick={saveEditBuyer} disabled={editSaving}
-                  className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2.5 rounded-[8px] transition-colors">
-                  {editSaving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BuyerEditSlideover
+          buyer={{
+            id: editTarget.id,
+            name: editTarget.name,
+            phone: editTarget.phone,
+            email: editTarget.email,
+            tier: editTarget.tier,
+            markets: editTarget.markets ?? [],
+            maxPurchasePrice: editTarget.maxBuyPrice ? String(editTarget.maxBuyPrice) : null,
+            verifiedFunding: editTarget.verifiedFunding ?? false,
+          }}
+          tenantSlug={tenantSlug}
+          onClose={() => setEditTarget(null)}
+          onSaved={(patch) => {
+            // Map back to BuyerItem shape for the kanban (only the fields
+            // BuyerItem renders need to round-trip).
+            applyBuyerPatch({
+              name: patch.name,
+              phone: patch.phone ?? null,
+              email: patch.email ?? null,
+              tier: patch.tier,
+              markets: patch.markets,
+              maxBuyPrice: patch.maxPurchasePrice ? Number(patch.maxPurchasePrice) : null,
+              verifiedFunding: patch.verifiedFunding,
+            } as Partial<BuyerItem>)
+          }}
+        />
       )}
 
       {/* Session 77 — Bulk Add + Send modals */}

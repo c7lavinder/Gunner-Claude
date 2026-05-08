@@ -108,7 +108,7 @@ export function DispositionJourney({
         expanded={openSection === 4}
         onToggle={() => toggle(4)}
       >
-        <Section4Responses property={property} />
+        <Section4Responses property={property} tenantSlug={tenantSlug} />
       </JourneySection>
 
       <JourneySection

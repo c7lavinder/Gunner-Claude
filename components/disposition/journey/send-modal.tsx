@@ -18,12 +18,19 @@ import { X, Loader2, Send, AlertCircle } from 'lucide-react'
 import { titleCase } from '@/lib/format'
 import { useToast } from '@/components/ui/toaster'
 
-type ArtifactKind = 'description' | 'listing' | 'social' | 'custom'
+type ArtifactKind = 'auto-tier' | 'description' | 'listing' | 'social' | 'custom'
+
+interface TierMsg {
+  emailSubject?: string
+  emailBody?: string
+  smsBody?: string
+}
 
 interface DispoArtifacts {
   description?: string
   listingPost?: string
   socialPost?: string
+  tierMessages?: Partial<Record<string, TierMsg>>
 }
 
 interface BuyerLite {
@@ -35,6 +42,7 @@ interface BuyerLite {
 }
 
 const ARTIFACT_LABELS: Record<ArtifactKind, string> = {
+  'auto-tier': 'Auto-tier (per-buyer message)',
   description: 'Description (short)',
   listing: 'Property Listing Post',
   social: 'Social Media Post',
@@ -57,7 +65,14 @@ export function SendModal({
   onSent: (sentBuyerIds: string[]) => void
 }) {
   const { toast } = useToast()
-  const [artifactKind, setArtifactKind] = useState<ArtifactKind>('description')
+  // Default to auto-tier when tier messages exist (the common path for
+  // "Send all matched"); fall back to description for one-off sends.
+  const tierMessages = artifacts.tierMessages ?? {}
+  const hasTierMessages = Object.keys(tierMessages).length > 0
+  const isMulti = buyers.length > 1
+  const [artifactKind, setArtifactKind] = useState<ArtifactKind>(
+    hasTierMessages && isMulti ? 'auto-tier' : 'description'
+  )
   const [channel, setChannel] = useState<'sms' | 'email'>('sms')
   const [customText, setCustomText] = useState('')
   const [emailSubject, setEmailSubject] = useState(`Off-market deal: ${propertyAddress}`)
@@ -65,17 +80,44 @@ export function SendModal({
   const [pendingApproval, setPendingApproval] = useState<{ gateId: string; recipientCount: number; confirmation: string } | null>(null)
   const [sending, setSending] = useState(false)
 
-  const messageText = artifactKind === 'description' ? (artifacts.description ?? '')
+  // Per-buyer message resolver for auto-tier mode. Returns null if the
+  // buyer's tier has no generated message — they're filtered out.
+  function tierMessageFor(tier: string): { message: string; subject?: string } | null {
+    const m = tierMessages[tier]
+    if (!m) return null
+    if (channel === 'sms') {
+      return m.smsBody ? { message: m.smsBody } : null
+    }
+    return m.emailBody
+      ? { message: m.emailBody, subject: m.emailSubject || `Off-market deal: ${propertyAddress}` }
+      : null
+  }
+
+  const messageText = artifactKind === 'auto-tier' ? '[per-tier]'
+    : artifactKind === 'description' ? (artifacts.description ?? '')
     : artifactKind === 'listing' ? (artifacts.listingPost ?? '')
     : artifactKind === 'social' ? (artifacts.socialPost ?? '')
     : customText
 
   const eligibleBuyers = buyers.filter(b => {
-    if (channel === 'sms') return !!b.phone && selectedIds.has(b.id)
-    return !!b.email && selectedIds.has(b.id)
+    if (!selectedIds.has(b.id)) return false
+    if (channel === 'sms' ? !b.phone : !b.email) return false
+    if (artifactKind === 'auto-tier') {
+      // Buyer must have a tier message in the chosen channel.
+      return !!tierMessageFor(b.tier)
+    }
+    return true
   })
 
   const ineligibleCount = selectedIds.size - eligibleBuyers.length
+
+  // For auto-tier, group eligible buyers by tier for the preview.
+  const tierGroups = (() => {
+    if (artifactKind !== 'auto-tier') return null
+    const groups: Record<string, number> = {}
+    for (const b of eligibleBuyers) groups[b.tier] = (groups[b.tier] ?? 0) + 1
+    return groups
+  })()
 
   function toggleBuyer(id: string) {
     setSelectedIds(prev => {
@@ -89,23 +131,37 @@ export function SendModal({
   function clearAll() { setSelectedIds(new Set()) }
 
   async function send(approvalGateId?: string) {
-    if (!messageText.trim() || eligibleBuyers.length === 0) return
+    if (eligibleBuyers.length === 0) return
+    if (artifactKind !== 'auto-tier' && !messageText.trim()) return
     setSending(true)
     try {
+      // Auto-tier path uses the multi-message endpoint so each buyer
+      // gets their tier-specific copy in a single approval flow.
+      const body = artifactKind === 'auto-tier'
+        ? {
+            action: 'send-multi',
+            channel,
+            buyerMessages: eligibleBuyers.map(b => {
+              const tm = tierMessageFor(b.tier)!
+              return { buyerId: b.id, message: tm.message, subject: tm.subject }
+            }),
+            ...(approvalGateId ? { approvalGateId } : {}),
+          }
+        : {
+            action: 'send',
+            // Synthetic tier — the blast route honors buyerIds when present;
+            // tier is just required by the schema + recorded in the audit log.
+            tier: 'manual',
+            channel,
+            message: messageText,
+            subject: channel === 'email' ? emailSubject : undefined,
+            buyerIds: eligibleBuyers.map(b => b.id),
+            ...(approvalGateId ? { approvalGateId } : {}),
+          }
       const res = await fetch(`/api/properties/${propertyId}/blast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'send',
-          // Synthetic tier — the blast route honors buyerIds when present;
-          // tier is just required by the schema + recorded in the audit log.
-          tier: 'manual',
-          channel,
-          message: messageText,
-          subject: channel === 'email' ? emailSubject : undefined,
-          buyerIds: eligibleBuyers.map(b => b.id),
-          ...(approvalGateId ? { approvalGateId } : {}),
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (res.status === 202 && data.status === 'pending_approval') {
@@ -175,12 +231,13 @@ export function SendModal({
             <div>
               <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Artifact</label>
               <div className="grid grid-cols-2 gap-2">
-                {(['description', 'listing', 'social', 'custom'] as const).map(k => {
-                  const empty = (k !== 'custom') && !(
-                    k === 'description' ? artifacts.description
-                    : k === 'listing' ? artifacts.listingPost
-                    : artifacts.socialPost
-                  )
+                {(['auto-tier', 'description', 'listing', 'social', 'custom'] as const).map(k => {
+                  const empty =
+                    k === 'auto-tier' ? !hasTierMessages
+                    : k === 'description' ? !artifacts.description
+                    : k === 'listing' ? !artifacts.listingPost
+                    : k === 'social' ? !artifacts.socialPost
+                    : false  // custom is never empty
                   return (
                     <button
                       key={k}
@@ -214,6 +271,27 @@ export function SendModal({
                   className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/20 resize-none"
                 />
               </div>
+            ) : artifactKind === 'auto-tier' ? (
+              <div>
+                <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">
+                  Per-tier breakdown (each buyer gets the message for their tier)
+                </label>
+                <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-2 space-y-1">
+                  {tierGroups && Object.keys(tierGroups).length > 0 ? (
+                    Object.entries(tierGroups).map(([tier, count]) => (
+                      <div key={tier} className="flex items-center justify-between text-[11px]">
+                        <span className="capitalize font-medium text-txt-primary">{tier}</span>
+                        <span className="text-txt-muted">{count} {count === 1 ? 'buyer' : 'buyers'}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-txt-muted italic">No eligible buyers — either tier messages are missing or buyers lack a {channel}.</p>
+                  )}
+                </div>
+                <p className="text-[10px] text-txt-muted mt-1.5 italic">
+                  Edit per-tier copy in Section 2 → Tier Messages.
+                </p>
+              </div>
             ) : (
               <div>
                 <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Preview</label>
@@ -245,7 +323,7 @@ export function SendModal({
                   >Email</button>
                 </div>
               </div>
-              {channel === 'email' && (
+              {channel === 'email' && artifactKind !== 'auto-tier' && (
                 <div className="flex-1">
                   <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Subject</label>
                   <input
@@ -307,7 +385,11 @@ export function SendModal({
               >Cancel</button>
               <button
                 onClick={() => send()}
-                disabled={sending || eligibleBuyers.length === 0 || !messageText.trim()}
+                disabled={
+                  sending
+                  || eligibleBuyers.length === 0
+                  || (artifactKind !== 'auto-tier' && !messageText.trim())
+                }
                 className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[10px] inline-flex items-center justify-center gap-1.5"
               >
                 {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}

@@ -16,10 +16,12 @@ import { hasPermission } from '@/types/roles'
 import type { UserRole } from '@/types/roles'
 import {
   generateDispoArtifact,
+  generateTierMessages,
   type DispoArtifactKind,
+  BUYER_TIERS,
 } from '@/lib/ai/dispo-generators'
 
-const KIND_VALUES = ['description', 'listing', 'social'] as const
+const KIND_VALUES = ['description', 'listing', 'social', 'tiers'] as const
 const FIELD_KEY: Record<DispoArtifactKind, 'description' | 'listingPost' | 'socialPost'> = {
   description: 'description',
   listing: 'listingPost',
@@ -30,10 +32,21 @@ const generateSchema = z.object({
   kind: z.enum(KIND_VALUES),
 })
 
-const patchSchema = z.object({
-  kind: z.enum(KIND_VALUES),
+const patchTextSchema = z.object({
+  kind: z.enum(['description', 'listing', 'social']),
   text: z.string(),
 })
+
+// Session 77 round 2 — PATCH a single tier message field directly
+// (used when the rep edits one of the 5 tier email/SMS bodies inline).
+const patchTierSchema = z.object({
+  kind: z.literal('tier'),
+  tier: z.enum(BUYER_TIERS),
+  field: z.enum(['emailSubject', 'emailBody', 'smsBody']),
+  text: z.string(),
+})
+
+const patchSchema = z.union([patchTextSchema, patchTierSchema])
 
 export const POST = withTenant<{ propertyId: string }>(async (request, ctx, params) => {
   if (!hasPermission(ctx.userRole as UserRole, 'properties.edit')) {
@@ -52,6 +65,14 @@ export const POST = withTenant<{ propertyId: string }>(async (request, ctx, para
     select: { id: true },
   })
   if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
+
+  if (parsed.data.kind === 'tiers') {
+    const result = await generateTierMessages(params.propertyId, ctx.tenantId, ctx.userId)
+    if (result.status === 'error') {
+      return NextResponse.json({ error: result.reason ?? 'Generation failed' }, { status: 500 })
+    }
+    return NextResponse.json({ status: 'success', kind: 'tiers', tiers: result.tiers })
+  }
 
   const result = await generateDispoArtifact(
     params.propertyId,
@@ -84,8 +105,24 @@ export const PATCH = withTenant<{ propertyId: string }>(async (request, ctx, par
   if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 })
 
   const current = (property.dispoArtifacts ?? {}) as Record<string, unknown>
-  const fieldKey = FIELD_KEY[parsed.data.kind]
-  const updated = { ...current, [fieldKey]: parsed.data.text }
+
+  let updated: Record<string, unknown>
+  if (parsed.data.kind === 'tier') {
+    // Inline edit to one tier × one field. Merge into tierMessages[tier][field].
+    const tiers = (current.tierMessages ?? {}) as Record<string, Record<string, string>>
+    const tier = parsed.data.tier
+    const field = parsed.data.field
+    updated = {
+      ...current,
+      tierMessages: {
+        ...tiers,
+        [tier]: { ...(tiers[tier] ?? {}), [field]: parsed.data.text },
+      },
+    }
+  } else {
+    const fieldKey = FIELD_KEY[parsed.data.kind]
+    updated = { ...current, [fieldKey]: parsed.data.text }
+  }
 
   await db.property.update({
     where: { id: params.propertyId, tenantId: ctx.tenantId },

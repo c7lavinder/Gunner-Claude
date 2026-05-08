@@ -32,7 +32,7 @@ export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) 
 export const POST = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
   try {
     const tenantId = ctx.tenantId
-    const { action, tiers, tier, message, channel, subject, buyerIds, approvalGateId } = await req.json()
+    const { action, tiers, tier, message, channel, subject, buyerIds, approvalGateId, buyerMessages } = await req.json()
 
     const propertyRaw = await db.property.findUnique({
       where: { id: params.propertyId, tenantId },
@@ -364,6 +364,140 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
           source: 'USER',
           severity: 'INFO',
           payload: { propertyId: params.propertyId, tier, channel, sent: sentCount, skipped: skippedCount },
+        },
+      })
+
+      return NextResponse.json({ status: 'success', blastId: blast.id, sentTo: sentCount, skipped: skippedCount })
+    }
+
+    // Session 77 round 2 — multi-message send. Each buyer gets their
+    // own message+subject; one approval gate covers the total. Used by
+    // the SendModal's "auto-tier" mode where each tier gets its own copy.
+    //   buyerMessages: [{ buyerId, message, subject? }]
+    if (action === 'send-multi' && Array.isArray(buyerMessages) && buyerMessages.length > 0) {
+      const items = buyerMessages as Array<{ buyerId: string; message: string; subject?: string }>
+      const ids = items.map(i => i.buyerId)
+      const buyers = await db.buyer.findMany({
+        where: { tenantId, isActive: true, id: { in: ids } },
+      })
+      const byId = new Map(buyers.map(b => [b.id, b]))
+
+      // Approval gate (single, covers total)
+      const resolvedChannel = String(channel ?? 'sms')
+      if (!approvalGateId) {
+        const gate = await db.auditLog.create({
+          data: {
+            tenantId,
+            userId: ctx.userId,
+            action: `gate.${resolvedChannel}_blast.pending`,
+            resource: `${resolvedChannel}_blast`,
+            resourceId: params.propertyId,
+            source: 'SYSTEM',
+            severity: 'WARNING',
+            payload: {
+              description: `Send ${resolvedChannel.toUpperCase()} (auto-tier) to ${items.length} buyers for ${property.address}`,
+              recipientCount: items.length,
+              propertyId: params.propertyId,
+              propertyAddress: property.address,
+              channel: resolvedChannel,
+              tier: 'auto-tier',
+              buyerIdSample: ids.slice(0, 20),
+            },
+          },
+        })
+        return NextResponse.json({
+          status: 'pending_approval',
+          gateId: gate.id,
+          recipientCount: items.length,
+          propertyAddress: property.address,
+          channel: resolvedChannel,
+          confirmationMessage: `Send ${resolvedChannel.toUpperCase()} (per-tier message) to ${items.length} buyers at ${property.address}? Confirm to proceed.`,
+        }, { status: 202 })
+      }
+
+      const gate = await db.auditLog.findFirst({
+        where: { id: approvalGateId, tenantId, userId: ctx.userId, resourceId: params.propertyId },
+        select: { id: true, action: true, createdAt: true },
+      })
+      const gateAgeMs = gate ? Date.now() - gate.createdAt.getTime() : Infinity
+      if (!gate
+          || !gate.action.startsWith('gate.')
+          || !gate.action.endsWith('_blast.pending')
+          || gateAgeMs > 5 * 60_000) {
+        return NextResponse.json({ error: 'Invalid or expired approval gate' }, { status: 403 })
+      }
+      await approveAction(gate.id, ctx.userId, tenantId)
+
+      const blast = await db.dealBlast.create({
+        data: {
+          tenantId,
+          propertyId: params.propertyId,
+          createdById: ctx.userId,
+          channel: resolvedChannel,
+          message: '[per-tier]',
+          status: 'sending',
+        },
+      })
+
+      const { getGHLClient } = await import('@/lib/ghl/client')
+      const ghl = await getGHLClient(tenantId)
+      let sentCount = 0
+      let skippedCount = 0
+
+      for (const item of items) {
+        const buyer = byId.get(item.buyerId)
+        if (!buyer || !buyer.ghlContactId) { skippedCount++; continue }
+        try {
+          if (resolvedChannel === 'email' && item.subject && item.message) {
+            await ghl.sendEmail(buyer.ghlContactId, item.subject, `<div>${item.message.replace(/\n/g, '<br>')}</div>`)
+          } else if (item.message) {
+            await ghl.sendSMS(buyer.ghlContactId, item.message)
+          }
+          sentCount++
+          await db.dealBlastRecipient.create({ data: { blastId: blast.id, buyerId: buyer.id } })
+
+          // Stage promote — same logic as the single-message send.
+          try {
+            const existing = await db.propertyBuyerStage.findUnique({
+              where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId: buyer.id } },
+              select: { id: true, stage: true },
+            })
+            const ADVANCED = ['responded', 'interested', 'showing_scheduled']
+            const newStage = existing && ADVANCED.includes(existing.stage) ? existing.stage : 'sent'
+            await db.propertyBuyerStage.upsert({
+              where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId: buyer.id } },
+              create: {
+                tenantId, propertyId: params.propertyId, buyerId: buyer.id,
+                stage: 'sent', source: 'matched',
+                lastBlastSentAt: new Date(), blastsReceivedCount: 1,
+              },
+              update: {
+                stage: newStage,
+                lastBlastSentAt: new Date(),
+                blastsReceivedCount: { increment: 1 },
+              },
+            })
+          } catch (err) {
+            console.warn(`[Blast multi] Stage promote failed for ${buyer.id}:`, err instanceof Error ? err.message : err)
+          }
+
+          await new Promise(r => setTimeout(r, 100))
+        } catch (err) {
+          console.error(`[Blast multi] Send failed for buyer ${buyer.id}:`, err instanceof Error ? err.message : err)
+          skippedCount++
+        }
+      }
+
+      await db.dealBlast.update({
+        where: { id: blast.id, tenantId },
+        data: { status: 'sent', sentAt: new Date() },
+      })
+      await db.auditLog.create({
+        data: {
+          tenantId, userId: ctx.userId,
+          action: 'deal_blast.sent',
+          source: 'USER', severity: 'INFO',
+          payload: { propertyId: params.propertyId, tier: 'auto-tier', channel: resolvedChannel, sent: sentCount, skipped: skippedCount },
         },
       })
 

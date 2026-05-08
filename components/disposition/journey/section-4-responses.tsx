@@ -19,6 +19,7 @@ import { useToast } from '@/components/ui/toaster'
 import { formatPhone, titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
 import { SendModal } from './send-modal'
+import { BuyerEditSlideover } from './buyer-edit-slideover'
 
 type Stage = 'responded' | 'interested' | 'showing_scheduled'
 
@@ -63,11 +64,12 @@ const TIER_COLORS: Record<string, string> = {
   halted: 'bg-red-100 text-red-500',
 }
 
-export function Section4Responses({ property }: { property: PropertyDetail }) {
+export function Section4Responses({ property, tenantSlug }: { property: PropertyDetail; tenantSlug: string }) {
   const { toast } = useToast()
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [sendTargets, setSendTargets] = useState<Row[] | null>(null)
+  const [editTarget, setEditTarget] = useState<Row | null>(null)
 
   async function load() {
     setLoading(true)
@@ -181,7 +183,13 @@ export function Section4Responses({ property }: { property: PropertyDetail }) {
                           <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 capitalize ${TIER_COLORS[r.tier] ?? TIER_COLORS.unqualified}`}>
                             {r.tier}
                           </span>
-                          <span className="text-ds-fine font-semibold text-txt-primary truncate flex-1">{titleCase(r.name)}</span>
+                          <a
+                            href={`/${tenantSlug}/buyers/${r.buyerId}`}
+                            className="text-ds-fine font-semibold text-txt-primary truncate flex-1 hover:text-gunner-red hover:underline"
+                            title="Open buyer page"
+                          >
+                            {titleCase(r.name)}
+                          </a>
                         </div>
                         {r.phone && (
                           <p className="text-[10px] text-txt-muted mb-2 pl-0.5">{formatPhone(r.phone)}</p>
@@ -200,14 +208,13 @@ export function Section4Responses({ property }: { property: PropertyDetail }) {
                           >
                             <Send size={10} /> Send
                           </button>
-                          <a
-                            href={`/${property.address ? '' : ''}`}
-                            onClick={e => e.preventDefault()}
-                            className="flex items-center gap-1 text-[9px] font-medium text-txt-muted hover:text-txt-secondary bg-surface-tertiary hover:bg-surface-secondary px-2 py-1 rounded-md transition-colors cursor-default"
-                            title="Buyer detail (coming soon)"
+                          <button
+                            onClick={() => setEditTarget(r)}
+                            className="flex items-center gap-1 text-[9px] font-medium text-txt-muted hover:text-txt-secondary bg-surface-tertiary hover:bg-surface-secondary px-2 py-1 rounded-md transition-colors"
+                            title="Edit buyer"
                           >
-                            <Pencil size={9} /> Notes
-                          </a>
+                            <Pencil size={9} /> Edit
+                          </button>
                           <div className="flex-1" />
                           {prev && (
                             <button
@@ -252,6 +259,36 @@ export function Section4Responses({ property }: { property: PropertyDetail }) {
           }}
           onClose={() => setSendTargets(null)}
           onSent={() => { /* Section 4 stages don't auto-promote on follow-up send */ }}
+        />
+      )}
+
+      {editTarget && (
+        <BuyerEditSlideover
+          buyer={{
+            id: editTarget.buyerId,
+            name: editTarget.name,
+            phone: editTarget.phone,
+            email: editTarget.email,
+            tier: editTarget.tier,
+            markets: editTarget.markets ?? [],
+          }}
+          tenantSlug={tenantSlug}
+          onClose={() => setEditTarget(null)}
+          onSaved={(patch) => {
+            // Merge into the local rows so the kanban card reflects the
+            // edit without a refetch.
+            setRows(prev => prev.map(r => r.buyerId === editTarget.buyerId
+              ? {
+                  ...r,
+                  name: patch.name ?? r.name,
+                  phone: patch.phone ?? r.phone,
+                  email: patch.email ?? r.email,
+                  tier: patch.tier ?? r.tier,
+                  markets: patch.markets ?? r.markets,
+                }
+              : r,
+            ))
+          }}
         />
       )}
     </div>

@@ -30,9 +30,26 @@ const MAX_TOKENS = 1500
 
 export type DispoArtifactKind = 'description' | 'listing' | 'social'
 
+export const BUYER_TIERS = ['priority', 'qualified', 'jv', 'unqualified', 'realtor'] as const
+export type BuyerTier = typeof BUYER_TIERS[number]
+
+export interface TierMessage {
+  emailSubject: string
+  emailBody: string
+  smsBody: string
+}
+
+export type TierMessages = Partial<Record<BuyerTier, TierMessage>>
+
 export interface GenerateDispoResult {
   status: 'success' | 'error'
   text?: string
+  reason?: string
+}
+
+export interface GenerateTiersResult {
+  status: 'success' | 'error'
+  tiers?: TierMessages
   reason?: string
 }
 
@@ -153,6 +170,131 @@ export async function generateDispoArtifact(
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[Dispo Generator] ${kind} failed for ${propertyId}:`, msg)
     await logFailure(tenantId, `dispo_${kind}.generate_failed`, `property:${propertyId}`, err).catch(() => {})
+    return { status: 'error', reason: msg }
+  }
+}
+
+// ─── Per-tier messages (Session 77 round 2) ─────────────────────────
+// Generates 5 tier-specific email + SMS pairs in ONE AI call. Persists
+// under dispoArtifacts.tierMessages. Used by the Section-3 SendModal's
+// "auto-tier" mode where each recipient gets the message tailored to
+// their buyer.tier.
+
+export async function generateTierMessages(
+  propertyId: string,
+  tenantId: string,
+  generatedByUserId: string,
+): Promise<GenerateTiersResult> {
+  const ctx = await loadContext(propertyId, tenantId)
+  if (!ctx) return { status: 'error', reason: 'property not found or context unavailable' }
+  if (!ctx.dispoManagerName) {
+    return { status: 'error', reason: 'no Disposition Manager assigned — see Section 1 readiness' }
+  }
+
+  const userPrompt = buildPrompt('listing', ctx)  // re-use the structured fact dump
+    + `\n\nGenerate one (email_subject, email_body, sms_body) trio for each of these 5 buyer tiers:
+- PRIORITY: top-tier proven cash buyers, getting first access. Tone: brief, urgent, exclusive.
+- QUALIFIED: verified proof of funds. Tone: professional, deal-focused, factual.
+- JV: co-investment partners. Tone: collaborative, terms-forward, partner-oriented.
+- UNQUALIFIED: unverified buyers. Tone: warm, broad-strokes, low-commitment ask.
+- REALTOR: agents who'd show this to clients. Tone: highlight commission/spread potential, offer co-op.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "priority":    { "email_subject": "...", "email_body": "...", "sms_body": "..." },
+  "qualified":   { "email_subject": "...", "email_body": "...", "sms_body": "..." },
+  "jv":          { "email_subject": "...", "email_body": "...", "sms_body": "..." },
+  "unqualified": { "email_subject": "...", "email_body": "...", "sms_body": "..." },
+  "realtor":     { "email_subject": "...", "email_body": "...", "sms_body": "..." }
+}
+
+Rules per message:
+- email_body: 3-5 sentences, professional. Close with the dispo manager's name + phone.
+- sms_body: 1-2 sentences, under 320 characters. Close with name + phone.
+- email_subject: short, factual, no clickbait.
+- No hype words ("steal", "gem", "massive", "explosive", "insane").
+- No emojis.`
+
+  const systemPrompt = `You are generating per-tier outreach messages for a wholesale real estate deal blast. Output ONLY a JSON object — no commentary, no markdown fences, no surrounding text. The JSON must parse with JSON.parse on first try.`
+
+  try {
+    const { logAiCall, startTimer } = await import('@/lib/ai/log')
+    const timer = startTimer()
+
+    const response = await anthropic.messages.create({
+      model: DISPO_MODEL,
+      max_tokens: 4000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    })
+
+    const textBlock = response.content.find(b => b.type === 'text')
+    const raw = textBlock && textBlock.type === 'text' ? textBlock.text.trim() : ''
+    if (!raw) return { status: 'error', reason: 'empty response from model' }
+
+    // Tolerant JSON extraction — strip markdown fences if model adds them.
+    const jsonStart = raw.indexOf('{')
+    const jsonEnd = raw.lastIndexOf('}')
+    const jsonText = jsonStart >= 0 && jsonEnd > jsonStart ? raw.slice(jsonStart, jsonEnd + 1) : raw
+
+    let parsed: Record<string, { email_subject: string; email_body: string; sms_body: string }>
+    try {
+      parsed = JSON.parse(jsonText)
+    } catch (err) {
+      return { status: 'error', reason: `failed to parse model JSON: ${err instanceof Error ? err.message : String(err)}` }
+    }
+
+    const tiers: TierMessages = {}
+    for (const tier of BUYER_TIERS) {
+      const t = parsed[tier]
+      if (!t) continue
+      tiers[tier] = {
+        emailSubject: t.email_subject ?? '',
+        emailBody: t.email_body ?? '',
+        smsBody: t.sms_body ?? '',
+      }
+    }
+
+    logAiCall({
+      tenantId,
+      type: 'blast_gen',
+      pageContext: `property:${propertyId}`,
+      input: userPrompt.slice(0, 3000),
+      output: raw.slice(0, 3000),
+      tokensIn: response.usage?.input_tokens,
+      tokensOut: response.usage?.output_tokens,
+      durationMs: timer(),
+      model: DISPO_MODEL,
+    }).catch(err => {
+      logFailure(tenantId, `dispo_tiers.ai_log_failed`, `property:${propertyId}`, err).catch(() => {})
+    })
+
+    // Persist into dispoArtifacts.tierMessages
+    const property = await db.property.findUnique({
+      where: { id: propertyId, tenantId },
+      select: { dispoArtifacts: true },
+    })
+    const current = (property?.dispoArtifacts ?? {}) as Record<string, unknown>
+    const generatedAt = (current.generatedAt ?? {}) as Record<string, string>
+    const generatedBy = (current.generatedBy ?? {}) as Record<string, string>
+    const updatedArtifacts = {
+      ...current,
+      tierMessages: tiers,
+      generatedAt: { ...generatedAt, tierMessages: new Date().toISOString() },
+      generatedBy: { ...generatedBy, tierMessages: generatedByUserId },
+    }
+    await db.property.update({
+      where: { id: propertyId, tenantId },
+      data: {
+        dispoArtifacts: JSON.parse(JSON.stringify(updatedArtifacts)) as Prisma.InputJsonValue,
+      },
+    })
+
+    return { status: 'success', tiers }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[Dispo Generator] tiers failed for ${propertyId}:`, msg)
+    await logFailure(tenantId, `dispo_tiers.generate_failed`, `property:${propertyId}`, err).catch(() => {})
     return { status: 'error', reason: msg }
   }
 }

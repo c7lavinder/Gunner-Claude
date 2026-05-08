@@ -107,24 +107,6 @@ export function Section2DealBlast({
         onSaved={handleBlastFieldSaved}
       />
 
-      {/* Session 77 — three generators (description, listing-site post,
-          FB post). No send button — sending lives in Section 3 (Match
-          buyers). */}
-      <Section2Artifacts
-        propertyId={property.id}
-        initialArtifacts={property.dispoArtifacts}
-        hasDispoManager={property.propertyTeam.some(t => isDispoManagerRole(t.role))}
-        hasDescription={!!description}
-        onArtifactSaved={(kind, text) => {
-          // Description doubles as the Property.description field below in
-          // the deal summary. Keep them in sync when the AI generates one
-          // (or the rep edits the artifact and saves).
-          if (kind === 'description') {
-            setDescription(text)
-          }
-        }}
-      />
-
       <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
         <div className="px-4 py-2 bg-surface-secondary border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
           <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Deal Summary</p>
@@ -260,13 +242,28 @@ export function Section2DealBlast({
         </div>
       </div>
 
-      {/* Session 77 — sending happens in Section 3 (Match Buyers) now,
-          not here. The tier picker / per-tier blast cards / send buttons /
-          recipient list / FROM dropdown / blast history were all stripped
-          when Section 3 became the operational dispatch center. The
-          generators above produce the artifacts; Section 3 distributes them. */}
+      {/* Session 77 — three generators (description, listing-site post,
+          FB post) + per-tier messages (priority/qualified/jv/unqualified/
+          realtor). No send button — sending lives in Section 3 (Match
+          buyers). The deal summary above gives the AI numeric context;
+          this block produces the actual buyer-facing copy. */}
+      <Section2Artifacts
+        propertyId={property.id}
+        initialArtifacts={property.dispoArtifacts}
+        hasDispoManager={property.propertyTeam.some(t => isDispoManagerRole(t.role))}
+        hasDescription={!!description}
+        onArtifactSaved={(kind, text) => {
+          // Description doubles as the Property.description field above in
+          // the deal summary. Keep them in sync when the AI generates one
+          // (or the rep edits the artifact and saves).
+          if (kind === 'description') {
+            setDescription(text)
+          }
+        }}
+      />
+
       <p className="text-[10px] text-txt-muted text-center bg-surface-secondary rounded-[8px] py-2 border-[0.5px] border-[rgba(0,0,0,0.06)]">
-        Generated artifacts live above. Sending happens in Section 3 (Match Buyers).
+        Sending happens in Section 3 (Match Buyers).
       </p>
     </div>
   )

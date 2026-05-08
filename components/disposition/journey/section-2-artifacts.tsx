@@ -11,10 +11,43 @@
 // Persisted on Property.dispoArtifacts. Re-generate overwrites.
 
 import { useState, useEffect } from 'react'
-import { Loader2, Wand2, Copy, Check } from 'lucide-react'
+import { Loader2, Wand2, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { useToast } from '@/components/ui/toaster'
 
 type Kind = 'description' | 'listing' | 'social'
+type Tier = 'priority' | 'qualified' | 'jv' | 'unqualified' | 'realtor'
+
+interface TierMessage {
+  emailSubject?: string
+  emailBody?: string
+  smsBody?: string
+}
+
+const TIER_LABELS: Record<Tier, string> = {
+  priority: 'Priority',
+  qualified: 'Qualified',
+  jv: 'JV Partner',
+  unqualified: 'Unqualified',
+  realtor: 'Realtor',
+}
+
+const TIER_BLURBS: Record<Tier, string> = {
+  priority: 'Top-tier proven cash buyers — first access, urgent tone.',
+  qualified: 'Verified proof of funds — professional, deal-focused.',
+  jv: 'Co-investment partners — terms-forward, collaborative.',
+  unqualified: 'Unverified — warm, broad-strokes, low-commitment ask.',
+  realtor: 'Agents who would show this to clients — co-op friendly.',
+}
+
+const TIER_COLORS: Record<Tier, string> = {
+  priority: 'bg-amber-50 text-amber-700 border-amber-200',
+  qualified: 'bg-green-50 text-green-700 border-green-200',
+  jv: 'bg-blue-50 text-blue-700 border-blue-200',
+  unqualified: 'bg-gray-50 text-gray-600 border-gray-200',
+  realtor: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+}
+
+const TIERS: Tier[] = ['priority', 'qualified', 'jv', 'unqualified', 'realtor']
 
 const KIND_META: Record<Kind, { label: string; helper: string; rows: number; field: 'description' | 'listingPost' | 'socialPost' }> = {
   description: {
@@ -41,7 +74,11 @@ interface DispoArtifacts {
   description?: string
   listingPost?: string
   socialPost?: string
-  generatedAt?: { description?: string; listingPost?: string; socialPost?: string }
+  tierMessages?: Partial<Record<Tier, TierMessage>>
+  generatedAt?: {
+    description?: string; listingPost?: string; socialPost?: string
+    tierMessages?: string
+  }
 }
 
 export function Section2Artifacts({
@@ -74,6 +111,8 @@ export function Section2Artifacts({
     listing: initial.generatedAt?.listingPost ?? null,
     social: initial.generatedAt?.socialPost ?? null,
   })
+  const [tierMessages, setTierMessages] = useState<Partial<Record<Tier, TierMessage>>>(initial.tierMessages ?? {})
+  const [tiersGeneratedAt, setTiersGeneratedAt] = useState<string | null>(initial.generatedAt?.tierMessages ?? null)
 
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
@@ -109,7 +148,194 @@ export function Section2Artifacts({
             onSavedEdit={t => onArtifactSaved?.(kind, t)}
           />
         ))}
+
+        <TierMessagesBlock
+          propertyId={propertyId}
+          messages={tierMessages}
+          generatedAt={tiersGeneratedAt}
+          disabled={!hasDispoManager}
+          onGenerated={(tiers, at) => {
+            setTierMessages(tiers)
+            setTiersGeneratedAt(at)
+          }}
+          onMessagesChange={setTierMessages}
+        />
       </div>
+    </div>
+  )
+}
+
+// ─── Tier Messages block ──────────────────────────────────────────
+// Five collapsible rows (one per tier) — email subject + email body +
+// SMS body, all editable. ONE "Generate all" button regenerates all
+// 15 strings via a single AI call (POST /dispo-generate kind=tiers).
+// Inline edits PATCH per-field via the same route with kind=tier.
+
+function TierMessagesBlock({
+  propertyId, messages, generatedAt, disabled, onGenerated, onMessagesChange,
+}: {
+  propertyId: string
+  messages: Partial<Record<Tier, TierMessage>>
+  generatedAt: string | null
+  disabled: boolean
+  onGenerated: (tiers: Partial<Record<Tier, TierMessage>>, at: string) => void
+  onMessagesChange: (tiers: Partial<Record<Tier, TierMessage>>) => void
+}) {
+  const { toast } = useToast()
+  const [generating, setGenerating] = useState(false)
+  const [openTier, setOpenTier] = useState<Tier | null>(null)
+  const hasAny = Object.keys(messages).length > 0
+
+  async function generate() {
+    if (disabled) return
+    setGenerating(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/dispo-generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'tiers' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast(data.error ?? 'Failed to generate tier messages', 'error')
+      } else {
+        const tiers: Partial<Record<Tier, TierMessage>> = data.tiers ?? {}
+        onGenerated(tiers, new Date().toISOString())
+        toast('Tier messages generated', 'success')
+      }
+    } catch {
+      toast('Failed to generate tier messages', 'error')
+    }
+    setGenerating(false)
+  }
+
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <p className="text-[11px] font-semibold text-txt-primary">Tier Messages</p>
+          <p className="text-[9px] text-txt-muted">
+            One email + SMS pair per buyer tier. Used by the &ldquo;Send all matched&rdquo; auto-tier mode in Section 3.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {generatedAt && (
+            <span className="text-[8px] text-txt-muted">
+              Generated {new Date(generatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={generate}
+            disabled={generating || disabled}
+            className="text-[10px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-2.5 py-1 rounded-[6px] inline-flex items-center gap-1 transition-colors"
+          >
+            {generating ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+            {generating ? 'Generating...' : (hasAny ? 'Regenerate all' : 'Generate all')}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        {TIERS.map(tier => {
+          const msg = messages[tier]
+          const isOpen = openTier === tier
+          const filled = !!(msg?.emailBody || msg?.smsBody)
+          return (
+            <div key={tier} className="border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] overflow-hidden">
+              <button
+                onClick={() => setOpenTier(isOpen ? null : tier)}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-surface-secondary text-left transition-colors"
+              >
+                {isOpen ? <ChevronDown size={11} className="text-txt-muted" /> : <ChevronRight size={11} className="text-txt-muted" />}
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border-[0.5px] capitalize ${TIER_COLORS[tier]}`}>
+                  {TIER_LABELS[tier]}
+                </span>
+                <span className="text-[10px] text-txt-muted truncate flex-1">{TIER_BLURBS[tier]}</span>
+                {!filled && (
+                  <span className="text-[9px] text-txt-muted italic">Not generated</span>
+                )}
+              </button>
+              {isOpen && (
+                <div className="px-3 py-2.5 space-y-2 border-t border-[rgba(0,0,0,0.04)] bg-surface-secondary/30">
+                  <TierField
+                    propertyId={propertyId}
+                    tier={tier}
+                    field="emailSubject"
+                    label="Email Subject"
+                    rows={1}
+                    value={msg?.emailSubject ?? ''}
+                    onChange={(v) => onMessagesChange({ ...messages, [tier]: { ...messages[tier], emailSubject: v } })}
+                  />
+                  <TierField
+                    propertyId={propertyId}
+                    tier={tier}
+                    field="emailBody"
+                    label="Email Body"
+                    rows={4}
+                    value={msg?.emailBody ?? ''}
+                    onChange={(v) => onMessagesChange({ ...messages, [tier]: { ...messages[tier], emailBody: v } })}
+                  />
+                  <TierField
+                    propertyId={propertyId}
+                    tier={tier}
+                    field="smsBody"
+                    label="SMS Body"
+                    rows={2}
+                    value={msg?.smsBody ?? ''}
+                    onChange={(v) => onMessagesChange({ ...messages, [tier]: { ...messages[tier], smsBody: v } })}
+                  />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function TierField({
+  propertyId, tier, field, label, rows, value, onChange,
+}: {
+  propertyId: string
+  tier: Tier
+  field: 'emailSubject' | 'emailBody' | 'smsBody'
+  label: string
+  rows: number
+  value: string
+  onChange: (v: string) => void
+}) {
+  const [savedValue, setSavedValue] = useState(value)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setSavedValue(value) }, [value])
+
+  async function persist() {
+    if (value === savedValue) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/dispo-generate`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'tier', tier, field, text: value }),
+      })
+      if (res.ok) setSavedValue(value)
+    } catch {}
+    setSaving(false)
+  }
+
+  return (
+    <div>
+      <label className="text-[9px] font-semibold text-txt-muted uppercase block mb-0.5">
+        {label} {saving && <span className="font-normal italic ml-1">saving...</span>}
+      </label>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onBlur={persist}
+        rows={rows}
+        className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[6px] px-2 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gunner-red/20 resize-none font-mono"
+      />
     </div>
   )
 }
