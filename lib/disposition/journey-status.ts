@@ -36,6 +36,12 @@ export interface JourneyInputs {
   responsesCount: number                   // # of inbound buyer responses
   offersLoggedCount: number                // # of logged offers
   offersAcceptedCount: number              // # accepted (drives status=done)
+  // Session 78 — Section 2 status is driven by artifact generation, not
+  // by whether a blast has shipped. 4 pieces total: description (lives
+  // on Property.description after the description-merge), listing post,
+  // social post, tier messages. Optional so the portfolio query can
+  // omit it (defaults to 0).
+  artifactsGeneratedCount?: number
 }
 
 export function computeJourneyStatus(p: JourneyInputs): JourneyStatus {
@@ -62,8 +68,15 @@ export function computeJourneyStatus(p: JourneyInputs): JourneyStatus {
     : 'in_progress'
 
   // ── Section 2 — Generate deal blast ────────────────────────────────
+  // Driven by artifact generation count: 0 = not_started, 1-3 = in_progress,
+  // 4 = done. Falls back to the legacy "blast sent" check for the portfolio
+  // query that doesn't carry artifact counts.
+  const generated = p.artifactsGeneratedCount ?? 0
   const section2: SectionStatus =
-    p.blastsSentCount > 0 ? 'done' : 'not_started'
+    generated >= 4 ? 'done'
+    : generated > 0 ? 'in_progress'
+    : p.blastsSentCount > 0 ? 'done'
+    : 'not_started'
 
   // ── Section 3 — Match buyers ───────────────────────────────────────
   // No "done" — buyers come in over time. Rep moves on when ready.

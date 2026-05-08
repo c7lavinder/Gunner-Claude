@@ -311,6 +311,11 @@ async function loadContext(propertyId: string, tenantId: string): Promise<DispoC
       arv: true, dispoAskingPrice: true, contractPrice: true, assignmentFee: true,
       dealBlastArvOverride: true,
       description: true, neighborhoodSummary: true,
+      // constructionEstimate is the rep-set value in the Property Details
+      // panel ("Construction" row). It takes precedence over the AI-derived
+      // repairEstimate so the artifact prompt always uses what the rep
+      // sees on the panel.
+      constructionEstimate: true,
       repairEstimate: true, rentalEstimate: true,
       // Intangibles → infer pros + work-needed for the prompts
       comparableRisk: true, basementStatus: true, curbAppeal: true,
@@ -361,7 +366,9 @@ async function loadContext(propertyId: string, tenantId: string): Promise<DispoC
     assignmentFee: property.assignmentFee?.toString() ?? null,
     description: property.description,
     neighborhoodSummary: property.neighborhoodSummary,
-    repairEstimate: property.repairEstimate?.toString() ?? null,
+    // Panel's Construction Estimate wins over the AI-derived repair number.
+    // Falls back to repairEstimate when the rep hasn't entered a value yet.
+    repairEstimate: property.constructionEstimate?.toString() ?? property.repairEstimate?.toString() ?? null,
     rentalEstimate: property.rentalEstimate?.toString() ?? null,
     comps: property.comps.map(c => ({
       address: c.address,

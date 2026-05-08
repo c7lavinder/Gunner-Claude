@@ -10,20 +10,35 @@
 // internal notes, the 3 generators, plus the PDF flyer download.
 
 import { useState } from 'react'
-import { FileText, Pencil, X } from 'lucide-react'
+import { FileText, Loader2, Pencil, Wand2, X } from 'lucide-react'
 import {
   InlineTextArea,
   type PropertyDetail,
 } from '@/components/inventory/property-detail-client'
 import { Section2Artifacts } from './section-2-artifacts'
 import { isDispoManagerRole } from '@/lib/disposition/property-details-readiness'
+import { useToast } from '@/components/ui/toaster'
 
 export function Section2DealBlast({
   property,
+  description,
+  onDescriptionChange,
+  internalNotes,
+  onInternalNotesChange,
+  artifacts,
+  onArtifactsChange,
 }: {
   property: PropertyDetail
   tenantSlug: string
+  // Lifted from DispositionJourney so collapse/expand doesn't lose state.
+  description: string | null
+  onDescriptionChange: (val: string | null) => void
+  internalNotes: string | null
+  onInternalNotesChange: (val: string | null) => void
+  artifacts: Record<string, unknown>
+  onArtifactsChange: (next: Record<string, unknown>) => void
 }) {
+  const { toast } = useToast()
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [overrides, setOverrides] = useState<Record<string, string | null>>({
@@ -37,17 +52,58 @@ export function Section2DealBlast({
   )
   const [savingOverride, setSavingOverride] = useState(false)
 
-  const [description, setDescription] = useState<string | null>(property.description)
-  const [internalNotes, setInternalNotes] = useState<string | null>(property.internalNotes)
-  const [descriptionSource, setDescriptionSource] = useState<string | undefined>(property.fieldSources?.description)
+  const [generatingDescription, setGeneratingDescription] = useState(false)
+  const descriptionSource = fieldSources.description
+  const hasDispoManager = property.propertyTeam.some(t => isDispoManagerRole(t.role))
 
   function handleBlastFieldSaved(field: string, val: string | number | null, src?: string) {
     if (field === 'description') {
-      setDescription(val as string | null)
-      if (src !== undefined) setDescriptionSource(src || undefined)
+      onDescriptionChange(val as string | null)
+      if (src !== undefined) {
+        setFieldSources(prev => {
+          const next = { ...prev }
+          if (src) next.description = src
+          else delete next.description
+          return next
+        })
+      }
     } else if (field === 'internalNotes') {
-      setInternalNotes(val as string | null)
+      onInternalNotesChange(val as string | null)
     }
+  }
+
+  async function generateDescription() {
+    if (!hasDispoManager || generatingDescription) return
+    setGeneratingDescription(true)
+    try {
+      const res = await fetch(`/api/properties/${property.id}/dispo-generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'description' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast(data.error ?? 'Failed to generate description', 'error')
+      } else {
+        const newText = data.text ?? ''
+        onDescriptionChange(newText)
+        // The dispo-generate route writes dispoArtifacts.description, so
+        // also persist to Property.description for the canonical source.
+        await fetch(`/api/properties/${property.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: newText,
+            fieldSources: { description: 'ai' },
+          }),
+        }).catch(() => {})
+        setFieldSources(prev => ({ ...prev, description: 'ai' }))
+        toast('Description generated', 'success')
+      }
+    } catch {
+      toast('Failed to generate description', 'error')
+    }
+    setGeneratingDescription(false)
   }
 
   async function saveDealOverride(overrideKey: string, value: string) {
@@ -218,8 +274,20 @@ export function Section2DealBlast({
           <p className="text-[10px] text-txt-secondary mt-2 italic">{property.neighborhoodSummary}</p>
         )}
         <div className="mt-3">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Description</p>
+            <button
+              onClick={generateDescription}
+              disabled={!hasDispoManager || generatingDescription}
+              title={!hasDispoManager ? 'Assign a Disposition Manager first.' : ''}
+              className="text-[10px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-2.5 py-1 rounded-[6px] inline-flex items-center gap-1 transition-colors"
+            >
+              {generatingDescription ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+              {generatingDescription ? 'Generating...' : (description ? 'Regenerate' : 'Generate')}
+            </button>
+          </div>
           <InlineTextArea
-            label="Description"
+            label=""
             value={description}
             field="description"
             propertyId={property.id}
@@ -249,24 +317,15 @@ export function Section2DealBlast({
         </div>
       </div>
 
-      {/* Session 77 — three generators (description, listing-site post,
-          FB post) + per-tier messages (priority/qualified/jv/unqualified/
-          realtor). No send button — sending lives in Section 3 (Match
-          buyers). The deal summary above gives the AI numeric context;
-          this block produces the actual buyer-facing copy. */}
+      {/* Session 78 — listing post + social post + per-tier messages.
+          Description was promoted out of artifacts and lives next to the
+          deal summary above (single source of truth on Property.description).
+          No send button — sending lives in Section 3 (Match buyers). */}
       <Section2Artifacts
         propertyId={property.id}
-        initialArtifacts={property.dispoArtifacts}
-        hasDispoManager={property.propertyTeam.some(t => isDispoManagerRole(t.role))}
-        hasDescription={!!description}
-        onArtifactSaved={(kind, text) => {
-          // Description doubles as the Property.description field above in
-          // the deal summary. Keep them in sync when the AI generates one
-          // (or the rep edits the artifact and saves).
-          if (kind === 'description') {
-            setDescription(text)
-          }
-        }}
+        artifacts={artifacts}
+        onArtifactsChange={onArtifactsChange}
+        hasDispoManager={hasDispoManager}
       />
 
       <p className="text-[10px] text-txt-muted text-center bg-surface-secondary rounded-[8px] py-2 border-[0.5px] border-[rgba(0,0,0,0.06)]">

@@ -13,12 +13,13 @@
 
 import { useState, useEffect } from 'react'
 import {
-  X, Plus, DollarSign, Clock, User, Loader2, Pencil,
+  X, Plus, DollarSign, Clock, User, Loader2, Pencil, Send,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/toaster'
 import { titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
+import { SendModal } from './send-modal'
 
 const CT_ZONE = 'America/Chicago'
 const CT_DATETIME = new Intl.DateTimeFormat('en-US', {
@@ -75,6 +76,12 @@ export function Section5OffersShowings({
   const [offerAmount, setOfferAmount] = useState('')
   const [showingDate, setShowingDate] = useState('')
   const [showingTime, setShowingTime] = useState('')
+
+  // Send-modal target — set by clicking Send on an activity card. Modal
+  // mounts here (not in the card) so the card stays cheap to re-render.
+  const [sendTarget, setSendTarget] = useState<{
+    id: string; name: string; phone: string | null; email: string | null; tier: string
+  } | null>(null)
 
   useEffect(() => {
     fetch(`/api/properties/${property.id}/outreach`)
@@ -260,6 +267,7 @@ export function Section5OffersShowings({
             propertyId={property.id}
             tenantSlug={tenantSlug}
             onLogClick={() => setFormType('showing')}
+            onSendClick={setSendTarget}
             onUpdated={refreshLogs}
           />
           <ActivityColumn
@@ -271,9 +279,26 @@ export function Section5OffersShowings({
             propertyId={property.id}
             tenantSlug={tenantSlug}
             onLogClick={() => setFormType('offer')}
+            onSendClick={setSendTarget}
             onUpdated={refreshLogs}
           />
         </div>
+      )}
+
+      {sendTarget && (
+        <SendModal
+          propertyId={property.id}
+          propertyAddress={property.address}
+          tenantSlug={tenantSlug}
+          buyers={[sendTarget]}
+          artifacts={{
+            description: (property.dispoArtifacts?.description as string | undefined),
+            listingPost: (property.dispoArtifacts?.listingPost as string | undefined),
+            socialPost: (property.dispoArtifacts?.socialPost as string | undefined),
+          }}
+          onClose={() => setSendTarget(null)}
+          onSent={() => setSendTarget(null)}
+        />
       )}
     </div>
   )
@@ -281,7 +306,7 @@ export function Section5OffersShowings({
 
 // ─── Per-side column ─────────────────────────────────────────────────────────
 function ActivityColumn({
-  label, count, icon: Icon, iconBg, logs, propertyId, tenantSlug, onLogClick, onUpdated,
+  label, count, icon: Icon, iconBg, logs, propertyId, tenantSlug, onLogClick, onSendClick, onUpdated,
 }: {
   label: string
   count: number
@@ -291,6 +316,7 @@ function ActivityColumn({
   propertyId: string
   tenantSlug: string
   onLogClick: () => void
+  onSendClick: (target: { id: string; name: string; phone: string | null; email: string | null; tier: string }) => void
   onUpdated: () => void
 }) {
   return (
@@ -322,6 +348,7 @@ function ActivityColumn({
               propertyId={propertyId}
               tenantSlug={tenantSlug}
               iconBg={iconBg}
+              onSendClick={onSendClick}
               onUpdated={onUpdated}
             />
           ))}
@@ -333,12 +360,13 @@ function ActivityColumn({
 
 // ─── Single activity card (offer or showing) ────────────────────────────────
 function ActivityCard({
-  log: l, propertyId, tenantSlug, iconBg, onUpdated,
+  log: l, propertyId, tenantSlug, iconBg, onSendClick, onUpdated,
 }: {
   log: ActivityLog
   propertyId: string
   tenantSlug: string
   iconBg: string
+  onSendClick: (target: { id: string; name: string; phone: string | null; email: string | null; tier: string }) => void
   onUpdated: () => void
 }) {
   const [editing, setEditing] = useState(false)
@@ -491,10 +519,28 @@ function ActivityCard({
                 </button>
               </>
             ) : (
-              <button onClick={() => setEditing(true)}
-                className="flex items-center gap-1 text-[9px] font-medium text-txt-muted hover:text-txt-secondary bg-surface-tertiary hover:bg-surface-secondary px-2 py-1 rounded-md transition-colors">
-                <Pencil size={9} /> Edit
-              </button>
+              <>
+                {/* Send pill — disabled when buyerId can't be resolved
+                    (the SendModal needs a buyer record to address). */}
+                <button
+                  onClick={() => l.buyerId && onSendClick({
+                    id: l.buyerId,
+                    name: l.recipientName,
+                    phone: l.recipientContact && /\d/.test(l.recipientContact) ? l.recipientContact : null,
+                    email: l.recipientContact && l.recipientContact.includes('@') ? l.recipientContact : null,
+                    tier: 'qualified',
+                  })}
+                  disabled={!l.buyerId}
+                  title={l.buyerId ? 'Send a follow-up' : 'Buyer not linked — open buyer page to link'}
+                  className="flex items-center gap-1 text-[9px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-2 py-1 rounded-md transition-colors"
+                >
+                  <Send size={9} /> Send
+                </button>
+                <button onClick={() => setEditing(true)}
+                  className="flex items-center gap-1 text-[9px] font-medium text-txt-muted hover:text-txt-secondary bg-surface-tertiary hover:bg-surface-secondary px-2 py-1 rounded-md transition-colors">
+                  <Pencil size={9} /> Edit
+                </button>
+              </>
             )}
           </div>
         </div>

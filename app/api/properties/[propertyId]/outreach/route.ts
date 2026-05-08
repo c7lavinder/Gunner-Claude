@@ -138,7 +138,10 @@ export const POST = withTenant<{ propertyId: string }>(async (req, ctx, params) 
     const { type, channel, recipientName, recipientContact, ghlContactId, notes, offerAmount, showingDate, source } = body
 
     const VALID_OFFER_STATUSES = ['Pending', 'Accepted', 'Rejected', 'Countered', 'Expired']
-    const VALID_SHOWING_STATUSES = ['Scheduled', 'Showed', 'No-Show', 'Cancelled']
+    // Match the Section 5 UI exactly. Older code accepted 'Showed' / 'No-Show'
+    // which the dropdown never sent — picks silently round-tripped to
+    // Scheduled because the API rejected the payload.
+    const VALID_SHOWING_STATUSES = ['Scheduled', 'Completed', 'Cancelled', 'No Show']
 
     // PATCH action — update existing log
     if (body.action === 'update' && body.logId) {

@@ -14,7 +14,11 @@ import { useState, useEffect } from 'react'
 import { Loader2, Wand2, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { useToast } from '@/components/ui/toaster'
 
-type Kind = 'description' | 'listing' | 'social'
+// Session 78 — "description" was removed as an artifact kind. The main
+// Property.description field (above this block) is now the only place
+// description lives; its Generate button calls the same dispo-generate
+// route with kind='description' but the result writes to Property.description.
+type Kind = 'listing' | 'social'
 type Tier = 'priority' | 'qualified' | 'jv' | 'unqualified' | 'realtor'
 
 interface TierMessage {
@@ -49,13 +53,7 @@ const TIER_COLORS: Record<Tier, string> = {
 
 const TIERS: Tier[] = ['priority', 'qualified', 'jv', 'unqualified', 'realtor']
 
-const KIND_META: Record<Kind, { label: string; helper: string; rows: number; field: 'description' | 'listingPost' | 'socialPost' }> = {
-  description: {
-    label: 'Description',
-    helper: '2-4 sentence opener used at the top of every blast.',
-    rows: 4,
-    field: 'description',
-  },
+const KIND_META: Record<Kind, { label: string; helper: string; rows: number; field: 'listingPost' | 'socialPost' }> = {
   listing: {
     label: 'Property Listing Post',
     helper: 'Full structured post for a public listing site. Includes property details, comps, and the closing block.',
@@ -83,36 +81,33 @@ interface DispoArtifacts {
 
 export function Section2Artifacts({
   propertyId,
-  initialArtifacts,
+  artifacts,
+  onArtifactsChange,
   hasDispoManager,
-  hasDescription,
-  onArtifactSaved,
 }: {
   propertyId: string
-  initialArtifacts: Record<string, unknown>
+  // Lifted to DispositionJourney so artifact state survives section
+  // collapse/expand. Section 2 unmounts when collapsed; without lifting,
+  // generations were lost on toggle-back.
+  artifacts: Record<string, unknown>
+  onArtifactsChange: (next: Record<string, unknown>) => void
   hasDispoManager: boolean
-  // True when Property.description is set (the AI uses it as a seed for
-  // refinement). We surface a hint when missing so the rep knows the
-  // generated text will be more generic.
-  hasDescription: boolean
-  // Bubbles "description" text up to the parent so the existing
-  // Property.description field can stay in sync (the description block
-  // also lives in the deal summary). Optional.
-  onArtifactSaved?: (kind: Kind, text: string) => void
 }) {
-  const initial = (initialArtifacts ?? {}) as DispoArtifacts
-  const [texts, setTexts] = useState<Record<Kind, string>>({
-    description: initial.description ?? '',
+  const initial = (artifacts ?? {}) as DispoArtifacts
+  const texts: Record<Kind, string> = {
     listing: initial.listingPost ?? '',
     social: initial.socialPost ?? '',
-  })
-  const [generatedAt, setGeneratedAt] = useState<Record<Kind, string | null>>({
-    description: initial.generatedAt?.description ?? null,
+  }
+  const generatedAt: Record<Kind, string | null> = {
     listing: initial.generatedAt?.listingPost ?? null,
     social: initial.generatedAt?.socialPost ?? null,
-  })
-  const [tierMessages, setTierMessages] = useState<Partial<Record<Tier, TierMessage>>>(initial.tierMessages ?? {})
-  const [tiersGeneratedAt, setTiersGeneratedAt] = useState<string | null>(initial.generatedAt?.tierMessages ?? null)
+  }
+  const tierMessages: Partial<Record<Tier, TierMessage>> = initial.tierMessages ?? {}
+  const tiersGeneratedAt = initial.generatedAt?.tierMessages ?? null
+
+  function patchArtifacts(patch: Partial<DispoArtifacts>) {
+    onArtifactsChange({ ...initial, ...patch })
+  }
 
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
@@ -129,25 +124,29 @@ export function Section2Artifacts({
       </div>
 
       <div className="divide-y divide-[rgba(0,0,0,0.04)]">
-        {(Object.keys(KIND_META) as Kind[]).map(kind => (
-          <ArtifactBlock
-            key={kind}
-            kind={kind}
-            propertyId={propertyId}
-            text={texts[kind]}
-            generatedAt={generatedAt[kind]}
-            disabled={!hasDispoManager}
-            disabledReason={!hasDispoManager ? 'Assign a Disposition Manager first.' : null}
-            hasDescription={hasDescription}
-            onTextChange={t => setTexts(prev => ({ ...prev, [kind]: t }))}
-            onGenerated={(t, at) => {
-              setTexts(prev => ({ ...prev, [kind]: t }))
-              setGeneratedAt(prev => ({ ...prev, [kind]: at }))
-              onArtifactSaved?.(kind, t)
-            }}
-            onSavedEdit={t => onArtifactSaved?.(kind, t)}
-          />
-        ))}
+        {(Object.keys(KIND_META) as Kind[]).map(kind => {
+          const fieldKey = KIND_META[kind].field
+          return (
+            <ArtifactBlock
+              key={kind}
+              kind={kind}
+              propertyId={propertyId}
+              text={texts[kind]}
+              generatedAt={generatedAt[kind]}
+              disabled={!hasDispoManager}
+              disabledReason={!hasDispoManager ? 'Assign a Disposition Manager first.' : null}
+              onTextChange={t => patchArtifacts({ [fieldKey]: t } as Partial<DispoArtifacts>)}
+              onGenerated={(t, at) => {
+                onArtifactsChange({
+                  ...initial,
+                  [fieldKey]: t,
+                  generatedAt: { ...(initial.generatedAt ?? {}), [fieldKey]: at },
+                })
+              }}
+              onSavedEdit={() => { /* parent already in sync via onTextChange */ }}
+            />
+          )
+        })}
 
         <TierMessagesBlock
           propertyId={propertyId}
@@ -155,10 +154,13 @@ export function Section2Artifacts({
           generatedAt={tiersGeneratedAt}
           disabled={!hasDispoManager}
           onGenerated={(tiers, at) => {
-            setTierMessages(tiers)
-            setTiersGeneratedAt(at)
+            onArtifactsChange({
+              ...initial,
+              tierMessages: tiers,
+              generatedAt: { ...(initial.generatedAt ?? {}), tierMessages: at },
+            })
           }}
-          onMessagesChange={setTierMessages}
+          onMessagesChange={tiers => patchArtifacts({ tierMessages: tiers })}
         />
       </div>
     </div>
@@ -342,7 +344,7 @@ function TierField({
 
 function ArtifactBlock({
   kind, propertyId, text, generatedAt, disabled, disabledReason,
-  hasDescription, onTextChange, onGenerated, onSavedEdit,
+  onTextChange, onGenerated, onSavedEdit,
 }: {
   kind: Kind
   propertyId: string
@@ -350,7 +352,6 @@ function ArtifactBlock({
   generatedAt: string | null
   disabled: boolean
   disabledReason: string | null
-  hasDescription: boolean
   onTextChange: (t: string) => void
   onGenerated: (text: string, at: string) => void
   onSavedEdit: (text: string) => void
@@ -474,11 +475,6 @@ function ArtifactBlock({
       />
 
       {savingEdit && <p className="text-[9px] text-txt-muted mt-1">Saving...</p>}
-      {kind === 'description' && !hasDescription && !text && (
-        <p className="text-[9px] text-txt-muted mt-1 italic">
-          Tip: filling in the rough Description on Overview gives the generator a seed to refine.
-        </p>
-      )}
     </div>
   )
 }

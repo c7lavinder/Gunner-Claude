@@ -1,9 +1,15 @@
 'use client'
 // components/disposition/journey/disposition-journey.tsx
 // The Disposition Journey — five collapsible sections rendered in sequence.
-// Mounted on the property-detail page Disposition tab. State is client-only
-// (no persistence): first non-Done section auto-opens; user can manually
-// expand/collapse via section chevrons.
+// Mounted on the property-detail page Disposition tab. First non-Done
+// section auto-opens; user can manually expand/collapse via section
+// chevrons.
+//
+// Mutable property fields owned by Section 2 — description, internal
+// notes, generated artifacts — are lifted up to this component so they
+// survive section collapse/expand. Section 2 is unmounted while
+// collapsed (per JourneySection); without this lift, every generation
+// or note edit was lost the moment the rep clicked a different section.
 
 import { useState, useMemo } from 'react'
 import { JourneySection } from './journey-section'
@@ -29,6 +35,25 @@ export function DispositionJourney({
   tenantSlug: string
   onJumpToTab: (tabKey: 'overview' | 'data') => void
 }) {
+  // Lifted state — owned here so Section 2 can re-mount with the latest
+  // values after a collapse/expand round-trip.
+  const [description, setDescription] = useState<string | null>(property.description)
+  const [internalNotes, setInternalNotes] = useState<string | null>(property.internalNotes)
+  const [artifacts, setArtifacts] = useState<Record<string, unknown>>(property.dispoArtifacts ?? {})
+
+  // Count generated artifact pieces (description, listing post, social
+  // post, tier messages). Drives Section 2 status: 0 = not_started,
+  // 1-3 = in_progress, 4 = done.
+  const artifactsGeneratedCount = useMemo(() => {
+    let n = 0
+    if (description && description.trim().length > 0) n += 1
+    const a = artifacts as { listingPost?: string; socialPost?: string; tierMessages?: Record<string, unknown> }
+    if (a.listingPost && a.listingPost.trim().length > 0) n += 1
+    if (a.socialPost && a.socialPost.trim().length > 0) n += 1
+    if (a.tierMessages && Object.keys(a.tierMessages).length > 0) n += 1
+    return n
+  }, [description, artifacts])
+
   // Map PropertyDetail → JourneyInputs. Counts are server-computed in the
   // page query (see app/(tenant)/[tenant]/inventory/[propertyId]/page.tsx)
   // so the 5-section status badges are accurate on first paint without
@@ -50,8 +75,9 @@ export function DispositionJourney({
       responsesCount: property.responsesCount,
       offersLoggedCount: property.offersLoggedCount,
       offersAcceptedCount: property.offersAcceptedCount,
+      artifactsGeneratedCount,
     }
-  }, [property])
+  }, [property, artifactsGeneratedCount])
 
   const status = useMemo(() => computeJourneyStatus(inputs), [inputs])
 
@@ -79,11 +105,24 @@ export function DispositionJourney({
         index={2}
         title="Generate deal blast"
         status={status.section2}
-        summary={status.section2 === 'done' ? 'Blast sent' : 'No blast sent yet'}
+        summary={
+          status.section2 === 'done' ? 'All artifacts generated'
+          : status.section2 === 'in_progress' ? `${artifactsGeneratedCount} of 4 generated`
+          : 'No artifacts generated yet'
+        }
         expanded={openSection === 2}
         onToggle={() => toggle(2)}
       >
-        <Section2DealBlast property={property} tenantSlug={tenantSlug} />
+        <Section2DealBlast
+          property={property}
+          tenantSlug={tenantSlug}
+          description={description}
+          onDescriptionChange={setDescription}
+          internalNotes={internalNotes}
+          onInternalNotesChange={setInternalNotes}
+          artifacts={artifacts}
+          onArtifactsChange={setArtifacts}
+        />
       </JourneySection>
 
       <JourneySection
