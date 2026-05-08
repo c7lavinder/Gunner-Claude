@@ -123,7 +123,7 @@ export function DispositionJourney({
         expanded={openSection === 5}
         onToggle={() => toggle(5)}
       >
-        <Section5OffersShowings property={property} />
+        <Section5OffersShowings property={property} tenantSlug={tenantSlug} />
       </JourneySection>
     </div>
   )

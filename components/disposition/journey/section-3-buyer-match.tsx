@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Search as SearchIcon, Users, Loader2, Plus, MapPin, X,
+  Search as SearchIcon, Loader2, Plus, MapPin, X,
   Pencil, ChevronLeft, ChevronRight, Send, Upload,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/toaster'
@@ -294,6 +294,9 @@ export function Section3BuyerMatch({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-ds-label font-semibold text-txt-primary">Buyers</h3>
+          {/* Buyers auto-sync from GHL via webhooks; no manual Sync/Rematch
+              buttons. The matched list refreshes whenever this section
+              mounts or the property's market changes. */}
           {syncMsg && <p className="text-[10px] text-txt-muted mt-0.5">{syncMsg}</p>}
         </div>
         <div className="flex gap-2">
@@ -302,18 +305,13 @@ export function Section3BuyerMatch({
             <Upload size={11} />
             Bulk Add
           </button>
-          <button onClick={async () => { const ok = await runSync(); if (ok) matchBuyers() }} disabled={loading}
-            className="text-ds-fine font-medium text-semantic-purple hover:text-semantic-purple/80 flex items-center gap-1 transition-colors disabled:opacity-50">
-            {loading && syncMsg ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
-            Sync CRM
-          </button>
-          <button onClick={matchBuyers} disabled={loading}
-            className="text-ds-fine font-medium text-gunner-red hover:text-gunner-red-dark flex items-center gap-1 transition-colors disabled:opacity-50">
-            {loading && !syncMsg ? <Loader2 size={11} className="animate-spin" /> : <Users size={11} />}
-            {fetched ? 'Rematch' : 'Match'}
-          </button>
         </div>
       </div>
+
+      {/* Tier roll-up — counts of every buyer tied to this deal, broken
+          out by tier, with a "/ N sent" tail showing how many in each tier
+          have already been blasted (stage = sent or responded). */}
+      <TierSummary buyers={allBuyers} stages={buyerStages} />
 
       {showAddForm && (
         <div className="bg-surface-secondary rounded-[10px] p-4 space-y-3">
@@ -711,6 +709,58 @@ export function Section3BuyerMatch({
           }}
         />
       )}
+    </div>
+  )
+}
+
+// ─── Tier summary strip ──────────────────────────────────────────────────────
+// Five fixed tier buckets shown in tier-badge colors. Each bucket renders
+// "<count> / <sent>" so the rep sees both how many buyers in that tier are
+// linked to this deal AND how many have actually been blasted.
+const TIER_BUCKETS: Array<{ key: string; label: string; bg: string; text: string }> = [
+  { key: 'priority',    label: 'Priority',    bg: 'bg-amber-100',   text: 'text-amber-700' },
+  { key: 'qualified',   label: 'Qualified',   bg: 'bg-green-100',   text: 'text-green-700' },
+  { key: 'unqualified', label: 'Unqualified', bg: 'bg-gray-100',    text: 'text-gray-600' },
+  { key: 'realtor',     label: 'Realtors',    bg: 'bg-fuchsia-100', text: 'text-fuchsia-700' },
+  { key: 'jv',          label: 'JVs',         bg: 'bg-blue-100',    text: 'text-blue-700' },
+]
+
+function TierSummary({
+  buyers,
+  stages,
+}: {
+  buyers: Array<{ id: string; tier: string }>
+  stages: Record<string, string>
+}) {
+  const totals: Record<string, { total: number; sent: number }> = {}
+  for (const t of TIER_BUCKETS) totals[t.key] = { total: 0, sent: 0 }
+
+  for (const b of buyers) {
+    const bucket = totals[b.tier] ?? totals.unqualified
+    bucket.total += 1
+    const stage = stages[b.id]
+    if (stage === 'sent' || stage === 'responded') bucket.sent += 1
+  }
+
+  return (
+    <div className="grid grid-cols-5 gap-2">
+      {TIER_BUCKETS.map(t => {
+        const c = totals[t.key]
+        return (
+          <div
+            key={t.key}
+            className={`${t.bg} rounded-[10px] px-2.5 py-2 flex flex-col items-start gap-0.5`}
+          >
+            <span className={`text-[8px] font-bold uppercase tracking-wider ${t.text}`}>
+              {t.label}
+            </span>
+            <span className={`text-[14px] font-bold ${t.text}`}>
+              {c.total}
+              <span className={`text-[10px] font-medium opacity-70 ml-1`}>/ {c.sent} sent</span>
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }

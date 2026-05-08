@@ -27,14 +27,14 @@ export function Section2DealBlast({
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [overrides, setOverrides] = useState<Record<string, string | null>>({
-    dealBlastAskingOverride: property.dealBlastAskingOverride,
-    dealBlastArvOverride: property.dealBlastArvOverride,
     dealBlastContractOverride: property.dealBlastContractOverride,
-    dealBlastAssignmentFeeOverride: property.dealBlastAssignmentFeeOverride,
     // Session 77 — investor-facing asking. Treated as a "primary" key here,
     // not an override (there's no seller-asking fallback to strike through).
     dispoAskingPrice: property.dispoAskingPrice,
   })
+  const [fieldSources, setFieldSources] = useState<Record<string, string>>(
+    (property.fieldSources ?? {}) as Record<string, string>,
+  )
   const [savingOverride, setSavingOverride] = useState(false)
 
   const [description, setDescription] = useState<string | null>(property.description)
@@ -54,12 +54,24 @@ export function Section2DealBlast({
     setSavingOverride(true)
     try {
       const numericValue = value ? parseFloat(value.replace(/[^0-9.]/g, '')) : null
+      const stored = numericValue ? numericValue.toString() : null
+      // Stamp fieldSources alongside the value so the card flips to the
+      // green "EDITED" state on save and stays that way after refresh.
       await fetch(`/api/properties/${property.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [overrideKey]: numericValue ? numericValue.toString() : null }),
+        body: JSON.stringify({
+          [overrideKey]: stored,
+          fieldSources: { [overrideKey]: stored ? 'user' : '' },
+        }),
       })
-      setOverrides(prev => ({ ...prev, [overrideKey]: numericValue ? numericValue.toString() : null }))
+      setOverrides(prev => ({ ...prev, [overrideKey]: stored }))
+      setFieldSources(prev => {
+        const next = { ...prev }
+        if (stored) next[overrideKey] = 'user'
+        else delete next[overrideKey]
+        return next
+      })
     } catch {
       // revert on error
     }
@@ -113,20 +125,15 @@ export function Section2DealBlast({
           <p className="text-[8px] text-txt-muted italic">Asking is what we ask the investor — distinct from seller&apos;s ask on Overview. Click any value to edit.</p>
         </div>
         <div className="p-3">
-        <div className="grid grid-cols-4 gap-3">
-          {/* Order: Contract → Asking → ARV → Assignment Fee.
-              Contract is sourced from Overview (seller's contract price);
-              Asking is filled HERE (investor-facing dispoAskingPrice);
-              ARV / Assignment Fee keep the override pattern. */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Order: Contract → Asking. ARV is shown above in the Property
+              Details panel; Assignment Fee belongs after the deal closes,
+              not before sending — both are dropped here per Session 78. */}
           {([
             { key: 'contractPrice', overrideKey: 'dealBlastContractOverride', label: 'Contract', value: property.contractPrice, color: 'text-txt-primary', isPrimaryWrite: false },
             { key: 'dispoAskingPrice', overrideKey: 'dispoAskingPrice', label: 'Asking', value: null, color: 'text-txt-primary', isPrimaryWrite: true },
-            { key: 'arv', overrideKey: 'dealBlastArvOverride', label: 'ARV', value: property.arv, color: 'text-semantic-green', isPrimaryWrite: false },
-            { key: 'assignmentFee', overrideKey: 'dealBlastAssignmentFeeOverride', label: 'Assignment Fee',
-              value: property.assignmentFee ?? (property.acceptedPrice && property.contractPrice ? String(Number(property.acceptedPrice) - Number(property.contractPrice)) : null),
-              color: 'text-semantic-amber', isPrimaryWrite: false },
           ] as const).map(field => {
-            const source = property.fieldSources?.[field.key]
+            const source = field.isPrimaryWrite ? fieldSources[field.overrideKey] : fieldSources[field.key]
             const overrideValue = overrides[field.overrideKey]
             const displayValue = overrideValue ?? field.value
             const hasOverride = overrideValue !== null && overrideValue !== undefined

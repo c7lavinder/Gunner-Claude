@@ -13,6 +13,21 @@ export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) 
       take: 50,
     })
 
+    // Resolve buyerId per-log via ghlContactId → Buyer lookup (one query).
+    // Activity log doesn't carry a direct buyer FK; we join via the GHL
+    // contact id so the UI can deep-link the recipient name to /buyers/[id].
+    const ghlContactIds = Array.from(new Set(logs.map(l => l.ghlContactId).filter((v): v is string => !!v)))
+    const buyersByGhl = ghlContactIds.length
+      ? await db.buyer.findMany({
+          where: { tenantId: ctx.tenantId, ghlContactId: { in: ghlContactIds } },
+          select: { id: true, ghlContactId: true },
+        })
+      : []
+    const buyerIdByGhl = new Map<string, string>()
+    for (const b of buyersByGhl) {
+      if (b.ghlContactId) buyerIdByGhl.set(b.ghlContactId, b.id)
+    }
+
     return NextResponse.json({
       logs: logs.map(l => ({
         id: l.id,
@@ -21,6 +36,8 @@ export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) 
         recipientName: l.recipientName,
         recipientContact: l.recipientContact,
         ghlContactId: l.ghlContactId,
+        // buyerId surfaces so the activity card can link to /buyers/[id].
+        buyerId: l.ghlContactId ? buyerIdByGhl.get(l.ghlContactId) ?? null : null,
         notes: l.notes,
         offerAmount: l.offerAmount,
         offerStatus: l.offerStatus,

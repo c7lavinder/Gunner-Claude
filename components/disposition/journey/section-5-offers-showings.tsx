@@ -1,25 +1,35 @@
 'use client'
 // components/disposition/journey/section-5-offers-showings.tsx
-// Section 5 of the Disposition Journey: Offers & Showings.
-// Lifted from the prior OutreachTab in property-detail-client.tsx —
-// "offer" and "showing" sub-tabs only. The "send" sub-tab is dropped per
-// plan; that work lives in Section 2 (Generate blast).
+// Section 5 of the Disposition Journey: Activity (Showings + Offers).
 //
-// Logged offers (amount, status: pending / accepted / countered / rejected),
-// scheduled showings (date, status: scheduled / completed / no-show).
+// Session 78 — both feeds show side-by-side without the tab switch.
+// Showings on the left, offers on the right. Each column has its own
+// "Log" button so the rep doesn't have to flip tabs to add either type.
+// Times render in Central Time so a Nashville-based team always sees
+// the same wall-clock no matter where they're traveling.
+//
 // Status = In progress while live offers exist; Done when one is accepted —
 // property moves to UNDER_CONTRACT.
 
 import { useState, useEffect } from 'react'
-import { format } from 'date-fns'
 import {
-  X, Plus, Send, DollarSign, Clock, User, Loader2, Pencil,
+  X, Plus, DollarSign, Clock, User, Loader2, Pencil,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useToast } from '@/components/ui/toaster'
 import { titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
 
-const TZ_ABBR = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
+const CT_ZONE = 'America/Chicago'
+const CT_DATETIME = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short', month: 'short', day: 'numeric',
+  hour: 'numeric', minute: '2-digit', hour12: true,
+  timeZone: CT_ZONE, timeZoneName: 'short',
+})
+const CT_DATE = new Intl.DateTimeFormat('en-US', {
+  month: 'short', day: 'numeric',
+  timeZone: CT_ZONE,
+})
 
 const OFFER_STATUSES = ['Pending', 'Accepted', 'Rejected', 'Countered', 'Expired']
 const SHOWING_STATUSES = ['Scheduled', 'Completed', 'Cancelled', 'No Show']
@@ -32,27 +42,29 @@ const SHOWING_STATUS_COLORS: Record<string, string> = {
   Scheduled: 'bg-blue-100 text-blue-700', Completed: 'bg-green-100 text-green-700',
   Cancelled: 'bg-red-100 text-red-700', 'No Show': 'bg-amber-100 text-amber-700',
 }
-const LOG_TYPE_ICONS: Record<string, { icon: typeof Send; bg: string }> = {
-  send: { icon: Send, bg: 'bg-purple-500' },
-  offer: { icon: DollarSign, bg: 'bg-green-500' },
-  showing: { icon: Clock, bg: 'bg-blue-500' },
+
+type LogType = 'offer' | 'showing'
+
+interface ActivityLog {
+  id: string; type: string; channel: string; recipientName: string; recipientContact: string
+  ghlContactId: string | null; buyerId: string | null
+  notes: string | null; offerAmount: number | null
+  offerStatus: string | null; showingDate: string | null; showingStatus: string | null
+  source: string; loggedAt: string; loggedByName: string
 }
 
-type SubTab = 'offer' | 'showing'
-
-export function Section5OffersShowings({ property }: { property: PropertyDetail }) {
+export function Section5OffersShowings({
+  property,
+  tenantSlug,
+}: {
+  property: PropertyDetail
+  tenantSlug: string
+}) {
   const { toast } = useToast()
-  const [subTab, setSubTab] = useState<SubTab>('offer')
-  const [logs, setLogs] = useState<Array<{
-    id: string; type: string; channel: string; recipientName: string; recipientContact: string
-    ghlContactId: string | null; notes: string | null; offerAmount: number | null
-    offerStatus: string | null; showingDate: string | null; showingStatus: string | null
-    source: string; loggedAt: string; loggedByName: string
-  }>>([])
+  const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [showForm, setShowForm] = useState(false)
+  const [formType, setFormType] = useState<LogType | null>(null)
   const [saving, setSaving] = useState(false)
-  const [formType, setFormType] = useState<SubTab>('offer')
 
   const [contactQuery, setContactQuery] = useState('')
   const [contactResults, setContactResults] = useState<Array<{ id: string; name: string; phone: string | null; email: string | null }>>([])
@@ -65,11 +77,14 @@ export function Section5OffersShowings({ property }: { property: PropertyDetail 
   const [showingTime, setShowingTime] = useState('')
 
   useEffect(() => {
-    fetch(`/api/properties/${property.id}/outreach`).then(r => r.json()).then(d => { setLogs(d.logs ?? []); setLoaded(true) }).catch(() => setLoaded(true))
+    fetch(`/api/properties/${property.id}/outreach`)
+      .then(r => r.json())
+      .then(d => { setLogs(d.logs ?? []); setLoaded(true) })
+      .catch(() => setLoaded(true))
   }, [property.id])
 
-  const filtered = logs.filter(l => l.type === subTab)
-  const counts = { offer: logs.filter(l => l.type === 'offer').length, showing: logs.filter(l => l.type === 'showing').length }
+  const showings = logs.filter(l => l.type === 'showing')
+  const offers = logs.filter(l => l.type === 'offer')
 
   async function searchGhlContacts(q: string) {
     setContactQuery(q)
@@ -91,11 +106,11 @@ export function Section5OffersShowings({ property }: { property: PropertyDetail 
     setOfferAmount('')
     setShowingDate('')
     setShowingTime('')
-    setShowForm(false)
+    setFormType(null)
   }
 
   async function saveLog() {
-    if (!selectedContact) return
+    if (!selectedContact || !formType) return
     setSaving(true)
     try {
       const payload: Record<string, unknown> = {
@@ -112,6 +127,9 @@ export function Section5OffersShowings({ property }: { property: PropertyDetail 
       if (formType === 'showing') {
         payload.channel = 'in_person'
         if (showingDate) {
+          // Date inputs return a YYYY-MM-DD string with no zone. Treat the
+          // rep's chosen date+time as Central Time so the saved instant
+          // matches what they typed regardless of the device's locale.
           const dt = new Date(`${showingDate}T${showingTime || '09:00'}:00`)
           payload.showingDate = dt.toISOString()
         }
@@ -138,49 +156,20 @@ export function Section5OffersShowings({ property }: { property: PropertyDetail 
     setLogs(d.logs ?? [])
   }
 
-  const typeIcons: Record<SubTab, typeof Send> = { offer: DollarSign, showing: Clock }
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          {(['offer', 'showing'] as const).map(t => (
-            <button key={t} onClick={() => { setSubTab(t); setShowForm(false) }}
-              className={`px-3 py-1 text-[10px] font-semibold rounded-full transition-all capitalize ${
-                subTab === t
-                  ? 'bg-gunner-red text-white shadow-sm'
-                  : 'bg-surface-secondary text-txt-muted hover:text-txt-secondary hover:bg-surface-tertiary'
-              }`}>
-              {`${t}s`} ({counts[t]})
-            </button>
-          ))}
-        </div>
-        <button onClick={() => { setShowForm(!showForm); if (showForm) resetForm() }}
-          className={`flex items-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-[8px] transition-colors ${
-            showForm ? 'bg-surface-secondary text-txt-secondary hover:bg-surface-tertiary' : 'bg-gunner-red text-white hover:bg-gunner-red-dark'
-          }`}>
-          {showForm ? <X size={10} /> : <Plus size={10} />}
-          {showForm ? 'Cancel' : 'Log Activity'}
-        </button>
-      </div>
-
-      {showForm && (
+    <div className="space-y-3">
+      {/* Inline log form — appears above the columns when the rep clicks
+          either column's "Log" button. Lives outside the columns so the
+          two lists stay aligned regardless of form state. */}
+      {formType && (
         <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] p-4 space-y-3 shadow-sm">
-          <div>
-            <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Type</label>
-            <div className="flex gap-2">
-              {(['offer', 'showing'] as const).map(t => {
-                const Icon = typeIcons[t]
-                return (
-                  <button key={t} onClick={() => setFormType(t)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold rounded-[8px] border-[0.5px] transition-all capitalize ${
-                      formType === t ? 'border-gunner-red bg-gunner-red-light text-gunner-red' : 'border-[rgba(0,0,0,0.08)] bg-surface-secondary text-txt-muted hover:text-txt-secondary'
-                    }`}>
-                    <Icon size={10} /> {t}
-                  </button>
-                )
-              })}
-            </div>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">
+              New {formType}
+            </p>
+            <button onClick={resetForm} className="text-txt-muted hover:text-txt-secondary" title="Cancel">
+              <X size={14} />
+            </button>
           </div>
 
           <div>
@@ -232,12 +221,12 @@ export function Section5OffersShowings({ property }: { property: PropertyDetail 
           {formType === 'showing' && (
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Date</label>
+                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Date (CT)</label>
                 <input type="date" value={showingDate} onChange={e => setShowingDate(e.target.value)}
                   className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/20" />
               </div>
               <div>
-                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Time</label>
+                <label className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider block mb-1.5">Time (CT)</label>
                 <input type="time" value={showingTime} onChange={e => setShowingTime(e.target.value)}
                   className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[8px] px-3 py-2 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/20" />
               </div>
@@ -260,16 +249,81 @@ export function Section5OffersShowings({ property }: { property: PropertyDetail 
 
       {!loaded ? (
         <div className="py-8 text-center"><Loader2 size={16} className="animate-spin text-txt-muted mx-auto" /></div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-surface-secondary rounded-[12px] p-8 text-center">
-          <Send size={20} className="text-txt-muted mx-auto mb-2 opacity-40" />
-          <p className="text-ds-body text-txt-muted">No {subTab} activity yet</p>
-          <p className="text-[10px] text-txt-muted mt-1">Click &ldquo;Log Activity&rdquo; to record outreach</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <ActivityColumn
+            label="Showings"
+            count={showings.length}
+            icon={Clock}
+            iconBg="bg-blue-500"
+            logs={showings}
+            propertyId={property.id}
+            tenantSlug={tenantSlug}
+            onLogClick={() => setFormType('showing')}
+            onUpdated={refreshLogs}
+          />
+          <ActivityColumn
+            label="Offers"
+            count={offers.length}
+            icon={DollarSign}
+            iconBg="bg-green-500"
+            logs={offers}
+            propertyId={property.id}
+            tenantSlug={tenantSlug}
+            onLogClick={() => setFormType('offer')}
+            onUpdated={refreshLogs}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Per-side column ─────────────────────────────────────────────────────────
+function ActivityColumn({
+  label, count, icon: Icon, iconBg, logs, propertyId, tenantSlug, onLogClick, onUpdated,
+}: {
+  label: string
+  count: number
+  icon: typeof Clock
+  iconBg: string
+  logs: ActivityLog[]
+  propertyId: string
+  tenantSlug: string
+  onLogClick: () => void
+  onUpdated: () => void
+}) {
+  return (
+    <div className="rounded-xl border border-[rgba(0,0,0,0.06)] bg-surface-secondary/50 p-3 min-h-[200px]">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-txt-muted">{label}</span>
+          <span className="text-[10px] font-medium bg-surface-tertiary text-txt-muted px-1.5 py-0.5 rounded-full">{count}</span>
+        </div>
+        <button
+          onClick={onLogClick}
+          className="text-[9px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-2 py-1 rounded-md inline-flex items-center gap-1 transition-colors"
+        >
+          <Plus size={10} /> Log
+        </button>
+      </div>
+
+      {logs.length === 0 ? (
+        <div className="bg-white/60 rounded-[10px] p-6 text-center">
+          <Icon size={16} className={`mx-auto mb-1 opacity-40 text-txt-muted`} />
+          <p className="text-[11px] text-txt-muted">No {label.toLowerCase()} yet</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(l => (
-            <OutreachLogCard key={l.id} log={l} propertyId={property.id} onUpdated={refreshLogs} />
+          {logs.map(l => (
+            <ActivityCard
+              key={l.id}
+              log={l}
+              propertyId={propertyId}
+              tenantSlug={tenantSlug}
+              iconBg={iconBg}
+              onUpdated={onUpdated}
+            />
           ))}
         </div>
       )}
@@ -277,22 +331,44 @@ export function Section5OffersShowings({ property }: { property: PropertyDetail 
   )
 }
 
-function OutreachLogCard({ log: l, propertyId, onUpdated }: {
-  log: {
-    id: string; type: string; channel: string; recipientName: string; recipientContact: string
-    notes: string | null; offerAmount: number | null; offerStatus: string | null
-    showingDate: string | null; showingStatus: string | null; source: string; loggedAt: string; loggedByName: string
-  }
+// ─── Single activity card (offer or showing) ────────────────────────────────
+function ActivityCard({
+  log: l, propertyId, tenantSlug, iconBg, onUpdated,
+}: {
+  log: ActivityLog
   propertyId: string
+  tenantSlug: string
+  iconBg: string
   onUpdated: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [editNotes, setEditNotes] = useState(l.notes ?? '')
   const [editAmount, setEditAmount] = useState(l.offerAmount?.toString() ?? '')
-  const localShowingDate = l.showingDate ? new Date(l.showingDate) : null
-  const [editDate, setEditDate] = useState(localShowingDate ? `${localShowingDate.getFullYear()}-${String(localShowingDate.getMonth() + 1).padStart(2, '0')}-${String(localShowingDate.getDate()).padStart(2, '0')}` : '')
-  const [editTime, setEditTime] = useState(localShowingDate ? `${String(localShowingDate.getHours()).padStart(2, '0')}:${String(localShowingDate.getMinutes()).padStart(2, '0')}` : '')
+  const showingInstant = l.showingDate ? new Date(l.showingDate) : null
+  // Pre-populate the date/time inputs in CT so the rep edits in the same
+  // wall-clock they originally entered.
+  const ctDateParts = showingInstant
+    ? new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric', month: '2-digit', day: '2-digit', timeZone: CT_ZONE,
+      }).formatToParts(showingInstant)
+    : []
+  const ctTimeParts = showingInstant
+    ? new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit', minute: '2-digit', hour12: false, timeZone: CT_ZONE,
+      }).formatToParts(showingInstant)
+    : []
+  const part = (parts: Intl.DateTimeFormatPart[], type: string) => parts.find(p => p.type === type)?.value ?? ''
+  const initialDate = ctDateParts.length
+    ? `${part(ctDateParts, 'year')}-${part(ctDateParts, 'month')}-${part(ctDateParts, 'day')}`
+    : ''
+  const initialTime = ctTimeParts.length
+    ? `${part(ctTimeParts, 'hour')}:${part(ctTimeParts, 'minute')}`
+    : ''
+  const [editDate, setEditDate] = useState(initialDate)
+  const [editTime, setEditTime] = useState(initialTime)
   const [saving, setSaving] = useState(false)
+
+  const Icon = l.type === 'offer' ? DollarSign : Clock
 
   async function updateField(data: Record<string, unknown>) {
     setSaving(true)
@@ -317,21 +393,30 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
     setEditing(false)
   }
 
-  const { icon: TypeIcon, bg: typeBg } = LOG_TYPE_ICONS[l.type] ?? LOG_TYPE_ICONS.send
   const sourceLabel = l.source === 'AI' ? 'AI' : l.source === 'Blast' ? 'Blast' : l.source === 'Auto' ? 'Auto' : 'Manual'
   const sourceColor = l.source === 'AI' ? 'bg-purple-100 text-purple-700' : l.source === 'Blast' ? 'bg-fuchsia-100 text-fuchsia-700' : l.source === 'Auto' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
 
   return (
-    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-3 group hover:border-[rgba(0,0,0,0.12)] transition-colors">
-      <div className="flex items-start gap-3">
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${typeBg}`}>
-          <TypeIcon size={12} className="text-white" />
+    <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-3 hover:border-[rgba(0,0,0,0.12)] transition-colors">
+      <div className="flex items-start gap-2.5">
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${iconBg}`}>
+          <Icon size={12} className="text-white" />
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-ds-body font-semibold text-txt-primary">{titleCase(l.recipientName)}</p>
-            <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${sourceColor}`}>{sourceLabel}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {l.buyerId ? (
+              <Link
+                href={`/${tenantSlug}/buyers/${l.buyerId}`}
+                className="text-ds-body font-semibold text-txt-primary hover:text-gunner-red hover:underline truncate"
+                title="Open buyer page"
+              >
+                {titleCase(l.recipientName)}
+              </Link>
+            ) : (
+              <span className="text-ds-body font-semibold text-txt-primary truncate">{titleCase(l.recipientName)}</span>
+            )}
+            <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${sourceColor}`}>{sourceLabel}</span>
           </div>
 
           {l.type === 'offer' && (
@@ -358,9 +443,9 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
                     className="bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2 py-1 text-[10px] focus:outline-none" />
                 </div>
               ) : (
-                l.showingDate && (
+                showingInstant && (
                   <span className="text-ds-fine font-medium text-semantic-blue flex items-center gap-1">
-                    <Clock size={10} /> {format(new Date(l.showingDate), 'EEE, MMM d · h:mm a')} {TZ_ABBR}
+                    <Clock size={10} /> {CT_DATETIME.format(showingInstant)}
                   </span>
                 )
               )}
@@ -371,44 +456,47 @@ function OutreachLogCard({ log: l, propertyId, onUpdated }: {
             <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2}
               className="w-full mt-1.5 bg-surface-secondary border-[0.5px] border-gunner-red/30 rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none resize-none" />
           ) : (
-            l.notes && <p className="text-ds-fine text-txt-muted mt-1">{l.notes}</p>
+            l.notes && <p className="text-ds-fine text-txt-muted mt-1 line-clamp-2">{l.notes}</p>
           )}
-        </div>
 
-        <div className="text-right shrink-0 space-y-1.5 flex flex-col items-end">
-          {l.type === 'offer' && (
-            <select value={l.offerStatus ?? 'Pending'} onChange={e => updateField({ offerStatus: e.target.value, offerAmount: l.offerAmount })}
-              disabled={saving}
-              className={`text-[9px] font-semibold px-2.5 py-1 rounded-full border-none cursor-pointer ${OFFER_STATUS_COLORS[l.offerStatus ?? 'Pending'] ?? OFFER_STATUS_COLORS.Pending}`}>
-              {OFFER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          )}
-          {l.type === 'showing' && (
-            <select value={l.showingStatus ?? 'Scheduled'} onChange={e => updateField({ showingStatus: e.target.value })}
-              disabled={saving}
-              className={`text-[9px] font-semibold px-2.5 py-1 rounded-full border-none cursor-pointer ${SHOWING_STATUS_COLORS[l.showingStatus ?? 'Scheduled'] ?? SHOWING_STATUS_COLORS.Scheduled}`}>
-              {SHOWING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          )}
-          <p className="text-[10px] text-txt-muted">{format(new Date(l.loggedAt), 'MMM d')}</p>
-          <p className="text-[9px] text-txt-muted">{l.loggedByName}</p>
-          {editing ? (
-            <div className="flex gap-1.5">
-              <button onClick={saveEdits} disabled={saving}
-                className="text-[9px] font-semibold text-white bg-semantic-green hover:bg-semantic-green/90 px-2 py-0.5 rounded transition-colors">
-                Save
+          {/* Status pill + meta + actions, all on one row matching the
+              Section 3 buyer card UI (red Send-style action, gray Edit pill). */}
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            {l.type === 'offer' && (
+              <select value={l.offerStatus ?? 'Pending'} onChange={e => updateField({ offerStatus: e.target.value, offerAmount: l.offerAmount })}
+                disabled={saving}
+                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border-none cursor-pointer ${OFFER_STATUS_COLORS[l.offerStatus ?? 'Pending'] ?? OFFER_STATUS_COLORS.Pending}`}>
+                {OFFER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            {l.type === 'showing' && (
+              <select value={l.showingStatus ?? 'Scheduled'} onChange={e => updateField({ showingStatus: e.target.value })}
+                disabled={saving}
+                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border-none cursor-pointer ${SHOWING_STATUS_COLORS[l.showingStatus ?? 'Scheduled'] ?? SHOWING_STATUS_COLORS.Scheduled}`}>
+                {SHOWING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            <span className="text-[10px] text-txt-muted">{CT_DATE.format(new Date(l.loggedAt))}</span>
+            <span className="text-[9px] text-txt-muted truncate">· {l.loggedByName}</span>
+            <div className="flex-1" />
+            {editing ? (
+              <>
+                <button onClick={saveEdits} disabled={saving}
+                  className="text-[9px] font-semibold text-white bg-semantic-green hover:bg-semantic-green/90 px-2 py-1 rounded-md transition-colors">
+                  Save
+                </button>
+                <button onClick={() => setEditing(false)}
+                  className="text-[9px] font-medium text-txt-muted hover:text-txt-secondary px-1 py-1 transition-colors">
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setEditing(true)}
+                className="flex items-center gap-1 text-[9px] font-medium text-txt-muted hover:text-txt-secondary bg-surface-tertiary hover:bg-surface-secondary px-2 py-1 rounded-md transition-colors">
+                <Pencil size={9} /> Edit
               </button>
-              <button onClick={() => setEditing(false)}
-                className="text-[9px] font-medium text-txt-muted hover:text-txt-secondary transition-colors">
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setEditing(true)}
-              className="text-[9px] font-medium text-txt-muted opacity-0 group-hover:opacity-100 hover:text-gunner-red transition-all">
-              <Pencil size={10} />
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
