@@ -249,6 +249,7 @@ export function Section4Responses({ property, tenantSlug }: { property: Property
         <SendModal
           propertyId={property.id}
           propertyAddress={property.address}
+          tenantSlug={tenantSlug}
           buyers={sendTargets.map(r => ({
             id: r.buyerId, name: r.name, phone: r.phone, email: r.email, tier: r.tier,
           }))}

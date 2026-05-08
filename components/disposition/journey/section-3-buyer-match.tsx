@@ -18,6 +18,7 @@ import type { PropertyDetail } from '@/components/inventory/property-detail-clie
 import { BulkAddModal } from './bulk-add-modal'
 import { SendModal } from './send-modal'
 import { BuyerEditSlideover } from './buyer-edit-slideover'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 export function Section3BuyerMatch({
   property,
@@ -328,9 +329,23 @@ export function Section3BuyerMatch({
                 className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
             </div>
             <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Last Name</label>
+              <input value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))}
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
               <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Phone *</label>
               <input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
                 placeholder="(615) 555-1234"
+                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Email</label>
+              <input value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="buyer@example.com"
                 className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
             </div>
           </div>
@@ -340,17 +355,21 @@ export function Section3BuyerMatch({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Buyer Tier *</label>
-              <select value={addForm.buyerTier} onChange={e => setAddForm(f => ({ ...f, buyerTier: e.target.value }))}
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine">
-                {(formOptions?.tiers ?? []).map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <SearchableSelect
+                value={addForm.buyerTier}
+                onChange={v => setAddForm(f => ({ ...f, buyerTier: v }))}
+                options={formOptions?.tiers ?? []}
+                placeholder="Type to search tiers..."
+              />
             </div>
             <div>
               <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Pipeline Stage *</label>
-              <select value={addForm.stageId} onChange={e => setAddForm(f => ({ ...f, stageId: e.target.value }))}
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine">
-                {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={addForm.stageId}
+                onChange={v => setAddForm(f => ({ ...f, stageId: v }))}
+                options={stages.map(s => ({ value: s.id, label: s.name }))}
+                placeholder="Type to search stages..."
+              />
             </div>
           </div>
 
@@ -390,24 +409,14 @@ export function Section3BuyerMatch({
             <div className="mt-2 space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Last Name</label>
-                  <input value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))}
-                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-                </div>
-                <div>
-                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Email</label>
-                  <input value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
                   <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Response Speed</label>
-                  <select value={addForm.responseSpeed} onChange={e => setAddForm(f => ({ ...f, responseSpeed: e.target.value }))}
-                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine">
-                    <option value="">---</option>
-                    {(formOptions?.speeds ?? []).map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={addForm.responseSpeed}
+                    onChange={v => setAddForm(f => ({ ...f, responseSpeed: v }))}
+                    options={formOptions?.speeds ?? []}
+                    placeholder="Type to search..."
+                    allowClear
+                  />
                 </div>
                 <div>
                   <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Secondary Market</label>
@@ -497,16 +506,29 @@ export function Section3BuyerMatch({
                           <Plus size={10} /> Add
                         </button>
                         {/* Session 77 — bulk send to every visible matched buyer.
-                            Disabled when no eligible buyers in the matched column. */}
-                        {colBuyers.length > 0 && (
-                          <button
-                            onClick={() => setSendTargets(colBuyers)}
-                            className="text-[10px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-2 py-0.5 rounded-md inline-flex items-center gap-1 transition-colors"
-                            title="Send to every buyer in the Matched column"
-                          >
-                            <Send size={9} /> Send all ({colBuyers.length})
-                          </button>
-                        )}
+                            Disabled until tier messages have been generated in
+                            Section 2 (the Auto-tier mode is the whole point of
+                            "Send all"; without per-tier copy there's nothing to send). */}
+                        {colBuyers.length > 0 && (() => {
+                          const tierMessages = (property.dispoArtifacts?.tierMessages ?? {}) as Record<string, unknown>
+                          const hasTierMessages = Object.keys(tierMessages).length > 0
+                          return (
+                            <button
+                              onClick={() => hasTierMessages && setSendTargets(colBuyers)}
+                              disabled={!hasTierMessages}
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1 transition-colors ${
+                                hasTierMessages
+                                  ? 'text-white bg-gunner-red hover:bg-gunner-red-dark'
+                                  : 'text-txt-muted bg-surface-tertiary cursor-not-allowed'
+                              }`}
+                              title={hasTierMessages
+                                ? 'Send to every buyer in the Matched column'
+                                : 'Generate Tier Messages in Section 2 first'}
+                            >
+                              <Send size={9} /> Send all ({colBuyers.length})
+                            </button>
+                          )
+                        })()}
                       </div>
                     </>
                   ) : (
@@ -665,6 +687,7 @@ export function Section3BuyerMatch({
         <SendModal
           propertyId={property.id}
           propertyAddress={property.address}
+          tenantSlug={tenantSlug}
           buyers={sendTargets.map(b => ({
             id: b.id, name: b.name, phone: b.phone, email: b.email, tier: b.tier,
           }))}

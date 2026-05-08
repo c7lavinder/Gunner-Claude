@@ -18,7 +18,13 @@ export interface PropertyDetailsSnapshot {
   arv: string | null
   constructionEstimate: string | null
   mao: string | null
-  riskFactor: string | null
+  // riskFactor intentionally NOT a gate — it's a *computed display* in
+  // the persistent panel: (construction + max offer) / arv × 100. The
+  // panel auto-renders the percentage as soon as the 3 inputs are
+  // filled (which the readiness check already requires). The schema
+  // column `Property.riskFactor` exists but the UI never writes to it,
+  // so checking it would always fail. (Session 77 hotfix on 2026-05-08.)
+  riskFactor?: string | null
   // propertyCondition is intentionally NOT in this snapshot — it's a top-
   // level summary string that has no dedicated UI in the persistent
   // Property Details panel (only the 4 sub-conditions below have edit
@@ -57,7 +63,6 @@ const FIELDS: FieldSpec[] = [
   { label: 'ARV',                  filled: p => !!p.arv },
   { label: 'Construction estimate', filled: p => !!p.constructionEstimate },
   { label: 'MAO',                  filled: p => !!p.mao },
-  { label: 'Risk factor',          filled: p => !!p.riskFactor },
   { label: 'Roof',                 filled: p => !!p.roofCondition },
   { label: 'Windows',              filled: p => !!p.windowsCondition },
   { label: 'Siding',               filled: p => !!p.sidingCondition },

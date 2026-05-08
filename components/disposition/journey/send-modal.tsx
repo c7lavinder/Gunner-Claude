@@ -13,9 +13,9 @@
 // On success: caller refreshes the kanban (buyers auto-promote to
 // 'sent' via the blast route's stage-promote logic added Wave 4).
 
-import { useState } from 'react'
-import { X, Loader2, Send, AlertCircle } from 'lucide-react'
-import { titleCase } from '@/lib/format'
+import { useState, useEffect } from 'react'
+import { X, Loader2, Send, AlertCircle, Search, ChevronDown } from 'lucide-react'
+import { titleCase, formatPhone } from '@/lib/format'
 import { useToast } from '@/components/ui/toaster'
 
 type ArtifactKind = 'auto-tier' | 'description' | 'listing' | 'social' | 'custom'
@@ -54,6 +54,7 @@ export function SendModal({
   propertyAddress,
   buyers,
   artifacts,
+  tenantSlug,
   onClose,
   onSent,
 }: {
@@ -61,6 +62,7 @@ export function SendModal({
   propertyAddress: string
   buyers: BuyerLite[]
   artifacts: DispoArtifacts
+  tenantSlug: string
   onClose: () => void
   onSent: (sentBuyerIds: string[]) => void
 }) {
@@ -73,12 +75,34 @@ export function SendModal({
   const [artifactKind, setArtifactKind] = useState<ArtifactKind>(
     hasTierMessages && isMulti ? 'auto-tier' : 'description'
   )
-  const [channel, setChannel] = useState<'sms' | 'email'>('sms')
+  // Channel intentionally unset on first render — rep must choose
+  // SMS or Email explicitly. Prevents accidental sends on the wrong channel.
+  const [channel, setChannel] = useState<'sms' | 'email' | null>(null)
   const [customText, setCustomText] = useState('')
   const [emailSubject, setEmailSubject] = useState(`Off-market deal: ${propertyAddress}`)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(buyers.map(b => b.id)))
   const [pendingApproval, setPendingApproval] = useState<{ gateId: string; recipientCount: number; confirmation: string } | null>(null)
   const [sending, setSending] = useState(false)
+  const [recipientSearch, setRecipientSearch] = useState('')
+
+  // Team FROM numbers — same source as the legacy Section 2 dropdown.
+  // For SMS this is the LC outbound number; for Email this is the
+  // sender's verified email. Surfaced so the rep knows exactly which
+  // identity their buyers will see.
+  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; phone: string; email?: string }>>([])
+  const [selectedFrom, setSelectedFrom] = useState<{ name: string; phone: string; email?: string } | null>(null)
+  const [fromDropdownOpen, setFromDropdownOpen] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/${tenantSlug}/dayhub/team-numbers`)
+      .then(r => r.ok ? r.json() : { numbers: [] })
+      .then(d => {
+        const members = (d.numbers ?? []) as Array<{ name: string; phone: string; email?: string }>
+        setTeamMembers(members)
+        if (members.length > 0) setSelectedFrom(members[0])
+      })
+      .catch(() => {})
+  }, [tenantSlug])
 
   // Per-buyer message resolver for auto-tier mode. Returns null if the
   // buyer's tier has no generated message — they're filtered out.
@@ -88,9 +112,12 @@ export function SendModal({
     if (channel === 'sms') {
       return m.smsBody ? { message: m.smsBody } : null
     }
-    return m.emailBody
-      ? { message: m.emailBody, subject: m.emailSubject || `Off-market deal: ${propertyAddress}` }
-      : null
+    if (channel === 'email') {
+      return m.emailBody
+        ? { message: m.emailBody, subject: m.emailSubject || `Off-market deal: ${propertyAddress}` }
+        : null
+    }
+    return null
   }
 
   const messageText = artifactKind === 'auto-tier' ? '[per-tier]'
@@ -99,8 +126,19 @@ export function SendModal({
     : artifactKind === 'social' ? (artifacts.socialPost ?? '')
     : customText
 
+  // Filter buyers by search term first (case-insensitive across name/phone).
+  const searchLower = recipientSearch.toLowerCase()
+  const visibleBuyers = recipientSearch
+    ? buyers.filter(b =>
+        b.name.toLowerCase().includes(searchLower) ||
+        (b.phone ?? '').includes(recipientSearch) ||
+        (b.email ?? '').toLowerCase().includes(searchLower),
+      )
+    : buyers
+
   const eligibleBuyers = buyers.filter(b => {
     if (!selectedIds.has(b.id)) return false
+    if (!channel) return false
     if (channel === 'sms' ? !b.phone : !b.email) return false
     if (artifactKind === 'auto-tier') {
       // Buyer must have a tier message in the chosen channel.
@@ -304,51 +342,117 @@ export function SendModal({
               </div>
             )}
 
-            {/* Channel + email subject */}
-            <div className="flex items-center gap-3">
+            {/* Channel — required. No default, both buttons start neutral. */}
+            <div>
+              <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Channel <span className="text-semantic-red">*</span></label>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setChannel('sms')}
+                  className={`text-[11px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                    channel === 'sms'
+                      ? 'bg-green-600 text-white ring-2 ring-green-200'
+                      : 'bg-surface-secondary text-txt-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] hover:bg-surface-tertiary'
+                  }`}
+                >SMS</button>
+                <button
+                  onClick={() => setChannel('email')}
+                  className={`text-[11px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                    channel === 'email'
+                      ? 'bg-blue-600 text-white ring-2 ring-blue-200'
+                      : 'bg-surface-secondary text-txt-secondary border-[0.5px] border-[rgba(0,0,0,0.1)] hover:bg-surface-tertiary'
+                  }`}
+                >Email</button>
+                {!channel && (
+                  <span className="text-[10px] text-amber-700 italic ml-1 self-center">Pick SMS or Email to continue.</span>
+                )}
+              </div>
+            </div>
+
+            {/* FROM identity + email subject (when applicable) */}
+            {channel && (
               <div>
-                <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Channel</label>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setChannel('sms')}
-                    className={`text-[11px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                      channel === 'sms' ? 'bg-green-600 text-white' : 'bg-surface-secondary text-txt-secondary hover:bg-surface-tertiary'
-                    }`}
-                  >SMS</button>
-                  <button
-                    onClick={() => setChannel('email')}
-                    className={`text-[11px] font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                      channel === 'email' ? 'bg-blue-600 text-white' : 'bg-surface-secondary text-txt-secondary hover:bg-surface-tertiary'
-                    }`}
-                  >Email</button>
+                <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">
+                  Sending from
+                </label>
+                <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-2 flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    {selectedFrom ? (
+                      <div className="text-[11px] text-txt-primary">
+                        <span className="font-semibold">{selectedFrom.name}</span>
+                        <span className="text-txt-muted ml-1.5">
+                          {channel === 'sms'
+                            ? formatPhone(selectedFrom.phone)
+                            : (selectedFrom.email ?? selectedFrom.phone)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-amber-700 italic">No team {channel === 'sms' ? 'numbers' : 'emails'} configured</span>
+                    )}
+                  </div>
+                  {teamMembers.length > 1 && (
+                    <div className="relative">
+                      <button onClick={() => setFromDropdownOpen(p => !p)}
+                        className="text-[10px] font-medium text-semantic-blue hover:underline inline-flex items-center gap-0.5">
+                        Change <ChevronDown size={9} />
+                      </button>
+                      {fromDropdownOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-[8px] border-[0.5px] border-[rgba(0,0,0,0.1)] shadow-lg py-1 min-w-[220px]">
+                          {teamMembers.map((m, i) => (
+                            <button
+                              key={i}
+                              onClick={() => { setSelectedFrom(m); setFromDropdownOpen(false) }}
+                              className={`w-full text-left px-3 py-1.5 text-[10px] hover:bg-surface-secondary transition-colors ${
+                                selectedFrom?.phone === m.phone ? 'bg-gunner-red-light text-txt-primary font-semibold' : 'text-txt-secondary'
+                              }`}
+                            >
+                              {m.name} — {channel === 'sms' ? formatPhone(m.phone) : (m.email ?? m.phone)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              {channel === 'email' && artifactKind !== 'auto-tier' && (
-                <div className="flex-1">
-                  <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Subject</label>
-                  <input
-                    value={emailSubject}
-                    onChange={e => setEmailSubject(e.target.value)}
-                    className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-1.5 text-[12px] focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
-                  />
-                </div>
-              )}
-            </div>
+            )}
+
+            {channel === 'email' && artifactKind !== 'auto-tier' && (
+              <div>
+                <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider block mb-1">Subject</label>
+                <input
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] px-3 py-1.5 text-[12px] focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+                />
+              </div>
+            )}
 
             {/* Recipient list */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">
-                  Recipients — {eligibleBuyers.length} eligible{ineligibleCount > 0 ? `, ${ineligibleCount} missing ${channel}` : ''}
+                  Recipients — {eligibleBuyers.length} eligible{channel && ineligibleCount > 0 ? `, ${ineligibleCount} missing ${channel}` : ''}
                 </label>
                 <div className="flex gap-3">
                   <button onClick={selectAll} className="text-[10px] font-medium text-semantic-blue hover:underline">Select all</button>
                   <button onClick={clearAll} className="text-[10px] font-medium text-txt-muted hover:underline">Clear</button>
                 </div>
               </div>
+              <div className="relative mb-1.5">
+                <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-txt-muted" />
+                <input
+                  value={recipientSearch}
+                  onChange={e => setRecipientSearch(e.target.value)}
+                  placeholder="Search by name, phone, or email..."
+                  className="w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[8px] pl-7 pr-2 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gunner-red/20"
+                />
+              </div>
               <div className="max-h-32 overflow-y-auto space-y-1 border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] p-2 bg-surface-secondary">
-                {buyers.map(b => {
-                  const eligible = channel === 'sms' ? !!b.phone : !!b.email
+                {visibleBuyers.length === 0 && (
+                  <p className="text-[10px] text-txt-muted italic text-center py-2">No buyers match &ldquo;{recipientSearch}&rdquo;.</p>
+                )}
+                {visibleBuyers.map(b => {
+                  const eligible = !channel ? false : channel === 'sms' ? !!b.phone : !!b.email
                   return (
                     <label
                       key={b.id}
@@ -371,7 +475,7 @@ export function SendModal({
                         : b.tier === 'realtor' ? 'bg-fuchsia-100 text-fuchsia-700'
                         : 'bg-gray-100 text-gray-600'
                       }`}>{b.tier}</span>
-                      {!eligible && <span className="text-[9px] text-amber-700">no {channel}</span>}
+                      {channel && !eligible && <span className="text-[9px] text-amber-700">no {channel}</span>}
                     </label>
                   )
                 })}
@@ -387,13 +491,16 @@ export function SendModal({
                 onClick={() => send()}
                 disabled={
                   sending
+                  || !channel
                   || eligibleBuyers.length === 0
                   || (artifactKind !== 'auto-tier' && !messageText.trim())
                 }
                 className="flex-1 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[10px] inline-flex items-center justify-center gap-1.5"
               >
                 {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                {sending ? 'Sending...' : `Send ${channel.toUpperCase()} to ${eligibleBuyers.length}`}
+                {sending ? 'Sending...'
+                  : !channel ? 'Pick a channel'
+                  : `Send ${channel.toUpperCase()} to ${eligibleBuyers.length}`}
               </button>
             </div>
           </>
