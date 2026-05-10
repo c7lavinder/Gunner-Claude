@@ -1,6 +1,8 @@
 // app/api/properties/[propertyId]/photos/[photoId]/route.ts
-// PATCH  — toggle the cover-photo star. Only one starred photo per property
-//          at a time; setting one starred unstars the rest in the same tx.
+// PATCH  — toggle the cover-photo star, or move a photo to a different
+//          category (manual override of Claude vision auto-classification
+//          via drag-and-drop). isStarred enforces one cover per property
+//          in a single transaction.
 // DELETE — remove a photo from storage + DB. Best-effort: storage failures
 //          don't block the DB delete (orphaned blob is acceptable).
 
@@ -13,8 +15,13 @@ import { forbiddenResponse } from '@/lib/auth/session'
 import { deletePhoto } from '@/lib/storage/property-assets'
 import { z } from 'zod'
 
+const CATEGORY_VALUES = ['front', 'exterior', 'kitchen', 'bathroom', 'living', 'basement', 'other'] as const
+
 const patchSchema = z.object({
-  isStarred: z.boolean(),
+  isStarred: z.boolean().optional(),
+  category: z.enum(CATEGORY_VALUES).optional(),
+}).refine(v => v.isStarred !== undefined || v.category !== undefined, {
+  message: 'Provide isStarred or category',
 })
 
 export const PATCH = withTenant<{ propertyId: string; photoId: string }>(async (req, ctx, params) => {
@@ -30,7 +37,16 @@ export const PATCH = withTenant<{ propertyId: string; photoId: string }>(async (
   })
   if (!photo) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  if (parsed.data.isStarred) {
+  if (parsed.data.category !== undefined) {
+    // Manual reclassification — also flip classificationStatus to 'done'
+    // so the UI stops showing a "Classifying…" overlay.
+    await db.propertyPhoto.update({
+      where: { id: photo.id },
+      data: { category: parsed.data.category, classificationStatus: 'done' },
+    })
+  }
+
+  if (parsed.data.isStarred === true) {
     // Unstar everything else for this property, then star the target —
     // single transaction so concurrent stars don't end up with two coverages.
     await db.$transaction([
@@ -43,7 +59,7 @@ export const PATCH = withTenant<{ propertyId: string; photoId: string }>(async (
         data: { isStarred: true },
       }),
     ])
-  } else {
+  } else if (parsed.data.isStarred === false) {
     await db.propertyPhoto.update({
       where: { id: photo.id },
       data: { isStarred: false },

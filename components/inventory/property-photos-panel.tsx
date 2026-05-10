@@ -6,8 +6,12 @@
 //   JPEG via heic-convert (libheif/wasm) so the browser stays simple.
 // - 25MB / file. Each photo classifies into Front / Exterior / Kitchen /
 //   Bathroom / Living / Basement / Other via Claude vision.
-// - Starred ("cover") photo always renders first in the grid. One star per
-//   property; starring a new one auto-unstars the previous.
+// - Users can drag any tile onto another section header to manually
+//   reclassify (overrides Claude vision). All canonical sections render
+//   while dragging so empty sections are valid drop targets.
+// - Starred ("cover") photo always renders first in the grid AND as a big
+//   hero image above the sections. One star per property; starring a new
+//   one auto-unstars the previous.
 // - Sections are collapsed by default. "Expand all" / "Collapse all"
 //   toggles every section in one click.
 // - Tiny thumbnails — click any to open a fullscreen lightbox with arrow-
@@ -46,6 +50,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 
 const CATEGORY_ORDER = ['front', 'exterior', 'kitchen', 'bathroom', 'living', 'basement', 'other', 'uncategorized']
+// Categories the API accepts for manual reclassification — `uncategorized`
+// is a pre-classification state, not a writable target.
+const WRITABLE_CATEGORIES = ['front', 'exterior', 'kitchen', 'bathroom', 'living', 'basement', 'other']
 
 const ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif'
 const MAX_BYTES = 25 * 1024 * 1024
@@ -78,6 +85,12 @@ export function PropertyPhotosPanel({
   const [editingLink, setEditingLink] = useState(false)
   const [linkDraft, setLinkDraft] = useState(initialPhotosLink ?? '')
   const [savingLink, setSavingLink] = useState(false)
+  // Drag-and-drop reclassification state. `draggingPhotoId` is set while a
+  // tile is being dragged so we can render every canonical section as a
+  // drop target (even empty ones) and dim the source tile.
+  // `dropTargetKey` highlights the section header the cursor is over.
+  const [draggingPhotoId, setDraggingPhotoId] = useState<string | null>(null)
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
   // Hydrate expanded state from localStorage on mount (client-only).
@@ -203,6 +216,33 @@ export function PropertyPhotosPanel({
     }
   }
 
+  async function reclassifyPhoto(id: string, nextCategory: string) {
+    const current = photos.find(p => p.id === id)
+    if (!current) return
+    const currentCat = current.classificationStatus === 'pending' ? 'uncategorized' : (current.category ?? 'uncategorized')
+    if (currentCat === nextCategory) return
+    // Optimistic — flip category locally and clear the "pending" overlay if it
+    // was still classifying. User intent wins over Claude vision.
+    setPhotos(prev => prev.map(p => p.id === id
+      ? { ...p, category: nextCategory, classificationStatus: 'done' }
+      : p,
+    ))
+    // Auto-expand the destination section so the user sees where it landed.
+    setExpanded(prev => {
+      if (prev.has(nextCategory)) return prev
+      const next = new Set(prev)
+      next.add(nextCategory)
+      persistExpanded(next)
+      return next
+    })
+    const res = await fetch(`/api/properties/${propertyId}/photos/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: nextCategory }),
+    })
+    if (!res.ok) load()
+  }
+
   async function downloadAll() {
     if (photos.length === 0 || downloading) return
     setDownloading(true)
@@ -260,6 +300,8 @@ export function PropertyPhotosPanel({
 
   // Group photos by category in the canonical order. Starred photos sort
   // first within their category (server already orders them that way).
+  // While dragging, every writable section renders even if empty so users
+  // can drop onto a section that doesn't have any photos yet.
   const grouped = useMemo(() => CATEGORY_ORDER
     .map(cat => ({
       key: cat,
@@ -269,7 +311,10 @@ export function PropertyPhotosPanel({
         return c === cat
       }),
     }))
-    .filter(g => g.photos.length > 0), [photos])
+    .filter(g => g.photos.length > 0 || (draggingPhotoId !== null && WRITABLE_CATEGORIES.includes(g.key))),
+    [photos, draggingPhotoId])
+
+  const starredPhoto = useMemo(() => photos.find(p => p.isStarred) ?? null, [photos])
 
   function toggleSection(key: string) {
     setExpanded(prev => {
@@ -460,17 +505,78 @@ export function PropertyPhotosPanel({
         </div>
       )}
 
+      {/* Cover photo hero — large display of the starred photo above the
+          grid. Click opens the lightbox at that photo. Hidden if no photo
+          is starred or while uploading from the empty state. */}
+      {!loading && starredPhoto && starredPhoto.url && (
+        <div className="px-3 pt-3">
+          <div
+            className="relative w-full aspect-[16/9] rounded-[10px] overflow-hidden bg-surface-secondary cursor-pointer group"
+            onClick={() => {
+              const idx = photos.findIndex(p => p.id === starredPhoto.id)
+              if (idx >= 0) setLightboxIndex(idx)
+            }}
+          >
+            <img
+              src={starredPhoto.url}
+              alt={starredPhoto.filename}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-amber-400/95 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm pointer-events-none">
+              <Star size={10} fill="currentColor" /> Cover
+            </div>
+            <button
+              onClick={e => { e.stopPropagation(); toggleStar(starredPhoto.id, true) }}
+              className="absolute top-2 right-2 px-2 py-1 rounded-full bg-black/60 hover:bg-black/80 text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Remove as cover photo"
+            >
+              Unstar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Categorized grid — every section collapsed by default. */}
       {!loading && photos.length > 0 && (
         <div className="p-3 space-y-2">
           {grouped.map(group => {
             const isOpen = expanded.has(group.key)
+            const isDropTarget = dropTargetKey === group.key
+            const canDropHere = draggingPhotoId !== null && WRITABLE_CATEGORIES.includes(group.key)
             return (
-              <div key={group.key} className="border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[8px] overflow-hidden">
+              <div
+                key={group.key}
+                className={`border-[0.5px] rounded-[8px] overflow-hidden transition-colors ${
+                  isDropTarget ? 'border-gunner-red bg-gunner-red/5' : 'border-[rgba(0,0,0,0.06)]'
+                }`}
+                onDragOver={e => {
+                  if (!canDropHere) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  if (dropTargetKey !== group.key) setDropTargetKey(group.key)
+                }}
+                onDragLeave={e => {
+                  // Only clear when the drag leaves the section bounds, not
+                  // when it crosses into a nested child.
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                    if (dropTargetKey === group.key) setDropTargetKey(null)
+                  }
+                }}
+                onDrop={e => {
+                  if (!canDropHere) return
+                  e.preventDefault()
+                  const id = e.dataTransfer.getData('text/plain') || draggingPhotoId
+                  setDropTargetKey(null)
+                  setDraggingPhotoId(null)
+                  if (id) reclassifyPhoto(id, group.key)
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => toggleSection(group.key)}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 bg-surface-secondary hover:bg-surface-tertiary transition-colors text-left"
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 transition-colors text-left ${
+                    isDropTarget ? 'bg-gunner-red/10' : 'bg-surface-secondary hover:bg-surface-tertiary'
+                  }`}
                 >
                   <ChevronDown
                     size={11}
@@ -478,20 +584,43 @@ export function PropertyPhotosPanel({
                   />
                   <span className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em]">{group.label}</span>
                   <span className="text-[10px] text-txt-muted">({group.photos.length})</span>
+                  {canDropHere && (
+                    <span className="ml-auto text-[9px] font-semibold text-gunner-red uppercase tracking-wider">
+                      Drop to move
+                    </span>
+                  )}
                 </button>
-                {isOpen && (
-                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1 p-1.5">
+                {/* Always render the photo grid container while a drag is in
+                    progress so empty sections still accept drops. */}
+                {(isOpen || canDropHere) && (
+                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1 p-1.5 min-h-[44px]">
+                    {group.photos.length === 0 && canDropHere && (
+                      <div className="col-span-full flex items-center justify-center text-[10px] text-txt-muted py-2">
+                        Drop here to move into {group.label}
+                      </div>
+                    )}
                     {group.photos.map(p => {
                       const idx = photos.findIndex(x => x.id === p.id)
                       const classifying = p.classificationStatus === 'pending'
+                      const isBeingDragged = draggingPhotoId === p.id
                       return (
                         <div
                           key={p.id}
-                          className={`aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-pointer ${p.isStarred ? 'ring-2 ring-amber-400' : ''}`}
+                          draggable
+                          onDragStart={e => {
+                            setDraggingPhotoId(p.id)
+                            try { e.dataTransfer.setData('text/plain', p.id) } catch {}
+                            e.dataTransfer.effectAllowed = 'move'
+                          }}
+                          onDragEnd={() => {
+                            setDraggingPhotoId(null)
+                            setDropTargetKey(null)
+                          }}
+                          className={`aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-pointer ${p.isStarred ? 'ring-2 ring-amber-400' : ''} ${isBeingDragged ? 'opacity-40' : ''}`}
                           onClick={() => setLightboxIndex(idx)}
                         >
                           {p.url ? (
-                            <img src={p.url} alt={p.filename} className="w-full h-full object-cover" loading="lazy" />
+                            <img src={p.url} alt={p.filename} className="w-full h-full object-cover" loading="lazy" draggable={false} />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-[8px] text-txt-muted">—</div>
                           )}
