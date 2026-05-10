@@ -27,6 +27,15 @@ import { parseGHLContact } from '../lib/buyers/sync'
 const args = process.argv.slice(2)
 const DRY = args.includes('--dry-run')
 const TENANT_ARG = (() => { const i = args.indexOf('--tenant'); return i >= 0 ? args[i + 1] : undefined })()
+// GHL rate limit (~10 req/s steady-state per location). Sequential
+// processing with a 250ms gap puts us at ~4 req/s, well under the
+// ceiling. Each buyer also makes 0 calls when no gap fill is needed.
+const GHL_THROTTLE_MS = (() => {
+  const i = args.indexOf('--throttle-ms')
+  return i >= 0 ? parseInt(args[i + 1], 10) : 250
+})()
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 const CANONICAL_KEYS = [
   'tier', 'verifiedFunding', 'hasPurchased', 'responseSpeed',
@@ -117,6 +126,10 @@ async function main() {
       const needsGhlPull = !!buyer.ghlContactId && (gaps.length > 0 || !hasMarkets || !hasNotes)
       let parsedFromGhl: ReturnType<typeof parseGHLContact> | null = null
       if (needsGhlPull) {
+        // Throttle BEFORE the call so the very first request starts
+        // immediately, but every subsequent buyer waits the configured
+        // gap. Prevents the 429 storm we hit on the first run.
+        if (GHL_THROTTLE_MS > 0) await sleep(GHL_THROTTLE_MS)
         try {
           const contact = await ghl.getContact(buyer.ghlContactId!)
           if (contact) {
@@ -134,8 +147,11 @@ async function main() {
           }
         } catch (err) {
           errors++
-          if (errors <= 5) process.stderr.write(`[backfill-buyer-fields]   buyer=${buyer.id} ghl fetch failed: ${err instanceof Error ? err.message : String(err)}\n`)
-          // Don't continue — the secondary-fold above may still produce a write.
+          const msg = err instanceof Error ? err.message : String(err)
+          if (errors <= 5) process.stderr.write(`[backfill-buyer-fields]   buyer=${buyer.id} ghl fetch failed: ${msg}\n`)
+          // On a 429, back off harder so the burst clears before the
+          // next request. Other errors fall through to the local fold.
+          if (msg.includes('429')) await sleep(2000)
         }
       }
 
