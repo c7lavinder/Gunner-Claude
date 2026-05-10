@@ -40,7 +40,11 @@ const LONGTERM_STATUS_TO_STAGE: Record<string, AppStage> = {
 
 interface Property {
   id: string; address: string; city: string; state: string; zip: string
-  status: string; acqStatus: string | null; dispoStatus: string | null; longtermStatus: string | null; arv: string | null; askingPrice: string | null
+  status: string; acqStatus: string | null; dispoStatus: string | null; longtermStatus: string | null
+  // ISO timestamps when the matching lane was marked Lost in GHL, null
+  // otherwise. Used to exclude Lost lanes from stage chip matches.
+  acqLostAt: string | null; dispoLostAt: string | null; longtermLostAt: string | null
+  arv: string | null; askingPrice: string | null
   mao: string | null; contractPrice: string | null; assignmentFee: string | null
   currentOffer: string | null; highestOffer: string | null; acceptedPrice: string | null; finalProfit: string | null
   offerTypes: string[]
@@ -188,9 +192,12 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
       // and `dispoStatus=CLOSED` use the same string, so the shared
       // STATUS_TO_APP_STAGE map can't disambiguate. Lane-aware lookups fix
       // both the dispo Closed chip (was reading 0) and the acq Closed chip.
-      const acqStage = p.acqStatus ? ACQ_STATUS_TO_STAGE[p.acqStatus] : null
-      const dispoStage = p.dispoStatus ? DISPO_STATUS_TO_STAGE[p.dispoStatus] : null
-      const longtermStage = p.longtermStatus ? LONGTERM_STATUS_TO_STAGE[p.longtermStatus] : null
+      // A lane marked Lost is excluded from chip matches — its dispoStatus
+      // (etc.) may still be set, but the deal is dead so it shouldn't
+      // appear in the "New Deal" / "Pushed Out" / etc. chips of that lane.
+      const acqStage = p.acqStatus && !p.acqLostAt ? ACQ_STATUS_TO_STAGE[p.acqStatus] : null
+      const dispoStage = p.dispoStatus && !p.dispoLostAt ? DISPO_STATUS_TO_STAGE[p.dispoStatus] : null
+      const longtermStage = p.longtermStatus && !p.longtermLostAt ? LONGTERM_STATUS_TO_STAGE[p.longtermStatus] : null
       if (acqStage !== selectedStage && dispoStage !== selectedStage && longtermStage !== selectedStage) return false
     }
     if (selectedMarket) {

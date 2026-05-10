@@ -134,10 +134,13 @@ export default async function InventoryPage({
     if (!stage) return
     stageCounts[stage] = (stageCounts[stage] ?? 0) + 1
   }
+  // Lost lanes do NOT contribute to stage chip counts. A property with
+  // dispoLostAt set must not inflate the "New Deal" chip — even though
+  // its dispoStatus is still IN_DISPOSITION, the deal is dead.
   for (const p of properties) {
-    if (p.acqStatus) bump(ACQ_STATUS_TO_STAGE[p.acqStatus])
-    if (p.dispoStatus) bump(DISPO_STATUS_TO_STAGE[p.dispoStatus])
-    if (p.longtermStatus) bump(LONGTERM_STATUS_TO_STAGE[p.longtermStatus])
+    if (p.acqStatus && !p.acqLostAt) bump(ACQ_STATUS_TO_STAGE[p.acqStatus])
+    if (p.dispoStatus && !p.dispoLostAt) bump(DISPO_STATUS_TO_STAGE[p.dispoStatus])
+    if (p.longtermStatus && !p.longtermLostAt) bump(LONGTERM_STATUS_TO_STAGE[p.longtermStatus])
   }
 
   // Get GHL location ID for CRM links
@@ -177,6 +180,12 @@ export default async function InventoryPage({
         acqStatus: p.acqStatus,
         dispoStatus: p.dispoStatus,
         longtermStatus: p.longtermStatus,
+        // ISO strings of the lane *LostAt timestamps — null when the
+        // lane is not Lost. Client uses these to keep Lost lanes out of
+        // stage-chip matches even when the per-lane status enum is set.
+        acqLostAt: p.acqLostAt?.toISOString() ?? null,
+        dispoLostAt: p.dispoLostAt?.toISOString() ?? null,
+        longtermLostAt: p.longtermLostAt?.toISOString() ?? null,
         arv: p.arv?.toString() ?? null,
         askingPrice: p.askingPrice?.toString() ?? null,
         mao: p.mao?.toString() ?? null,
