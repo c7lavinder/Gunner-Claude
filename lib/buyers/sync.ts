@@ -87,30 +87,52 @@ export async function syncBuyerFromGHL(
   contact: Parameters<typeof parseGHLContact>[0],
 ) {
   const parsed = parseGHLContact(contact)
+  const buyerId = `ghl_${contact.id}`
 
-  await db.buyer.upsert({
-    where: { id: `ghl_${contact.id}` },
-    create: {
-      id: `ghl_${contact.id}`,
-      tenantId,
+  // Tenant-scoped existence check — `where: { id }` alone matches across
+  // tenants on the unique id column. Use findFirst + tenantId in WHERE.
+  const existing = await db.buyer.findFirst({
+    where: { id: buyerId, tenantId },
+    select: { id: true },
+  })
+
+  if (!existing) {
+    // First-time import: seed the row with everything we have from GHL.
+    // After this, the buyer-info fields (markets, customFields, tags,
+    // internalNotes) become Gunner-owned — subsequent GHL syncs will
+    // NOT overwrite them. Contact info (name/phone/email) keeps round-
+    // tripping so GHL stays the source of truth there.
+    await db.buyer.create({
+      data: {
+        id: buyerId,
+        tenantId,
+        name: parsed.name,
+        phone: parsed.phone,
+        email: parsed.email,
+        ghlContactId: parsed.ghlContactId,
+        primaryMarkets: parsed.markets,
+        customFields: JSON.parse(JSON.stringify(parsed.criteria)),
+        tags: parsed.tags,
+        internalNotes: parsed.notes,
+        isActive: true,
+      },
+    })
+    return parsed
+  }
+
+  // Existing buyer: only refresh contact info from GHL. Buyer-info
+  // fields (tier, verifiedFunding, hasPurchased, responseSpeed, buybox,
+  // markets, secondaryMarkets, lastContactDate, internalNotes) stay
+  // owned by Gunner and are not overwritten here. Once the rep clicks
+  // through the GHL custom-field deletion checklist, those GHL fields
+  // can be removed without affecting Gunner's view.
+  await db.buyer.update({
+    where: { id: buyerId, tenantId },
+    data: {
       name: parsed.name,
       phone: parsed.phone,
       email: parsed.email,
       ghlContactId: parsed.ghlContactId,
-      primaryMarkets: parsed.markets,
-      customFields: JSON.parse(JSON.stringify(parsed.criteria)),
-      tags: parsed.tags,
-      internalNotes: parsed.notes,
-      isActive: true,
-    },
-    update: {
-      name: parsed.name,
-      phone: parsed.phone,
-      email: parsed.email,
-      primaryMarkets: parsed.markets,
-      customFields: JSON.parse(JSON.stringify(parsed.criteria)),
-      tags: parsed.tags,
-      internalNotes: parsed.notes,
       isActive: true,
     },
   })

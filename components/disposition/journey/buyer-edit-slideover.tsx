@@ -1,17 +1,18 @@
 'use client'
 // components/disposition/journey/buyer-edit-slideover.tsx
-// Shared right-side slide-over for editing a Buyer (Section 77 round 2).
-// Used by Section 3 (Match Buyers kanban) and Section 4 (Track Responses
-// kanban) so both surfaces edit through the same form.
+// Buyer edit slide-over (Session 78 — narrowed scope).
 //
-// Field set is intentionally narrower than the full /buyers/[id] page —
-// just the things a rep needs while triaging buyers in the kanban
-// (contact, tier, markets, buybox budget, funding, notes). Everything
-// else lives on the buyer page; the slide-over header has a "Open full
-// buyer page" link.
+// The fields shown here are the canonical buyer-info set Gunner now
+// owns: tier, verifiedFunding, purchasedBefore, responseSpeed,
+// lastContactDate, internalNotes, buybox, markets, secondaryMarket.
+// The earlier sprawl (buybox-budget min/max, ARV ranges, funding type,
+// POF) lives on the buyer detail page tabs — that's the deep dive,
+// this is the at-a-glance editor used by Section 3 + the buyer page
+// hero.
 //
-// All writes go through PATCH /api/buyers/[buyerId] (which accepts the
-// expanded field set as of Session 77 round 2).
+// All writes go through PATCH /api/buyers/[buyerId]. The route maps
+// purchasedBefore → customFields.hasPurchased (legacy storage key)
+// and secondaryMarket → customFields.secondaryMarkets[0].
 
 import { useState } from 'react'
 import { X, ExternalLink, Loader2 } from 'lucide-react'
@@ -21,21 +22,18 @@ export interface EditableBuyer {
   id: string
   name: string
   phone: string | null
-  mobilePhone?: string | null
   email: string | null
   company?: string | null
+  // Canonical fields
   tier: string
+  verifiedFunding: boolean
+  purchasedBefore: boolean
+  responseSpeed: string
+  lastContactDate: string | null
+  buybox: string[]
   markets: string[]
-  // Buybox budget (optional — fields may be unknown until rep types them)
-  minPurchasePrice?: string | null
-  maxPurchasePrice?: string | null
-  minArv?: string | null
-  maxArv?: string | null
-  maxRepairBudget?: string | null
-  fundingType?: string | null
-  pofAmount?: string | null
-  verifiedFunding?: boolean
-  notes?: string | null
+  secondaryMarket: string | null
+  notes: string | null
 }
 
 const TIER_OPTIONS = [
@@ -47,34 +45,37 @@ const TIER_OPTIONS = [
   { value: 'halted', label: 'Halted' },
 ]
 
-const FUNDING_TYPES = [
+const RESPONSE_SPEED_OPTIONS = [
   { value: '', label: '—' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'hard_money', label: 'Hard Money' },
-  { value: 'private_lender', label: 'Private Lender' },
-  { value: 'dscr', label: 'DSCR' },
-  { value: 'conventional', label: 'Conventional' },
-  { value: 'creative', label: 'Creative' },
-  { value: 'other', label: 'Other' },
+  { value: 'lightning', label: 'Lightning' },
+  { value: 'same day', label: 'Same Day' },
+  { value: 'slow', label: 'Slow' },
+  { value: 'ghost', label: 'Ghost' },
 ]
+
+const BUYBOX_OPTIONS = ['Fix and Flip', 'Rental', 'Builder', 'Wholesale', 'Land', 'Commercial', 'Multi-Family']
 
 interface FormState {
   name: string
   phone: string
-  mobilePhone: string
   email: string
   company: string
   tier: string
-  markets: string  // comma-separated for editing
-  minPurchasePrice: string
-  maxPurchasePrice: string
-  minArv: string
-  maxArv: string
-  maxRepairBudget: string
-  fundingType: string
-  pofAmount: string
   verifiedFunding: boolean
+  purchasedBefore: boolean
+  responseSpeed: string
+  lastContactDate: string
+  buybox: string[]
+  markets: string  // comma-separated for editing
+  secondaryMarket: string
   notes: string
+}
+
+function isoToInputDate(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export function BuyerEditSlideover({
@@ -91,28 +92,26 @@ export function BuyerEditSlideover({
   const [form, setForm] = useState<FormState>({
     name: buyer.name ?? '',
     phone: buyer.phone ?? '',
-    mobilePhone: buyer.mobilePhone ?? '',
     email: buyer.email ?? '',
     company: buyer.company ?? '',
     tier: buyer.tier ?? 'unqualified',
-    markets: (buyer.markets ?? []).join(', '),
-    minPurchasePrice: buyer.minPurchasePrice ?? '',
-    maxPurchasePrice: buyer.maxPurchasePrice ?? '',
-    minArv: buyer.minArv ?? '',
-    maxArv: buyer.maxArv ?? '',
-    maxRepairBudget: buyer.maxRepairBudget ?? '',
-    fundingType: buyer.fundingType ?? '',
-    pofAmount: buyer.pofAmount ?? '',
     verifiedFunding: buyer.verifiedFunding ?? false,
+    purchasedBefore: buyer.purchasedBefore ?? false,
+    responseSpeed: buyer.responseSpeed ?? '',
+    lastContactDate: isoToInputDate(buyer.lastContactDate),
+    buybox: buyer.buybox ?? [],
+    markets: (buyer.markets ?? []).join(', '),
+    secondaryMarket: buyer.secondaryMarket ?? '',
     notes: buyer.notes ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function num(s: string): number | null {
-    if (!s.trim()) return null
-    const n = parseFloat(s.replace(/[^0-9.]/g, ''))
-    return isNaN(n) ? null : n
+  function toggleBuybox(option: string) {
+    setForm(f => ({
+      ...f,
+      buybox: f.buybox.includes(option) ? f.buybox.filter(b => b !== option) : [...f.buybox, option],
+    }))
   }
 
   async function save() {
@@ -122,19 +121,16 @@ export function BuyerEditSlideover({
     const payload = {
       name: form.name,
       phone: form.phone,
-      mobilePhone: form.mobilePhone || null,
       email: form.email || null,
       company: form.company || null,
       tier: form.tier,
-      markets,
-      minPurchasePrice: num(form.minPurchasePrice),
-      maxPurchasePrice: num(form.maxPurchasePrice),
-      minArv: num(form.minArv),
-      maxArv: num(form.maxArv),
-      maxRepairBudget: num(form.maxRepairBudget),
-      fundingType: form.fundingType || null,
-      pofAmount: num(form.pofAmount),
       verifiedFunding: form.verifiedFunding,
+      purchasedBefore: form.purchasedBefore,
+      responseSpeed: form.responseSpeed || null,
+      lastContactDate: form.lastContactDate || null,
+      buybox: form.buybox,
+      markets,
+      secondaryMarket: form.secondaryMarket || null,
       notes: form.notes || null,
     }
     try {
@@ -147,19 +143,16 @@ export function BuyerEditSlideover({
         onSaved({
           name: form.name,
           phone: form.phone,
-          mobilePhone: form.mobilePhone || null,
           email: form.email || null,
           company: form.company || null,
           tier: form.tier,
-          markets,
-          minPurchasePrice: form.minPurchasePrice || null,
-          maxPurchasePrice: form.maxPurchasePrice || null,
-          minArv: form.minArv || null,
-          maxArv: form.maxArv || null,
-          maxRepairBudget: form.maxRepairBudget || null,
-          fundingType: form.fundingType || null,
-          pofAmount: form.pofAmount || null,
           verifiedFunding: form.verifiedFunding,
+          purchasedBefore: form.purchasedBefore,
+          responseSpeed: form.responseSpeed,
+          lastContactDate: form.lastContactDate || null,
+          buybox: form.buybox,
+          markets,
+          secondaryMarket: form.secondaryMarket || null,
           notes: form.notes || null,
         })
         onClose()
@@ -177,7 +170,6 @@ export function BuyerEditSlideover({
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative w-full max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b border-[rgba(0,0,0,0.06)] px-5 py-4 flex items-center justify-between z-10">
           <div>
             <h3 className="text-ds-label font-semibold text-txt-primary">Edit Buyer</h3>
@@ -198,7 +190,74 @@ export function BuyerEditSlideover({
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Contact */}
+          {/* Tier + Funding flags */}
+          <FormSection title="Tier & Status">
+            <Field label="Tier">
+              <select value={form.tier} onChange={e => setForm(f => ({ ...f, tier: e.target.value }))} className={INPUT_CLASS}>
+                {TIER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.verifiedFunding}
+                  onChange={e => setForm(f => ({ ...f, verifiedFunding: e.target.checked }))}
+                  className="accent-gunner-red" />
+                <span className="text-ds-fine text-txt-secondary">Verified Funding</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.purchasedBefore}
+                  onChange={e => setForm(f => ({ ...f, purchasedBefore: e.target.checked }))}
+                  className="accent-gunner-red" />
+                <span className="text-ds-fine text-txt-secondary">Purchased Before</span>
+              </label>
+            </div>
+            <Field label="Response Speed">
+              <select value={form.responseSpeed} onChange={e => setForm(f => ({ ...f, responseSpeed: e.target.value }))} className={INPUT_CLASS}>
+                {RESPONSE_SPEED_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Last Contact Date">
+              <input type="date" value={form.lastContactDate}
+                onChange={e => setForm(f => ({ ...f, lastContactDate: e.target.value }))}
+                className={INPUT_CLASS} />
+            </Field>
+          </FormSection>
+
+          {/* Markets + buybox */}
+          <FormSection title="Buybox & Markets">
+            <Field label="Buybox (select all that apply)">
+              <div className="flex flex-wrap gap-1.5">
+                {BUYBOX_OPTIONS.map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => toggleBuybox(opt)}
+                    className={`text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
+                      form.buybox.includes(opt)
+                        ? 'bg-gunner-red text-white'
+                        : 'bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary hover:bg-surface-tertiary'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Markets (comma separated)">
+              <input value={form.markets} onChange={e => setForm(f => ({ ...f, markets: e.target.value }))}
+                placeholder="Nashville, Chattanooga"
+                className={INPUT_CLASS} />
+            </Field>
+            <Field label="Secondary Market">
+              <input value={form.secondaryMarket} onChange={e => setForm(f => ({ ...f, secondaryMarket: e.target.value }))}
+                placeholder="One-off market for this deal"
+                className={INPUT_CLASS} />
+            </Field>
+          </FormSection>
+
+          {/* Contact (kept editable here for convenience even though
+              GHL is the source of truth — when GHL two-way write is
+              wired up later, these will round-trip). */}
           <FormSection title="Contact">
             <Field label="Name">
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={INPUT_CLASS} />
@@ -207,75 +266,23 @@ export function BuyerEditSlideover({
               <Field label="Phone">
                 <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={INPUT_CLASS} />
               </Field>
-              <Field label="Mobile">
-                <input value={form.mobilePhone} onChange={e => setForm(f => ({ ...f, mobilePhone: e.target.value }))} className={INPUT_CLASS} />
+              <Field label="Email">
+                <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={INPUT_CLASS} />
               </Field>
             </div>
-            <Field label="Email">
-              <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={INPUT_CLASS} />
-            </Field>
             <Field label="Company">
               <input value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))} className={INPUT_CLASS} />
             </Field>
           </FormSection>
 
-          {/* Tier + Markets */}
-          <FormSection title="Tier & Markets">
-            <Field label="Tier">
-              <select value={form.tier} onChange={e => setForm(f => ({ ...f, tier: e.target.value }))} className={INPUT_CLASS}>
-                {TIER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Markets (comma separated)">
-              <input value={form.markets} onChange={e => setForm(f => ({ ...f, markets: e.target.value }))}
-                placeholder="Nashville, Chattanooga"
-                className={INPUT_CLASS} />
-            </Field>
-          </FormSection>
-
-          {/* Buybox / Budget */}
-          <FormSection title="Buybox">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Min Purchase">
-                <input type="text" value={form.minPurchasePrice} onChange={e => setForm(f => ({ ...f, minPurchasePrice: e.target.value }))} placeholder="50,000" className={INPUT_CLASS} />
-              </Field>
-              <Field label="Max Purchase">
-                <input type="text" value={form.maxPurchasePrice} onChange={e => setForm(f => ({ ...f, maxPurchasePrice: e.target.value }))} placeholder="250,000" className={INPUT_CLASS} />
-              </Field>
-              <Field label="Min ARV">
-                <input type="text" value={form.minArv} onChange={e => setForm(f => ({ ...f, minArv: e.target.value }))} placeholder="100,000" className={INPUT_CLASS} />
-              </Field>
-              <Field label="Max ARV">
-                <input type="text" value={form.maxArv} onChange={e => setForm(f => ({ ...f, maxArv: e.target.value }))} placeholder="500,000" className={INPUT_CLASS} />
-              </Field>
-              <Field label="Max Repair Budget">
-                <input type="text" value={form.maxRepairBudget} onChange={e => setForm(f => ({ ...f, maxRepairBudget: e.target.value }))} placeholder="60,000" className={INPUT_CLASS} />
-              </Field>
-              <Field label="POF Amount">
-                <input type="text" value={form.pofAmount} onChange={e => setForm(f => ({ ...f, pofAmount: e.target.value }))} className={INPUT_CLASS} />
-              </Field>
-            </div>
-            <Field label="Funding Type">
-              <select value={form.fundingType} onChange={e => setForm(f => ({ ...f, fundingType: e.target.value }))} className={INPUT_CLASS}>
-                {FUNDING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </Field>
-            <label className="flex items-center gap-2 cursor-pointer pt-1">
-              <input type="checkbox" checked={form.verifiedFunding} onChange={e => setForm(f => ({ ...f, verifiedFunding: e.target.checked }))} className="accent-gunner-red" />
-              <span className="text-ds-fine text-txt-secondary">Verified Funding</span>
-            </label>
-          </FormSection>
-
-          {/* Notes */}
-          <FormSection title="Notes">
-            <Field label="Internal Notes">
-              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} className={`${INPUT_CLASS} resize-none`} />
-            </Field>
+          {/* Internal notes */}
+          <FormSection title="Internal Notes">
+            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              rows={4} className={`${INPUT_CLASS} resize-none`} />
           </FormSection>
 
           {error && <p className="text-[11px] text-semantic-red font-medium">{error}</p>}
 
-          {/* Actions */}
           <div className="flex gap-2 sticky bottom-0 bg-white pt-2 -mx-5 px-5 pb-1 border-t border-[rgba(0,0,0,0.06)]">
             <button onClick={onClose}
               className="flex-1 border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary text-ds-fine font-medium py-2 rounded-[10px] hover:bg-surface-secondary transition-colors">

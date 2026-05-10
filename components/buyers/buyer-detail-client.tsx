@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Phone, Mail, MapPin, ExternalLink, User,
-  Target, BarChart3, MessageSquare, Sparkles, Check, Building2,
+  Target, BarChart3, MessageSquare, Sparkles, Check, Building2, Pencil,
 } from 'lucide-react'
 import { formatPhone, titleCase } from '@/lib/format'
+import { BuyerEditSlideover } from '@/components/disposition/journey/buyer-edit-slideover'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -455,6 +456,13 @@ export function BuyerDetailClient({ buyer, tenantSlug }: BuyerDetailClientProps)
         </div>
       </div>
 
+      {/* ── Hero (Session 78) ──────────────────────────────
+          At-a-glance summary above the deep-dive tabs: contact info,
+          buyer-info canonical fields (Gunner source of truth), active
+          deals, deals closed. Tabs below remain as the comprehensive
+          field reference. */}
+      <BuyerHero buyer={data} tenantSlug={tenantSlug} onSaved={(patch) => setData(prev => ({ ...prev, ...patch }))} />
+
       {/* ── Tabs ───────────────────────────────────────── */}
       <div className="bg-white border-b border-[rgba(0,0,0,0.06)]">
         <div className="max-w-5xl mx-auto flex gap-1 px-6">
@@ -748,6 +756,271 @@ export function BuyerDetailClient({ buyer, tenantSlug }: BuyerDetailClientProps)
           </SectionCard>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Hero (Session 78) ──────────────────────────────────────────────────────
+// Sits above the deep-dive tab bar. Four cards in a 12-col grid:
+//   - Contact info (name/phone/email/company/address) — GHL is source
+//     of truth; renders read-only here, edit via "Open in GHL".
+//   - Buyer info — the 9 canonical fields Gunner now owns. Editable via
+//     a single Edit button that opens the BuyerEditSlideover (Session 3
+//     reuses the same modal). Inline rendering keeps the page compact.
+//   - Active deals — propertyStages with stage NOT in {closed, dead}.
+//   - Closed deals — totalDealsClosedWithUs + lastDealClosedDate.
+
+const TIER_PILL_COLORS: Record<string, string> = {
+  priority:    'bg-amber-100 text-amber-700',
+  qualified:   'bg-green-100 text-green-700',
+  jv:          'bg-blue-100 text-blue-700',
+  realtor:     'bg-fuchsia-100 text-fuchsia-700',
+  unqualified: 'bg-gray-100 text-gray-500',
+  halted:      'bg-red-100 text-red-500',
+}
+
+const ACTIVE_STAGES = new Set(['matched', 'added', 'sent', 'responded', 'interested', 'showing_scheduled', 'offer_made'])
+
+type BuyerCanonical = {
+  tier: string
+  verifiedFunding: boolean
+  purchasedBefore: boolean
+  responseSpeed: string
+  lastContactDate: string | null
+  buybox: string[]
+  markets: string[]
+  secondaryMarket: string | null
+  internalNotes: string | null
+}
+
+function readCanonical(buyer: BuyerData): BuyerCanonical {
+  const c = (buyer.customFields ?? {}) as Record<string, unknown>
+  const buyboxRaw = c.buybox
+  const buybox: string[] = Array.isArray(buyboxRaw)
+    ? buyboxRaw.map(String)
+    : typeof buyboxRaw === 'string' && buyboxRaw
+      ? buyboxRaw.split(',').map(s => s.trim()).filter(Boolean)
+      : []
+  const secondaryRaw = c.secondaryMarkets
+  const secondary = Array.isArray(secondaryRaw) && secondaryRaw.length > 0
+    ? String(secondaryRaw[0])
+    : (typeof secondaryRaw === 'string' ? secondaryRaw : null)
+  return {
+    tier: (c.tier as string) ?? 'unqualified',
+    verifiedFunding: c.verifiedFunding === true,
+    purchasedBefore: c.hasPurchased === true,
+    responseSpeed: (c.responseSpeed as string) ?? '',
+    lastContactDate: (c.lastContactDate as string) ?? buyer.lastCommunicationDate ?? null,
+    buybox,
+    markets: buyer.primaryMarkets ?? [],
+    secondaryMarket: secondary,
+    internalNotes: buyer.internalNotes ?? null,
+  }
+}
+
+function BuyerHero({
+  buyer, tenantSlug, onSaved,
+}: {
+  buyer: BuyerData
+  tenantSlug: string
+  onSaved: (patch: Partial<BuyerData>) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const canonical = readCanonical(buyer)
+  const active = buyer.propertyStages.filter(ps => ACTIVE_STAGES.has(ps.stage))
+  const closedCount = buyer.totalDealsClosedWithUs ?? 0
+
+  return (
+    <div className="bg-[#FAF9F6] border-b border-[rgba(0,0,0,0.04)]">
+      <div className="max-w-5xl mx-auto px-6 py-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+        {/* Buyer info — canonical fields, Gunner source of truth */}
+        <div className="md:col-span-5 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Buyer Info</p>
+            <button
+              onClick={() => setEditing(true)}
+              className="text-[10px] font-semibold text-gunner-red hover:text-gunner-red-dark inline-flex items-center gap-1"
+            >
+              <Pencil className="w-3 h-3" /> Edit
+            </button>
+          </div>
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full capitalize ${TIER_PILL_COLORS[canonical.tier] ?? TIER_PILL_COLORS.unqualified}`}>
+                {canonical.tier || 'Unqualified'}
+              </span>
+              {canonical.verifiedFunding && (
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Verified Funding</span>
+              )}
+              {canonical.purchasedBefore && (
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">Purchased Before</span>
+              )}
+              {canonical.responseSpeed && (
+                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 capitalize">
+                  Speed: {canonical.responseSpeed}
+                </span>
+              )}
+            </div>
+            <HeroRow label="Markets">
+              <TagList items={canonical.markets} color="bg-blue-100 text-blue-700" />
+            </HeroRow>
+            <HeroRow label="Secondary">
+              <span className={canonical.secondaryMarket ? 'text-[11px] text-gray-900' : 'text-[11px] text-gray-300'}>
+                {canonical.secondaryMarket || '—'}
+              </span>
+            </HeroRow>
+            <HeroRow label="Buybox">
+              <TagList items={canonical.buybox} color="bg-amber-100 text-amber-700" />
+            </HeroRow>
+            <HeroRow label="Last contact">
+              <span className={canonical.lastContactDate ? 'text-[11px] text-gray-900' : 'text-[11px] text-gray-300'}>
+                {fmtDate(canonical.lastContactDate)}
+              </span>
+            </HeroRow>
+            {canonical.internalNotes && (
+              <div className="text-[11px] text-gray-700 bg-amber-50 border-[0.5px] border-amber-200 rounded-[8px] px-2.5 py-2 mt-2">
+                {canonical.internalNotes}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Contact info — GHL source of truth */}
+        <div className="md:col-span-3 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
+            {buyer.ghlContactId && (
+              <a
+                href={`https://app.gohighlevel.com/contacts/detail/${buyer.ghlContactId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-medium text-gray-400 hover:text-gray-600 inline-flex items-center gap-1"
+                title="Source of truth — edit in GHL"
+              >
+                GHL <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+          <div className="p-3 space-y-1.5">
+            {buyer.phone && (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-700">
+                <Phone className="w-3 h-3 text-gray-400" /> {formatPhone(buyer.phone)}
+              </div>
+            )}
+            {buyer.email && (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-700 truncate">
+                <Mail className="w-3 h-3 text-gray-400 shrink-0" />
+                <span className="truncate">{buyer.email}</span>
+              </div>
+            )}
+            {buyer.company && (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-700">
+                <Building2 className="w-3 h-3 text-gray-400" /> {buyer.company}
+              </div>
+            )}
+            {(buyer.mailingCity || buyer.mailingState) && (
+              <div className="flex items-start gap-1.5 text-[11px] text-gray-700">
+                <MapPin className="w-3 h-3 text-gray-400 mt-0.5" />
+                <span>{[buyer.mailingAddress, buyer.mailingCity, buyer.mailingState, buyer.mailingZip].filter(Boolean).join(', ')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Active deals */}
+        <div className="md:col-span-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)]">
+            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Active Deals</p>
+          </div>
+          <div className="p-3">
+            <p className="text-[24px] font-bold text-gray-900 leading-none">{active.length}</p>
+            {active.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {active.slice(0, 3).map(ps => (
+                  <Link
+                    key={ps.id}
+                    href={`/${tenantSlug}/inventory/${ps.property.id}`}
+                    className="block text-[10px] text-gray-700 hover:text-gunner-red truncate"
+                  >
+                    {ps.property.address}
+                  </Link>
+                ))}
+                {active.length > 3 && (
+                  <p className="text-[9px] text-gray-400">+{active.length - 3} more</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Deals closed */}
+        <div className="md:col-span-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
+          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)]">
+            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Closed</p>
+          </div>
+          <div className="p-3">
+            <p className="text-[24px] font-bold text-gray-900 leading-none">{closedCount}</p>
+            {buyer.lastDealClosedDate && (
+              <p className="text-[10px] text-gray-500 mt-1">Last: {fmtDate(buyer.lastDealClosedDate)}</p>
+            )}
+            {buyer.totalVolumeFromUs && (
+              <p className="text-[10px] text-gray-500 mt-0.5">Volume: {fmtMoney(buyer.totalVolumeFromUs)}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {editing && (
+        <BuyerEditSlideover
+          buyer={{
+            id: buyer.id,
+            name: buyer.name,
+            phone: buyer.phone,
+            email: buyer.email,
+            company: buyer.company,
+            tier: canonical.tier,
+            markets: canonical.markets,
+            verifiedFunding: canonical.verifiedFunding,
+            purchasedBefore: canonical.purchasedBefore,
+            responseSpeed: canonical.responseSpeed,
+            lastContactDate: canonical.lastContactDate,
+            buybox: canonical.buybox,
+            secondaryMarket: canonical.secondaryMarket,
+            notes: canonical.internalNotes,
+          }}
+          tenantSlug={tenantSlug}
+          onClose={() => setEditing(false)}
+          onSaved={(patch) => {
+            // Mirror locally so the hero updates without a refetch.
+            const nextCustomFields: Record<string, unknown> = { ...(buyer.customFields ?? {}) }
+            if (patch.tier !== undefined) nextCustomFields.tier = patch.tier
+            if (patch.verifiedFunding !== undefined) nextCustomFields.verifiedFunding = patch.verifiedFunding
+            if (patch.purchasedBefore !== undefined) nextCustomFields.hasPurchased = patch.purchasedBefore
+            if (patch.responseSpeed !== undefined) nextCustomFields.responseSpeed = patch.responseSpeed
+            if (patch.lastContactDate !== undefined) nextCustomFields.lastContactDate = patch.lastContactDate
+            if (patch.secondaryMarket !== undefined) nextCustomFields.secondaryMarkets = patch.secondaryMarket ? [patch.secondaryMarket] : []
+            if (patch.buybox !== undefined) nextCustomFields.buybox = patch.buybox
+            onSaved({
+              name: patch.name ?? buyer.name,
+              phone: patch.phone ?? buyer.phone,
+              email: patch.email ?? buyer.email,
+              company: patch.company ?? buyer.company,
+              primaryMarkets: patch.markets ?? buyer.primaryMarkets,
+              internalNotes: patch.notes ?? buyer.internalNotes,
+              customFields: nextCustomFields,
+            })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function HeroRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[9px] uppercase tracking-wider text-gray-400 w-[68px] shrink-0">{label}</span>
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   )
 }

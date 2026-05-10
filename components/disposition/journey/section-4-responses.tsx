@@ -272,6 +272,13 @@ export function Section4Responses({ property, tenantSlug }: { property: Property
             email: editTarget.email,
             tier: editTarget.tier,
             markets: editTarget.markets ?? [],
+            verifiedFunding: false,
+            purchasedBefore: false,
+            responseSpeed: '',
+            lastContactDate: null,
+            buybox: [],
+            secondaryMarket: null,
+            notes: null,
           }}
           tenantSlug={tenantSlug}
           onClose={() => setEditTarget(null)}

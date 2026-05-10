@@ -314,9 +314,14 @@ export function Section3BuyerMatch({
       <TierSummary buyers={allBuyers} stages={buyerStages} />
 
       {showAddForm && (
-        <div className="bg-surface-secondary rounded-[10px] p-4 space-y-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAddForm(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto p-5 space-y-3 animate-in zoom-in-95">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-wider">Add Buyer to GHL</p>
+            <div>
+              <p className="text-[12px] font-semibold text-txt-primary">Add Buyer</p>
+              <p className="text-[10px] text-txt-muted">Creates a contact in GHL and a Buyer in Gunner. Buyer-info fields are owned by Gunner from here on.</p>
+            </div>
             <button onClick={() => setShowAddForm(false)} className="text-txt-muted hover:text-txt-secondary"><X size={14} /></button>
           </div>
 
@@ -447,11 +452,23 @@ export function Section3BuyerMatch({
             </div>
           </details>
 
+          {/* Defaults footer — shows the values that auto-fill when a
+              field is left empty. Pulled from the live GHL formOptions
+              so the rep sees the actual options at a glance. */}
+          <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-2 text-[10px] text-txt-muted space-y-0.5">
+            <p className="font-semibold text-[9px] uppercase tracking-wider text-txt-muted">Defaults</p>
+            <p>Tier: <span className="text-txt-secondary">{formOptions?.tiers?.[0] ?? '—'}</span></p>
+            <p>Buybox options: <span className="text-txt-secondary">{(formOptions?.buybox ?? []).slice(0, 4).join(', ') || '—'}{(formOptions?.buybox?.length ?? 0) > 4 ? '...' : ''}</span></p>
+            <p>Markets: <span className="text-txt-secondary">{(formOptions?.markets ?? []).slice(0, 4).join(', ') || '—'}{(formOptions?.markets?.length ?? 0) > 4 ? '...' : ''}</span></p>
+            <p>Response speeds: <span className="text-txt-secondary">{(formOptions?.speeds ?? []).join(', ') || '—'}</span></p>
+          </div>
+
           <button onClick={submitBuyer}
             disabled={!addForm.firstName || !addForm.phone || !addForm.stageId || addForm.buybox.length === 0 || addForm.markets.length === 0 || !addForm.source || saving}
             className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
             {saving ? 'Creating in GHL...' : 'Add Buyer'}
           </button>
+          </div>
         </div>
       )}
 
@@ -646,22 +663,27 @@ export function Section3BuyerMatch({
             email: editTarget.email,
             tier: editTarget.tier,
             markets: editTarget.markets ?? [],
-            maxPurchasePrice: editTarget.maxBuyPrice ? String(editTarget.maxBuyPrice) : null,
             verifiedFunding: editTarget.verifiedFunding ?? false,
+            // Canonical fields the kanban doesn't carry — slideover loads
+            // safe defaults; saving picks up any user-entered values.
+            purchasedBefore: false,
+            responseSpeed: '',
+            lastContactDate: null,
+            buybox: [],
+            secondaryMarket: null,
+            notes: editTarget.notes ?? null,
           }}
           tenantSlug={tenantSlug}
           onClose={() => setEditTarget(null)}
           onSaved={(patch) => {
-            // Map back to BuyerItem shape for the kanban (only the fields
-            // BuyerItem renders need to round-trip).
             applyBuyerPatch({
               name: patch.name,
               phone: patch.phone ?? null,
               email: patch.email ?? null,
               tier: patch.tier,
               markets: patch.markets,
-              maxBuyPrice: patch.maxPurchasePrice ? Number(patch.maxPurchasePrice) : null,
               verifiedFunding: patch.verifiedFunding,
+              notes: patch.notes ?? null,
             } as Partial<BuyerItem>)
           }}
         />
