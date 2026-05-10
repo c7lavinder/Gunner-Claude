@@ -10,7 +10,7 @@
 // internal notes, the 3 generators, plus the PDF flyer download.
 
 import { useState } from 'react'
-import { FileText, Loader2, Pencil, Wand2, X } from 'lucide-react'
+import { AlertCircle, FileText, Loader2, Pencil, Wand2, X } from 'lucide-react'
 import {
   InlineTextArea,
   type PropertyDetail,
@@ -27,6 +27,9 @@ export function Section2DealBlast({
   onInternalNotesChange,
   artifacts,
   onArtifactsChange,
+  primaryOfferType,
+  descriptionStale,
+  descriptionGeneratedForType,
 }: {
   property: PropertyDetail
   tenantSlug: string
@@ -37,6 +40,12 @@ export function Section2DealBlast({
   onInternalNotesChange: (val: string | null) => void
   artifacts: Record<string, unknown>
   onArtifactsChange: (next: Record<string, unknown>) => void
+  // Session 78 — primary offer type drives description voice.
+  // descriptionStale flips true when the rep changed the primary after
+  // the description was generated, prompting a regen nudge.
+  primaryOfferType: string
+  descriptionStale: boolean
+  descriptionGeneratedForType: string | null
 }) {
   const { toast } = useToast()
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -87,16 +96,29 @@ export function Section2DealBlast({
       } else {
         const newText = data.text ?? ''
         onDescriptionChange(newText)
-        // The dispo-generate route writes dispoArtifacts.description, so
-        // also persist to Property.description for the canonical source.
-        await fetch(`/api/properties/${property.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            description: newText,
-            fieldSources: { description: 'ai' },
-          }),
-        }).catch(() => {})
+        // Stamp Property.description (canonical) + dispoArtifacts meta
+        // so the stale-nudge can compare against the next primary toggle.
+        await Promise.all([
+          fetch(`/api/properties/${property.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              description: newText,
+              fieldSources: { description: 'ai' },
+            }),
+          }).catch(() => {}),
+          fetch(`/api/properties/${property.id}/dispo-meta`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ descriptionGeneratedForType: primaryOfferType }),
+          }).catch(() => {}),
+        ])
+        // Mirror the meta into the lifted artifacts state so the stale
+        // nudge clears immediately without a refetch.
+        onArtifactsChange({
+          ...artifacts,
+          descriptionGeneratedForType: primaryOfferType,
+        })
         setFieldSources(prev => ({ ...prev, description: 'ai' }))
         toast('Description generated', 'success')
       }
@@ -275,12 +297,27 @@ export function Section2DealBlast({
         )}
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Description</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[9px] font-semibold text-txt-muted uppercase tracking-wider">Description</p>
+              <span className="text-[8px] font-semibold text-semantic-blue bg-semantic-blue-bg px-1.5 py-0.5 rounded-full">
+                Primary: {primaryOfferType}
+              </span>
+              {descriptionStale && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-amber-700 bg-amber-50 border-[0.5px] border-amber-200 px-1.5 py-0.5 rounded-full"
+                  title={`Description was generated for ${descriptionGeneratedForType ?? 'a different offer type'}. Regenerate to refresh for ${primaryOfferType}.`}
+                >
+                  <AlertCircle size={9} /> Stale
+                </span>
+              )}
+            </div>
             <button
               onClick={generateDescription}
               disabled={!hasDispoManager || generatingDescription}
               title={!hasDispoManager ? 'Assign a Disposition Manager first.' : ''}
-              className="text-[10px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-2.5 py-1 rounded-[6px] inline-flex items-center gap-1 transition-colors"
+              className={`text-[10px] font-semibold text-white disabled:opacity-40 px-2.5 py-1 rounded-[6px] inline-flex items-center gap-1 transition-colors ${
+                descriptionStale ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gunner-red hover:bg-gunner-red-dark'
+              }`}
             >
               {generatingDescription ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
               {generatingDescription ? 'Generating...' : (description ? 'Regenerate' : 'Generate')}

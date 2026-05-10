@@ -362,6 +362,23 @@ export function PropertyDetailClient({
   const [sources, setSources] = useState<Record<string, string>>(property.fieldSources ?? {})
   const [offerTypes, setOfferTypes] = useState<string[]>(property.offerTypes ?? [])
   const [altPrices, setAltPrices] = useState<Record<string, Record<string, string | null>>>(property.altPrices ?? {})
+  // Session 78 — which offer type the rep is leading with on the blast.
+  // Lives in dispoArtifacts JSON (not a Prisma column) so adding it
+  // doesn't require a migration. NumbersColumn writes here; Section 2
+  // reads to drive the description regen + stale-nudge.
+  const [primaryOfferType, setPrimaryOfferType] = useState<string>(
+    ((property.dispoArtifacts ?? {}) as { primaryOfferType?: string }).primaryOfferType ?? 'Cash',
+  )
+  async function savePrimaryOfferType(next: string) {
+    setPrimaryOfferType(next)
+    try {
+      await fetch(`/api/properties/${property.id}/dispo-meta`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primaryOfferType: next }),
+      })
+    } catch {}
+  }
   const isClosed = property.status === 'SOLD' || property.status === 'DISPO_CLOSED'
 
   // Auto-compute assignment fee + final profit on mount if inputs exist and
@@ -643,6 +660,8 @@ export function PropertyDetailClient({
         sources={sources}
         altPrices={altPrices}
         offerTypes={offerTypes}
+        primaryOfferType={primaryOfferType}
+        onPrimaryOfferTypeChange={savePrimaryOfferType}
         onSaved={handleSaved}
         onArraySaved={handleArraySaved}
         onAltSaved={handleAltSaved}
@@ -736,6 +755,7 @@ export function PropertyDetailClient({
             <DispositionJourney
               property={property}
               tenantSlug={tenantSlug}
+              primaryOfferType={primaryOfferType}
               onJumpToTab={(t) => setActiveTab(t)}
             />
           )}
@@ -2874,6 +2894,7 @@ const NUMBERS_FIELDS: Array<{ key: string; label: string; kind: 'money' | 'text'
 
 function NumbersColumn({
   propertyId, cashValues, cashSources, altPrices, offerTypes,
+  primaryOfferType, onPrimaryOfferTypeChange,
   onCashSaved, onAltSaved,
 }: {
   propertyId: string
@@ -2881,6 +2902,11 @@ function NumbersColumn({
   cashSources: Record<string, string>
   altPrices: Record<string, Record<string, string | null>>
   offerTypes: string[]
+  // Session 78 — which offer type is primary for the blast. Click the
+  // star next to a tab to mark it primary (drives the description
+  // generator + Section 2 stale-nudge).
+  primaryOfferType: string
+  onPrimaryOfferTypeChange: (next: string) => void
   onCashSaved: (field: string, val: string | null, src: string) => void
   onAltSaved: (type: string, field: string, val: string | null) => void
 }) {
@@ -2956,24 +2982,38 @@ function NumbersColumn({
 
   return (
     <div>
-      {/* Section header + tab bar — matched underline treatment with sibling columns */}
+      {/* Section header + tab bar — matched underline treatment with sibling columns.
+          Each tab pairs with a star toggle that marks its offer type as primary
+          for the deal blast. Filled gold star = primary; outline = inactive. */}
       <div className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-[rgba(0,0,0,0.08)]">
         <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] shrink-0">Numbers</p>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           {tabs.map(t => {
             const isActive = activeTab === t
+            const isPrimary = primaryOfferType === t
             return (
-              <button
-                key={t}
-                onClick={() => setActiveTab(t)}
-                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-colors ${
-                  isActive
-                    ? (t === 'Cash' ? 'bg-gunner-red text-white' : 'bg-txt-primary text-white')
-                    : 'bg-surface-secondary text-txt-muted hover:text-txt-secondary'
-                }`}
-              >
-                {t}
-              </button>
+              <div key={t} className="inline-flex items-center">
+                <button
+                  onClick={() => onPrimaryOfferTypeChange(t)}
+                  title={isPrimary ? `${t} is the primary offer type` : `Mark ${t} as primary`}
+                  className={`text-[10px] -mr-0.5 px-1 py-0.5 rounded-full transition-colors ${
+                    isPrimary ? 'text-amber-500' : 'text-txt-muted hover:text-amber-400'
+                  }`}
+                  aria-label={`Set ${t} as primary offer type`}
+                >
+                  {isPrimary ? '★' : '☆'}
+                </button>
+                <button
+                  onClick={() => setActiveTab(t)}
+                  className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-colors ${
+                    isActive
+                      ? (t === 'Cash' ? 'bg-gunner-red text-white' : 'bg-txt-primary text-white')
+                      : 'bg-surface-secondary text-txt-muted hover:text-txt-secondary'
+                  }`}
+                >
+                  {t}
+                </button>
+              </div>
             )
           })}
         </div>
@@ -3111,13 +3151,16 @@ interface SharedVals {
 // shared state in PropertyDetailClient.
 
 function PropertyDetailsPanel({
-  propertyId, vals, sources, altPrices, offerTypes, onSaved, onArraySaved, onAltSaved, projectTypeOptions,
+  propertyId, vals, sources, altPrices, offerTypes, primaryOfferType, onPrimaryOfferTypeChange,
+  onSaved, onArraySaved, onAltSaved, projectTypeOptions,
 }: {
   propertyId: string
   vals: SharedVals
   sources: Record<string, string>
   altPrices: Record<string, Record<string, string | null>>
   offerTypes: string[]
+  primaryOfferType: string
+  onPrimaryOfferTypeChange: (next: string) => void
   onSaved: (field: string, val: string | number | null, src?: string) => void
   onArraySaved: (field: string, vals: string[]) => void
   onAltSaved: (type: string, field: string, val: string | null) => void
@@ -3171,6 +3214,8 @@ function PropertyDetailsPanel({
             cashSources={sources}
             altPrices={altPrices}
             offerTypes={offerTypes}
+            primaryOfferType={primaryOfferType}
+            onPrimaryOfferTypeChange={onPrimaryOfferTypeChange}
             onCashSaved={onSaved}
             onAltSaved={onAltSaved}
           />

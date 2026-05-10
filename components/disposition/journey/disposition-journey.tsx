@@ -29,10 +29,15 @@ import { checkPropertyDetailsReadiness, isDispoManagerRole } from '@/lib/disposi
 export function DispositionJourney({
   property,
   tenantSlug,
+  primaryOfferType,
   onJumpToTab,
 }: {
   property: PropertyDetail
   tenantSlug: string
+  // Owned by PropertyDetailClient (NumbersColumn writes it). Read here
+  // so Section 2 can show which offer type the description was generated
+  // for and warn when it's stale.
+  primaryOfferType: string
   onJumpToTab: (tabKey: 'overview' | 'data') => void
 }) {
   // Lifted state — owned here so Section 2 can re-mount with the latest
@@ -40,6 +45,15 @@ export function DispositionJourney({
   const [description, setDescription] = useState<string | null>(property.description)
   const [internalNotes, setInternalNotes] = useState<string | null>(property.internalNotes)
   const [artifacts, setArtifacts] = useState<Record<string, unknown>>(property.dispoArtifacts ?? {})
+
+  // Stale detection — when the rep generates the description, we stamp
+  // dispoArtifacts.descriptionGeneratedForType. If the primary later
+  // changes, Section 2 surfaces a regen nudge.
+  const descriptionGeneratedForType =
+    (artifacts as { descriptionGeneratedForType?: string }).descriptionGeneratedForType ?? null
+  const descriptionStale = !!description
+    && !!descriptionGeneratedForType
+    && descriptionGeneratedForType !== primaryOfferType
 
   // Count generated artifact pieces (description, listing post, social
   // post, tier messages). Drives Section 2 status: 0 = not_started,
@@ -122,6 +136,9 @@ export function DispositionJourney({
           onInternalNotesChange={setInternalNotes}
           artifacts={artifacts}
           onArtifactsChange={setArtifacts}
+          primaryOfferType={primaryOfferType}
+          descriptionStale={descriptionStale}
+          descriptionGeneratedForType={descriptionGeneratedForType}
         />
       </JourneySection>
 

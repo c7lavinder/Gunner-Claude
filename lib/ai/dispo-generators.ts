@@ -74,6 +74,11 @@ interface DispoContext {
   neighborhoodSummary: string | null
   repairEstimate: string | null
   rentalEstimate: string | null
+  // Session 78 — which offer type the rep is leading the blast with.
+  // Drives the description voice (Cash buyers care about repair cost +
+  // close speed; Sub-to / Novation buyers care about terms + monthly
+  // payment + spread; etc.). Read from dispoArtifacts.primaryOfferType.
+  primaryOfferType: string
   // Comps (from PropertyComp table) — only used by listing prompt
   comps: Array<{
     address: string
@@ -317,6 +322,9 @@ async function loadContext(propertyId: string, tenantId: string): Promise<DispoC
       // sees on the panel.
       constructionEstimate: true,
       repairEstimate: true, rentalEstimate: true,
+      // Session 78 — primary offer type lives in dispoArtifacts JSON.
+      // Selected separately below.
+      dispoArtifacts: true,
       // Intangibles → infer pros + work-needed for the prompts
       comparableRisk: true, basementStatus: true, curbAppeal: true,
       neighborsGrade: true, parkingType: true, yardGrade: true,
@@ -384,6 +392,9 @@ async function loadContext(propertyId: string, tenantId: string): Promise<DispoC
     fundingLink: property.tenant.dispositionFundingLink ?? 'https://franchise.newagainhouses.com/',
     dispoManagerName: dispoManager?.name ?? '',
     dispoManagerPhone: dispoManager?.phone ?? null,
+    primaryOfferType:
+      ((property.dispoArtifacts ?? {}) as { primaryOfferType?: string }).primaryOfferType
+      ?? 'Cash',
   }
 }
 
@@ -487,8 +498,29 @@ OUTPUT: A Facebook Marketplace / social media post for cash investors and rehabb
 - Output ONLY the post.`
 }
 
+// Voice hint per offer type. Keeps the AI focused on what the buying
+// audience actually cares about for that strategy. New types fall back
+// to the cash voice — safest default for cold buyer audiences.
+function offerTypeVoice(type: string): string {
+  const t = type.trim().toLowerCase()
+  if (t === 'cash' || t === '') {
+    return 'Lead with cash-friendly numbers (purchase price, repair estimate, ARV, spread). Audience: cash flippers and rental investors. Tone: direct, deal-math forward.'
+  }
+  if (t.includes('sub') && t.includes('to')) {
+    return 'Lead with terms (existing loan balance, monthly payment, interest rate, equity remaining). Audience: creative-finance investors. Skip cash-spread framing — they care about long-hold cashflow.'
+  }
+  if (t.includes('novation')) {
+    return 'Lead with novation upside (retail-buyer ARV vs purchase, listing strategy). Audience: agent-friendly investors comfortable listing on MLS. Mention agent commission room.'
+  }
+  if (t.includes('partner') || t === 'jv') {
+    return 'Lead with JV terms (split, capital required, exit strategy). Audience: co-investment partners — collaborative, not transactional.'
+  }
+  return `Lead with the angle most relevant to a ${type} buyer. Tone: professional, deal-focused.`
+}
+
 function buildPrompt(kind: DispoArtifactKind, ctx: DispoContext): string {
   const facts = [
+    `Primary offer type for this blast: ${ctx.primaryOfferType}`,
     `Address: ${ctx.address}${ctx.city ? `, ${ctx.city}` : ''}${ctx.state ? `, ${ctx.state}` : ''}`,
     ctx.beds != null ? `Beds: ${ctx.beds}` : null,
     ctx.baths != null ? `Baths: ${ctx.baths}` : null,
@@ -507,6 +539,7 @@ function buildPrompt(kind: DispoArtifactKind, ctx: DispoContext): string {
     ctx.description ? `Existing description (rewrite/refine): ${ctx.description}` : null,
     ctx.pros.length > 0 ? `Pros: ${ctx.pros.join(', ')}` : null,
     ctx.workNeeded.length > 0 ? `Work needed: ${ctx.workNeeded.join(', ')}` : null,
+    `\nVoice for ${ctx.primaryOfferType}: ${offerTypeVoice(ctx.primaryOfferType)}`,
   ].filter(Boolean).join('\n')
 
   const closing = `\nDisposition Manager: ${ctx.dispoManagerName}${ctx.dispoManagerPhone ? ` (${ctx.dispoManagerPhone})` : ''}\nFunding link (for the closing block — house-flipping franchise the rep owns): ${ctx.fundingLink}`
