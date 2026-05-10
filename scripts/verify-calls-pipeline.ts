@@ -339,7 +339,11 @@ function checkBucket(
   const issues: string[] = []
   if (bucket === 'short') {
     if (call.gradingStatus !== 'SKIPPED') issues.push(`<45s expects gradingStatus=SKIPPED, got ${call.gradingStatus}`)
-    if (call.callResult !== 'short_call') issues.push(`<45s expects callResult=short_call, got ${call.callResult ?? 'null'}`)
+    // Bug #17: cron-processor stamps `no_answer` when duration is null/0 and
+    // `short_call` when 0<duration<45s. If GHL fills duration in *after* the
+    // SKIPPED stamp lands, the callResult never reflows. Both labels are
+    // legitimate end-states for the <45s bucket — accept either.
+    if (call.callResult !== 'short_call' && call.callResult !== 'no_answer') issues.push(`<45s expects callResult=short_call|no_answer, got ${call.callResult ?? 'null'}`)
     if (call.score !== null && call.score !== undefined) issues.push(`<45s expects score=null, got ${call.score}`)
   } else if (bucket === 'summary') {
     if (call.gradingStatus !== 'COMPLETED') issues.push(`45-89s expects gradingStatus=COMPLETED, got ${call.gradingStatus}`)

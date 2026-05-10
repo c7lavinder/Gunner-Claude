@@ -169,6 +169,7 @@ async function main() {
                   durationSeconds: realDuration,
                   calledAt: msgDate,
                   gradingStatus: 'PENDING',
+                  source: 'sync_calls',
                 },
               })
 

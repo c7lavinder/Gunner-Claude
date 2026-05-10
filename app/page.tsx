@@ -5,9 +5,14 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
 
 export default async function RootPage() {
-  // TEMP: DEV BYPASS — remove this if-block to restore normal auth
+  // DEV BYPASS — set DEV_BYPASS_AUTH=true and DEV_BYPASS_TENANT_SLUG=<slug>
+  // to skip auth and land directly in a tenant's day-hub. No-op in prod
+  // because neither var is set there.
   if (process.env.DEV_BYPASS_AUTH === 'true') {
-    redirect('/apex-dev/day-hub')
+    const devSlug = process.env.DEV_BYPASS_TENANT_SLUG
+    if (devSlug) {
+      redirect(`/${devSlug}/day-hub`)
+    }
   }
 
   const session = await getServerSession(authOptions)

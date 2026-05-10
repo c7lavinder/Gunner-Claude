@@ -16,9 +16,15 @@ import { resolveAssignee } from '@/lib/ghl/resolveAssignee'
 import { logFailure } from '@/lib/audit'
 import { z } from 'zod'
 
+// Bug #24 hard cap. editedInput is a loose dict by necessity (40+ action
+// shapes), but a malicious / buggy client could POST multi-MB payloads that
+// bloat audit_logs. Reject anything over 64KB at the boundary — every real
+// edit shape is well under 1KB, so this gives ~50× headroom.
+const MAX_BODY_BYTES = 64 * 1024
+
 const bodySchema = z.object({
-  toolCallId: z.string(),
-  pageContext: z.string().optional().nullable(),
+  toolCallId: z.string().max(200),
+  pageContext: z.string().max(500).optional().nullable(),
   rejected: z.boolean().optional(),
   // Loose dict — per-branch validation happens inline where a required field
   // is enforced (e.g. change_pipeline_stage requires stageId; see defect #4 in
@@ -28,7 +34,20 @@ const bodySchema = z.object({
 })
 
 export const POST = withTenant(async (request, ctx) => {
-  const body = await request.json()
+  const contentLength = Number(request.headers.get('content-length') ?? 0)
+  if (contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
+  }
+  const rawText = await request.text()
+  if (rawText.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
+  }
+  let body: unknown
+  try {
+    body = JSON.parse(rawText)
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
   const parsed = bodySchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   const { toolCallId, pageContext, rejected, editedInput } = parsed.data

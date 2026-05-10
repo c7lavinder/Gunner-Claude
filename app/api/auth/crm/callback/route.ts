@@ -1,26 +1,13 @@
-import { getSession, unauthorizedResponse } from '@/lib/auth/session'
 // app/api/auth/crm/callback/route.ts
-// Handles the OAuth redirect from GHL Marketplace App
-// Exchanges code for tokens, saves to tenant, registers webhooks
+// Handles the OAuth redirect from GHL Marketplace App.
+// Exchanges code for tokens and saves them to the tenant. Webhook
+// registration happens at the GHL Marketplace App level (Bug #10) — no
+// per-tenant call needed here.
 
+import { getSession } from '@/lib/auth/session'
 import { NextRequest, NextResponse } from 'next/server'
-
-
-import { exchangeGHLCode, getGHLClient } from '@/lib/ghl/client'
+import { exchangeGHLCode } from '@/lib/ghl/client'
 import { db } from '@/lib/db/client'
-
-const GHL_WEBHOOK_EVENTS = [
-  'InboundMessage',
-  'OutboundMessage',
-  'CallCompleted',
-  'OpportunityStageChanged',
-  'OpportunityCreate',
-  'ContactCreated',
-  'ContactUpdate',
-  'ContactDelete',
-  'TaskCompleted',
-  'AppointmentCreated',
-]
 
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXTAUTH_URL ?? request.nextUrl.origin
@@ -67,18 +54,11 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Attempt webhook registration — non-blocking, we have polling fallback
-    try {
-      const ghlClient = await getGHLClient(tenantId)
-      const webhookUrl = `${baseUrl}/api/webhooks/ghl`
-      const webhook = await ghlClient.registerWebhook(webhookUrl, GHL_WEBHOOK_EVENTS)
-      await db.tenant.update({
-        where: { id: tenantId },
-        data: { ghlWebhookId: webhook.id },
-      })
-    } catch (webhookErr) {
-      console.warn('[GHL OAuth] Webhook registration failed (non-blocking):', webhookErr)
-    }
+    // Bug #10 (Session 79): per-tenant webhook registration removed —
+    // GHL Marketplace apps register webhooks at the App level, not per
+    // location. The webhook URL is configured once in the marketplace
+    // dashboard. Real-time events still flow to /api/webhooks/ghl via
+    // that global registration; the polling fallback runs as redundancy.
 
     // Reconnect → back to settings. First connect → onboarding step 2.
     if (isReconnect) {

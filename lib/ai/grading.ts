@@ -14,6 +14,7 @@ import { triggerWorkflows } from '@/lib/workflows/engine'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
 import { effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
+import { stripJsonFences, extractFirstJsonArray } from '@/lib/ai/json-utils'
 
 // ─── Main grading function ──────────────────────────────────────────────────
 
@@ -836,48 +837,6 @@ Grade this call now. Provide your JSON response.`)
   return sections.join('\n\n')
 }
 
-// ─── Utilities ─────────────────────────────────────────────────────────────
-
-function stripJsonFences(text: string): string {
-  // Strip ```json ... ``` or ``` ... ``` markdown code fences from Claude responses
-  // Handles: ```json, ``` json, ```JSON, leading/trailing whitespace, nested content
-  return text
-    .replace(/^\s*```\s*json?\s*\n?/i, '')
-    .replace(/\n?\s*```\s*$/i, '')
-    .trim()
-}
-
-// Extract the FIRST balanced JSON array from a string. Walks the text with a
-// bracket counter that's aware of string literals (so `]` inside a quoted
-// value doesn't fool the counter) and escapes. Returns null if no balanced
-// array is found.
-//
-// Why not /\[[\s\S]*\]/? That regex is greedy and will happily grab content
-// AFTER the actual array's closing bracket when the model appends explanatory
-// prose — "Unexpected non-whitespace character after JSON" is the symptom.
-// The non-greedy variant has the opposite problem (stops at the first `]`,
-// even nested).
-function extractFirstJsonArray(text: string): string | null {
-  const start = text.indexOf('[')
-  if (start < 0) return null
-  let depth = 0
-  let inString = false
-  let escaped = false
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === '\\') { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === '[') depth++
-    else if (ch === ']') {
-      depth--
-      if (depth === 0) return text.slice(start, i + 1)
-    }
-  }
-  return null
-}
-
 // ─── Response parser ────────────────────────────────────────────────────────
 
 function parseGradingResponse(text: string): GradingResult {
@@ -951,27 +910,52 @@ function parseGradingResponse(text: string): GradingResult {
   }
 }
 
-// Claude occasionally returns sentiment as a string ("positive"/"neutral"/"negative")
-// or sellerMotivation as a free-text rationale. The DB columns are Float, so anything
-// non-numeric must be coerced or dropped to keep the update from rejecting.
+// Claude occasionally returns sentiment/sellerMotivation in shapes Prisma's
+// Float column rejects: word labels ("positive"), prose with a number embedded
+// ("0.7 — they really want to sell"), objects with a `.value`/`.score` field,
+// or single-element arrays. Bug #21 fix (Session 79) widens the coercion to
+// handle all of these. Anything still non-numeric returns null so the update
+// silently drops the field instead of failing the whole grade.
 function coerceSentiment(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return Math.max(-1, Math.min(1, v))
+  const n = coerceToFloat(v)
+  if (n !== null) return Math.max(-1, Math.min(1, n))
   if (typeof v === 'string') {
     const s = v.trim().toLowerCase()
-    if (s === 'positive' || s === 'very positive') return 1
-    if (s === 'neutral') return 0
-    if (s === 'negative' || s === 'very negative') return -1
-    const parsed = Number(s)
-    if (Number.isFinite(parsed)) return Math.max(-1, Math.min(1, parsed))
+    if (/(very\s+positive|positive)/.test(s)) return 1
+    if (/(very\s+negative|negative)/.test(s)) return -1
+    if (/neutral/.test(s)) return 0
   }
   return null
 }
 
 function coerceNumber(v: unknown): number | null {
+  const n = coerceToFloat(v)
+  if (n === null) return null
+  return Math.max(0, Math.min(1, n))
+}
+
+// Drill into common Claude response shapes and pull a finite number out.
+// Returns null when nothing usable is found; the caller is responsible for
+// any range clamping.
+function coerceToFloat(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'boolean' || v === null || v === undefined) return null
+  if (Array.isArray(v)) return v.length > 0 ? coerceToFloat(v[0]) : null
+  if (typeof v === 'object') {
+    const obj = v as Record<string, unknown>
+    return coerceToFloat(obj.value ?? obj.score ?? obj.rating ?? null)
+  }
   if (typeof v === 'string') {
-    const parsed = Number(v.trim())
-    if (Number.isFinite(parsed)) return parsed
+    const trimmed = v.trim()
+    if (!trimmed) return null
+    const direct = Number(trimmed)
+    if (Number.isFinite(direct)) return direct
+    // Prose with a number embedded — "0.7 - high motivation", "score: 0.85".
+    const match = trimmed.match(/-?\d+(?:\.\d+)?/)
+    if (match) {
+      const parsed = Number(match[0])
+      if (Number.isFinite(parsed)) return parsed
+    }
   }
   return null
 }

@@ -39,9 +39,6 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
 
   // Fetch review queue count for Training badge
   useEffect(() => {
-    fetch(`/${tenantSlug}/api/calls-review-count`).catch(() => null)
-    // Lightweight: count calls with score < 50 via calls page data (avoid new endpoint)
-    // Use the existing calls page pattern — fetch from the tenant API
     fetch(`/api/${tenantSlug}/calls/review-count`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.count) setReviewCount(d.count) })
@@ -69,9 +66,11 @@ export function TopNav({ tenantSlug }: { tenantSlug: string }) {
     // /contacts is the canonical surface for Sellers/Buyers/Partners
     // (replaces the prior Sellers/Buyers/Partners top-level nav links).
     { href: `${base}/contacts`, label: 'Contacts', adminOnly: true },
-    // /disposition is the admin pipeline view; replaces the prior /buyers
-    // (Disposition Hub) link. Click-through into the per-property journey.
-    { href: `${base}/disposition`, label: 'Disposition', adminOnly: true },
+    // /disposition is the dispo pipeline view (replaces the prior /buyers
+    // Disposition Hub link). Visible to all team members so DMs/AMs can
+    // navigate the per-property journey directly. Server-side gates handle
+    // bulk send / blast approval — visibility on the nav link is safe.
+    { href: `${base}/disposition`, label: 'Disposition', always: true },
     { href: `${base}/kpis`, label: 'KPIs', adminOnly: true },
     { href: `${base}/accountability`, label: 'Accountability', adminOnly: true },
   ]

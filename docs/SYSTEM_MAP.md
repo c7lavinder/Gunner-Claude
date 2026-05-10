@@ -197,8 +197,13 @@ Library code lives in `lib/`. App routes live in `app/`. Components in
 - `lib/ghl/resolveAssignee.ts` — internal `userId` → GHL `userId` resolver
   (single source of truth across actions/route.ts and assistant/execute/route.ts).
 - `lib/ghl/fetch-recording.ts` — recording URL retrieval with retry.
-- `lib/ghl/webhook-register.ts` — register/deregister webhooks. Currently has
-  a silent `.catch(() => {})` flagged in Blocker #2 / AUDIT_PLAN.
+- `lib/ghl/webhook-register.ts` — soft-deprecated as of Session 79 (Bug #10).
+  GHL Marketplace apps register webhooks at the **App level** in the GHL
+  marketplace dashboard, not via `POST /locations/{id}/webhooks` (that path
+  returned 404 for every install). The function stays callable as a no-op
+  for back-compat; webhook events flow to `/api/webhooks/ghl` from the
+  global App-level config. Polling cron (`/api/cron/poll-calls`) is the
+  redundancy layer.
 
 ### AI
 
@@ -666,6 +671,15 @@ inversion is intentional.
 - `lib/ai/embeddings.ts` — OpenAI `text-embedding-3-small`. Embeds knowledge
   documents and calibration calls. pgvector similarity search.
 - 42 playbook docs + user profiles loaded + embedded into pgvector.
+
+### JSON response utilities
+
+- `lib/ai/json-utils.ts` — single source of truth for parsing Claude JSON
+  responses. `stripJsonFences()` handles ```` ```json ```` /```` ``` ```` /
+  no-tag fences; `extractFirstJsonArray()` walks bracket depth with string
+  + escape awareness so a `]` inside a quoted value doesn't fool the
+  counter. Used by `grading.ts` (grading parser, next-steps array) and
+  `extract-deal-intel.ts` (proposed-changes parser).
 
 ### Context builder
 

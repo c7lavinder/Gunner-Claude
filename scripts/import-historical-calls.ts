@@ -196,6 +196,7 @@ async function importHistoricalCalls() {
               direction: direction as 'INBOUND' | 'OUTBOUND',
               calledAt,
               gradingStatus: 'PENDING',
+              source: 'historical_import',
             },
           })
 

@@ -72,14 +72,27 @@ export const GET = withTenant<{ tenant: string }>(async (req, ctx) => {
 
     // Get all calendars (retry once if empty — GHL cold cache can return partial)
     let calendars: Array<{ id: string; name: string }> = []
+    let lastStatus = 0
     for (let attempt = 0; attempt < 2; attempt++) {
       const calRes = await fetch(
         `https://services.leadconnectorhq.com/calendars/?locationId=${tenant.ghlLocationId}`,
         { headers }
       )
+      lastStatus = calRes.status
       if (!calRes.ok) {
         if (attempt === 0) { await new Promise(r => setTimeout(r, 500)); continue }
-        return NextResponse.json({ appointments: [], error: 'Failed to fetch calendars' })
+        // Bug #11: surface 401 as a scope error so the UI can prompt a
+        // re-authorize, instead of showing a silent empty list. The GHL
+        // Marketplace App needs `calendars.readonly` + `calendars/events.readonly`
+        // scopes; if they're missing, every fetch returns 401.
+        if (lastStatus === 401 || lastStatus === 403) {
+          return NextResponse.json({
+            appointments: [],
+            error: 'GHL_SCOPE_MISSING',
+            message: 'Appointments require calendars.readonly + calendars/events.readonly scopes. Reconnect GHL from Settings → Integrations.',
+          }, { status: 200 })
+        }
+        return NextResponse.json({ appointments: [], error: 'Failed to fetch calendars', status: lastStatus })
       }
       const calData = await calRes.json() as { calendars?: Array<{ id: string; name: string }> }
       calendars = calData.calendars ?? []

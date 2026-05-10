@@ -79,6 +79,7 @@ dead weight (drop-only, no longer matches schema, etc.). When unset, retain.
 | `backfill-inventory-cleanup.ts` | Targeted inventory cleanup backfill | Yes | one-shot | Same — once production dry-run yields 0 changes for ≥30 days |
 | `backfill-today.ts` | Backfill today's enrichment | Yes | on demand | Never (recovery tool) |
 | `cleanup-empty-shell-calls.ts` | Bug #22 — 24 empty-shell FAILED rows | Yes | one-shot | After 2026-10-01 (6 months past Bug #22 close) |
+| `backfill-call-source.ts` | Bug #18 — stamp `source='legacy_unknown'` on 2,487 NULL-source rows | Yes | one-shot (Session 79) | After 2026-11-10 (6 months past Bug #18 close) |
 | `cleanup-duplicate-milestones.ts` | Data hygiene — dedupe duplicate milestones | Yes | on demand | Never (recurrent hygiene need) |
 | `cleanup-orphans.ts` | PROCESSING-orphan recovery + FAILED surface | Yes | on demand | Never (recurrent hygiene need) |
 | `fix-dispo-milestones.ts` | Disposition milestone repair | Yes | on demand | When dispo-milestone create flow is fully bulletproof for ≥90 days |

@@ -9,6 +9,7 @@ import { FIELD_LABELS, FIELD_CATEGORY } from '@/lib/types/deal-intel'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
 import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
+import { stripJsonFences } from '@/lib/ai/json-utils'
 
 export async function extractDealIntel(callId: string): Promise<void> {
   const call = await db.call.findUnique({
@@ -441,15 +442,6 @@ function buildExtractionUserPrompt(
   sections.push(`FULL TRANSCRIPT:\n${call.transcript}`)
 
   return sections.join('\n\n')
-}
-
-// ─── Utilities ─────────────────────────────────────────────────────────────
-
-function stripJsonFences(text: string): string {
-  return text
-    .replace(/^\s*```\s*json?\s*\n?/i, '')
-    .replace(/\n?\s*```\s*$/i, '')
-    .trim()
 }
 
 // ─── Response parser ────────────────────────────────────────────────────────

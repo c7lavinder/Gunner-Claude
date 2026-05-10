@@ -1,8 +1,20 @@
 // lib/ghl/webhook-register.ts
-// Reusable webhook registration — called from route handler and health check
-import { getGHLClient } from '@/lib/ghl/client'
-import { db } from '@/lib/db/client'
-import { logFailure } from '@/lib/audit'
+// Bug #10 (Session 79): GHL Marketplace apps register webhooks at the
+// **App level** in the GHL marketplace dashboard, not via per-location API
+// calls. The previous `POST /locations/{id}/webhooks` path returned 404
+// because that endpoint isn't exposed for marketplace-installed apps —
+// every install was logging `webhook.register_failed` while real-time
+// events still flowed (App-level webhooks deliver to a single global URL,
+// which the OAuth Marketplace App config sends to /api/webhooks/ghl).
+//
+// This module now soft-deprecates per-tenant registration: the function
+// stays callable so call sites (OAuth callback, /api/health, manual
+// reregister route) compile and behave benignly, but it no longer thrashes
+// against a 404 endpoint. The polling fallback in /api/cron/poll-calls
+// remains the redundancy layer.
+//
+// Owner action: webhook URL is configured ONCE in the GHL Marketplace App
+// dashboard. No per-tenant action needed.
 
 export const GHL_WEBHOOK_EVENTS = [
   'InboundMessage', 'OutboundMessage', 'CallCompleted',
@@ -11,35 +23,8 @@ export const GHL_WEBHOOK_EVENTS = [
   'TaskCompleted', 'AppointmentCreated',
 ]
 
-export async function reregisterWebhookForTenant(tenantId: string) {
-  const tenant = await db.tenant.findUnique({
-    where: { id: tenantId },
-    select: { ghlWebhookId: true, ghlAccessToken: true },
-  })
-  if (!tenant?.ghlAccessToken) return null
-
-  const ghl = await getGHLClient(tenantId)
-  const baseUrl = process.env.NEXTAUTH_URL ?? 'https://gunner-ai-production.up.railway.app'
-  const webhookUrl = `${baseUrl}/api/webhooks/ghl`
-
-  if (tenant.ghlWebhookId) {
-    await ghl.deleteWebhook(tenant.ghlWebhookId).catch(err =>
-      logFailure(tenantId, 'webhook.deregister_failed', `webhook:${tenant.ghlWebhookId}`, err, { webhookUrl })
-    )
-  }
-
-  let webhook: { id: string }
-  try {
-    webhook = await ghl.registerWebhook(webhookUrl, GHL_WEBHOOK_EVENTS)
-  } catch (err) {
-    await logFailure(tenantId, 'webhook.register_failed', 'webhook', err, { webhookUrl })
-    throw err
-  }
-
-  await db.tenant.update({
-    where: { id: tenantId },
-    data: { ghlWebhookId: webhook.id },
-  })
-
-  return webhook.id
+export async function reregisterWebhookForTenant(_tenantId: string): Promise<null> {
+  // No-op. Webhooks are registered at the GHL Marketplace App level, not
+  // per-tenant. See module header for context.
+  return null
 }
