@@ -6,6 +6,7 @@ import { requireSession } from '@/lib/auth/session'
 import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import type { GHLTaskItem } from '@/lib/ghl/client'
+import { cachedGHL } from '@/lib/ghl/cache'
 import { Prisma } from '@prisma/client'
 import { DayHubClient, type EnrichedTask } from './day-hub-client'
 import type { UserRole } from '@/types/roles'
@@ -62,10 +63,14 @@ export default async function TasksPage({ params }: { params: { tenant: string }
   try {
     const ghl = await getGHLClient(tenantId)
 
-    // Fetch incomplete + completed tasks from GHL in parallel
+    // Fetch incomplete + completed tasks from GHL in parallel.
+    // Cached for 45s — protects against rapid reloads (admin clicking
+    // between views, multiple users on Day Hub). TaskCompleted /
+    // TaskCreate webhooks invalidate `ghl:tasks:${tenantId}` so freshly
+    // changed tasks appear on the next load even within the TTL.
     const [incompleteResult, completedResult] = await Promise.all([
-      ghl.searchTasks('incompleted'),
-      ghl.searchTasks('completed'),
+      cachedGHL(`ghl:tasks:${tenantId}:incompleted`, 45_000, () => ghl.searchTasks('incompleted')),
+      cachedGHL(`ghl:tasks:${tenantId}:completed`, 45_000, () => ghl.searchTasks('completed')),
     ])
     let tasks: GHLTaskItem[] = incompleteResult.tasks ?? []
     const completedTasks: GHLTaskItem[] = completedResult.tasks ?? []
@@ -84,10 +89,13 @@ export default async function TasksPage({ params }: { params: { tenant: string }
     // Collect unique contactIds for bulk enrichment (cap at 50)
     const contactIds = [...new Set(tasks.map(t => t.contactId).filter(Boolean))].slice(0, 50)
 
-    // Bulk fetch contacts
+    // Bulk fetch contacts. Each contact is cached for 5min keyed by
+    // contactId — most contacts are reused across multiple tasks AND
+    // across page loads. ContactCreated/ContactUpdate webhooks
+    // invalidate `ghl:contact:${contactId}` so edits show immediately.
     const contactMap = new Map<string, { name: string; phone: string; address: string }>()
     const contactResults = await Promise.allSettled(
-      contactIds.map(id => ghl.getContact(id))
+      contactIds.map(id => cachedGHL(`ghl:contact:${id}`, 5 * 60_000, () => ghl.getContact(id)))
     )
     contactResults.forEach((res, i) => {
       if (res.status === 'fulfilled' && res.value) {
@@ -173,10 +181,16 @@ export default async function TasksPage({ params }: { params: { tenant: string }
       }
     }
 
-    // Resolve GHL user names for assignedTo
+    // Resolve GHL user names for assignedTo. Location users change
+    // rarely (team hires/fires) so 15min TTL is safe. No webhook
+    // invalidation — accept up to 15min staleness on new hires.
     let ghlUserMap = new Map<string, string>()
     try {
-      const usersResult = await ghl.getLocationUsers()
+      const usersResult = await cachedGHL(
+        `ghl:users:${tenantId}`,
+        15 * 60_000,
+        () => ghl.getLocationUsers(),
+      )
       for (const u of usersResult.users ?? []) {
         const name = u.name || `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim()
         if (name) ghlUserMap.set(u.id, name)

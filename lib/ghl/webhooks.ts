@@ -13,6 +13,7 @@ import { enrichProperty } from '@/lib/enrichment/enrich-property'
 import { awardTaskXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { logFailure } from '@/lib/audit'
+import { invalidateCache } from '@/lib/ghl/cache'
 
 export type GHLWebhookEvent = {
   type: string
@@ -880,6 +881,10 @@ async function handleTaskCompleted(tenantId: string, event: GHLWebhookEvent) {
   const ghlTaskId = taskData.taskId ?? taskData.id
   if (!ghlTaskId) return
 
+  // Drop cached task lists so the Day Hub reflects this completion on
+  // the next load instead of waiting out the 45s TTL.
+  invalidateCache(`ghl:tasks:${tenantId}:`)
+
   const updated = await db.task.findFirst({
     where: { tenantId, ghlTaskId },
     select: { id: true, assignedToId: true, category: true },
@@ -941,6 +946,11 @@ async function handleAppointmentCreated(tenantId: string, event: GHLWebhookEvent
 async function handleContactChange(tenantId: string, event: GHLWebhookEvent) {
   const contactId = (event.contactId ?? event.id ?? (event as Record<string, unknown>).contact_id) as string | undefined
   if (!contactId) return
+
+  // Drop cached contact details so the Day Hub picks up the fresh
+  // name/phone/address on the next load instead of waiting out the
+  // 5min TTL. Done first so even early-return paths invalidate.
+  invalidateCache(`ghl:contact:${contactId}`)
 
   const isDelete = event.type === 'ContactDelete' || event.type === 'contact.deleted'
 
