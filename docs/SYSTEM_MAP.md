@@ -194,6 +194,22 @@ Library code lives in `lib/`. App routes live in `app/`. Components in
 - `lib/ghl/client.ts` — all GHL API calls (contacts, tasks, SMS, email,
   pipelines, calendars). Token refresh + 502/503/504 retry built in.
 - `lib/ghl/webhooks.ts` — event handlers for incoming GHL webhooks.
+  Reads opportunity `status` field (since Session 81) and stamps
+  per-lane `*LostAt` timestamps when `lost` / `abandoned`; clears them
+  on `open` / `won`. Lost is orthogonal to stage — a Lost opp keeps
+  its stage, the `lostAt` column is the only Lost signal. Webhook
+  also invalidates the GHL read cache (see `cache.ts`) on
+  TaskCompleted and Contact{Created,Update,Delete}.
+- `lib/ghl/cache.ts` (Session 81) — in-process TTL memoizer for
+  expensive GHL reads. `cachedGHL(key, ttlMs, loader)` reads from a
+  module-level `Map`, falls through to the loader on miss/expiry,
+  caches successful results only (failures retry). `invalidateCache(prefix)`
+  drops every entry whose key starts with the prefix — called by
+  webhook handlers to bust stale data immediately. 5000-entry hard cap
+  with oldest-expiry eviction. Used by the Day Hub page to cache
+  `searchTasks` (45s), `getContact` (5min), `getLocationUsers` (15min)
+  — collapsed ~53 live GHL calls per Day Hub load down to near-zero
+  on warm cache.
 - `lib/ghl/resolveAssignee.ts` — internal `userId` → GHL `userId` resolver
   (single source of truth across actions/route.ts and assistant/execute/route.ts).
 - `lib/ghl/fetch-recording.ts` — recording URL retrieval with retry.
