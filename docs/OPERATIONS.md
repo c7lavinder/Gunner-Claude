@@ -332,6 +332,8 @@ file updated alongside this section when scripts land or rot. Categorized:
 - `apply-street-number-research.ts` / `apply-final-triage-corrections.ts` / `apply-zip-mismatch-fixes.ts` — Session 75: one-shot owner-data-driven corrections. Applied during the 2026-05-07 cleanup. Embed the CSV / correction list directly in the source — re-runs are no-ops once data is in DB.
 - `rollback-bad-county-rd-splits.ts` — Session 75 (extended): one-shot. Identified 49 over-splits caused by an early version of the space-jammed twin-street heuristic (shredded "X County Rd Y" addresses), restored each parent's address from the audit payload, deleted child rows + companion audits. Pattern: any `cleanup.address_split` audit whose `splits` payload has a fragment lacking a known street-suffix word (Rd, St, Ave, Dr, Ln, Blvd, Ct, Cir, Pl, Ter, Trl, Pike, Pkwy, Way, Loop, Hwy, Highway, Route, Rt, Rte, Sq, Cv, Aly, Xing, Path, Expy).
 - `test-parser-edge-cases.ts` — Session 75: 16-case regression fixture for `lib/address-parse.ts`. Run before/after every parser change. Each case has a `label`, raw inputs, expected primary + splits.
+- `backfill-buyer-fields.ts` — **Session 78.** One-shot read of GHL custom fields → fill any missing canonical keys on existing Buyer rows + fold `customFields.secondaryMarkets[]` into `Buyer.primaryMarkets` (case-insensitive dedupe, runs locally on every row regardless of GHL availability). Throttled at 250ms per GHL call (configurable `--throttle-ms`) with a 2s extra backoff on 429. Errors during GHL fetch don't abort the row. `--dry-run` and `--tenant <slug>` supported. Ran live on `new-again-houses` 2026-05-10: **2,055 updated, 1,187 skipped, 0 errors, 48 min**.
+- `strip-other-market.ts` — **Session 78.** Drops literal "Other" entries (case-insensitive, trimmed) from every active buyer's `primaryMarkets` array. No GHL calls. `--dry-run` + `--tenant` supported. Ran live on `new-again-houses` 2026-05-10: **1,470 updated, 0 errors, 16 min**.
 
 ### Seed + setup (one-shot, idempotent at install time)
 - `seed.ts`, `seed-markets.ts`, `seed-appointment-types.ts` — DB seeding.
@@ -353,6 +355,7 @@ Detail in `docs/AUDIT_PLAN.md`. Cross-ref summary:
 | **#1** — Call pipeline integrity | ✅ CLEARED 2026-04-20 (Session 37) | — |
 | **#2** — Action execution discipline | Code shipped Session 38; **production verification owed** (P1 in PROGRESS Next Session) | User |
 | **#3** — Dual grading worker (in-process + legacy `[[services]]`) | Code change deferred; documentation done (Commit #1 + SYSTEM_MAP) | Engineering |
+| **GHL buyer-field deletion** | Code + backfill complete (Session 78). Owner walks `docs/GHL_BUYER_FIELD_DELETION_CHECKLIST.md` to delete the 8 GHL custom fields one at a time. After deletion, Claude prunes `GHL_FIELD_MAP` entries in `lib/buyers/sync.ts` + `app/api/properties/[propertyId]/buyers/route.ts` (one-line cleanup per file). | User → Engineering |
 
 Plus 5 priority items in AUDIT_PLAN: P3 (model fragmentation), P4 (`/tasks/` deletion), P5 (`assign_contact_to_user` UI bypass), and pending decision D-0XX (AI model churn writeup).
 

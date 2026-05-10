@@ -394,6 +394,85 @@ binding constraint, not AI inference spend.
 
 ---
 
+### D-047 — Gunner is source of truth for buyer-info; GHL keeps contact info only
+
+**Decision**
+
+For Buyer rows, Gunner owns: `tier`, `verifiedFunding`,
+`purchasedBefore`, `responseSpeed`, `lastContactDate`, `buybox`,
+`markets`, `internalNotes`. GHL owns: `name`, `phone`, `email`,
+mailing address, `tags`, `source`. The sync direction in
+`lib/buyers/sync.ts` is contact-only on existing buyers — buyer-info
+fields seed from GHL once at first import and never overwrite after.
+
+**Why**
+
+- Per the user (CEO Corey, Session 78): "I want to get rid of those
+  fields in GHL and have Gunner as source of truth for buyer info and
+  GHL as just the source of truth for contact info."
+- GHL custom-field dropdowns are static and unwieldy (no add-on-the-fly
+  for markets, no boolean response-speed primitive); Gunner can render
+  the right shape per field without that constraint.
+- Eight GHL custom fields are scheduled for deletion per
+  `docs/GHL_BUYER_FIELD_DELETION_CHECKLIST.md` once the owner verifies
+  Gunner-side accuracy.
+- Contact info legitimately belongs in GHL because outbound channels
+  (SMS, email, calls) all flow through GHL infrastructure; keeping
+  Gunner authoritative there would create two sources of phone/email
+  truth — exactly the drift CLAUDE.md Rule 1 prevents.
+
+**Alternatives considered**
+
+- Gunner authoritative for everything (contact info too). Rejected —
+  GHL is the outbound dispatch layer; phone/email round-trip there
+  every time we send. Two sources of phone truth would split.
+- Keep status quo (GHL fields). Rejected — every write surface in
+  Gunner already wrote to `Buyer.customFields` (the local cache); the
+  GHL fields were read-only mirrors with no UI for the rep to edit
+  there anyway.
+
+**Status:** Locked. Date: 2026-05-10 (Session 78).
+
+---
+
+### D-048 — Drop `secondaryMarket` entirely; one canonical `markets` field
+
+**Decision**
+
+`Buyer.customFields.secondaryMarkets[]` is retired. Existing values
+were folded into `Buyer.primaryMarkets` (case-insensitive dedupe) by
+`scripts/backfill-buyer-fields.ts` on Session 78b. The
+`BuyerEditSlideover` no longer renders a secondary-market field.
+Markets is a single chip multi-select with on-the-fly add (new entries
+persist tenant-wide).
+
+**Why**
+
+- The primary/secondary distinction existed because GHL dropdown was
+  locked to a fixed list; reps used "Secondary Market" as a free-form
+  escape hatch for one-off markets. In Gunner there's no reason for
+  two fields — the chip multi-select with add-new gives the same
+  flexibility without the conceptual split.
+- Per the user (Session 78b): "I think in this app we can change that
+  and when we get new deal in a market we can add it."
+- Match logic (`buyerMatchesMarket` in
+  `app/api/properties/[propertyId]/buyers/route.ts`) was already
+  combining primary + secondary into one matching set — this just
+  collapses the storage to match the matching behavior.
+
+**Alternatives considered**
+
+- Keep secondary alongside primary, both addable. Rejected — UI
+  sprawl with no real semantic difference between the two fields.
+- Migrate but keep the field hidden in the API for back-compat.
+  Rejected — silent dead fields rot; clean removal forces correct
+  callers.
+
+**Status:** Locked. Date: 2026-05-10 (Session 78b). Backfill ran live
+2026-05-10: 2,055 buyers updated, 0 errors.
+
+---
+
 ## Decisions Still Open
 
 | # | Question | Options | Notes |

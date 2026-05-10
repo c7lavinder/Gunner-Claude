@@ -238,9 +238,72 @@ See "AI Layer" section below. Lives in `lib/ai/`.
 
 Per-vendor isolation: vendor failures do not take down the orchestrator.
 
-### Buyers
+### Buyers (Session 78 — Gunner = source of truth for buyer-info)
 
-- `lib/buyers/sync.ts` — buyer matching against new properties + outreach sync.
+Buyers are GHL contacts with structured buyer-info layered on top.
+**GHL stays authoritative for contact info only** (name, phone, email,
+mailing address, tags, source). Everything else is owned by Gunner.
+
+**Sync direction** (`lib/buyers/sync.ts`):
+- New buyer (first import): all GHL fields seed the Buyer row, including
+  `customFields.tier`, `customFields.buybox`, `customFields.verifiedFunding`,
+  etc. parsed from the GHL custom fields catalogued in `GHL_FIELD_MAP`.
+- Existing buyer (every subsequent webhook + manual sync): only
+  `name / phone / email / ghlContactId` get refreshed. Buyer-info keys
+  stay Gunner-owned.
+
+**Canonical buyer-info fields** (see AGENTS.md "Buyer-info source of
+truth" for the full table). Storage shape:
+
+| Field             | Storage                                       |
+|-------------------|-----------------------------------------------|
+| tier              | `Buyer.customFields.tier`                     |
+| verifiedFunding   | `Buyer.customFields.verifiedFunding`          |
+| purchasedBefore   | `Buyer.customFields.hasPurchased` (legacy key)|
+| responseSpeed     | `Buyer.customFields.responseSpeed`            |
+| buybox            | `Buyer.customFields.buybox` (string[])        |
+| markets           | `Buyer.primaryMarkets` (Json string[])        |
+| internalNotes     | `Buyer.internalNotes` (Text column)           |
+| lastContactDate   | Auto-derived server-side: `max(latest Call.calledAt, latest OutreachLog.loggedAt)` for the buyer's ghlContactId. Manual override at `Buyer.customFields.lastContactDate`. |
+
+**Retired**: `Buyer.customFields.secondaryMarkets[]` — folded into
+`Buyer.primaryMarkets` (case-insensitive dedupe) by
+`scripts/backfill-buyer-fields.ts` on Session 78b. Do not reintroduce.
+
+**Tenant-wide markets list**: union of `Buyer.primaryMarkets` and
+`Property.propertyMarkets` across the tenant. Computed in the buyer page
+server query and passed to `BuyerEditSlideover` as `marketOptions`. Reps
+add new markets inline via the chip multi-select; new entries persist
+across the tenant from the next page load forward.
+
+**Read paths**:
+- `app/api/properties/[propertyId]/buyers/route.ts` — `parseBuyerFields` /
+  `matchBuyers`. Reads from `Buyer.customFields` directly (no GHL
+  roundtrip per request).
+- `app/(tenant)/[tenant]/buyers/[id]/page.tsx` — full buyer detail.
+  Computes the closed-deal revenue (sum of `Property.assignmentFee`
+  from `OutreachLog` rows with `offerStatus='Accepted'` matching the
+  buyer's ghlContactId) and the auto-derived last-contact date.
+
+**Write path**: `PATCH /api/buyers/[buyerId]` accepts the 9 canonical
+fields by user-facing names. Internal storage keeps the legacy
+customFields keys so `matchBuyers` keeps working unchanged.
+
+**Hero shell**: `BuyerHero` (in `components/buyers/buyer-detail-client.tsx`)
+sits above the deep-dive tabs — sports-profile layout with avatar +
+identity bar + 5-cell stat banner + Profile / Contact 2-col body. The
+old comprehensive tabs (Identity / Buybox / Activity / Communication /
+AI Insights) stay below as the deep dive.
+
+**Backfill scripts**:
+- `scripts/backfill-buyer-fields.ts` — fills missing canonical keys
+  from GHL + folds secondaryMarkets → primaryMarkets. Throttled at
+  250ms per GHL call with 2s 429 backoff.
+- `scripts/strip-other-market.ts` — drops literal "Other" market entries.
+
+**GHL deletion checklist**: `docs/GHL_BUYER_FIELD_DELETION_CHECKLIST.md`
+walks the owner through deleting the 8 GHL custom fields once Gunner is
+verified authoritative.
 
 ### Partners (Session 67 — schema + property-detail UX)
 
@@ -366,7 +429,10 @@ two callers).
   per-property journey container. Mounted on the property-detail
   Disposition tab. Renders 5 collapsible sections in sequence;
   first non-Done section auto-opens; manual expand/collapse via
-  chevrons (state is client-only — no persistence).
+  chevrons. **Session 78** lifts mutable Section 2 state
+  (`description` / `internalNotes` / `dispoArtifacts`) into this
+  component so collapse/expand round-trips don't drop generations or
+  notes — `JourneySection` unmounts children when collapsed.
 - `components/disposition/journey/journey-section.tsx` — shared
   chrome (header bar, status pill, collapse chevron, summary line,
   body slot).
@@ -389,10 +455,39 @@ two callers).
   picker, recipient list, FROM dropdown, per-tier email/SMS editors,
   blast history were stripped — sending lives in Section 3 now.
 - `components/disposition/journey/section-2-artifacts.tsx` —
-  **Session 77.** 3 generator blocks (description / listing post / FB
-  social post). Each block: Generate button → POST `/api/properties/
-  [id]/dispo-generate` → fills the textarea → debounced PATCH on
-  blur saves manual edits. Persisted on `Property.dispoArtifacts`.
+  **Session 77** ships 3 generator blocks (description / listing post /
+  FB social post) + the per-tier message block. Each block: Generate
+  button → POST `/api/properties/[id]/dispo-generate` → fills the
+  textarea → debounced PATCH on blur saves manual edits. **Session 78
+  B6** drops the `description` Kind from this component — the single
+  description (canonical on `Property.description`) now has its own
+  Generate button rendered in `section-2-deal-blast.tsx` next to the
+  inline editor. Listing post + social post + tier messages remain
+  here, persisted on `Property.dispoArtifacts.{listingPost, socialPost,
+  tierMessages}`.
+- **Section 2 status badge (Session 78 B5)**: driven by artifact
+  generation count (description + listing + social + tierMessages):
+  `0 = not_started`, `1-3 = in_progress`, `4 = done`. Falls back to
+  `blastsSentCount` for the portfolio query that doesn't load artifact
+  counts. Summary line shows "X of 4 generated" while in progress.
+- **Primary offer-type toggle (Session 78 B8)**: per-tab star (☆/★)
+  in the property-details Numbers column marks one offer type as
+  primary for the deal blast. Stored as
+  `Property.dispoArtifacts.primaryOfferType` (no schema migration).
+  Section 2 description shows `Primary: <type>` pill + amber
+  `⚠ Stale` badge when the active primary differs from
+  `descriptionGeneratedForType` (also stamped on dispoArtifacts on
+  every successful description generation). Regenerate button turns
+  amber when stale (visual nudge, no auto-overwrite). The description
+  prompt receives a per-type voice hint via `offerTypeVoice()`:
+  Cash → deal math; Sub-to → terms; Novation → retail-buyer ARV +
+  commission room; Partnership/JV → split / capital / exit. Custom
+  types fall back to a generic professional voice.
+- `app/api/properties/[propertyId]/dispo-meta/route.ts` —
+  **Session 78.** PATCH route that merges `primaryOfferType` and
+  `descriptionGeneratedForType` into `Property.dispoArtifacts` JSON.
+  Lives separate from `/dispo-generate` because it's a click-driven
+  metadata write, not an AI call.
 - `lib/ai/dispo-generators.ts` — **Session 77.** Three generators
   with locked prompts (owner-supplied). Shared tone rules: no hype
   words, no emojis, always close with assigned dispo manager + GHL

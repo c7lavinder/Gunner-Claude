@@ -576,6 +576,60 @@ the route handler's 401 JSON, not a 307 redirect.
 | DB migrations | Named descriptively: add_tcp_score_to_properties |
 | Environment | Never commit .env.local — always use .env.example |
 
+## Buyer-info source of truth (added Session 78)
+
+Gunner owns the buyer-info fields below. GHL keeps **only** contact info
+(name / phone / email / mailing address / tags / source). The sync job in
+`lib/buyers/sync.ts` is contact-only on existing buyers — buyer-info
+fields seed from GHL once at first import, then never overwrite.
+
+| Field (user-facing name)  | Storage                                       |
+|---------------------------|-----------------------------------------------|
+| tier                      | `Buyer.customFields.tier`                     |
+| verifiedFunding           | `Buyer.customFields.verifiedFunding` (bool)   |
+| purchasedBefore           | `Buyer.customFields.hasPurchased` (legacy key)|
+| responseSpeed             | `Buyer.customFields.responseSpeed`            |
+| lastContactDate           | Auto-derived: `max(latest Call.calledAt, latest OutreachLog.loggedAt)` for the buyer's ghlContactId. Manual override at `Buyer.customFields.lastContactDate` wins if set. |
+| buybox                    | `Buyer.customFields.buybox` (string[])        |
+| markets                   | `Buyer.primaryMarkets` (Json string[])        |
+| internalNotes             | `Buyer.internalNotes` (Text column)           |
+
+**`secondaryMarket` is retired** (Session 78b). Existing values were
+folded into `primaryMarkets` (case-insensitive dedupe) by
+`scripts/backfill-buyer-fields.ts`. Do not reintroduce it.
+
+**Tenant-wide markets list** comes from
+`Buyer.primaryMarkets ∪ Property.propertyMarkets`. Reps add new markets
+on-the-fly in the `BuyerEditSlideover` chip picker; new entries persist
+across the tenant.
+
+When you add a new buyer-info field, follow the same shape: store on
+`Buyer.customFields` (or a top-level Buyer column for typed columns),
+expose it via `PATCH /api/buyers/[id]`, render it in the `BuyerHero`
+profile card, and edit it via `BuyerEditSlideover`.
+
+## dispoArtifacts JSON canonical shape (added Session 78)
+
+`Property.dispoArtifacts` is the single JSON home for everything
+generated or selected for the deal blast:
+
+| Key                            | Purpose                                       |
+|--------------------------------|-----------------------------------------------|
+| `description`                  | Legacy — Property.description is canonical now (Session 78 B6). |
+| `listingPost`                  | AI-generated listing-site post.               |
+| `socialPost`                   | AI-generated FB social post.                  |
+| `tierMessages`                 | Per-tier email subject/body + SMS body, keyed by tier. |
+| `generatedAt[fieldKey]`        | ISO timestamp of the last generation per artifact. |
+| `generatedBy[fieldKey]`        | userId of the last generator per artifact.    |
+| `primaryOfferType`             | "Cash" / "Sub-to" / "Novation" / etc. — drives description voice (Session 78 B8). |
+| `descriptionGeneratedForType`  | Stamped on every successful description gen so the UI can flag stale when primaryOfferType changes. |
+
+**Mutate via `PATCH /api/properties/[id]/dispo-meta`** (for
+primaryOfferType + descriptionGeneratedForType) or via
+`POST/PATCH /api/properties/[id]/dispo-generate` (for the artifact text
+fields). Don't reach into `dispoArtifacts` directly from arbitrary
+routes — both endpoints handle the read-merge-write atomically.
+
 ---
 
 ## Current Agent Toolset
