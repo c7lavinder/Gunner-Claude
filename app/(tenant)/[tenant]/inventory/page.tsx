@@ -39,6 +39,15 @@ export default async function InventoryPage({
   // be null, so a row with all active lanes Lost drops out of the
   // default view. "Show archived" bypasses this so the user can still
   // find Lost rows when they need to.
+  //
+  // Longterm branch is restricted to FOLLOW_UP (not DEAD). When a deal
+  // goes south in acq/dispo, GHL automatically pushes the contact onto
+  // the longterm follow-up pipeline at "Dead". Treating that
+  // longterm-DEAD presence as "visible" was keeping every Lost-in-dispo
+  // property alive in inventory. DEAD is terminal for longterm — same
+  // as CLOSED for the deal lanes — so it doesn't count toward
+  // visibility on its own. FOLLOW_UP is the only longterm state that
+  // represents active work.
   const showArchived = searchParams?.archived === '1'
   const visibilityFilter = showArchived
     ? {}
@@ -46,7 +55,7 @@ export default async function InventoryPage({
         OR: [
           { acqStatus: { not: null }, acqLostAt: null },
           { dispoStatus: { not: null }, dispoLostAt: null },
-          { longtermStatus: { not: null }, longtermLostAt: null },
+          { longtermStatus: 'FOLLOW_UP' as const, longtermLostAt: null },
         ],
       }
 

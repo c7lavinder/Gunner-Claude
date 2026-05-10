@@ -86,10 +86,14 @@ export function effectiveStageEnteredAt(
 // Phase 2 backfill will populate ghl{Acq,Dispo,Longterm}OppId; the rule
 // tightens to require the matching opp ID at that point.
 // A lane that's Lost doesn't count as visible — if all active lanes are
-// Lost the row drops out of the default inventory view.
+// Lost the row drops out of the default inventory view. Longterm only
+// counts when FOLLOW_UP — DEAD is terminal (mirrors the inventory page
+// SQL filter; keeps Lost-in-dispo rows from being kept alive by the
+// automatic longterm-DEAD push that GHL does on Lost opps).
 export function isVisibleInInventory(p: PropertyLaneSnapshot): boolean {
   if (p.acqStatus && !p.acqLostAt) return true
   if (p.dispoStatus && p.dispoStatus !== 'CLOSED' && !p.dispoLostAt) return true
+  if (p.longtermStatus === 'FOLLOW_UP' && !p.longtermLostAt) return true
   return false
 }
 

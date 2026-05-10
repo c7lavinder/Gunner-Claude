@@ -19,17 +19,18 @@ export default async function DispositionPage({ params }: { params: { tenant: st
     redirect(`/${params.tenant}/day-hub`)
   }
 
-  // Hide rows whose matching lane was marked Lost in GHL. A dispo opp
-  // marked Lost drops out of the IN_DISPOSITION branch; an acq opp
-  // marked Lost drops out of the UNDER_CONTRACT branch. The Property
-  // model carries one lostAt per lane, so each OR-branch filters its
-  // own lane independently.
+  // Hide rows whose matching lane was marked Lost in GHL. The dispo
+  // portfolio is "deals that are or were in disposition" — so an
+  // UNDER_CONTRACT row that already entered dispo and got Lost there
+  // must ALSO drop off this page, even though acq is technically still
+  // under-contract. Both branches therefore require dispoLostAt to be
+  // null: dispo work is dead = dispo portfolio is hidden.
   const properties = await db.property.findMany({
     where: {
       tenantId: session.tenantId,
       OR: [
         { dispoStatus: 'IN_DISPOSITION', ...WHERE_DISPO_NOT_LOST },
-        { acqStatus: 'UNDER_CONTRACT', ...WHERE_ACQ_NOT_LOST },
+        { acqStatus: 'UNDER_CONTRACT', ...WHERE_ACQ_NOT_LOST, ...WHERE_DISPO_NOT_LOST },
       ],
     },
     select: {
