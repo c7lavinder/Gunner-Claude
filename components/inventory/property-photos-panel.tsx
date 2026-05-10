@@ -25,6 +25,11 @@ import {
   Download, Link as LinkIcon, ExternalLink, Pencil, Check, Star,
   ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react'
+import {
+  DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
+  useDraggable, useDroppable, DragOverlay,
+  type DragEndEvent, type DragStartEvent,
+} from '@dnd-kit/core'
 
 interface Photo {
   id: string
@@ -315,6 +320,31 @@ export function PropertyPhotosPanel({
     [photos, draggingPhotoId])
 
   const starredPhoto = useMemo(() => photos.find(p => p.isStarred) ?? null, [photos])
+  const draggingPhoto = useMemo(
+    () => (draggingPhotoId ? photos.find(p => p.id === draggingPhotoId) ?? null : null),
+    [draggingPhotoId, photos],
+  )
+
+  // Pointer for mouse/trackpad (5px before drag starts so a click still
+  // opens the lightbox). Touch sensor uses a short hold so tap-to-open
+  // and drag-to-move don't collide on phones / iPads.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  )
+
+  function handleDragStart(e: DragStartEvent) {
+    setDraggingPhotoId(String(e.active.id))
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    const id = String(e.active.id)
+    const targetKey = e.over ? String(e.over.id) : null
+    setDraggingPhotoId(null)
+    setDropTargetKey(null)
+    if (!targetKey || !WRITABLE_CATEGORIES.includes(targetKey)) return
+    reclassifyPhoto(id, targetKey)
+  }
 
   function toggleSection(key: string) {
     setExpanded(prev => {
@@ -536,129 +566,68 @@ export function PropertyPhotosPanel({
         </div>
       )}
 
-      {/* Categorized grid — every section collapsed by default. */}
+      {/* Categorized grid — every section collapsed by default. Photos are
+          draggable between sections via @dnd-kit so it works for mouse,
+          trackpad, and touch (mobile/iPad). Tap/click still opens the
+          lightbox; drag only starts after 5px movement (mouse) or a 200ms
+          hold (touch) so we never confuse a tap with a drag. */}
       {!loading && photos.length > 0 && (
-        <div className="p-3 space-y-2">
-          {grouped.map(group => {
-            const isOpen = expanded.has(group.key)
-            const isDropTarget = dropTargetKey === group.key
-            const canDropHere = draggingPhotoId !== null && WRITABLE_CATEGORIES.includes(group.key)
-            return (
-              <div
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => { setDraggingPhotoId(null); setDropTargetKey(null) }}
+          onDragOver={e => setDropTargetKey(e.over ? String(e.over.id) : null)}
+        >
+          <div className="p-3 space-y-2">
+            {/* While dragging, show a sticky hint so the user knows to drop on a section header. */}
+            {draggingPhotoId && (
+              <div className="sticky top-0 z-10 mb-1 px-3 py-1.5 rounded-[8px] bg-gunner-red text-white text-[11px] font-semibold text-center shadow-sm">
+                Drop on a section below to move this photo
+              </div>
+            )}
+            {grouped.map(group => (
+              <DroppableSection
                 key={group.key}
-                className={`border-[0.5px] rounded-[8px] overflow-hidden transition-colors ${
-                  isDropTarget ? 'border-gunner-red bg-gunner-red/5' : 'border-[rgba(0,0,0,0.06)]'
-                }`}
-                onDragOver={e => {
-                  if (!canDropHere) return
-                  e.preventDefault()
-                  e.dataTransfer.dropEffect = 'move'
-                  if (dropTargetKey !== group.key) setDropTargetKey(group.key)
-                }}
-                onDragLeave={e => {
-                  // Only clear when the drag leaves the section bounds, not
-                  // when it crosses into a nested child.
-                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                    if (dropTargetKey === group.key) setDropTargetKey(null)
-                  }
-                }}
-                onDrop={e => {
-                  if (!canDropHere) return
-                  e.preventDefault()
-                  const id = e.dataTransfer.getData('text/plain') || draggingPhotoId
-                  setDropTargetKey(null)
-                  setDraggingPhotoId(null)
-                  if (id) reclassifyPhoto(id, group.key)
-                }}
+                groupKey={group.key}
+                label={group.label}
+                count={group.photos.length}
+                isOpen={expanded.has(group.key)}
+                isActiveDrag={draggingPhotoId !== null}
+                onToggle={() => toggleSection(group.key)}
               >
-                <button
-                  type="button"
-                  onClick={() => toggleSection(group.key)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 transition-colors text-left ${
-                    isDropTarget ? 'bg-gunner-red/10' : 'bg-surface-secondary hover:bg-surface-tertiary'
-                  }`}
-                >
-                  <ChevronDown
-                    size={11}
-                    className={`text-txt-muted transition-transform ${isOpen ? '' : '-rotate-90'}`}
-                  />
-                  <span className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em]">{group.label}</span>
-                  <span className="text-[10px] text-txt-muted">({group.photos.length})</span>
-                  {canDropHere && (
-                    <span className="ml-auto text-[9px] font-semibold text-gunner-red uppercase tracking-wider">
-                      Drop to move
-                    </span>
-                  )}
-                </button>
-                {/* Always render the photo grid container while a drag is in
-                    progress so empty sections still accept drops. */}
-                {(isOpen || canDropHere) && (
+                {(group.photos.length > 0 || (draggingPhotoId !== null && WRITABLE_CATEGORIES.includes(group.key))) && (
                   <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1 p-1.5 min-h-[44px]">
-                    {group.photos.length === 0 && canDropHere && (
+                    {group.photos.length === 0 && draggingPhotoId !== null && (
                       <div className="col-span-full flex items-center justify-center text-[10px] text-txt-muted py-2">
                         Drop here to move into {group.label}
                       </div>
                     )}
-                    {group.photos.map(p => {
-                      const idx = photos.findIndex(x => x.id === p.id)
-                      const classifying = p.classificationStatus === 'pending'
-                      const isBeingDragged = draggingPhotoId === p.id
-                      return (
-                        <div
-                          key={p.id}
-                          draggable
-                          onDragStart={e => {
-                            setDraggingPhotoId(p.id)
-                            try { e.dataTransfer.setData('text/plain', p.id) } catch {}
-                            e.dataTransfer.effectAllowed = 'move'
-                          }}
-                          onDragEnd={() => {
-                            setDraggingPhotoId(null)
-                            setDropTargetKey(null)
-                          }}
-                          className={`aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-pointer ${p.isStarred ? 'ring-2 ring-amber-400' : ''} ${isBeingDragged ? 'opacity-40' : ''}`}
-                          onClick={() => setLightboxIndex(idx)}
-                        >
-                          {p.url ? (
-                            <img src={p.url} alt={p.filename} className="w-full h-full object-cover" loading="lazy" draggable={false} />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[8px] text-txt-muted">—</div>
-                          )}
-                          {classifying && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                              <Loader2 size={10} className="text-white animate-spin" />
-                            </div>
-                          )}
-                          {/* Persistent star indicator when starred */}
-                          {p.isStarred && (
-                            <div className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-amber-400 text-white pointer-events-none">
-                              <Star size={9} fill="currentColor" />
-                            </div>
-                          )}
-                          {/* Hover actions */}
-                          <button
-                            onClick={e => { e.stopPropagation(); toggleStar(p.id, p.isStarred) }}
-                            className={`absolute top-0.5 left-0.5 p-0.5 rounded-full ${p.isStarred ? 'opacity-0' : 'bg-black/60 text-white opacity-0 group-hover:opacity-100'} transition-opacity`}
-                            title={p.isStarred ? 'Unstar' : 'Star (set as cover photo)'}
-                          >
-                            <Star size={9} />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); deletePhoto(p.id) }}
-                            className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Delete"
-                          >
-                            <Trash2 size={9} />
-                          </button>
-                        </div>
-                      )
-                    })}
+                    {group.photos.map(p => (
+                      <DraggableTile
+                        key={p.id}
+                        photo={p}
+                        onOpen={() => {
+                          const idx = photos.findIndex(x => x.id === p.id)
+                          if (idx >= 0) setLightboxIndex(idx)
+                        }}
+                        onStar={() => toggleStar(p.id, p.isStarred)}
+                        onDelete={() => deletePhoto(p.id)}
+                      />
+                    ))}
                   </div>
                 )}
+              </DroppableSection>
+            ))}
+          </div>
+          <DragOverlay dropAnimation={null}>
+            {draggingPhoto && draggingPhoto.url ? (
+              <div className="w-20 h-20 rounded-[6px] overflow-hidden shadow-2xl ring-2 ring-gunner-red bg-white">
+                <img src={draggingPhoto.url} alt="" className="w-full h-full object-cover" />
               </div>
-            )
-          })}
-        </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {/* Lightbox */}
@@ -701,6 +670,132 @@ export function PropertyPhotosPanel({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Single photo tile. Wires @dnd-kit's useDraggable so it works for both
+// mouse + touch. We suppress the click handler if the user actually
+// dragged (dnd-kit gives us isDragging) so a tap still opens the lightbox
+// but a drag doesn't accidentally open it on drop.
+function DraggableTile({
+  photo,
+  onOpen,
+  onStar,
+  onDelete,
+}: {
+  photo: Photo
+  onOpen: () => void
+  onStar: () => void
+  onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: photo.id })
+  const classifying = photo.classificationStatus === 'pending'
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{ touchAction: 'none' }}
+      className={`aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-grab active:cursor-grabbing ${photo.isStarred ? 'ring-2 ring-amber-400' : ''} ${isDragging ? 'opacity-30' : ''}`}
+      onClick={e => {
+        // dnd-kit cancels the click if a drag actually happened, but guard
+        // anyway: don't open lightbox while a drag is in flight.
+        if (isDragging) { e.preventDefault(); return }
+        onOpen()
+      }}
+      title="Drag to move to another section · click to open"
+    >
+      {photo.url ? (
+        <img src={photo.url} alt={photo.filename} className="w-full h-full object-cover pointer-events-none" loading="lazy" draggable={false} />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-[8px] text-txt-muted">—</div>
+      )}
+      {classifying && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none">
+          <Loader2 size={10} className="text-white animate-spin" />
+        </div>
+      )}
+      {photo.isStarred && (
+        <div className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-amber-400 text-white pointer-events-none">
+          <Star size={9} fill="currentColor" />
+        </div>
+      )}
+      {/* Hover actions. onPointerDown stop is critical — without it the
+          dnd-kit listener swallows the button press and the click never
+          fires. */}
+      <button
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onStar() }}
+        className={`absolute top-0.5 left-0.5 p-0.5 rounded-full ${photo.isStarred ? 'opacity-0' : 'bg-black/60 text-white opacity-0 group-hover:opacity-100'} transition-opacity`}
+        title={photo.isStarred ? 'Unstar' : 'Star (set as cover photo)'}
+      >
+        <Star size={9} />
+      </button>
+      <button
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onDelete() }}
+        className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Delete"
+      >
+        <Trash2 size={9} />
+      </button>
+    </div>
+  )
+}
+
+// Section card that acts as a drop target via useDroppable. Header toggles
+// expand/collapse with a normal click; the whole card is the drop zone so
+// users can drop anywhere inside it, not just on the header.
+function DroppableSection({
+  groupKey,
+  label,
+  count,
+  isOpen,
+  isActiveDrag,
+  onToggle,
+  children,
+}: {
+  groupKey: string
+  label: string
+  count: number
+  isOpen: boolean
+  isActiveDrag: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: groupKey,
+    disabled: !WRITABLE_CATEGORIES.includes(groupKey),
+  })
+  const canDropHere = isActiveDrag && WRITABLE_CATEGORIES.includes(groupKey)
+  return (
+    <div
+      ref={setNodeRef}
+      className={`border-[0.5px] rounded-[8px] overflow-hidden transition-colors ${
+        isOver ? 'border-gunner-red bg-gunner-red/5' : 'border-[rgba(0,0,0,0.06)]'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 transition-colors text-left ${
+          isOver ? 'bg-gunner-red/10' : 'bg-surface-secondary hover:bg-surface-tertiary'
+        }`}
+      >
+        <ChevronDown
+          size={11}
+          className={`text-txt-muted transition-transform ${isOpen || canDropHere ? '' : '-rotate-90'}`}
+        />
+        <span className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em]">{label}</span>
+        <span className="text-[10px] text-txt-muted">({count})</span>
+        {canDropHere && (
+          <span className="ml-auto text-[9px] font-semibold text-gunner-red uppercase tracking-wider">
+            Drop to move
+          </span>
+        )}
+      </button>
+      {(isOpen || canDropHere) && children}
     </div>
   )
 }
