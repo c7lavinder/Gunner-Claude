@@ -277,7 +277,6 @@ export function Section4Responses({ property, tenantSlug }: { property: Property
             responseSpeed: '',
             lastContactDate: null,
             buybox: [],
-            secondaryMarket: null,
             notes: null,
           }}
           tenantSlug={tenantSlug}

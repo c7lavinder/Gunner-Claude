@@ -42,13 +42,22 @@ Fields**.
 | `VcdWDP2lXuuV1LwedOhs`   | Buybox                 | `Buyer.customFields.buybox`                 |
 | `RbNnV6OxCiF6ai2krkyy`   | Response Speed         | `Buyer.customFields.responseSpeed`          |
 | `IZdG26j5rw0yiU1jvDEo`   | Verified Funding       | `Buyer.customFields.verifiedFunding`        |
-| `FRyMcgqWes9BuWqo97HF`   | Last Contact Date      | `Buyer.customFields.lastContactDate`        |
+| `FRyMcgqWes9BuWqo97HF`   | Last Contact Date      | Auto-derived (latest Call.calledAt or OutreachLog.loggedAt) |
 | `4qyjtjm5DWVgFgMCHdqQ`   | Notes                  | `Buyer.internalNotes`                       |
-| `DOGXpCgOc2jMoWwY4dpc`   | Secondary Market       | `Buyer.customFields.secondaryMarkets`       |
+| `DOGXpCgOc2jMoWwY4dpc`   | Secondary Market       | **Retired (Session 78b)** — folded into `Buyer.primaryMarkets` by the backfill. |
 
-There is no Gunner field for `hasPurchased` in GHL — Gunner tracks
-"Purchased Before" via `Buyer.customFields.hasPurchased`, set in the edit
-slideover. Nothing to delete in GHL for that one.
+Notes:
+
+- **Secondary Market** is gone as a concept. The backfill script folds
+  any existing `secondaryMarkets[]` values into `primaryMarkets` (case-
+  insensitive dedupe) and drops the key from `customFields`. After the
+  backfill runs cleanly, you can delete the GHL field with no data loss.
+- **Last Contact Date** is now computed live from the latest call or
+  outreach log for the buyer's GHL contact id. The stored value is kept
+  as a manual override if the rep edits it explicitly.
+- **`hasPurchased`** never existed in GHL — Gunner tracks "Purchased
+  Before" in `customFields.hasPurchased`, set in the edit slideover.
+  Nothing to delete in GHL for that one.
 
 ## Order of operations
 

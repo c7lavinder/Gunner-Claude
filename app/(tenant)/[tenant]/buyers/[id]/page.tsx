@@ -33,6 +33,8 @@ export default async function BuyerDetailPage({
               ...PROPERTY_LANE_SELECT,
               arv: true,
               askingPrice: true,
+              assignmentFee: true,
+              acceptedPrice: true,
             },
           },
         },
@@ -41,6 +43,110 @@ export default async function BuyerDetailPage({
   })
 
   if (!buyer) notFound()
+
+  // Closed-deal revenue — Session 78b. Pull every accepted offer for
+  // this buyer's GHL contact and sum the property's assignment fee.
+  // Falls back to acceptedPrice - contractPrice if assignmentFee isn't set.
+  // Done server-side so the hero card lights up on first paint.
+  let closedRevenue = 0
+  let closedDealCount = 0
+  const closedDealAddresses: Array<{ propertyId: string; address: string; assignmentFee: string | null; closedAt: string | null }> = []
+  if (buyer.ghlContactId) {
+    const acceptedOffers = await db.outreachLog.findMany({
+      where: {
+        tenantId,
+        ghlContactId: buyer.ghlContactId,
+        type: 'offer',
+        offerStatus: 'Accepted',
+      },
+      select: {
+        propertyId: true,
+        loggedAt: true,
+        property: {
+          select: { id: true, address: true, assignmentFee: true, acceptedPrice: true, contractPrice: true },
+        },
+      },
+      orderBy: { loggedAt: 'desc' },
+    })
+    // Dedup by property — one accepted offer per deal even if logged twice.
+    const seen = new Set<string>()
+    for (const o of acceptedOffers) {
+      if (!o.property || seen.has(o.property.id)) continue
+      seen.add(o.property.id)
+      const fee = o.property.assignmentFee ? Number(o.property.assignmentFee) : null
+      const derived = (o.property.acceptedPrice && o.property.contractPrice)
+        ? Number(o.property.acceptedPrice) - Number(o.property.contractPrice)
+        : null
+      const value = fee ?? derived ?? 0
+      closedRevenue += value
+      closedDealCount += 1
+      closedDealAddresses.push({
+        propertyId: o.property.id,
+        address: o.property.address,
+        assignmentFee: o.property.assignmentFee?.toString() ?? (derived !== null ? String(derived) : null),
+        closedAt: o.loggedAt.toISOString(),
+      })
+    }
+  }
+
+  // Last contact date — Session 78b. Latest of Call.calledAt or
+  // OutreachLog.loggedAt for this buyer's GHL contact. Falls back to
+  // the manually-stored value when nothing is logged. Auto-updates with
+  // every page load — no cron needed.
+  let lastContactComputed: string | null = null
+  if (buyer.ghlContactId) {
+    const [lastCall, lastLog] = await Promise.all([
+      db.call.findFirst({
+        where: { tenantId, ghlContactId: buyer.ghlContactId, calledAt: { not: null } },
+        orderBy: { calledAt: 'desc' },
+        select: { calledAt: true },
+      }),
+      db.outreachLog.findFirst({
+        where: { tenantId, ghlContactId: buyer.ghlContactId },
+        orderBy: { loggedAt: 'desc' },
+        select: { loggedAt: true },
+      }),
+    ])
+    const candidates = [
+      lastCall?.calledAt ?? null,
+      lastLog?.loggedAt ?? null,
+    ].filter((d): d is Date => d !== null)
+    if (candidates.length > 0) {
+      lastContactComputed = candidates.reduce((a, b) => (a > b ? a : b)).toISOString()
+    }
+  }
+
+  // Tenant-wide market list — pulled from Buyer.primaryMarkets ∪
+  // Property.propertyMarkets so the multi-select knows every market
+  // currently in use. Reps can also add new ones from the slideover.
+  const [allBuyerMarkets, allPropertyMarkets] = await Promise.all([
+    db.buyer.findMany({
+      where: { tenantId },
+      select: { primaryMarkets: true },
+    }),
+    db.property.findMany({
+      where: { tenantId },
+      select: { propertyMarkets: true },
+    }),
+  ])
+  const marketSet = new Set<string>()
+  for (const b of allBuyerMarkets) {
+    if (Array.isArray(b.primaryMarkets)) {
+      for (const m of b.primaryMarkets as string[]) {
+        const t = String(m).trim()
+        if (t) marketSet.add(t)
+      }
+    }
+  }
+  for (const p of allPropertyMarkets) {
+    if (Array.isArray(p.propertyMarkets)) {
+      for (const m of p.propertyMarkets) {
+        const t = String(m).trim()
+        if (t) marketSet.add(t)
+      }
+    }
+  }
+  const tenantMarkets = Array.from(marketSet).sort((a, b) => a.localeCompare(b))
 
   const serialized = {
     ...buyer,
@@ -107,6 +213,11 @@ export default async function BuyerDetailPage({
     <BuyerDetailClient
       buyer={serialized}
       tenantSlug={params.tenant}
+      closedRevenue={closedRevenue}
+      closedDealCount={closedDealCount}
+      closedDeals={closedDealAddresses}
+      lastContactComputed={lastContactComputed}
+      tenantMarkets={tenantMarkets}
     />
   )
 }

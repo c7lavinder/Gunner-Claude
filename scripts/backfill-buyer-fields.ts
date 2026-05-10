@@ -55,8 +55,10 @@ async function main() {
       continue
     }
 
+    // All active buyers — including ones without a GHL contact id, since
+    // the secondary→primary market fold runs locally and doesn't need GHL.
     const buyers = await db.buyer.findMany({
-      where: { tenantId: tenant.id, isActive: true, NOT: { ghlContactId: null } },
+      where: { tenantId: tenant.id, isActive: true },
       select: { id: true, ghlContactId: true, customFields: true, primaryMarkets: true, internalNotes: true },
     })
     if (buyers.length === 0) continue
@@ -82,52 +84,97 @@ async function main() {
       const hasMarkets = markets.length > 0
       const hasNotes = !!buyer.internalNotes && buyer.internalNotes.trim().length > 0
 
-      // Already complete — skip without a GHL roundtrip.
-      if (gaps.length === 0 && hasMarkets && hasNotes) {
-        skipped++
-        continue
+      // Step 1 — local secondary→primary market fold. Runs on every
+      // buyer regardless of GHL availability. Each entry in
+      // customFields.secondaryMarkets becomes an entry in
+      // primaryMarkets (case-insensitive dedupe). Then secondaryMarkets
+      // is dropped from customFields.
+      const merged: Record<string, unknown> = { ...criteria }
+      const data: Record<string, unknown> = {}
+      const secondary = Array.isArray(merged.secondaryMarkets)
+        ? (merged.secondaryMarkets as unknown[]).map(String).filter(Boolean)
+        : []
+      const folded: string[] = []
+      if (secondary.length > 0) {
+        const primary = (Array.isArray(buyer.primaryMarkets) ? buyer.primaryMarkets as unknown[] : []).map(String)
+        const seen = new Set(primary.map(m => m.toLowerCase()))
+        for (const s of secondary) {
+          const key = s.toLowerCase()
+          if (!seen.has(key)) {
+            folded.push(s)
+            seen.add(key)
+          }
+        }
+        if (folded.length > 0) {
+          data.primaryMarkets = [...primary, ...folded]
+        }
+        delete (merged as Record<string, unknown>).secondaryMarkets
       }
 
-      let contact
-      try {
-        contact = await ghl.getContact(buyer.ghlContactId!)
-      } catch (err) {
-        errors++
-        if (errors <= 5) process.stderr.write(`[backfill-buyer-fields]   buyer=${buyer.id} ghl fetch failed: ${err instanceof Error ? err.message : String(err)}\n`)
-        continue
-      }
-      if (!contact) {
-        skippedNoGhl++
-        continue
-      }
-
-      const parsed = parseGHLContact({
-        id: contact.id,
-        firstName: contact.firstName,
-        lastName: contact.lastName,
-        phone: contact.phone,
-        email: contact.email,
-        city: contact.city,
-        state: contact.state,
-        tags: contact.tags ?? [],
-        customFields: contact.customFields ?? [],
-      })
-
-      // Fill ONLY the gaps — never overwrite a value the rep already
-      // edited in Gunner. This is the whole point of the wave.
-      const merged = { ...criteria }
-      for (const k of gaps) {
-        const fromGhl = (parsed.criteria as Record<string, unknown>)[k]
-        if (fromGhl !== undefined && fromGhl !== '' && fromGhl !== null) {
-          merged[k] = fromGhl
+      // Step 2 — GHL pull, but only when we still have gaps to fill.
+      // A buyer with no GHL contact id can't pull but the secondary
+      // fold above may still apply, so we don't `continue` here.
+      const needsGhlPull = !!buyer.ghlContactId && (gaps.length > 0 || !hasMarkets || !hasNotes)
+      let parsedFromGhl: ReturnType<typeof parseGHLContact> | null = null
+      if (needsGhlPull) {
+        try {
+          const contact = await ghl.getContact(buyer.ghlContactId!)
+          if (contact) {
+            parsedFromGhl = parseGHLContact({
+              id: contact.id,
+              firstName: contact.firstName,
+              lastName: contact.lastName,
+              phone: contact.phone,
+              email: contact.email,
+              city: contact.city,
+              state: contact.state,
+              tags: contact.tags ?? [],
+              customFields: contact.customFields ?? [],
+            })
+          }
+        } catch (err) {
+          errors++
+          if (errors <= 5) process.stderr.write(`[backfill-buyer-fields]   buyer=${buyer.id} ghl fetch failed: ${err instanceof Error ? err.message : String(err)}\n`)
+          // Don't continue — the secondary-fold above may still produce a write.
         }
       }
 
-      const data: Record<string, unknown> = {}
+      if (parsedFromGhl) {
+        // Fill ONLY the gaps — never overwrite a value the rep already
+        // edited in Gunner. This is the whole point of the wave.
+        for (const k of gaps) {
+          const fromGhl = (parsedFromGhl.criteria as Record<string, unknown>)[k]
+          if (fromGhl !== undefined && fromGhl !== '' && fromGhl !== null) {
+            merged[k] = fromGhl
+          }
+        }
+        // GHL secondaryMarkets land here too — fold them into primary.
+        const ghlSecondary = (parsedFromGhl.criteria as { secondaryMarkets?: string[] }).secondaryMarkets ?? []
+        if (ghlSecondary.length > 0) {
+          const base = ((data.primaryMarkets as string[] | undefined)
+            ?? (Array.isArray(buyer.primaryMarkets) ? buyer.primaryMarkets as unknown[] : []).map(String))
+          const seen = new Set(base.map(m => m.toLowerCase()))
+          const additions: string[] = []
+          for (const s of ghlSecondary) {
+            const key = s.toLowerCase()
+            if (!seen.has(key)) {
+              additions.push(s)
+              seen.add(key)
+            }
+          }
+          if (additions.length > 0) {
+            data.primaryMarkets = [...base, ...additions]
+          }
+        }
+        delete (merged as Record<string, unknown>).secondaryMarkets
+      }
+
       const customChanged = JSON.stringify(merged) !== JSON.stringify(criteria)
       if (customChanged) data.customFields = JSON.parse(JSON.stringify(merged))
-      if (!hasMarkets && parsed.markets.length > 0) data.primaryMarkets = parsed.markets
-      if (!hasNotes && parsed.notes) data.internalNotes = parsed.notes
+      if (data.primaryMarkets === undefined && !hasMarkets && parsedFromGhl && parsedFromGhl.markets.length > 0) {
+        data.primaryMarkets = parsedFromGhl.markets
+      }
+      if (!hasNotes && parsedFromGhl?.notes) data.internalNotes = parsedFromGhl.notes
 
       if (Object.keys(data).length === 0) {
         skipped++

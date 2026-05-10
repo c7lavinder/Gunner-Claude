@@ -670,7 +670,6 @@ export function Section3BuyerMatch({
             responseSpeed: '',
             lastContactDate: null,
             buybox: [],
-            secondaryMarket: null,
             notes: editTarget.notes ?? null,
           }}
           tenantSlug={tenantSlug}

@@ -191,6 +191,12 @@ interface BuyerData {
 interface BuyerDetailClientProps {
   buyer: BuyerData
   tenantSlug: string
+  // Server-computed values for the hero (Session 78b).
+  closedRevenue: number
+  closedDealCount: number
+  closedDeals: Array<{ propertyId: string; address: string; assignmentFee: string | null; closedAt: string | null }>
+  lastContactComputed: string | null
+  tenantMarkets: string[]
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -359,7 +365,9 @@ const TAB_ICONS: Record<Tab, React.ReactNode> = {
   'AI Insights': <Sparkles className="w-3.5 h-3.5" />,
 }
 
-export function BuyerDetailClient({ buyer, tenantSlug }: BuyerDetailClientProps) {
+export function BuyerDetailClient({
+  buyer, tenantSlug, closedRevenue, closedDealCount, closedDeals, lastContactComputed, tenantMarkets,
+}: BuyerDetailClientProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>('Identity')
   const [data, setData] = useState(buyer)
@@ -392,76 +400,33 @@ export function BuyerDetailClient({ buyer, tenantSlug }: BuyerDetailClientProps)
 
   return (
     <div className="min-h-screen bg-[#FAF9F6]" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      {/* ── Header ─────────────────────────────────────── */}
-      <div className="bg-white border-b border-[rgba(0,0,0,0.06)] px-6 py-4">
+      {/* ── Back nav (compact strip; identity moved into BuyerHero) ── */}
+      <div className="bg-white border-b border-[rgba(0,0,0,0.06)] px-6 py-2">
         <div className="max-w-5xl mx-auto">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-gray-600 mb-3"
+            className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-gray-600"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
-
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900">{data.name}</h1>
-            {data.company && (
-              <span className="text-[12px] text-gray-500">{data.company}</span>
-            )}
-            {data.buyerGrade && (
-              <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${GRADE_COLORS[data.buyerGrade] ?? 'bg-gray-100 text-gray-600'}`}>
-                Grade {data.buyerGrade}
-              </span>
-            )}
-            {data.isVip && (
-              <span className="px-2 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-700">VIP</span>
-            )}
-            {data.ghlContactId && (
-              <a
-                href={`https://app.gohighlevel.com/contacts/detail/${data.ghlContactId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-400 hover:text-gray-600"
-                title="Open in GHL"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
-            {data.doNotContact && (
-              <span className="px-2 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-700">DNC</span>
-            )}
-            {data.isGhost && (
-              <span className="px-2 py-0.5 rounded text-[9px] font-semibold bg-gray-200 text-gray-600">Ghost</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-6 mt-2 text-[10px] text-gray-500">
-            {data.phone && (
-              <span className="flex items-center gap-1">
-                <Phone className="w-3 h-3" /> {formatPhone(data.phone)}
-              </span>
-            )}
-            {data.email && (
-              <span className="flex items-center gap-1">
-                <Mail className="w-3 h-3" /> {data.email}
-              </span>
-            )}
-            {data.blastResponseRate !== null && (
-              <span>Blast Response: {fmtPct(data.blastResponseRate)}</span>
-            )}
-            <span className="flex items-center gap-1">
-              <Building2 className="w-3 h-3" /> {data.totalDealsClosedWithUs} Deals Closed
-            </span>
-            <span>{data.propertyStages.length} Active {data.propertyStages.length === 1 ? 'Deal' : 'Deals'}</span>
-          </div>
         </div>
       </div>
 
-      {/* ── Hero (Session 78) ──────────────────────────────
-          At-a-glance summary above the deep-dive tabs: contact info,
-          buyer-info canonical fields (Gunner source of truth), active
-          deals, deals closed. Tabs below remain as the comprehensive
-          field reference. */}
-      <BuyerHero buyer={data} tenantSlug={tenantSlug} onSaved={(patch) => setData(prev => ({ ...prev, ...patch }))} />
+      {/* ── Hero (Session 78b — sports-profile shell) ──────
+          Avatar + name + tier hero badge + status flags up top, then
+          a 5-stat banner (Active / Closed / Revenue / Response / Buyer
+          Since), then a 2-col Profile + Contact body. The data-form
+          tabs below stay as the deep dive. */}
+      <BuyerHero
+        buyer={data}
+        tenantSlug={tenantSlug}
+        closedRevenue={closedRevenue}
+        closedDealCount={closedDealCount}
+        closedDeals={closedDeals}
+        lastContactComputed={lastContactComputed}
+        tenantMarkets={tenantMarkets}
+        onSaved={(patch) => setData(prev => ({ ...prev, ...patch }))}
+      />
 
       {/* ── Tabs ───────────────────────────────────────── */}
       <div className="bg-white border-b border-[rgba(0,0,0,0.06)]">
@@ -760,16 +725,20 @@ export function BuyerDetailClient({ buyer, tenantSlug }: BuyerDetailClientProps)
   )
 }
 
-// ─── Hero (Session 78) ──────────────────────────────────────────────────────
-// Sits above the deep-dive tab bar. Four cards in a 12-col grid:
-//   - Contact info (name/phone/email/company/address) — GHL is source
-//     of truth; renders read-only here, edit via "Open in GHL".
-//   - Buyer info — the 9 canonical fields Gunner now owns. Editable via
-//     a single Edit button that opens the BuyerEditSlideover (Session 3
-//     reuses the same modal). Inline rendering keeps the page compact.
-//   - Active deals — propertyStages with stage NOT in {closed, dead}.
-//   - Closed deals — totalDealsClosedWithUs + lastDealClosedDate.
+// ─── Hero (Session 78b — sports-profile shell) ──────────────────────────────
+// Three rows:
+//   1. Identity bar: avatar + name + tier hero badge + status flags
+//   2. Stats banner: Active / Closed / Revenue / Response Rate / Buyer Since
+//   3. Body: Profile card (Gunner-owned) + Contact card (editable inline)
 
+const TIER_HERO_COLORS: Record<string, string> = {
+  priority:    'bg-amber-500 text-white',
+  qualified:   'bg-emerald-500 text-white',
+  jv:          'bg-blue-500 text-white',
+  realtor:     'bg-fuchsia-500 text-white',
+  unqualified: 'bg-gray-300 text-gray-700',
+  halted:      'bg-red-500 text-white',
+}
 const TIER_PILL_COLORS: Record<string, string> = {
   priority:    'bg-amber-100 text-amber-700',
   qualified:   'bg-green-100 text-green-700',
@@ -777,6 +746,27 @@ const TIER_PILL_COLORS: Record<string, string> = {
   realtor:     'bg-fuchsia-100 text-fuchsia-700',
   unqualified: 'bg-gray-100 text-gray-500',
   halted:      'bg-red-100 text-red-500',
+}
+// Avatar tint cycles deterministically off the buyer id so the same
+// person always gets the same color.
+const AVATAR_TINTS = [
+  'bg-gradient-to-br from-blue-500 to-indigo-600',
+  'bg-gradient-to-br from-amber-500 to-orange-600',
+  'bg-gradient-to-br from-emerald-500 to-teal-600',
+  'bg-gradient-to-br from-fuchsia-500 to-pink-600',
+  'bg-gradient-to-br from-violet-500 to-purple-600',
+  'bg-gradient-to-br from-red-500 to-rose-600',
+]
+function avatarTint(seed: string): string {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return AVATAR_TINTS[h % AVATAR_TINTS.length]
+}
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 const ACTIVE_STAGES = new Set(['matched', 'added', 'sent', 'responded', 'interested', 'showing_scheduled', 'offer_made'])
@@ -789,11 +779,10 @@ type BuyerCanonical = {
   lastContactDate: string | null
   buybox: string[]
   markets: string[]
-  secondaryMarket: string | null
   internalNotes: string | null
 }
 
-function readCanonical(buyer: BuyerData): BuyerCanonical {
+function readCanonical(buyer: BuyerData, lastContactComputed: string | null): BuyerCanonical {
   const c = (buyer.customFields ?? {}) as Record<string, unknown>
   const buyboxRaw = c.buybox
   const buybox: string[] = Array.isArray(buyboxRaw)
@@ -801,171 +790,228 @@ function readCanonical(buyer: BuyerData): BuyerCanonical {
     : typeof buyboxRaw === 'string' && buyboxRaw
       ? buyboxRaw.split(',').map(s => s.trim()).filter(Boolean)
       : []
-  const secondaryRaw = c.secondaryMarkets
-  const secondary = Array.isArray(secondaryRaw) && secondaryRaw.length > 0
-    ? String(secondaryRaw[0])
-    : (typeof secondaryRaw === 'string' ? secondaryRaw : null)
+  // Server-computed last contact wins; falls back to the manually set
+  // value or the legacy lastCommunicationDate column.
+  const lastContact = lastContactComputed
+    ?? (c.lastContactDate as string | undefined)
+    ?? buyer.lastCommunicationDate
+    ?? null
   return {
     tier: (c.tier as string) ?? 'unqualified',
     verifiedFunding: c.verifiedFunding === true,
     purchasedBefore: c.hasPurchased === true,
     responseSpeed: (c.responseSpeed as string) ?? '',
-    lastContactDate: (c.lastContactDate as string) ?? buyer.lastCommunicationDate ?? null,
+    lastContactDate: lastContact,
     buybox,
     markets: buyer.primaryMarkets ?? [],
-    secondaryMarket: secondary,
     internalNotes: buyer.internalNotes ?? null,
   }
 }
 
 function BuyerHero({
-  buyer, tenantSlug, onSaved,
+  buyer, tenantSlug,
+  closedRevenue, closedDealCount, closedDeals,
+  lastContactComputed, tenantMarkets,
+  onSaved,
 }: {
   buyer: BuyerData
   tenantSlug: string
+  closedRevenue: number
+  closedDealCount: number
+  closedDeals: Array<{ propertyId: string; address: string; assignmentFee: string | null; closedAt: string | null }>
+  lastContactComputed: string | null
+  tenantMarkets: string[]
   onSaved: (patch: Partial<BuyerData>) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const canonical = readCanonical(buyer)
+  const canonical = readCanonical(buyer, lastContactComputed)
   const active = buyer.propertyStages.filter(ps => ACTIVE_STAGES.has(ps.stage))
-  const closedCount = buyer.totalDealsClosedWithUs ?? 0
+  const tint = avatarTint(buyer.id)
+  const responseRateLabel = buyer.blastResponseRate !== null ? fmtPct(buyer.blastResponseRate) : '—'
+  const buyerSinceLabel = buyer.buyerSinceDate
+    ? fmtDate(buyer.buyerSinceDate)
+    : fmtDate(buyer.createdAt)
+  const tierLabel = canonical.tier ? canonical.tier[0].toUpperCase() + canonical.tier.slice(1) : 'Unqualified'
 
   return (
     <div className="bg-[#FAF9F6] border-b border-[rgba(0,0,0,0.04)]">
-      <div className="max-w-5xl mx-auto px-6 py-4 grid grid-cols-1 md:grid-cols-12 gap-3">
-        {/* Buyer info — canonical fields, Gunner source of truth */}
-        <div className="md:col-span-5 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
-            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Buyer Info</p>
-            <button
-              onClick={() => setEditing(true)}
-              className="text-[10px] font-semibold text-gunner-red hover:text-gunner-red-dark inline-flex items-center gap-1"
-            >
-              <Pencil className="w-3 h-3" /> Edit
-            </button>
-          </div>
-          <div className="p-3 space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full capitalize ${TIER_PILL_COLORS[canonical.tier] ?? TIER_PILL_COLORS.unqualified}`}>
-                {canonical.tier || 'Unqualified'}
-              </span>
-              {canonical.verifiedFunding && (
-                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Verified Funding</span>
-              )}
-              {canonical.purchasedBefore && (
-                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">Purchased Before</span>
-              )}
-              {canonical.responseSpeed && (
-                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 capitalize">
-                  Speed: {canonical.responseSpeed}
-                </span>
-              )}
+      <div className="max-w-5xl mx-auto px-6 pt-4 pb-6 space-y-3">
+        {/* Identity bar */}
+        <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
+          <div className="flex items-stretch gap-4 p-4">
+            <div className={`${tint} w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 shadow-sm`}>
+              <span className="text-white text-[22px] font-bold tracking-tight">{initials(buyer.name)}</span>
             </div>
-            <HeroRow label="Markets">
-              <TagList items={canonical.markets} color="bg-blue-100 text-blue-700" />
-            </HeroRow>
-            <HeroRow label="Secondary">
-              <span className={canonical.secondaryMarket ? 'text-[11px] text-gray-900' : 'text-[11px] text-gray-300'}>
-                {canonical.secondaryMarket || '—'}
-              </span>
-            </HeroRow>
-            <HeroRow label="Buybox">
-              <TagList items={canonical.buybox} color="bg-amber-100 text-amber-700" />
-            </HeroRow>
-            <HeroRow label="Last contact">
-              <span className={canonical.lastContactDate ? 'text-[11px] text-gray-900' : 'text-[11px] text-gray-300'}>
-                {fmtDate(canonical.lastContactDate)}
-              </span>
-            </HeroRow>
-            {canonical.internalNotes && (
-              <div className="text-[11px] text-gray-700 bg-amber-50 border-[0.5px] border-amber-200 rounded-[8px] px-2.5 py-2 mt-2">
-                {canonical.internalNotes}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Contact info — GHL source of truth */}
-        <div className="md:col-span-3 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
-            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
-            {buyer.ghlContactId && (
-              <a
-                href={`https://app.gohighlevel.com/contacts/detail/${buyer.ghlContactId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] font-medium text-gray-400 hover:text-gray-600 inline-flex items-center gap-1"
-                title="Source of truth — edit in GHL"
-              >
-                GHL <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-          </div>
-          <div className="p-3 space-y-1.5">
-            {buyer.phone && (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-700">
-                <Phone className="w-3 h-3 text-gray-400" /> {formatPhone(buyer.phone)}
-              </div>
-            )}
-            {buyer.email && (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-700 truncate">
-                <Mail className="w-3 h-3 text-gray-400 shrink-0" />
-                <span className="truncate">{buyer.email}</span>
-              </div>
-            )}
-            {buyer.company && (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-700">
-                <Building2 className="w-3 h-3 text-gray-400" /> {buyer.company}
-              </div>
-            )}
-            {(buyer.mailingCity || buyer.mailingState) && (
-              <div className="flex items-start gap-1.5 text-[11px] text-gray-700">
-                <MapPin className="w-3 h-3 text-gray-400 mt-0.5" />
-                <span>{[buyer.mailingAddress, buyer.mailingCity, buyer.mailingState, buyer.mailingZip].filter(Boolean).join(', ')}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Active deals */}
-        <div className="md:col-span-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)]">
-            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Active Deals</p>
-          </div>
-          <div className="p-3">
-            <p className="text-[24px] font-bold text-gray-900 leading-none">{active.length}</p>
-            {active.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {active.slice(0, 3).map(ps => (
-                  <Link
-                    key={ps.id}
-                    href={`/${tenantSlug}/inventory/${ps.property.id}`}
-                    className="block text-[10px] text-gray-700 hover:text-gunner-red truncate"
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-[22px] font-bold text-gray-900 truncate">{buyer.name || '—'}</h1>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${TIER_HERO_COLORS[canonical.tier] ?? TIER_HERO_COLORS.unqualified}`}>
+                  {tierLabel}
+                </span>
+                {buyer.buyerGrade && (
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${GRADE_COLORS[buyer.buyerGrade] ?? 'bg-gray-100 text-gray-600'}`}>
+                    Grade {buyer.buyerGrade}
+                  </span>
+                )}
+                {buyer.isVip && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">VIP</span>
+                )}
+                {canonical.verifiedFunding && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">Verified Funding</span>
+                )}
+                {canonical.purchasedBefore && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-100 text-violet-700">Purchased</span>
+                )}
+                {buyer.doNotContact && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">DNC</span>
+                )}
+                {buyer.isGhost && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-200 text-gray-600">Ghost</span>
+                )}
+                {buyer.ghlContactId && (
+                  <a
+                    href={`https://app.gohighlevel.com/contacts/detail/${buyer.ghlContactId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-gray-600"
+                    title="Open in GHL"
                   >
-                    {ps.property.address}
-                  </Link>
-                ))}
-                {active.length > 3 && (
-                  <p className="text-[9px] text-gray-400">+{active.length - 3} more</p>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 )}
               </div>
-            )}
+              <p className="text-[12px] text-gray-500 mt-1">
+                {buyer.company || 'Independent buyer'}
+                {canonical.markets.length > 0 && (
+                  <span> · {canonical.markets.slice(0, 3).join(' · ')}{canonical.markets.length > 3 ? `  +${canonical.markets.length - 3}` : ''}</span>
+                )}
+              </p>
+            </div>
+            <div className="hidden sm:flex items-start">
+              <button
+                onClick={() => setEditing(true)}
+                className="text-[11px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark px-3 py-1.5 rounded-md inline-flex items-center gap-1 transition-colors"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </button>
+            </div>
+          </div>
+
+          {/* Stats banner — sports-card vibe. Each cell stat-on-top, label below. */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 border-t border-[rgba(0,0,0,0.06)] divide-x divide-[rgba(0,0,0,0.06)]">
+            <StatCell value={String(active.length)} label="Active Deals" />
+            <StatCell value={String(closedDealCount)} label="Closed Deals" sub={buyer.lastDealClosedDate ? `Last ${fmtDate(buyer.lastDealClosedDate)}` : undefined} />
+            <StatCell value={fmtMoney(String(closedRevenue))} label="Revenue" sub="Assignment fees" accent />
+            <StatCell value={responseRateLabel} label="Response Rate" />
+            <StatCell value={buyerSinceLabel} label="Buyer Since" />
           </div>
         </div>
 
-        {/* Deals closed */}
-        <div className="md:col-span-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
-          <div className="px-4 py-2 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)]">
-            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Closed</p>
+        {/* Body — 2 col on md+: Profile (Gunner) + Contact (editable inline) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Profile card — canonical buyer-info */}
+          <div className="md:col-span-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
+            <div className="px-4 py-2.5 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+              <p className="text-[10px] font-bold text-gray-700 uppercase tracking-[0.08em]">Profile</p>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-[10px] font-semibold text-gunner-red hover:text-gunner-red-dark inline-flex items-center gap-1"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </button>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              <ProfileRow label="Tier">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${TIER_PILL_COLORS[canonical.tier] ?? TIER_PILL_COLORS.unqualified}`}>
+                  {canonical.tier || 'unqualified'}
+                </span>
+              </ProfileRow>
+              <ProfileRow label="Response Speed">
+                {canonical.responseSpeed ? (
+                  <span className="text-[11px] text-gray-900 capitalize">{canonical.responseSpeed}</span>
+                ) : <span className="text-[11px] text-gray-300">—</span>}
+              </ProfileRow>
+              <ProfileRow label="Markets" wide>
+                {canonical.markets.length > 0
+                  ? <TagList items={canonical.markets} color="bg-blue-100 text-blue-700" />
+                  : <span className="text-[11px] text-gray-300">—</span>}
+              </ProfileRow>
+              <ProfileRow label="Buybox" wide>
+                {canonical.buybox.length > 0
+                  ? <TagList items={canonical.buybox} color="bg-amber-100 text-amber-700" />
+                  : <span className="text-[11px] text-gray-300">—</span>}
+              </ProfileRow>
+              <ProfileRow label="Last Contact">
+                <span className={canonical.lastContactDate ? 'text-[11px] text-gray-900' : 'text-[11px] text-gray-300'}>
+                  {fmtDate(canonical.lastContactDate)}
+                </span>
+              </ProfileRow>
+              <ProfileRow label="Total Volume">
+                {buyer.totalVolumeFromUs
+                  ? <span className="text-[11px] text-gray-900">{fmtMoney(buyer.totalVolumeFromUs)}</span>
+                  : <span className="text-[11px] text-gray-300">—</span>}
+              </ProfileRow>
+              {canonical.internalNotes && (
+                <div className="sm:col-span-2 mt-1 text-[11px] text-gray-700 bg-amber-50 border-[0.5px] border-amber-200 rounded-[8px] px-3 py-2">
+                  {canonical.internalNotes}
+                </div>
+              )}
+            </div>
+
+            {/* Closed-deal breakdown — assignment fee per deal so the rep
+                can verify the revenue stat above came from real deals. */}
+            {closedDeals.length > 0 && (
+              <div className="px-4 pb-4">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-[0.08em] mb-1.5">Closed Deals</p>
+                <div className="space-y-1">
+                  {closedDeals.slice(0, 6).map(d => (
+                    <Link
+                      key={d.propertyId}
+                      href={`/${tenantSlug}/inventory/${d.propertyId}`}
+                      className="flex items-center justify-between gap-2 text-[11px] text-gray-700 hover:text-gunner-red px-2 py-1 rounded hover:bg-black/[0.02]"
+                    >
+                      <span className="truncate">{d.address}</span>
+                      <span className="shrink-0 text-emerald-700 font-semibold tabular-nums">
+                        {d.assignmentFee ? fmtMoney(d.assignmentFee) : '—'}
+                      </span>
+                    </Link>
+                  ))}
+                  {closedDeals.length > 6 && (
+                    <p className="text-[10px] text-gray-400 px-2">+{closedDeals.length - 6} more</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="p-3">
-            <p className="text-[24px] font-bold text-gray-900 leading-none">{closedCount}</p>
-            {buyer.lastDealClosedDate && (
-              <p className="text-[10px] text-gray-500 mt-1">Last: {fmtDate(buyer.lastDealClosedDate)}</p>
-            )}
-            {buyer.totalVolumeFromUs && (
-              <p className="text-[10px] text-gray-500 mt-0.5">Volume: {fmtMoney(buyer.totalVolumeFromUs)}</p>
-            )}
+
+          {/* Contact card — editable in-app via the slideover. */}
+          <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
+            <div className="px-4 py-2.5 bg-[#FAFAFA] border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between">
+              <p className="text-[10px] font-bold text-gray-700 uppercase tracking-[0.08em]">Contact</p>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-[10px] font-semibold text-gunner-red hover:text-gunner-red-dark inline-flex items-center gap-1"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <ContactLine icon={<Phone className="w-3.5 h-3.5 text-gray-400" />} label="Phone" value={buyer.phone ? formatPhone(buyer.phone) : null} />
+              {(buyer.mobilePhone || buyer.secondaryPhone) && (
+                <ContactLine icon={<Phone className="w-3.5 h-3.5 text-gray-300" />} label="Mobile" value={formatPhone(buyer.mobilePhone) || formatPhone(buyer.secondaryPhone)} />
+              )}
+              <ContactLine icon={<Mail className="w-3.5 h-3.5 text-gray-400" />} label="Email" value={buyer.email} />
+              {buyer.secondaryEmail && (
+                <ContactLine icon={<Mail className="w-3.5 h-3.5 text-gray-300" />} label="Email 2" value={buyer.secondaryEmail} />
+              )}
+              <ContactLine icon={<Building2 className="w-3.5 h-3.5 text-gray-400" />} label="Company" value={buyer.company} />
+              {(buyer.mailingAddress || buyer.mailingCity || buyer.mailingState) && (
+                <div className="flex items-start gap-2 text-[11px] text-gray-700 pt-1 border-t border-[rgba(0,0,0,0.04)]">
+                  <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
+                  <span className="leading-snug">{[buyer.mailingAddress, buyer.mailingCity, buyer.mailingState, buyer.mailingZip].filter(Boolean).join(', ')}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -976,7 +1022,10 @@ function BuyerHero({
             id: buyer.id,
             name: buyer.name,
             phone: buyer.phone,
+            mobilePhone: buyer.mobilePhone,
+            secondaryPhone: buyer.secondaryPhone,
             email: buyer.email,
+            secondaryEmail: buyer.secondaryEmail,
             company: buyer.company,
             tier: canonical.tier,
             markets: canonical.markets,
@@ -985,28 +1034,30 @@ function BuyerHero({
             responseSpeed: canonical.responseSpeed,
             lastContactDate: canonical.lastContactDate,
             buybox: canonical.buybox,
-            secondaryMarket: canonical.secondaryMarket,
             notes: canonical.internalNotes,
           }}
           tenantSlug={tenantSlug}
+          marketOptions={tenantMarkets}
           onClose={() => setEditing(false)}
           onSaved={(patch) => {
-            // Mirror locally so the hero updates without a refetch.
             const nextCustomFields: Record<string, unknown> = { ...(buyer.customFields ?? {}) }
             if (patch.tier !== undefined) nextCustomFields.tier = patch.tier
             if (patch.verifiedFunding !== undefined) nextCustomFields.verifiedFunding = patch.verifiedFunding
             if (patch.purchasedBefore !== undefined) nextCustomFields.hasPurchased = patch.purchasedBefore
             if (patch.responseSpeed !== undefined) nextCustomFields.responseSpeed = patch.responseSpeed
             if (patch.lastContactDate !== undefined) nextCustomFields.lastContactDate = patch.lastContactDate
-            if (patch.secondaryMarket !== undefined) nextCustomFields.secondaryMarkets = patch.secondaryMarket ? [patch.secondaryMarket] : []
             if (patch.buybox !== undefined) nextCustomFields.buybox = patch.buybox
+            // secondaryMarkets retired — fold any patch values into primary above.
             onSaved({
               name: patch.name ?? buyer.name,
               phone: patch.phone ?? buyer.phone,
-              email: patch.email ?? buyer.email,
-              company: patch.company ?? buyer.company,
+              mobilePhone: patch.mobilePhone !== undefined ? patch.mobilePhone : buyer.mobilePhone,
+              secondaryPhone: patch.secondaryPhone !== undefined ? patch.secondaryPhone : buyer.secondaryPhone,
+              email: patch.email !== undefined ? patch.email : buyer.email,
+              secondaryEmail: patch.secondaryEmail !== undefined ? patch.secondaryEmail : buyer.secondaryEmail,
+              company: patch.company !== undefined ? patch.company : buyer.company,
               primaryMarkets: patch.markets ?? buyer.primaryMarkets,
-              internalNotes: patch.notes ?? buyer.internalNotes,
+              internalNotes: patch.notes !== undefined ? patch.notes : buyer.internalNotes,
               customFields: nextCustomFields,
             })
           }}
@@ -1016,11 +1067,32 @@ function BuyerHero({
   )
 }
 
-function HeroRow({ label, children }: { label: string; children: React.ReactNode }) {
+function StatCell({ value, label, sub, accent }: { value: string; label: string; sub?: string; accent?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[9px] uppercase tracking-wider text-gray-400 w-[68px] shrink-0">{label}</span>
-      <div className="flex-1 min-w-0">{children}</div>
+    <div className="px-4 py-3">
+      <p className={`text-[20px] font-bold leading-none tabular-nums ${accent ? 'text-emerald-700' : 'text-gray-900'}`}>{value}</p>
+      <p className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold mt-1">{label}</p>
+      {sub && <p className="text-[9px] text-gray-400 mt-0.5 truncate">{sub}</p>}
+    </div>
+  )
+}
+
+function ProfileRow({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className={wide ? 'sm:col-span-2' : ''}>
+      <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">{label}</p>
+      <div>{children}</div>
+    </div>
+  )
+}
+
+function ContactLine({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | null | undefined }) {
+  if (!value) return null
+  return (
+    <div className="flex items-center gap-2 text-[11px] text-gray-700">
+      {icon}
+      <span className="text-[9px] uppercase tracking-wider text-gray-400 w-[44px] shrink-0">{label}</span>
+      <span className="truncate">{value}</span>
     </div>
   )
 }
