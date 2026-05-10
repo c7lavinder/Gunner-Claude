@@ -250,6 +250,15 @@ model Property {
   dispoStageEnteredAt    DateTime? @map("dispo_stage_entered_at")
   longtermStageEnteredAt DateTime? @map("longterm_stage_entered_at")
 
+  // Per-lane Lost flag — set when the GHL opp for that lane is marked
+  // status=lost or status=abandoned. Cleared when the opp is reopened
+  // (status=open). Default views (disposition, inventory, KPI counts)
+  // exclude lanes whose lostAt is non-null. Lost is orthogonal to stage:
+  // a property can be Lost at any stage. See lib/property-status.ts.
+  acqLostAt      DateTime? @map("acq_lost_at")
+  dispoLostAt    DateTime? @map("dispo_lost_at")
+  longtermLostAt DateTime? @map("longterm_lost_at")
+
   // Backfill flag — true if Phase 2 backfill created this row before
   // Phase 3 catch-up cron has run enrichment. False once enrichment lands.
   pendingEnrichment Boolean @default(false) @map("pending_enrichment")

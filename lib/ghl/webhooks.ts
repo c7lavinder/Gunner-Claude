@@ -447,6 +447,11 @@ type GhlOppEvent = {
   assignedTo?: string
   userId?: string
   locationId: string
+  // GHL opportunity status — 'open' | 'won' | 'lost' | 'abandoned'.
+  // Fires on OpportunityUpdate when the user marks the opp Lost in GHL.
+  // Read by processLaneOppEvent to set/clear the matching lane's
+  // *LostAt timestamp. See lib/property-status.ts.
+  status?: string
 }
 
 type Lane = 'acquisition' | 'disposition' | 'longterm'
@@ -587,6 +592,29 @@ function laneUpdatePayload(
     ghlLongtermStageName: stageLabel,
     ...(oppId ? { ghlLongtermOppId: oppId } : {}),
   }
+}
+
+// Translate a GHL opp status into a lostAt write for the given lane.
+// Returns {} when status is unknown/missing so the caller can spread
+// safely without overwriting existing lostAt values.
+//
+//   lost / abandoned → set the lane's *LostAt = now
+//   open / won       → clear the lane's *LostAt (deal is active or won)
+//   anything else    → no write (leave previous value intact)
+function laneLostPayload(
+  lane: Lane,
+  rawStatus: string | undefined,
+  now: Date,
+): Record<string, unknown> {
+  if (!rawStatus) return {}
+  const s = rawStatus.toLowerCase()
+  const field =
+    lane === 'acquisition' ? 'acqLostAt'
+    : lane === 'disposition' ? 'dispoLostAt'
+    : 'longtermLostAt'
+  if (s === 'lost' || s === 'abandoned') return { [field]: now }
+  if (s === 'open' || s === 'won') return { [field]: null }
+  return {}
 }
 
 async function logUnlistenedPipeline(tenantId: string, oppData: GhlOppEvent, eventType: string) {
@@ -770,11 +798,14 @@ async function processLaneOppEvent(
     if (created) {
       await db.property.update({
         where: { id: created.id },
-        data: laneUpdatePayload(lane, status, stageLabel, oppData.id ?? null, now),
+        data: {
+          ...laneUpdatePayload(lane, status, stageLabel, oppData.id ?? null, now),
+          ...laneLostPayload(lane, oppData.status, now),
+        },
       })
       await backfillMilestones(tenantId, created.id, appStage, milestoneUserId)
     }
-    console.log(`[GHL Webhook] ${isCreate ? 'Created' : 'Stage moved'} → property created for contact ${oppData.contactId} (lane=${lane}, status=${status})`)
+    console.log(`[GHL Webhook] ${isCreate ? 'Created' : 'Stage moved'} → property created for contact ${oppData.contactId} (lane=${lane}, status=${status}, oppStatus=${oppData.status ?? 'n/a'})`)
     return
   }
 
@@ -786,10 +817,13 @@ async function processLaneOppEvent(
 
   await db.property.update({
     where: { id: existing.id, tenantId },
-    data: laneUpdatePayload(lane, status, stageLabel, oppData.id ?? null, now),
+    data: {
+      ...laneUpdatePayload(lane, status, stageLabel, oppData.id ?? null, now),
+      ...laneLostPayload(lane, oppData.status, now),
+    },
   })
   await backfillMilestones(tenantId, existing.id, appStage, milestoneUserId)
-  console.log(`[GHL Webhook] ${existing.address} → ${lane}=${status} (stage="${stageLabel}")`)
+  console.log(`[GHL Webhook] ${existing.address} → ${lane}=${status} (stage="${stageLabel}", oppStatus=${oppData.status ?? 'n/a'})`)
 }
 
 async function handleOpportunityCreate(tenantId: string, event: GHLWebhookEvent) {

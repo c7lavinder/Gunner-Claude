@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       db.call.count({ where: { ...tidFilter, calledAt: { gte: dayStart, lte: dayEnd } } }),
       db.call.count({ where: { ...tidFilter, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' } }),
       db.call.aggregate({ where: { ...tidFilter, calledAt: { gte: dayStart, lte: dayEnd }, gradingStatus: 'COMPLETED' }, _avg: { score: true } }),
-      db.property.count({ where: { ...tidFilter, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
+      db.property.count({ where: { ...tidFilter, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' }, acqLostAt: null, dispoLostAt: null, longtermLostAt: null } }),
       db.task.count({ where: { ...tidFilter, status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
       db.task.count({ where: { ...tidFilter, status: { in: ['PENDING', 'IN_PROGRESS'] }, dueAt: { lt: dayStart } } }),
       db.propertyMilestone.count({ where: { ...tidFilter, type: 'APPOINTMENT_SET', createdAt: { gte: dayStart, lte: dayEnd } } }),

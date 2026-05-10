@@ -34,14 +34,19 @@ export default async function InventoryPage({
   // alongside active ones. "Show archived" still reveals truly empty
   // rows (no lane status anywhere — should be near-zero after the
   // 2026-05-06 deep resync).
+  //
+  // Lost rule: each OR-branch requires the matching lane's lostAt to
+  // be null, so a row with all active lanes Lost drops out of the
+  // default view. "Show archived" bypasses this so the user can still
+  // find Lost rows when they need to.
   const showArchived = searchParams?.archived === '1'
   const visibilityFilter = showArchived
     ? {}
     : {
         OR: [
-          { acqStatus: { not: null } },
-          { dispoStatus: { not: null } },
-          { longtermStatus: { not: null } },
+          { acqStatus: { not: null }, acqLostAt: null },
+          { dispoStatus: { not: null }, dispoLostAt: null },
+          { longtermStatus: { not: null }, longtermLostAt: null },
         ],
       }
 

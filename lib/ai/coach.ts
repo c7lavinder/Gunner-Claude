@@ -146,7 +146,7 @@ export async function getCoachResponse(
       where: { tenantId, assignedToId: userId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
     }),
     db.property.count({
-      where: { tenantId, assignedToId: userId, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } },
+      where: { tenantId, assignedToId: userId, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' }, acqLostAt: null, dispoLostAt: null, longtermLostAt: null },
     }),
     db.userXp.findUnique({
       where: { tenantId_userId: { tenantId, userId } },

@@ -55,7 +55,7 @@ export default async function HealthPage({ params }: { params: { tenant: string 
       select: { title: true, status: true, category: true, createdAt: true, completedAt: true, assignedTo: { select: { name: true } } },
     }),
     // Properties / Pipeline
-    db.property.count({ where: { tenantId, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
+    db.property.count({ where: { tenantId, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' }, acqLostAt: null, dispoLostAt: null, longtermLostAt: null } }),
     db.auditLog.findMany({
       where: { tenantId, action: { in: ['property.status_changed', 'call.graded', 'milestone.created', 'property.created'] }, createdAt: { gte: todayStart } },
       orderBy: { createdAt: 'desc' }, take: 15,

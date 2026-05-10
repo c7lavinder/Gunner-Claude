@@ -49,13 +49,13 @@ export default async function AccountabilityPage({ params }: { params: { tenant:
     overdueTasks,
   ] = await Promise.all([
     // Data quality counts — exclude terminal (closed in either lane) and dead (longterm)
-    db.property.count({ where: { tenantId, marketId: null, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
-    db.property.count({ where: { tenantId, leadSource: null, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
-    db.property.count({ where: { tenantId, address: '', acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' } } }),
+    db.property.count({ where: { tenantId, marketId: null, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' }, acqLostAt: null, dispoLostAt: null, longtermLostAt: null } }),
+    db.property.count({ where: { tenantId, leadSource: null, acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' }, acqLostAt: null, dispoLostAt: null, longtermLostAt: null } }),
+    db.property.count({ where: { tenantId, address: '', acqStatus: { not: 'CLOSED' }, dispoStatus: { not: 'CLOSED' }, longtermStatus: { not: 'DEAD' }, acqLostAt: null, dispoLostAt: null, longtermLostAt: null } }),
 
     // Properties with their milestones for gap detection — exclude brand-new acq leads + dead
     db.property.findMany({
-      where: { tenantId, acqStatus: { not: 'NEW_LEAD' }, longtermStatus: { not: 'DEAD' } },
+      where: { tenantId, acqStatus: { not: 'NEW_LEAD' }, longtermStatus: { not: 'DEAD' }, acqLostAt: null, dispoLostAt: null, longtermLostAt: null },
       select: {
         id: true, address: true, city: true, state: true,
         ...PROPERTY_LANE_SELECT,

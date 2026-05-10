@@ -10,7 +10,7 @@ import { db } from '@/lib/db/client'
 import { isRoleAtLeast } from '@/types/roles'
 import { computeJourneyStatus, type JourneyInputs } from '@/lib/disposition/journey-status'
 import { DispositionClient, type DispositionRow } from './disposition-client'
-import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
+import { effectiveStatus, PROPERTY_LANE_SELECT, WHERE_DISPO_NOT_LOST, WHERE_ACQ_NOT_LOST } from '@/lib/property-status'
 
 export default async function DispositionPage({ params }: { params: { tenant: string } }) {
   const session = await requireSession()
@@ -19,12 +19,17 @@ export default async function DispositionPage({ params }: { params: { tenant: st
     redirect(`/${params.tenant}/day-hub`)
   }
 
+  // Hide rows whose matching lane was marked Lost in GHL. A dispo opp
+  // marked Lost drops out of the IN_DISPOSITION branch; an acq opp
+  // marked Lost drops out of the UNDER_CONTRACT branch. The Property
+  // model carries one lostAt per lane, so each OR-branch filters its
+  // own lane independently.
   const properties = await db.property.findMany({
     where: {
       tenantId: session.tenantId,
       OR: [
-        { dispoStatus: 'IN_DISPOSITION' },
-        { acqStatus: 'UNDER_CONTRACT' },
+        { dispoStatus: 'IN_DISPOSITION', ...WHERE_DISPO_NOT_LOST },
+        { acqStatus: 'UNDER_CONTRACT', ...WHERE_ACQ_NOT_LOST },
       ],
     },
     select: {
