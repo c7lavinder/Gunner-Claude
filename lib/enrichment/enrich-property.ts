@@ -148,6 +148,7 @@ export async function enrichProperty(
       beds: true, baths: true, sqft: true, yearBuilt: true,
       propertyType: true, occupancy: true, lotSize: true, description: true,
       taxAssessment: true, annualTax: true, deedDate: true,
+      zestimate: true,
       // Tier 1+
       county: true, latitude: true, longitude: true, apn: true,
       fips: true, subdivision: true,

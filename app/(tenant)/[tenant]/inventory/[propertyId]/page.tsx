@@ -92,12 +92,24 @@ export default async function PropertyDetailPage({
         // cashBuyerOwner stripped to Seller. Render-side now reads from
         // primarySeller (property.sellers[0]). absenteeOwnerInState +
         // samePropertyMailing stay on Property (Q3 lock — property facts).
-        absenteeOwnerInState: true, samePropertyMailing: true,
+        absenteeOwnerInState: true, samePropertyMailing: true, absenteeOwner: true,
         valuationAsOfDate: true, valuationConfidence: true,
         advancedPropertyType: true, lotDepthFootage: true,
         hasOpenLiens: true, hasOpenPersonLiens: true,
         underwater: true, expiredListing: true,
         deedHistoryJson: true, mortgageHistoryJson: true, liensJson: true,
+        // Session 80 — finance + condition + tax + HOA from PR/BD for the
+        // Tier 3 read-only intel row on the Property Details panel.
+        mortgageAmount: true, mortgageRate: true, mortgageDate: true,
+        mortgageLender: true, mortgageType: true,
+        secondMortgageAmount: true, secondMortgageDate: true, secondMortgageLender: true,
+        openMortgageBalance: true, estimatedMortgagePayment: true,
+        equityPercent: true, availableEquity: true, estimatedEquity: true,
+        taxDelinquentAmount: true,
+        hoaDues: true, hoaPastDue: true, hoaName: true,
+        improvementCondition: true, buildingQuality: true,
+        lastSalePrice: true, deedType: true,
+        suggestedRent: true,
         sellers: {
           include: {
             seller: {
@@ -441,6 +453,31 @@ export default async function PropertyDetailPage({
         deedHistoryJson: (property.deedHistoryJson ?? null) as Array<Record<string, unknown>> | null,
         mortgageHistoryJson: (property.mortgageHistoryJson ?? null) as Array<Record<string, unknown>> | null,
         liensJson: (property.liensJson ?? null) as Array<Record<string, unknown>> | null,
+        // Session 80 — Tier 3 intel row
+        absenteeOwner: property.absenteeOwner,
+        mortgageAmount: property.mortgageAmount?.toString() ?? null,
+        mortgageRate: property.mortgageRate?.toString() ?? null,
+        mortgageDate: property.mortgageDate?.toISOString() ?? null,
+        mortgageLender: property.mortgageLender,
+        mortgageType: property.mortgageType,
+        secondMortgageAmount: property.secondMortgageAmount?.toString() ?? null,
+        secondMortgageDate: property.secondMortgageDate?.toISOString() ?? null,
+        secondMortgageLender: property.secondMortgageLender,
+        openMortgageBalance: property.openMortgageBalance?.toString() ?? null,
+        estimatedMortgagePayment: property.estimatedMortgagePayment?.toString() ?? null,
+        equityPercent: property.equityPercent?.toString() ?? null,
+        availableEquity: property.availableEquity?.toString() ?? null,
+        estimatedEquity: property.estimatedEquity?.toString() ?? null,
+        taxDelinquentAmount: property.taxDelinquentAmount?.toString() ?? null,
+        hoaDues: property.hoaDues?.toString() ?? null,
+        hoaPastDue: property.hoaPastDue,
+        hoaName: property.hoaName,
+        improvementCondition: property.improvementCondition,
+        buildingQuality: property.buildingQuality,
+        lastSalePrice: property.lastSalePrice?.toString() ?? null,
+        deedDate: property.deedDate?.toISOString() ?? null,
+        deedType: property.deedType,
+        suggestedRent: property.suggestedRent?.toString() ?? null,
         sellers: property.sellers.map((ps) => ({
           id: ps.seller.id,
           name: ps.seller.name,

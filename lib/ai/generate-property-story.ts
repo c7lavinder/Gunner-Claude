@@ -15,10 +15,10 @@
 // Cost target: ~$0.01–0.02 per regeneration with Sonnet.
 
 import { db } from '@/lib/db/client'
-import type { Prisma } from '@prisma/client'
+import type { Prisma, AcqStatus, DispoStatus, LongtermStatus } from '@prisma/client'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
-import { effectiveStatus } from '@/lib/property-status'
+import { describePropertyStage, formatOutreachOutcome } from '@/lib/format/status'
 const STORY_MODEL = 'claude-sonnet-4-6'
 const MAX_CALLS_IN_CONTEXT = 10
 const MAX_TOKENS = 700
@@ -93,7 +93,7 @@ export async function generatePropertyStory(
   const bd = ((property.zillowData as Record<string, unknown> | null)?.batchData ?? {}) as Record<string, unknown>
   const dealIntel = (property.dealIntel ?? {}) as Record<string, unknown>
 
-  const userPrompt = buildStoryPrompt({ ...property, status: effectiveStatus(property) }, bd, dealIntel)
+  const userPrompt = buildStoryPrompt(property, bd, dealIntel)
 
   try {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
@@ -146,28 +146,35 @@ export async function generatePropertyStory(
 
 // ─── Prompt builders ─────────────────────────────────────────────────────────
 
-const STORY_SYSTEM_PROMPT = `You are writing the Deal Story for a real estate wholesaling CRM. The story is a single, readable paragraph of 180-260 words that gives an internal team member a full situational picture of a property deal in under a minute.
+const STORY_SYSTEM_PROMPT = `You are writing the Deal Story for a real estate wholesaling CRM. The story is a single, readable paragraph (target 180-260 words; shorter when data is thin) that gives an internal team member the full situational picture in under a minute.
 
-TONE: Direct, specific, and factual. Reference names, dollar amounts, dates, and concrete quotes when they exist. Do not editorialize or use marketing language. Do not add hedges like "it appears" or "it seems" — if the data shows it, state it.
+TONE: Direct, specific, and factual. Reference names, dollar amounts, dates, and concrete quotes when they exist in the input. Plain English only. Do not editorialize. Do not use marketing language. Do not hedge with "it appears" / "it seems".
+
+STRICT FACT RULE — read carefully, this is the most important rule:
+- Use ONLY facts present in the structured input. Do not infer, estimate, or guess any number, date, name, status, or relationship that isn't there.
+- Every dollar amount you mention must appear verbatim in the FINANCIALS or DEAL INTEL or CALL summaries. Never round, average, or invent.
+- Stage / status labels are pre-translated to plain English in the input under "STAGE". Use those exact phrases. Never write internal codes like NEW_LEAD, IN_DISPOSITION, DISPO_PUSHED — those will not appear in your input. If you see all-caps underscore strings anywhere, treat them as a bug and skip rather than echo.
+- If a section has no data, skip it silently. Never write "No buyer activity yet" or "Equity unknown" — just leave it out.
+
+PLAIN ENGLISH RULE:
+- Translate any technical term to what a person on the team would say out loud. "Pre-foreclosure" not "preForeclosure". "Owner is absentee" not "absenteeOwner=true". "Mortgage rate" not "loanInterestRate".
+- No JSON, no underscores, no enum values, no field names.
 
 STRUCTURE (single paragraph, no headings, no bullets):
-1. Open with how and when the lead came in (source, campaign if known, days ago)
-2. Property + seller facts (address, condition, beds/baths, equity posture if known; who the seller is and what their situation is)
-3. Conversation arc — what reps have learned across calls, where motivation stands, objections, commitments, key quotes
-4. Deal state — current stage, recent milestones, offers made, negotiation posture
-5. Buyer activity — matched buyers, blasts sent, responses received, movement through buyer kanban
-6. What matters most right now — the one or two things a team member should watch or act on
+1. Open with how and when the lead came in (source / campaign / days ago — only if present).
+2. Property + seller facts (address, condition, beds/baths, equity, mortgage posture if present; who the seller is and what their situation is).
+3. Conversation arc across calls — motivation, objections, commitments, key quotes from aiSummary.
+4. Deal state — current stage in plain English, recent milestones, offers made, negotiation posture.
+5. Buyer activity — matched buyers, blasts sent, responses received, movement through stages.
+6. What matters most right now — the one or two things a team member should watch or act on, anchored to actual data above.
 
-RULES:
-- If a section has no data, skip it silently — do not write "No buyer activity yet."
-- Never make up data that wasn't in the input.
-- Keep it to ONE paragraph. No headings, no lists, no markdown.
-- Write in past tense for history and present tense for current state.
-- If no meaningful signal exists in a section, shorten the paragraph — length should reflect data available.`
+OUTPUT: ONE paragraph, no headings, no lists, no markdown. Past tense for history, present tense for current state. Length scales with available data — sparse data = shorter story.`
 
 interface StoryPromptInput {
   address: string; city: string; state: string; zip: string
-  status: string; dispoStatus: string | null
+  acqStatus: AcqStatus | null
+  dispoStatus: DispoStatus | null
+  longtermStatus: LongtermStatus | null
   createdAt: Date
   leadSource: string | null
   leadSubSource: string | null
@@ -226,7 +233,7 @@ function buildStoryPrompt(
 
   parts.push(`TODAY: ${today.toISOString().slice(0, 10)}`)
   parts.push(`PROPERTY: ${p.address}, ${p.city}, ${p.state} ${p.zip}`)
-  parts.push(`STAGE: acquisition=${p.status}${p.dispoStatus ? `, disposition=${p.dispoStatus}` : ''}`)
+  parts.push(`STAGE: ${describePropertyStage({ acqStatus: p.acqStatus, dispoStatus: p.dispoStatus, longtermStatus: p.longtermStatus })}`)
   parts.push(`LEAD CAME IN: ${daysOld} days ago (${d(p.createdAt)}) — source=${p.leadSource ?? 'unknown'}${p.leadSubSource ? ` / ${p.leadSubSource}` : ''}${p.market?.name ? `, market=${p.market.name}` : ''}`)
   if (p.assignedTo?.name) parts.push(`ASSIGNED TO: ${p.assignedTo.name}${p.assignedTo.role ? ` (${p.assignedTo.role})` : ''}`)
 
@@ -306,8 +313,10 @@ function buildStoryPrompt(
 
   if (p.outreachLogs.length > 0) {
     const ol = p.outreachLogs.slice(0, 10).map(l => {
-      const tag = l.type === 'offer' ? `offer $${l.offerAmount ?? '?'}${l.offerStatus ? `(${l.offerStatus})` : ''}`
-                 : l.type === 'showing' ? `showing ${l.showingDate ? d(l.showingDate) : ''}${l.showingStatus ? `(${l.showingStatus})` : ''}`
+      const offerLabel = formatOutreachOutcome(l.offerStatus)
+      const showLabel = formatOutreachOutcome(l.showingStatus)
+      const tag = l.type === 'offer' ? `offer $${l.offerAmount ?? '?'}${offerLabel ? ` (${offerLabel})` : ''}`
+                 : l.type === 'showing' ? `showing ${l.showingDate ? d(l.showingDate) : ''}${showLabel ? ` (${showLabel})` : ''}`
                  : `${l.channel}`
       return `${d(l.loggedAt)} ${l.type} ${tag} → ${l.recipientName}${l.notes ? ` — ${l.notes.slice(0, 80)}` : ''}`
     })
@@ -315,10 +324,16 @@ function buildStoryPrompt(
   }
 
   if (p.buyerStages.length > 0) {
+    const STAGE_LABELS: Record<string, string> = {
+      matched: 'matched', sent: 'sent the deal', responded: 'replied',
+      interested: 'interested', showing_scheduled: 'showing scheduled',
+      added: 'added manually', passed: 'passed',
+    }
     const counts: Record<string, number> = {}
     const responses: string[] = []
     for (const bs of p.buyerStages) {
-      counts[bs.stage] = (counts[bs.stage] ?? 0) + 1
+      const label = STAGE_LABELS[bs.stage] ?? bs.stage.replace(/_/g, ' ')
+      counts[label] = (counts[label] ?? 0) + 1
       if (bs.responseIntent) responses.push(`${bs.buyer.name}: ${bs.responseIntent}`)
     }
     const stageSummary = Object.entries(counts).map(([s, c]) => `${c} ${s}`).join(', ')

@@ -681,6 +681,21 @@ inversion is intentional.
   counter. Used by `grading.ts` (grading parser, next-steps array) and
   `extract-deal-intel.ts` (proposed-changes parser).
 
+### Plain-English humanizers (Session 80)
+
+- `lib/format/status.ts` — every Prisma enum or outreach-outcome string
+  that ends up in a user-visible string (UI label, AI prompt, deal story)
+  goes through here first. `formatAcqStatus`, `formatDispoStatus`,
+  `formatLongtermStatus` map enum values to natural English ("In
+  disposition", "Pushed to buyers"). `describePropertyStage()` combines
+  all three lane statuses into a sentence; `formatOutreachOutcome()`
+  covers showing + offer status strings ("Showed" → "Buyer showed up").
+  Unmapped values fall through to Title Case so we never crash; missing
+  entries are intentional bugs to fix. Used by
+  `lib/ai/generate-property-story.ts`. Any new code that surfaces an
+  enum to a human MUST route through this module — no raw `DISPO_NEW`
+  shapes in user-facing strings.
+
 ### Context builder
 
 - `lib/ai/context-builder.ts` — central knowledge assembly. Pulls:

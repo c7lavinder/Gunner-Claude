@@ -127,6 +127,31 @@ export interface PropertyDetail {
   hasRecentEviction: boolean | null
   taxDelinquent: boolean | null
   foreclosureStatus: string | null
+  // Session 80 — finance + condition + tax + HOA from PR/BD (Tier 3 intel row)
+  absenteeOwner: boolean | null
+  mortgageAmount: string | null
+  mortgageRate: string | null
+  mortgageDate: string | null
+  mortgageLender: string | null
+  mortgageType: string | null
+  secondMortgageAmount: string | null
+  secondMortgageDate: string | null
+  secondMortgageLender: string | null
+  openMortgageBalance: string | null
+  estimatedMortgagePayment: string | null
+  equityPercent: string | null
+  availableEquity: string | null
+  estimatedEquity: string | null
+  taxDelinquentAmount: string | null
+  hoaDues: string | null
+  hoaPastDue: boolean | null
+  hoaName: string | null
+  improvementCondition: string | null
+  buildingQuality: string | null
+  lastSalePrice: string | null
+  deedDate: string | null
+  deedType: string | null
+  suggestedRent: string | null
   mlsActive: boolean | null
   mlsPending: boolean | null
   mlsSold: boolean | null
@@ -666,6 +691,40 @@ export function PropertyDetailClient({
         onArraySaved={handleArraySaved}
         onAltSaved={handleAltSaved}
         projectTypeOptions={projectTypeOptions}
+        intel={{
+          // Mortgage & equity
+          openMortgageBalance: property.openMortgageBalance,
+          mortgageRate: property.mortgageRate,
+          estimatedMortgagePayment: property.estimatedMortgagePayment,
+          equityPercent: property.equityPercent,
+          availableEquity: property.availableEquity,
+          underwater: property.underwater,
+          mortgageLender: property.mortgageLender,
+          // Distress
+          distressScore: property.distressScore,
+          preForeclosure: property.preForeclosure,
+          bankOwned: property.bankOwned,
+          inBankruptcy: property.inBankruptcy,
+          inProbate: property.inProbate,
+          inDivorce: property.inDivorce,
+          hasRecentEviction: property.hasRecentEviction,
+          taxDelinquent: property.taxDelinquent,
+          taxDelinquentAmount: property.taxDelinquentAmount,
+          // MLS & owner
+          mlsActive: property.mlsActive,
+          mlsPending: property.mlsPending,
+          mlsSold: property.mlsSold,
+          mlsStatus: property.mlsStatus,
+          mlsListingPrice: property.mlsListingPrice,
+          mlsDaysOnMarket: property.mlsDaysOnMarket,
+          lastSalePrice: property.lastSalePrice,
+          deedDate: property.deedDate,
+          absenteeOwner: property.absenteeOwner,
+          hoaDues: property.hoaDues,
+          hoaName: property.hoaName,
+          annualTax: property.annualTax,
+          suggestedRent: property.suggestedRent,
+        }}
       />
 
       {/* Tab bar */}
@@ -3150,9 +3209,44 @@ interface SharedVals {
 // Specs / Numbers) kept in sync with the Overview tab's pricing rows via the
 // shared state in PropertyDetailClient.
 
+interface VendorIntel {
+  // Mortgage & equity (PropertyRadar)
+  openMortgageBalance: string | null
+  mortgageRate: string | null
+  estimatedMortgagePayment: string | null
+  equityPercent: string | null
+  availableEquity: string | null
+  underwater: boolean | null
+  mortgageLender: string | null
+  // Distress
+  distressScore: number | null
+  preForeclosure: boolean | null
+  bankOwned: boolean | null
+  inBankruptcy: boolean | null
+  inProbate: boolean | null
+  inDivorce: boolean | null
+  hasRecentEviction: boolean | null
+  taxDelinquent: boolean | null
+  taxDelinquentAmount: string | null
+  // MLS & owner
+  mlsActive: boolean | null
+  mlsPending: boolean | null
+  mlsSold: boolean | null
+  mlsStatus: string | null
+  mlsListingPrice: string | null
+  mlsDaysOnMarket: number | null
+  lastSalePrice: string | null
+  deedDate: string | null
+  absenteeOwner: boolean | null
+  hoaDues: string | null
+  hoaName: string | null
+  annualTax: string | null
+  suggestedRent: string | null
+}
+
 function PropertyDetailsPanel({
   propertyId, vals, sources, altPrices, offerTypes, primaryOfferType, onPrimaryOfferTypeChange,
-  onSaved, onArraySaved, onAltSaved, projectTypeOptions,
+  onSaved, onArraySaved, onAltSaved, projectTypeOptions, intel,
 }: {
   propertyId: string
   vals: SharedVals
@@ -3165,6 +3259,7 @@ function PropertyDetailsPanel({
   onArraySaved: (field: string, vals: string[]) => void
   onAltSaved: (type: string, field: string, val: string | null) => void
   projectTypeOptions?: string[]
+  intel?: VendorIntel
 }) {
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[12px] overflow-hidden">
@@ -3254,8 +3349,125 @@ function PropertyDetailsPanel({
           <CompactDetailCell label="Market Risk" value={vals.marketRisk} field="marketRisk" propertyId={propertyId} type="select" options={MARKET_RISK_OPTIONS} source={sources.marketRisk} onSaved={onSaved} />
         </div>
       </div>
+
+      {/* Tier 3 — read-only public-records intel from PropertyRadar / BatchData.
+          Only renders sections that have at least one populated field; if a
+          property has no enrichment data yet the whole row stays hidden. */}
+      {intel && hasIntelData(intel) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 divide-y md:divide-y-0 md:divide-x divide-[rgba(0,0,0,0.04)] border-t border-[rgba(0,0,0,0.04)] bg-purple-50/20">
+          {/* Column 1 — Mortgage & Equity */}
+          {hasMortgageData(intel) && (
+            <div className="px-4 py-1">
+              <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)] flex items-center gap-1">
+                Mortgage & Equity
+                <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">PR</span>
+              </p>
+              <IntelCell label="Mortgage Bal" value={intel.openMortgageBalance != null ? `$${Number(intel.openMortgageBalance).toLocaleString()}` : null} />
+              <IntelCell label="Rate" value={intel.mortgageRate != null ? `${intel.mortgageRate}%` : null} />
+              <IntelCell label="Est. Payment" value={intel.estimatedMortgagePayment != null ? `$${Number(intel.estimatedMortgagePayment).toLocaleString()}/mo` : null} />
+              <IntelCell label="Equity" value={intel.equityPercent != null ? `${intel.equityPercent}%${intel.availableEquity != null ? ` ($${Number(intel.availableEquity).toLocaleString()})` : ''}` : null} />
+              <IntelCell label="Status" value={intel.underwater === true ? 'Underwater' : null} />
+              <IntelCell label="Lender" value={intel.mortgageLender} />
+            </div>
+          )}
+
+          {/* Column 2 — Distress Signals */}
+          {hasDistressData(intel) && (
+            <div className="px-4 py-1">
+              <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)] flex items-center gap-1">
+                Distress
+                <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">PR</span>
+              </p>
+              <IntelCell label="Distress Score" value={intel.distressScore != null ? `${intel.distressScore}/100` : null} />
+              <IntelCell label="Pre-Foreclosure" value={intel.preForeclosure ? 'Yes' : null} highlight={intel.preForeclosure === true} />
+              <IntelCell label="Bank Owned" value={intel.bankOwned ? 'Yes' : null} highlight={intel.bankOwned === true} />
+              <IntelCell label="Bankruptcy" value={intel.inBankruptcy ? 'Yes' : null} highlight={intel.inBankruptcy === true} />
+              <IntelCell label="Probate" value={intel.inProbate ? 'Yes' : null} highlight={intel.inProbate === true} />
+              <IntelCell label="Divorce" value={intel.inDivorce ? 'Yes' : null} highlight={intel.inDivorce === true} />
+              <IntelCell label="Eviction" value={intel.hasRecentEviction ? 'Recent' : null} highlight={intel.hasRecentEviction === true} />
+              <IntelCell label="Tax Delinquent" value={intel.taxDelinquent ? (intel.taxDelinquentAmount ? `$${Number(intel.taxDelinquentAmount).toLocaleString()}` : 'Yes') : null} highlight={intel.taxDelinquent === true} />
+            </div>
+          )}
+
+          {/* Column 3 — MLS, Sale, Owner */}
+          {hasMlsOwnerData(intel) && (
+            <div className="px-4 py-1">
+              <p className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em] pb-1 mb-1 border-b border-[rgba(0,0,0,0.08)] flex items-center gap-1">
+                MLS & Records
+                <span className="text-[7px] font-bold text-purple-500 bg-purple-50 px-1 py-0.5 rounded">PR</span>
+              </p>
+              <IntelCell label="MLS Status" value={
+                intel.mlsActive ? 'Active' :
+                intel.mlsPending ? 'Pending' :
+                intel.mlsSold ? 'Sold' :
+                intel.mlsStatus
+              } />
+              <IntelCell label="List Price" value={intel.mlsListingPrice != null ? `$${Number(intel.mlsListingPrice).toLocaleString()}` : null} />
+              <IntelCell label="Days on Mkt" value={intel.mlsDaysOnMarket != null ? String(intel.mlsDaysOnMarket) : null} />
+              <IntelCell label="Last Sale" value={intel.lastSalePrice != null ? `$${Number(intel.lastSalePrice).toLocaleString()}${intel.deedDate ? ` (${intel.deedDate.slice(0, 10)})` : ''}` : null} />
+              <IntelCell label="Owner" value={intel.absenteeOwner === true ? 'Absentee' : intel.absenteeOwner === false ? 'Occupies' : null} />
+              <IntelCell label="HOA" value={intel.hoaDues != null ? `$${Number(intel.hoaDues).toLocaleString()}/mo${intel.hoaName ? ` · ${intel.hoaName}` : ''}` : null} />
+              <IntelCell label="Annual Tax" value={intel.annualTax != null ? `$${Number(intel.annualTax).toLocaleString()}` : null} />
+              <IntelCell label="HUD FMR" value={intel.suggestedRent != null ? `$${Number(intel.suggestedRent).toLocaleString()}/mo` : null} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
+}
+
+// ─── Tier 3 read-only intel cell + helpers ──────────────────────────────────
+// Public-records data sourced from PropertyRadar / BatchData. Read-only by
+// design — these aren't fields a rep should hand-edit, just facts about the
+// property at the time of last enrichment.
+
+function IntelCell({ label, value, highlight }: { label: string; value: string | null; highlight?: boolean }) {
+  if (value == null || value === '') return null
+  return (
+    <div className="flex items-center justify-between gap-2 h-[22px]">
+      <span className="text-[10px] text-txt-muted font-medium shrink-0">{label}</span>
+      <span className={`text-ds-fine font-medium ${highlight ? 'text-semantic-amber' : 'text-txt-primary'}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function hasMortgageData(i: VendorIntel): boolean {
+  return i.openMortgageBalance != null
+    || i.mortgageRate != null
+    || i.estimatedMortgagePayment != null
+    || i.equityPercent != null
+    || i.availableEquity != null
+    || i.underwater === true
+    || (i.mortgageLender != null && i.mortgageLender !== '')
+}
+
+function hasDistressData(i: VendorIntel): boolean {
+  return i.distressScore != null
+    || i.preForeclosure === true
+    || i.bankOwned === true
+    || i.inBankruptcy === true
+    || i.inProbate === true
+    || i.inDivorce === true
+    || i.hasRecentEviction === true
+    || i.taxDelinquent === true
+}
+
+function hasMlsOwnerData(i: VendorIntel): boolean {
+  return i.mlsActive === true || i.mlsPending === true || i.mlsSold === true
+    || (i.mlsStatus != null && i.mlsStatus !== '')
+    || i.mlsListingPrice != null || i.mlsDaysOnMarket != null
+    || i.lastSalePrice != null
+    || i.absenteeOwner != null
+    || i.hoaDues != null
+    || i.annualTax != null
+    || i.suggestedRent != null
+}
+
+function hasIntelData(i: VendorIntel): boolean {
+  return hasMortgageData(i) || hasDistressData(i) || hasMlsOwnerData(i)
 }
 
 function OverviewTab({

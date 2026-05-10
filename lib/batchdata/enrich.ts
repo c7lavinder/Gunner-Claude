@@ -24,6 +24,7 @@ type PropertySlice = {
   taxAssessment: unknown
   annualTax: unknown
   deedDate: Date | null
+  zestimate: unknown
   // Tier 1+
   county: string | null
   latitude: unknown
@@ -288,6 +289,11 @@ export function buildDenormUpdate(
   setIfEmpty('taxAssessment', result.taxAssessedValue)
   setIfEmpty('annualTax', result.annualTaxAmount)
   setIfEmpty('deedDate', toDate(result.lastSaleDate))
+
+  // PropertyRadar / BatchData AVM → Property.zestimate. Surfaced as the
+  // vendor's automated valuation; ARV stays rep-controlled because AVMs
+  // assume current condition, not after-repair condition.
+  setIfEmpty('zestimate', result.estimatedValue)
 
   // Identity & location
   setIfEmpty('county', result.county)
@@ -627,7 +633,7 @@ export async function enrichPropertyFromBatchData(
       beds: true, baths: true, sqft: true, yearBuilt: true,
       lotSize: true, propertyType: true, occupancy: true,
       description: true,
-      taxAssessment: true, annualTax: true, deedDate: true,
+      taxAssessment: true, annualTax: true, deedDate: true, zestimate: true,
       fieldSources: true, zillowData: true,
       // Tier 1+2 promoted columns — only backfill when empty
       county: true, latitude: true, longitude: true, apn: true,
