@@ -100,7 +100,7 @@ export function AiCoachClient({
               &#x2726; AI
             </span>
           </div>
-          <p className="text-ds-fine text-txt-secondary">Your personal wholesaling coach — knows your calls, your numbers, your game</p>
+          <p className="text-ds-fine text-txt-secondary">Coaching only — read-only. To take actions (send SMS, log offers, etc.), use the Ask Gunner sidebar.</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5 text-ds-fine text-semantic-green bg-semantic-green-bg px-3 py-1 rounded-full font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-semantic-green" />
@@ -209,7 +209,7 @@ export function AiCoachClient({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask anything about your calls, deals, scripts, or strategy..."
+            placeholder="Ask about your calls, scores, scripts, or strategy (read-only)..."
             rows={1}
             className="flex-1 bg-transparent text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none resize-none max-h-32 leading-relaxed"
             style={{ scrollbarWidth: 'none' }}

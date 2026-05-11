@@ -682,6 +682,21 @@ inversion is intentional.
 > calls of context) is intentionally retained. Driver = stability-first
 > (Wave 1 lock-in, 2026-04-27); full DECISIONS.md writeup pending Wave 4.
 
+### Embeddings + semantic search (call transcripts — Phase D)
+
+`lib/ai/embeddings.ts → embedCallTranscript(callId, tenantId)` generates
+a 1536-dim vector from contact + type + outcome + aiSummary + transcript
+(6500-char cap) and writes via raw SQL to `calls.transcript_embedding`
+(HNSW index `idx_calls_transcript_embedding_hnsw`).
+
+Backfill: `scripts/embed-calls-backfill.ts` — supports `--dry-run`,
+`--tenant=<id>`, `--limit=N`. Idempotent — only embeds rows where the
+column is null. Skips automatically if `OPENAI_API_KEY` is unset.
+
+Used by the `semantic_search_calls` query tool. Falls back to a clear
+"not yet enabled / not yet backfilled / migration not applied" error
+if any precondition is missing — caller gets actionable guidance.
+
 ### Embeddings + semantic search
 
 - `lib/ai/embeddings.ts` — OpenAI `text-embedding-3-small`. Embeds knowledge
@@ -721,16 +736,79 @@ inversion is intentional.
   - pgvector-matched playbook docs (industry knowledge, objection handling, scripts)
   - Manager corrections from `call_reclassifications` table (in-context corrections feed)
 
-### Role Assistant (74 tools)
+### Role Assistant (~85 tools)
 
 - Routes:
-  - `app/api/ai/assistant/route.ts` — chat endpoint.
-  - `app/api/ai/assistant/execute/route.ts` — action execution.
+  - `app/api/ai/assistant/route.ts` — chat endpoint. Streams in-process,
+    no SSE to client. Per-user rate limit (20 turns / min) via
+    `lib/ai/rate-limit.ts`.
+  - `app/api/ai/assistant/execute/route.ts` — action execution. Per-user
+    rate limit (30 exec / min). Two server-side gates (Rule 4 defense in
+    depth): role check via `canUseTool` and high-stakes approval check
+    via `isHighStakes` from `lib/ai/role-gates.ts`.
   - `app/api/ai/assistant/session/route.ts` — daily session persistence.
 - Component: `components/ui/coach-sidebar.tsx` — right-sidebar chat surface
   on every page, action card UI, edit panel, confirm modal.
-- Tool registry: `lib/ai/assistant-tools.ts` — 74 tools across CRM, calls,
-  properties, contacts, blasts, workflows, etc.
+- Tool registry: `lib/ai/assistant-tools.ts` — write/CRM tools (~70) +
+  Phase B query tools (11) across calls, properties, contacts, blasts,
+  workflows, KPIs, team performance.
+
+#### Role-based capability gates (Session 82 — Phase A)
+
+`lib/ai/role-gates.ts` is the single source of truth. `ROLE_TOOL_MATRIX`
+maps every tool to an allow-list of `UserRole` values; unknown tools
+default-deny to OWNER+ADMIN only. The gate fires in two places:
+
+1. `app/api/ai/assistant/route.ts` calls `filterToolsForRole` before
+   passing tools to Claude — so the LLM never sees forbidden tools.
+2. `app/api/ai/assistant/execute/route.ts` calls `canUseTool` after the
+   toolCallId resolves — refuses 403 if a forged client tries to execute
+   a stale tool call from a higher-privilege session.
+
+`HIGH_STAKES_TOOLS` set: `send_sms_blast`, `send_email_blast`,
+`bulk_tag_contacts`, `update_user_role`, `update_pipeline_config`. The
+execute route requires `approved: true` on the request body for any of
+these — refuses 409 otherwise. The UI confirmation modal must set this
+flag; bypass attempts get blocked server-side.
+
+#### Query tools (Session 82 — Phase B)
+
+`lib/ai/query-tools.ts`. 11 tenant-scoped, limit-capped functions
+returning the self-healing JSON contract
+(`{status, data?, error?, suggestion?, count?}`):
+
+| Tool | Purpose |
+|---|---|
+| `query_properties` | Filter inventory by status / ARV / TCP / source / market / assignee / days-since-last-contact |
+| `search_calls` | By date / rep / grade band / type / outcome / contact / property / emotion / has-objection |
+| `semantic_search_calls` | Vector search over `Call.transcriptEmbedding` (Phase D dependency; falls back gracefully) |
+| `query_tasks` | By status / priority / assignee / overdue / due-within-N / property |
+| `get_kpi_metrics` | Week-over-week / month-over-month deltas (callVolume, avgScore, appointments, contracts, tasks) |
+| `get_team_performance` | Leaderboard (MANAGERS-only role gate) |
+| `query_sellers` | By motivation / likelihood / urgency / hardship / timeline / location |
+| `query_buyers` | By market / propertyType / repair budget / national-vs-local |
+| `get_ghl_pipeline_state` | Stage distribution + stuck deals per lane |
+| `cross_entity_query` | Composite: property filters AND "no recent activity" |
+| `find_similar_deals` | Rule-based comparables (same city, ±20% ARV, ±1 bed) |
+
+#### Prompt caching (Session 82 — Phase C1)
+
+Both the assistant route and `lib/ai/coach.ts` split the system prompt
+into stable (cached) + variable blocks via Anthropic's
+`cache_control: {type: 'ephemeral'}`. Tools list is also cached (mark
+the last tool with `cache_control`). First turn pays full price; turns
+2+ within 5 minutes hit the cache. Real-world impact: ~80% latency cut
+on follow-up turns plus token cost savings.
+
+#### Cross-session memory (Session 82 — Phase C2)
+
+`lib/ai/session-summarizer.ts`. AssistantMessage history resets every
+day on `sessionDate`. To stop losing continuity, Haiku 4.5 rolls each
+day into a one-paragraph summary stored in `AssistantSessionSummary`
+(unique on `tenantId_userId_sessionDate`). Refresh fires every 6 user
+turns, fire-and-forget. On new session, `getRecentSessionMemory` loads
+the last 3 daily summaries (30-day lookback cap) into the assistant
+system prompt. Storage: `assistant_session_summaries` table.
 
 #### Propose → Edit → Confirm flow (closed Blocker #2 in Session 38)
 

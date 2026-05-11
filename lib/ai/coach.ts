@@ -211,7 +211,16 @@ When the user asks about "this property" or "this deal", they mean the property 
   const knowledge = await buildKnowledgeContext({ tenantId, userId, userRole })
   const knowledgeBlock = formatKnowledgeForPrompt(knowledge, 6000)
 
-  const systemPrompt = `You are Gunner, an elite AI coach for real estate wholesaling teams.
+  // Prompt caching — see app/api/ai/assistant/route.ts for the rationale.
+  //
+  //   stablePersona — identity, personality, rules. Same for every coach
+  //                   conversation. CACHED.
+  //   contextBlock  — user metrics + property + recent calls + playbook.
+  //                   Stable across this user's session today. CACHED.
+  //                   (Even if recentCalls changes between sessions, the
+  //                   cache TTL is 5 minutes so this is just a one-turn
+  //                   miss; subsequent turns hit.)
+  const stablePersona = `You are Gunner, an elite AI coach for real estate wholesaling teams.
 
 You are talking with ${userName}, who is a ${formatRole(userRole)} on their wholesaling team.
 
@@ -222,7 +231,19 @@ YOUR PERSONALITY:
 - Push them to be better, celebrate wins
 - Short answers for simple questions, deeper for complex ones
 
-THEIR CURRENT CONTEXT:
+NOTE TO USER (this surface is READ-ONLY):
+- You are a coach, not an executor. You cannot send SMS, create tasks, change
+  pipeline stages, or modify any data. If the user asks you to take an
+  action, tell them to use the "Ask Gunner" assistant sidebar (the one
+  with the Actions button), which has tools for that.
+
+RULES:
+- Never make up specific market data or prices
+- If they ask about their calls/scores, reference the context block below
+- When coaching, reference SPECIFIC scripts and techniques from the playbook below. Quote exact phrases and steps the rep should use.
+- Keep answers conversational, not listy unless a list is truly the best format`
+
+  const contextBlock = `THEIR CURRENT CONTEXT:
 ${avgScore !== null ? `- Recent avg call score: ${avgScore}/100 (last 5 calls)` : '- No graded calls yet'}
 ${weekAvg !== null ? `- This week avg: ${weekAvg}/100 across ${weekCalls.length} calls` : ''}
 ${activeTasks > 0 ? `- ${activeTasks} open tasks` : '- No open tasks'}
@@ -242,21 +263,16 @@ ${recentCalls.map((c, i) => {
   ${c.transcript ? `Transcript excerpt: "${c.transcript.slice(0, 300)}..."` : ''}`
 }).join('\n\n')}` : ''}
 
-${knowledgeBlock}
-
-RULES:
-- Never make up specific market data or prices
-- If they ask about their calls/scores, reference the context above
-- When coaching, reference SPECIFIC scripts and techniques from the playbook above. Quote exact phrases and steps the rep should use.
-- Keep answers conversational, not listy unless a list is truly the best format
-- If they ask you to take an action in GHL (send SMS, create task, etc), tell them to use the Actions button in the interface
-`
+${knowledgeBlock}`
 
   const timer = startTimer()
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    system: systemPrompt,
+    system: [
+      { type: 'text', text: stablePersona, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: contextBlock, cache_control: { type: 'ephemeral' } },
+    ],
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   })
 

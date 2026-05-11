@@ -153,3 +153,52 @@ export async function searchKnowledgeBySimilarity(
 export function isEmbeddingsEnabled(): boolean {
   return !!process.env.OPENAI_API_KEY
 }
+
+// ── Embed a single call's transcript ──
+// Phase D — used by scripts/embed-calls-backfill.ts and (eventually)
+// triggered automatically by the grading completion path. Tenant-scoped.
+//
+// Returns:
+//   true   → embedded successfully
+//   false  → skipped (no transcript, no API key, generation failed)
+//   throws → DB-level error (caller should log and continue)
+
+export async function embedCallTranscript(callId: string, tenantId: string): Promise<boolean> {
+  const call = await db.call.findUnique({
+    where: { id: callId, tenantId },
+    select: {
+      transcript: true, aiSummary: true, contactName: true,
+      callType: true, callOutcome: true,
+    },
+  })
+  if (!call) return false
+
+  // Combine summary + transcript so short calls still get useful vectors.
+  // Cap at 8000 chars; OpenAI input limit is 8192 tokens which is ~32K
+  // chars, but quality stays good well below that ceiling.
+  const text = [
+    call.contactName ? `Contact: ${call.contactName}` : '',
+    call.callType ? `Type: ${call.callType}` : '',
+    call.callOutcome ? `Outcome: ${call.callOutcome}` : '',
+    call.aiSummary ?? '',
+    (call.transcript ?? '').slice(0, 6500),
+  ].filter(Boolean).join('\n')
+
+  if (text.trim().length < 50) return false
+
+  const embedding = await generateEmbedding(text)
+  if (!embedding) return false
+
+  const vectorStr = `[${embedding.join(',')}]`
+  await db.$executeRawUnsafe(
+    `UPDATE calls SET transcript_embedding = $1::vector WHERE id = $2 AND tenant_id = $3`,
+    vectorStr,
+    callId,
+    tenantId,
+  )
+
+  return true
+}
+
+// Re-exported so other modules don't have to import the private name.
+export { generateEmbedding }

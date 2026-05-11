@@ -7,10 +7,23 @@ import { anthropic } from '@/config/anthropic'
 import type Anthropic from '@anthropic-ai/sdk'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { ASSISTANT_TOOLS } from '@/lib/ai/assistant-tools'
+import { filterToolsForRole } from '@/lib/ai/role-gates'
+import { checkRateLimit } from '@/lib/ai/rate-limit'
+import { getRecentSessionMemory, scheduleSessionSummary } from '@/lib/ai/session-summarizer'
 import { logFailure } from '@/lib/audit'
 import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
 export const POST = withTenant(async (request, ctx) => {
+  // Rate limit: 20 chat turns per minute per user. Real usage is closer
+  // to 1-3 per minute; anything above 20 is a runaway loop or abuse.
+  const rl = checkRateLimit(ctx.userId, 'assistant-chat', 20, 60_000)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many messages in a short window. Please wait a moment.', retryAfterMs: rl.retryAfterMs },
+      { status: 429 },
+    )
+  }
+
   const { message, pageContext } = await request.json()
   if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 })
 
@@ -115,11 +128,27 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
       ? `\nRECENTLY REJECTED ACTIONS — the user has rejected these, avoid suggesting similar:\n${recentRejections.map(r => `- ${r.actionType}: ${JSON.stringify(r.proposed).slice(0, 100)}`).join('\n')}`
       : ''
 
+    // Cross-session memory — load last 3 daily summaries (skipped if no
+    // prior sessions). See lib/ai/session-summarizer.ts.
+    const memoryBlock = await getRecentSessionMemory(tenantId, userId, 3)
+
     const roleName = ctx.userRole.replace(/_/g, ' ') || 'Team Member'
     const timer = startTimer()
 
-    // System prompt
-    const systemPrompt = `You are the ${roleName} Assistant for ${tenant?.name ?? 'this company'}, a wholesale real estate company.
+    // Prompt caching (Anthropic ephemeral cache, 5-minute TTL).
+    //
+    // The system prompt is split into 3 blocks so the cache hit rate stays
+    // high across turns inside the same chat session:
+    //
+    //   stableSystem  — persona, capabilities, rules. Identical for every
+    //                   turn this user makes today. CACHED.
+    //   pageBlock     — page-specific data (current property/call). Stable
+    //                   while the user is on the same page. CACHED.
+    //   variableTail  — knowledge RAG (recomputed per turn from semantic
+    //                   search) + recent rejections. NOT cached.
+    //
+    // Tools are also cached — they're a stable 30-50 entry list of ~6KB.
+    const stableSystem = `You are the ${roleName} Assistant for ${tenant?.name ?? 'this company'}, a wholesale real estate company.
 
 User: ${ctx.userName || 'Unknown'} (${roleName})
 
@@ -129,23 +158,44 @@ YOUR CAPABILITIES:
 - Execute actions in Gunner (update properties, log milestones, manage deals)
 - Reference company scripts, playbooks, and training materials
 - Provide personalized coaching based on the user's performance profile
+- Use the query tools (query_properties, search_calls, get_kpi_metrics, get_team_performance, query_sellers, query_buyers, cross_entity_query, etc.) to pull real data when answering analytical questions — do not make up numbers.
 
 RULES:
 - Be concise. Short, direct responses unless asked for detail.
 - When the user asks you to DO something (send SMS, create task, etc.), use the appropriate tool. Don't just describe what to do.
+- When the user asks for data ("how many calls did Mike take last week?", "show me cold leads with TCP > 0.6"), use the query tools — never guess.
 - When proposing actions, fill in ALL fields with real data from context. Never leave placeholders.
 - You are AI-assisted, not autonomous. Always propose actions for user approval before executing.
-- When coaching on calls or objections, reference the SPECIFIC scripts and techniques from the playbook below. Quote exact phrases and steps.
+- When coaching on calls or objections, reference the SPECIFIC scripts and techniques from the playbook. Quote exact phrases and steps.`
 
-${pageData ? `\n${pageData}` : ''}
+    const pageBlock = pageData ? `\n${pageData}` : ''
+    const variableTail = `${memoryBlock}\n${knowledgeBlock}${rejectionContext}`
 
-${knowledgeBlock}${rejectionContext}`
+    // Rule 4 (CLAUDE.md): role-based capability gating. Tools the user is
+    // not allowed to use are removed before Claude sees them, so the LLM
+    // can't propose actions the user lacks permission for. Execute route
+    // re-checks (defense in depth) — see lib/ai/role-gates.ts.
+    const allowedTools = filterToolsForRole(ASSISTANT_TOOLS, ctx.userRole)
+
+    // Mark the last tool with cache_control so the entire tool list above
+    // it gets cached. Tool.cache_control is part of the standard SDK type
+    // since 0.90 — no cast needed.
+    const cachedTools: Anthropic.Tool[] = allowedTools.length > 0
+      ? [
+          ...allowedTools.slice(0, -1),
+          { ...allowedTools[allowedTools.length - 1], cache_control: { type: 'ephemeral' } },
+        ]
+      : allowedTools
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1500,
-      system: systemPrompt,
-      tools: ASSISTANT_TOOLS,
+      system: [
+        { type: 'text', text: stableSystem, cache_control: { type: 'ephemeral' } },
+        ...(pageBlock ? [{ type: 'text' as const, text: pageBlock, cache_control: { type: 'ephemeral' as const } }] : []),
+        { type: 'text', text: variableTail },
+      ],
+      tools: cachedTools,
       messages: conversationHistory,
     })
 
@@ -180,6 +230,16 @@ ${knowledgeBlock}${rejectionContext}`
         pageContext,
       },
     })
+
+    // Cross-session memory: refresh the session summary in the background
+    // every ~6 user turns. Fire-and-forget — does not block the response.
+    // priorMessages.length here counts everything saved before THIS turn,
+    // so `+1` (the user msg just inserted) keeps the cadence intuitive.
+    // See lib/ai/session-summarizer.ts.
+    const turnsThisSession = Math.floor((priorMessages.length + 1) / 2)
+    if (turnsThisSession >= 3 && turnsThisSession % 6 === 0) {
+      scheduleSessionSummary(tenantId, userId)
+    }
 
     // Log AI call
     logAiCall({

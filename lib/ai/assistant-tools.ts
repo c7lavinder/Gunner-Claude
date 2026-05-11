@@ -445,4 +445,195 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   { name: 'seller_profile', description: 'Build a seller communication profile: personality style, triggers, what not to say, best approach.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
   { name: 'title_risk', description: 'Assess title/legal risks from deal intel: liens, taxes, title issues, encumbrances.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
   { name: 'market_analysis', description: 'Provide market analysis for the current property based on available data.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
+
+  // ═══ PHASE B — QUERY TOOLS (data retrieval across the whole tenant) ═══
+  // These return real data the assistant can narrate. Each is tenant-scoped
+  // and capped at 100 rows. See lib/ai/query-tools.ts for behavior.
+
+  {
+    name: 'query_properties',
+    description: 'Search inventory across the whole tenant by filters: status, ARV range, TCP score, lead source, city/state, market, assigned rep, days-since-last-contact, has-offer. Use when the user asks "show me properties where…" Returns up to 100 rows.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        acqStatus: { type: 'string', description: 'Acquisition status filter (NEW_LEAD, QUALIFIED, OFFER_MADE, UNDER_CONTRACT, etc.)' },
+        dispoStatus: { type: 'string', description: 'Disposition status filter' },
+        longtermStatus: { type: 'string', description: 'Long-term status filter' },
+        arvMin: { type: 'number', description: 'Minimum After Repair Value' },
+        arvMax: { type: 'number', description: 'Maximum After Repair Value' },
+        askingPriceMax: { type: 'number', description: 'Maximum asking price' },
+        tcpMin: { type: 'number', description: 'Minimum TCP score (0.0–1.0)' },
+        daysSinceLastContactMin: { type: 'number', description: 'Minimum days since last contact (>= N)' },
+        daysSinceLastContactMax: { type: 'number', description: 'Maximum days since last contact (<= N)' },
+        leadSource: { type: 'string', description: 'Lead source contains this fragment (e.g., "Google Ads")' },
+        city: { type: 'string', description: 'City name fragment' },
+        state: { type: 'string', description: 'State (e.g., TN, GA)' },
+        marketName: { type: 'string', description: 'Market name (e.g., Nashville)' },
+        assignedToName: { type: 'string', description: 'Assigned rep name fragment' },
+        hasOffer: { type: 'boolean', description: 'Only properties with a current offer' },
+        excludeLost: { type: 'boolean', description: 'Exclude properties whose all three lanes are Lost (default true)' },
+        sortBy: { type: 'string', description: 'tcp | arv | lastContact | createdAt' },
+        sortDir: { type: 'string', description: 'asc | desc (default desc)' },
+        limit: { type: 'number', description: 'Max rows (default 25, max 100)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'search_calls',
+    description: 'Search calls across the tenant by date range, rep, grade band (low/medium/high), call type, outcome, contact, property fragment, primary emotion. Returns up to 100 rows with summaries.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        dateFrom: { type: 'string', description: 'Start date YYYY-MM-DD' },
+        dateTo: { type: 'string', description: 'End date YYYY-MM-DD' },
+        daysAgo: { type: 'number', description: 'Shortcut: last N days' },
+        repName: { type: 'string', description: 'Rep name fragment' },
+        gradeBand: { type: 'string', description: 'low (<60), medium (60-80), or high (>=80)' },
+        scoreMin: { type: 'number' },
+        scoreMax: { type: 'number' },
+        callType: { type: 'string', description: 'cold_call | qualification_call | offer_call | follow_up_call | dispo_call | admin_call' },
+        callOutcome: { type: 'string', description: 'appointment_set | contract | dead | follow_up | not_interested' },
+        contactNameFragment: { type: 'string' },
+        propertyAddressFragment: { type: 'string' },
+        primaryEmotion: { type: 'string', description: 'anxious | hopeful | resigned | angry | grief | defensive' },
+        hasObjection: { type: 'boolean' },
+        limit: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'semantic_search_calls',
+    description: 'Vector-search call transcripts by topic/meaning, e.g. "calls where seller mentioned divorce". Falls back gracefully if embeddings are not yet wired up — use search_calls as backup.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'What to search for in the transcript' },
+        daysAgo: { type: 'number', description: 'Restrict to last N days' },
+        limit: { type: 'number' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'query_tasks',
+    description: 'Search tasks by status, priority, assigned rep, overdue, due-within-N-days, property. Useful for "show me overdue tasks" or "what is Mike\'s open queue?"',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        status: { type: 'string', description: 'PENDING | IN_PROGRESS | COMPLETED | CANCELLED' },
+        priority: { type: 'string', description: 'LOW | MEDIUM | HIGH | URGENT' },
+        assignedToName: { type: 'string' },
+        overdue: { type: 'boolean' },
+        dueWithinDays: { type: 'number' },
+        propertyAddressFragment: { type: 'string' },
+        limit: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_kpi_metrics',
+    description: 'KPI deltas — call volume, avg score, appointments set, contracts locked, tasks completed — for this week vs prior, or month vs prior. Pass repName to scope to one person, omit for whole-tenant.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        period: { type: 'string', description: 'week | month' },
+        repName: { type: 'string', description: 'Scope to a specific rep (optional)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_team_performance',
+    description: 'Team leaderboard — calls, avg score, appointments, contracts, open tasks per rep over last week or month. Use to find underperformers or top performers.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        period: { type: 'string', description: 'week | month' },
+        limit: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'query_sellers',
+    description: 'Search sellers across the tenant by motivation, likelihood to sell, urgency level, hardship type, sale timeline, city/state.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        motivationMin: { type: 'number', description: 'Minimum motivation score 0.0–1.0' },
+        likelihoodToSellMin: { type: 'number', description: 'Minimum likelihood 0.0–1.0' },
+        urgencyLevel: { type: 'string', description: 'high | medium | low | unknown' },
+        hardshipType: { type: 'string', description: 'financial | divorce | death | relocation | tired_landlord | health | other' },
+        saleTimeline: { type: 'string', description: 'ASAP | 30_days | 60_days | 90_days | flexible' },
+        nameFragment: { type: 'string' },
+        city: { type: 'string' },
+        state: { type: 'string' },
+        limit: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'query_buyers',
+    description: 'Search active buyers by market, property type, repair budget, national vs local. Useful for "who would buy this kind of deal?"',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        market: { type: 'string', description: 'City, county, or zip fragment to match against buyer markets' },
+        propertyType: { type: 'string', description: 'SFR | MFR | commercial | land | mobile' },
+        maxRepairBudgetMin: { type: 'number', description: 'Minimum repair budget the buyer will take on' },
+        isNationalBuyer: { type: 'boolean' },
+        active: { type: 'boolean', description: 'Default true' },
+        nameFragment: { type: 'string' },
+        limit: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_ghl_pipeline_state',
+    description: 'Pipeline health: stage distribution + stuck deals (in same stage > N days) for acquisition / disposition / longterm.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        lane: { type: 'string', description: 'acquisition | disposition | longterm (default acquisition)' },
+        stuckDaysThreshold: { type: 'number', description: 'Days in stage to be considered stuck (default 14)' },
+        limit: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'cross_entity_query',
+    description: 'Composite query — properties matching X AND no recent activity Y. Example: "properties with TCP > 0.6 not called in 5 days". Use when the user asks something that requires combining property filters with activity recency.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        tcpMin: { type: 'number' },
+        arvMin: { type: 'number' },
+        acqStatus: { type: 'string' },
+        dispoStatus: { type: 'string' },
+        noCallInLastDays: { type: 'number', description: 'Hasn\'t been called in N+ days' },
+        noTaskInLastDays: { type: 'number' },
+        assignedToName: { type: 'string' },
+        limit: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'find_similar_deals',
+    description: 'Find comparable properties to the given one — same city, similar ARV, similar beds. Useful for "how did similar deals close?"',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        propertyId: { type: 'string', description: 'Property to find comparables for' },
+        limit: { type: 'number' },
+      },
+      required: ['propertyId'],
+    },
+  },
 ]

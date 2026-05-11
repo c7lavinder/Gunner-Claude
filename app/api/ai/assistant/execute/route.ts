@@ -14,6 +14,8 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { resolveAssignee } from '@/lib/ghl/resolveAssignee'
 import { logFailure } from '@/lib/audit'
+import { canUseTool, isHighStakes } from '@/lib/ai/role-gates'
+import { checkRateLimit } from '@/lib/ai/rate-limit'
 import { z } from 'zod'
 
 // Bug #24 hard cap. editedInput is a loose dict by necessity (40+ action
@@ -31,6 +33,11 @@ const bodySchema = z.object({
   // ACTION_EXECUTION_AUDIT.md). All keys are optional at the schema level so
   // the same endpoint can service 40+ action types with different shapes.
   editedInput: z.record(z.unknown()).optional(),
+  // High-stakes tools (HIGH_STAKES_TOOLS in lib/ai/role-gates.ts) require
+  // the client to send `approved: true` to confirm the user passed the
+  // explicit confirmation modal. Server-side mirror of the UI gate —
+  // closes the bypass where a forged request skips the modal.
+  approved: z.boolean().optional(),
 })
 
 export const POST = withTenant(async (request, ctx) => {
@@ -50,12 +57,23 @@ export const POST = withTenant(async (request, ctx) => {
   }
   const parsed = bodySchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
-  const { toolCallId, pageContext, rejected, editedInput } = parsed.data
+  const { toolCallId, pageContext, rejected, editedInput, approved } = parsed.data
 
   // Local aliases for the existing 50+ in-handler usages — minimum churn.
   const tenantId = ctx.tenantId
   const sessionUserId = ctx.userId
   const today = new Date().toISOString().slice(0, 10)
+
+  // Rate limit: cheap in-memory limiter keyed on userId. Caps a single user
+  // at 30 tool executions per minute. Bursts above this are almost always
+  // a buggy client or abuse, not real usage. See lib/ai/rate-limit.ts.
+  const rl = checkRateLimit(sessionUserId, 'assistant-execute', 30, 60_000)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many actions in a short window. Slow down for a moment.', retryAfterMs: rl.retryAfterMs },
+      { status: 429 },
+    )
+  }
 
   // Find the tool call in today's messages
   const messages = await db.assistantMessage.findMany({
@@ -73,6 +91,45 @@ export const POST = withTenant(async (request, ctx) => {
   }
 
   if (!toolCall) return NextResponse.json({ error: 'Tool call not found' }, { status: 404 })
+
+  // ── Role gate (Rule 4 — defense in depth) ──
+  // The assistant route already filters tools by role before Claude sees
+  // them, so this branch should rarely fire — but a forged request that
+  // POSTs a stale toolCallId from a higher-privilege session would slip
+  // past that filter. Re-check at execute time so the server is the
+  // final arbiter. See lib/ai/role-gates.ts.
+  if (!canUseTool(toolCall.name, ctx.userRole)) {
+    await db.auditLog.create({
+      data: {
+        tenantId, userId: sessionUserId,
+        action: 'assistant.role_denied',
+        resource: 'tool',
+        resourceId: toolCall.name,
+        source: 'SYSTEM',
+        severity: 'WARNING',
+        payload: { tool: toolCall.name, actorRole: ctx.userRole },
+      },
+    }).catch(err => logFailure(tenantId, 'assistant.role_denied_log_failed', 'auditLog', err))
+    return NextResponse.json(
+      { error: `Your role does not have permission to use "${toolCall.name}".` },
+      { status: 403 },
+    )
+  }
+
+  // ── High-stakes gate (Rule 4) ──
+  // Tools in HIGH_STAKES_TOOLS need an explicit `approved: true` on the
+  // request. The UI surfaces a confirmation modal that posts with that
+  // flag set. If a client tries to bypass the modal, we refuse here.
+  if (isHighStakes(toolCall.name) && approved !== true) {
+    return NextResponse.json(
+      {
+        error: 'This action requires explicit confirmation.',
+        requiresApproval: true,
+        tool: toolCall.name,
+      },
+      { status: 409 },
+    )
+  }
 
   // Merge client-supplied edits OVER the AI's original input. Edit wins on
   // overlap. Branches read from `mergedInput`; audit rows persist BOTH shapes.
@@ -948,6 +1005,43 @@ export const POST = withTenant(async (request, ctx) => {
       case 'set_kpi_goals':
       case 'update_pipeline_config': {
         result = `${toolCall.name.replace(/_/g, ' ')} — use the Settings page to configure this.`
+        break
+      }
+
+      // ─── Phase B query tools — run the real DB query and embed the
+      // structured result in the result string. The assistant route picks
+      // this up via the actionLog `executed` field, and the next turn
+      // includes it in conversation history so the LLM can synthesize.
+      case 'query_properties':
+      case 'search_calls':
+      case 'semantic_search_calls':
+      case 'query_tasks':
+      case 'get_kpi_metrics':
+      case 'get_team_performance':
+      case 'query_sellers':
+      case 'query_buyers':
+      case 'get_ghl_pipeline_state':
+      case 'cross_entity_query':
+      case 'find_similar_deals': {
+        const qt = await import('@/lib/ai/query-tools')
+        let payload
+        switch (toolCall.name) {
+          case 'query_properties': payload = await qt.queryProperties(tenantId, mergedInput as Parameters<typeof qt.queryProperties>[1]); break
+          case 'search_calls': payload = await qt.searchCalls(tenantId, mergedInput as Parameters<typeof qt.searchCalls>[1]); break
+          case 'semantic_search_calls': payload = await qt.semanticSearchCalls(tenantId, mergedInput as Parameters<typeof qt.semanticSearchCalls>[1]); break
+          case 'query_tasks': payload = await qt.queryTasks(tenantId, mergedInput as Parameters<typeof qt.queryTasks>[1]); break
+          case 'get_kpi_metrics': payload = await qt.getKpiMetrics(tenantId, mergedInput as Parameters<typeof qt.getKpiMetrics>[1]); break
+          case 'get_team_performance': payload = await qt.getTeamPerformance(tenantId, mergedInput as Parameters<typeof qt.getTeamPerformance>[1]); break
+          case 'query_sellers': payload = await qt.querySellers(tenantId, mergedInput as Parameters<typeof qt.querySellers>[1]); break
+          case 'query_buyers': payload = await qt.queryBuyers(tenantId, mergedInput as Parameters<typeof qt.queryBuyers>[1]); break
+          case 'get_ghl_pipeline_state': payload = await qt.getGhlPipelineState(tenantId, mergedInput as Parameters<typeof qt.getGhlPipelineState>[1]); break
+          case 'cross_entity_query': payload = await qt.crossEntityQuery(tenantId, mergedInput as Parameters<typeof qt.crossEntityQuery>[1]); break
+          case 'find_similar_deals': payload = await qt.findSimilarDeals(tenantId, mergedInput as Parameters<typeof qt.findSimilarDeals>[1]); break
+        }
+        // Truncate to a sane payload — Claude doesn't need megabytes back.
+        // 16KB is roughly 4000 tokens, plenty for 100 rows of compact JSON.
+        const json = JSON.stringify(payload)
+        result = json.length > 16000 ? json.slice(0, 16000) + '\n...[truncated]' : json
         break
       }
 
