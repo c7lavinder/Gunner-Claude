@@ -1,21 +1,20 @@
 'use client'
 // components/disposition/journey/buyer-modal.tsx
-// Canonical buyer edit/add modal (Phase A1 — disposition rebuild).
-// Replaces buyer-edit-slideover.tsx for the buyer-edit flow and the
-// inline add form in section-3 for the buyer-add flow. Same component,
-// `mode` prop flips between PATCH (edit) and POST (add).
+// Canonical buyer edit/add modal (Phase A1.1 — disposition rebuild).
 //
-// Layout: center-page, fixed dimensions, body scrolls inside. The page
-// scroll is locked while the modal is open. Backdrop click does NOT
-// close — only the X or Cancel button — to prevent accidental data loss
-// after typing into many fields.
+// Replaces buyer-edit-slideover.tsx for both Section 3 (Match Buyers)
+// and Section 4 (Track Responses) edit flows, and the inline add form
+// in Section 3 (A2 will swap that trigger).
 //
-// Field set (14 canonical):
-//   Contact: name, phone, mobilePhone, secondaryPhone, email,
-//            secondaryEmail, company
-//   Status:  tier, responseSpeed, verifiedFunding, purchasedBefore
-//   Match:   markets[] (searchable multi, add-new), buybox[] (searchable multi)
-//   Notes
+// Layout
+//   • Center-page, dimensions fit content — no internal scroll.
+//   • Two-column dense grid keeps all 14 canonical fields visible at once.
+//   • Page scroll is locked while open. Backdrop click does NOT close.
+//     Only X, Cancel, or Esc closes — prevents data loss after typing.
+//
+// Edit mode loads the canonical buyer record from GET /api/buyers/[id]
+// on mount so checkboxes like "Purchased Before" reflect what's actually
+// persisted (the kanban row doesn't carry every field).
 
 import { useEffect, useMemo, useState } from 'react'
 import { X, Loader2, ExternalLink } from 'lucide-react'
@@ -111,16 +110,16 @@ export function BuyerModal({
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadingCanonical, setLoadingCanonical] = useState(mode === 'edit' && !!buyer?.id)
 
-  // Lock page scroll while the modal is open. Restored on unmount.
+  // Lock page scroll while open.
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }
   }, [])
 
-  // Allow Esc to close (matches user expectation; backdrop click is the
-  // only thing we suppress).
+  // Esc closes.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -128,6 +127,40 @@ export function BuyerModal({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Edit mode: fetch the canonical buyer record so fields not carried by
+  // the kanban row (purchasedBefore, responseSpeed, buybox, full markets,
+  // company, secondary phone/email, etc.) reflect what's in the DB.
+  useEffect(() => {
+    if (mode !== 'edit' || !buyer?.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/buyers/${buyer.id}`)
+        if (!res.ok) { setLoadingCanonical(false); return }
+        const data = await res.json()
+        const b = data.buyer
+        if (!b || cancelled) return
+        setForm(f => ({
+          ...f,
+          name: b.name ?? f.name,
+          phone: b.phone ?? f.phone,
+          mobilePhone: b.mobilePhone ?? f.mobilePhone,
+          email: b.email ?? f.email,
+          company: b.company ?? f.company,
+          tier: b.tier ?? f.tier,
+          verifiedFunding: !!b.verifiedFunding,
+          purchasedBefore: !!b.purchasedBefore,
+          responseSpeed: b.responseSpeed ?? '',
+          buybox: Array.isArray(b.buybox) ? b.buybox : f.buybox,
+          markets: Array.isArray(b.markets) && b.markets.length > 0 ? b.markets : f.markets,
+          notes: b.notes ?? f.notes,
+        }))
+      } catch { /* keep current form; user can still edit */ }
+      finally { if (!cancelled) setLoadingCanonical(false) }
+    })()
+    return () => { cancelled = true }
+  }, [mode, buyer?.id])
 
   const marketOptionsCombined = useMemo(() => {
     const set = new Set<string>([...marketOptions, ...form.markets])
@@ -188,14 +221,10 @@ export function BuyerModal({
           setSaving(false)
           return
         }
-        // Match the existing POST /api/properties/[id]/buyers add path.
-        // It expects firstName + lastName (split from name), so we split
-        // on first space. Backend joins them back into Buyer.name.
         const [firstName, ...rest] = form.name.trim().split(/\s+/)
         const lastName = rest.join(' ')
         const addPayload = {
-          firstName,
-          lastName,
+          firstName, lastName,
           phone: form.phone.trim(),
           email: form.email.trim() || null,
           buyerTier: form.tier,
@@ -206,7 +235,6 @@ export function BuyerModal({
           hasPurchased: form.purchasedBefore,
           responseSpeed: form.responseSpeed || null,
           notes: form.notes.trim() || null,
-          // Optional contact-detail extras the API can persist if present.
           mobilePhone: form.mobilePhone.trim() || null,
           secondaryPhone: form.secondaryPhone.trim() || null,
           secondaryEmail: form.secondaryEmail.trim() || null,
@@ -254,13 +282,9 @@ export function BuyerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop — click is suppressed (no onClick) to prevent accidental
-          data loss. Use X / Cancel / Esc to close. */}
       <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
 
-      {/* Modal frame — fixed dimensions, body scrolls inside */}
-      <div className="relative w-full max-w-2xl bg-white rounded-[14px] shadow-2xl flex flex-col overflow-hidden"
-           style={{ maxHeight: 'min(80vh, 640px)' }}>
+      <div className="relative w-full max-w-3xl bg-white rounded-[14px] shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="shrink-0 px-5 py-3 border-b border-[rgba(0,0,0,0.06)] flex items-center justify-between">
           <div className="min-w-0">
@@ -268,7 +292,10 @@ export function BuyerModal({
               {mode === 'edit' ? 'Edit Buyer' : 'Add Buyer'}
             </h3>
             {mode === 'edit' && buyer?.name && (
-              <p className="text-[11px] text-txt-muted truncate">{titleCase(buyer.name)}</p>
+              <p className="text-[11px] text-txt-muted truncate">
+                {titleCase(buyer.name)}
+                {loadingCanonical && <span className="ml-2 text-[10px]">loading…</span>}
+              </p>
             )}
           </div>
           <div className="flex items-center gap-3 shrink-0">
@@ -288,139 +315,111 @@ export function BuyerModal({
           </div>
         </div>
 
-        {/* Body — scrolls inside the modal */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-          {/* Status row */}
-          <Section title="Status">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Tier" required>
-                <SearchableSelect
-                  value={form.tier}
-                  options={TIER_OPTIONS}
-                  onChange={v => update('tier', v)}
-                  placeholder="Pick a tier…"
+        {/* Body — single dense pane, no internal scroll. Two-column grid. */}
+        <div className="p-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {/* LEFT COLUMN — Status + Match Criteria */}
+            <div className="space-y-3">
+              <SectionLabel>Status</SectionLabel>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Tier" required>
+                  <SearchableSelect
+                    value={form.tier}
+                    options={TIER_OPTIONS}
+                    onChange={v => update('tier', v)}
+                    placeholder="Tier…"
+                  />
+                </Field>
+                <Field label="Response Speed">
+                  <SearchableSelect
+                    value={form.responseSpeed}
+                    options={RESPONSE_SPEED_OPTIONS}
+                    onChange={v => update('responseSpeed', v)}
+                    placeholder="Speed…"
+                    allowClear
+                  />
+                </Field>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="flex items-center gap-2 cursor-pointer text-[12px] text-txt-secondary">
+                  <input type="checkbox" checked={form.verifiedFunding}
+                    onChange={e => update('verifiedFunding', e.target.checked)}
+                    className="accent-gunner-red" />
+                  Verified Funding
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-[12px] text-txt-secondary">
+                  <input type="checkbox" checked={form.purchasedBefore}
+                    onChange={e => update('purchasedBefore', e.target.checked)}
+                    className="accent-gunner-red" />
+                  Purchased Before
+                </label>
+              </div>
+
+              <SectionLabel>Match Criteria</SectionLabel>
+              <Field label="Markets (multi, add new)" required>
+                <SearchableMultiSelect
+                  values={form.markets}
+                  options={marketOptionsCombined}
+                  onChange={v => update('markets', v)}
+                  placeholder="Search markets…"
+                  allowAddNew
                 />
               </Field>
-              <Field label="Response Speed">
-                <SearchableSelect
-                  value={form.responseSpeed}
-                  options={RESPONSE_SPEED_OPTIONS}
-                  onChange={v => update('responseSpeed', v)}
-                  placeholder="Pick a speed…"
-                  allowClear
+              <Field label="Buybox (multi)" required>
+                <SearchableMultiSelect
+                  values={form.buybox}
+                  options={BUYBOX_OPTIONS}
+                  onChange={v => update('buybox', v)}
+                  placeholder="Search buybox…"
                 />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3 mt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-[12px] text-txt-secondary">
-                <input type="checkbox" checked={form.verifiedFunding}
-                  onChange={e => update('verifiedFunding', e.target.checked)}
-                  className="accent-gunner-red" />
-                Verified Funding
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-[12px] text-txt-secondary">
-                <input type="checkbox" checked={form.purchasedBefore}
-                  onChange={e => update('purchasedBefore', e.target.checked)}
-                  className="accent-gunner-red" />
-                Purchased Before
-              </label>
+
+            {/* RIGHT COLUMN — Contact + Notes */}
+            <div className="space-y-3">
+              <SectionLabel>Contact</SectionLabel>
+              <Field label="Name" required>
+                <input value={form.name} onChange={e => update('name', e.target.value)} className={INPUT_CLASS} />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label={mode === 'add' ? 'Phone*' : 'Phone'}>
+                  <input value={form.phone} onChange={e => update('phone', e.target.value)} className={INPUT_CLASS} />
+                </Field>
+                <Field label="Mobile">
+                  <input value={form.mobilePhone} onChange={e => update('mobilePhone', e.target.value)} className={INPUT_CLASS} />
+                </Field>
+                <Field label="Secondary Phone">
+                  <input value={form.secondaryPhone} onChange={e => update('secondaryPhone', e.target.value)} className={INPUT_CLASS} />
+                </Field>
+                <Field label="Company">
+                  <input value={form.company} onChange={e => update('company', e.target.value)} className={INPUT_CLASS} />
+                </Field>
+                <Field label="Email">
+                  <input value={form.email} onChange={e => update('email', e.target.value)} className={INPUT_CLASS} />
+                </Field>
+                <Field label="Secondary Email">
+                  <input value={form.secondaryEmail} onChange={e => update('secondaryEmail', e.target.value)} className={INPUT_CLASS} />
+                </Field>
+              </div>
+
+              <SectionLabel>Internal Notes</SectionLabel>
+              <textarea
+                value={form.notes}
+                onChange={e => update('notes', e.target.value)}
+                rows={3}
+                className={`${INPUT_CLASS} resize-none`}
+                placeholder="Anything the team should know…"
+              />
             </div>
-          </Section>
-
-          {/* Match criteria */}
-          <Section title="Match Criteria">
-            <Field label="Markets (searchable, multi-select, add new on the fly)" required>
-              <SearchableMultiSelect
-                values={form.markets}
-                options={marketOptionsCombined}
-                onChange={v => update('markets', v)}
-                placeholder="Search markets or type to add new…"
-                allowAddNew
-              />
-            </Field>
-            <Field label="Buybox (searchable, multi-select)" required>
-              <SearchableMultiSelect
-                values={form.buybox}
-                options={BUYBOX_OPTIONS}
-                onChange={v => update('buybox', v)}
-                placeholder="Search buybox…"
-              />
-            </Field>
-          </Section>
-
-          {/* Contact info */}
-          <Section title="Contact">
-            <Field label="Name" required>
-              <input
-                value={form.name}
-                onChange={e => update('name', e.target.value)}
-                className={INPUT_CLASS}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={mode === 'add' ? 'Phone (primary)*' : 'Phone (primary)'} required={mode === 'add'}>
-                <input
-                  value={form.phone}
-                  onChange={e => update('phone', e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </Field>
-              <Field label="Mobile">
-                <input
-                  value={form.mobilePhone}
-                  onChange={e => update('mobilePhone', e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </Field>
-              <Field label="Secondary Phone">
-                <input
-                  value={form.secondaryPhone}
-                  onChange={e => update('secondaryPhone', e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </Field>
-              <Field label="Company">
-                <input
-                  value={form.company}
-                  onChange={e => update('company', e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </Field>
-              <Field label="Email">
-                <input
-                  value={form.email}
-                  onChange={e => update('email', e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </Field>
-              <Field label="Secondary Email">
-                <input
-                  value={form.secondaryEmail}
-                  onChange={e => update('secondaryEmail', e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </Field>
-            </div>
-          </Section>
-
-          {/* Notes */}
-          <Section title="Internal Notes">
-            <textarea
-              value={form.notes}
-              onChange={e => update('notes', e.target.value)}
-              rows={3}
-              className={`${INPUT_CLASS} resize-none`}
-              placeholder="Anything the team should know…"
-            />
-          </Section>
+          </div>
 
           {error && (
-            <p className="text-[12px] text-semantic-red font-medium">{error}</p>
+            <p className="text-[12px] text-semantic-red font-medium mt-3">{error}</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 flex gap-2 px-5 py-3 border-t border-[rgba(0,0,0,0.06)] bg-white">
+        <div className="shrink-0 flex gap-2 px-5 py-3 border-t border-[rgba(0,0,0,0.06)]">
           <button
             onClick={onClose}
             className="flex-1 border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary text-ds-fine font-medium py-2 rounded-[10px] hover:bg-surface-secondary transition-colors"
@@ -442,13 +441,8 @@ export function BuyerModal({
 
 const INPUT_CLASS = 'w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none focus:ring-1 focus:ring-gunner-red/20'
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-[0.08em] mb-2">{title}</p>
-      <div className="space-y-2">{children}</div>
-    </div>
-  )
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] font-semibold text-txt-muted uppercase tracking-[0.08em]">{children}</p>
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {

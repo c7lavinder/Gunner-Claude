@@ -19,7 +19,7 @@ import { useToast } from '@/components/ui/toaster'
 import { formatPhone, titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
 import { SendModal } from './send-modal'
-import { BuyerEditSlideover } from './buyer-edit-slideover'
+import { BuyerModal } from './buyer-modal'
 
 type Stage = 'responded' | 'interested' | 'showing_scheduled'
 
@@ -70,6 +70,19 @@ export function Section4Responses({ property, tenantSlug }: { property: Property
   const [loading, setLoading] = useState(true)
   const [sendTargets, setSendTargets] = useState<Row[] | null>(null)
   const [editTarget, setEditTarget] = useState<Row | null>(null)
+  const [marketOptions, setMarketOptions] = useState<string[]>([])
+
+  async function loadMarketOptionsIfNeeded() {
+    if (marketOptions.length > 0) return
+    try {
+      const res = await fetch(`/api/properties/${property.id}/buyers`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getFormOptions' }),
+      })
+      const data = await res.json()
+      if (Array.isArray(data.options?.markets)) setMarketOptions(data.options.markets)
+    } catch { /* modal still opens; user can type to add markets */ }
+  }
 
   async function load() {
     setLoading(true)
@@ -209,7 +222,7 @@ export function Section4Responses({ property, tenantSlug }: { property: Property
                             <Send size={10} /> Send
                           </button>
                           <button
-                            onClick={() => setEditTarget(r)}
+                            onClick={() => { setEditTarget(r); loadMarketOptionsIfNeeded() }}
                             className="flex items-center gap-1 text-[9px] font-medium text-txt-muted hover:text-txt-secondary bg-surface-tertiary hover:bg-surface-secondary px-2 py-1 rounded-md transition-colors"
                             title="Edit buyer"
                           >
@@ -264,7 +277,8 @@ export function Section4Responses({ property, tenantSlug }: { property: Property
       )}
 
       {editTarget && (
-        <BuyerEditSlideover
+        <BuyerModal
+          mode="edit"
           buyer={{
             id: editTarget.buyerId,
             name: editTarget.name,
@@ -275,23 +289,23 @@ export function Section4Responses({ property, tenantSlug }: { property: Property
             verifiedFunding: false,
             purchasedBefore: false,
             responseSpeed: '',
-            lastContactDate: null,
             buybox: [],
             notes: null,
           }}
           tenantSlug={tenantSlug}
+          marketOptions={marketOptions}
           onClose={() => setEditTarget(null)}
-          onSaved={(patch) => {
+          onSaved={(next) => {
             // Merge into the local rows so the kanban card reflects the
             // edit without a refetch.
             setRows(prev => prev.map(r => r.buyerId === editTarget.buyerId
               ? {
                   ...r,
-                  name: patch.name ?? r.name,
-                  phone: patch.phone ?? r.phone,
-                  email: patch.email ?? r.email,
-                  tier: patch.tier ?? r.tier,
-                  markets: patch.markets ?? r.markets,
+                  name: next.name ?? r.name,
+                  phone: next.phone ?? r.phone,
+                  email: next.email ?? r.email,
+                  tier: next.tier ?? r.tier,
+                  markets: next.markets ?? r.markets,
                 }
               : r,
             ))

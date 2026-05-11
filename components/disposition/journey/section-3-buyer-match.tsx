@@ -17,9 +17,6 @@ import { formatPhone, titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
 import { BulkAddModal } from './bulk-add-modal'
 import { SendModal } from './send-modal'
-// Phase A1 — buyer-edit moved to the canonical center-page BuyerModal.
-// The old right-side BuyerEditSlideover is still in the tree for
-// reference until A2 lands the add-flow conversion, then it gets deleted.
 import { BuyerModal } from './buyer-modal'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 
@@ -253,13 +250,26 @@ export function Section3BuyerMatch({
     return 'bg-gray-100 text-gray-600'
   }
 
-  function openEditModal(b: BuyerItem) {
+  async function openEditModal(b: BuyerItem) {
     setEditTarget(b)
+    // Eagerly load formOptions so the modal's Markets dropdown has the
+    // full tenant-wide market list (otherwise the user can only see
+    // markets already attached to this buyer).
+    if (!formOptions) {
+      try {
+        const res = await fetch(`/api/properties/${property.id}/buyers`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'getFormOptions' }),
+        })
+        const data = await res.json()
+        if (data.options) setFormOptions(data.options)
+      } catch { /* modal still works with whatever markets the buyer carries */ }
+    }
   }
 
-  // Session 77 round 2 — buyer edits go through <BuyerEditSlideover/>.
-  // The slide-over does its own PATCH; we just merge the result locally
-  // so the kanban card updates without a refetch.
+  // Buyer edits go through <BuyerModal/>. The modal does its own PATCH;
+  // we just merge the result locally so the kanban card updates without
+  // a refetch.
   function applyBuyerPatch(patch: Partial<BuyerItem>) {
     if (!editTarget) return
     const updater = (list: BuyerItem[]) => list.map(b =>
@@ -668,15 +678,16 @@ export function Section3BuyerMatch({
             tier: editTarget.tier,
             markets: editTarget.markets ?? [],
             verifiedFunding: editTarget.verifiedFunding ?? false,
-            // Canonical fields the kanban row doesn't carry — the modal
-            // loads safe defaults and the user-entered values flow back
-            // through onSaved.
+            // Safe defaults for fields the kanban row doesn't carry —
+            // the modal fetches the canonical buyer on open and overrides
+            // these with the actual persisted values.
             purchasedBefore: false,
             responseSpeed: '',
             buybox: [],
             notes: editTarget.notes ?? null,
           }}
           tenantSlug={tenantSlug}
+          marketOptions={formOptions?.markets ?? []}
           onClose={() => setEditTarget(null)}
           onSaved={(next) => {
             applyBuyerPatch({

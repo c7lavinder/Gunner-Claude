@@ -8,7 +8,7 @@ import {
   Target, BarChart3, MessageSquare, Sparkles, Check, Building2, Pencil,
 } from 'lucide-react'
 import { formatPhone, titleCase } from '@/lib/format'
-import { BuyerEditSlideover } from '@/components/disposition/journey/buyer-edit-slideover'
+import { BuyerModal } from '@/components/disposition/journey/buyer-modal'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -1017,7 +1017,8 @@ function BuyerHero({
       </div>
 
       {editing && (
-        <BuyerEditSlideover
+        <BuyerModal
+          mode="edit"
           buyer={{
             id: buyer.id,
             name: buyer.name,
@@ -1032,32 +1033,29 @@ function BuyerHero({
             verifiedFunding: canonical.verifiedFunding,
             purchasedBefore: canonical.purchasedBefore,
             responseSpeed: canonical.responseSpeed,
-            lastContactDate: canonical.lastContactDate,
             buybox: canonical.buybox,
             notes: canonical.internalNotes,
           }}
           tenantSlug={tenantSlug}
           marketOptions={tenantMarkets}
           onClose={() => setEditing(false)}
-          onSaved={(patch) => {
+          onSaved={(next) => {
             const nextCustomFields: Record<string, unknown> = { ...(buyer.customFields ?? {}) }
-            if (patch.tier !== undefined) nextCustomFields.tier = patch.tier
-            if (patch.verifiedFunding !== undefined) nextCustomFields.verifiedFunding = patch.verifiedFunding
-            if (patch.purchasedBefore !== undefined) nextCustomFields.hasPurchased = patch.purchasedBefore
-            if (patch.responseSpeed !== undefined) nextCustomFields.responseSpeed = patch.responseSpeed
-            if (patch.lastContactDate !== undefined) nextCustomFields.lastContactDate = patch.lastContactDate
-            if (patch.buybox !== undefined) nextCustomFields.buybox = patch.buybox
-            // secondaryMarkets retired — fold any patch values into primary above.
+            nextCustomFields.tier = next.tier
+            nextCustomFields.verifiedFunding = next.verifiedFunding
+            nextCustomFields.hasPurchased = next.purchasedBefore
+            nextCustomFields.responseSpeed = next.responseSpeed
+            nextCustomFields.buybox = next.buybox
             onSaved({
-              name: patch.name ?? buyer.name,
-              phone: patch.phone ?? buyer.phone,
-              mobilePhone: patch.mobilePhone !== undefined ? patch.mobilePhone : buyer.mobilePhone,
-              secondaryPhone: patch.secondaryPhone !== undefined ? patch.secondaryPhone : buyer.secondaryPhone,
-              email: patch.email !== undefined ? patch.email : buyer.email,
-              secondaryEmail: patch.secondaryEmail !== undefined ? patch.secondaryEmail : buyer.secondaryEmail,
-              company: patch.company !== undefined ? patch.company : buyer.company,
-              primaryMarkets: patch.markets ?? buyer.primaryMarkets,
-              internalNotes: patch.notes !== undefined ? patch.notes : buyer.internalNotes,
+              name: next.name ?? buyer.name,
+              phone: next.phone ?? buyer.phone,
+              mobilePhone: next.mobilePhone ?? buyer.mobilePhone,
+              secondaryPhone: next.secondaryPhone ?? buyer.secondaryPhone,
+              email: next.email ?? buyer.email,
+              secondaryEmail: next.secondaryEmail ?? buyer.secondaryEmail,
+              company: next.company ?? buyer.company,
+              primaryMarkets: next.markets ?? buyer.primaryMarkets,
+              internalNotes: next.notes ?? buyer.internalNotes,
               customFields: nextCustomFields,
             })
           }}

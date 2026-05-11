@@ -19,6 +19,51 @@ import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 
+// GET — canonical buyer record for the edit modal. Returns the
+// first-class columns + the canonical fields stored in customFields
+// (tier, verifiedFunding, purchasedBefore, responseSpeed, buybox, etc.)
+// so the modal can show what's actually persisted instead of guessing
+// defaults from the kanban row.
+export const GET = withTenant<{ buyerId: string }>(async (_req, ctx, params) => {
+  const buyer = await db.buyer.findFirst({
+    where: { id: params.buyerId, tenantId: ctx.tenantId },
+    select: {
+      id: true, name: true, phone: true, mobilePhone: true, email: true,
+      company: true, primaryMarkets: true, internalNotes: true,
+      lastCommunicationDate: true, customFields: true, tags: true,
+    },
+  })
+  if (!buyer) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const cf = (buyer.customFields ?? {}) as Record<string, unknown>
+  const buyboxRaw = cf.buybox
+  const buybox = Array.isArray(buyboxRaw)
+    ? buyboxRaw.filter((v): v is string => typeof v === 'string')
+    : typeof buyboxRaw === 'string'
+      ? buyboxRaw.split(',').map(s => s.trim()).filter(Boolean)
+      : []
+
+  return NextResponse.json({
+    buyer: {
+      id: buyer.id,
+      name: buyer.name,
+      phone: buyer.phone,
+      mobilePhone: buyer.mobilePhone,
+      email: buyer.email,
+      company: buyer.company,
+      tier: typeof cf.tier === 'string' ? cf.tier : 'unqualified',
+      verifiedFunding: cf.verifiedFunding === true,
+      // legacy key in storage is hasPurchased
+      purchasedBefore: cf.hasPurchased === true,
+      responseSpeed: typeof cf.responseSpeed === 'string' ? cf.responseSpeed : '',
+      buybox,
+      markets: (buyer.primaryMarkets ?? []) as string[],
+      notes: buyer.internalNotes,
+      lastContactDate: buyer.lastCommunicationDate?.toISOString() ?? null,
+    },
+  })
+})
+
 const schema = z.object({
   // ── Contact info (synced with GHL) ───────────────────────────────
   name: z.string().min(1).optional(),
