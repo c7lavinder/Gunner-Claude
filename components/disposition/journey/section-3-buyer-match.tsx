@@ -17,7 +17,10 @@ import { formatPhone, titleCase } from '@/lib/format'
 import type { PropertyDetail } from '@/components/inventory/property-detail-client'
 import { BulkAddModal } from './bulk-add-modal'
 import { SendModal } from './send-modal'
-import { BuyerEditSlideover } from './buyer-edit-slideover'
+// Phase A1 — buyer-edit moved to the canonical center-page BuyerModal.
+// The old right-side BuyerEditSlideover is still in the tree for
+// reference until A2 lands the add-flow conversion, then it gets deleted.
+import { BuyerModal } from './buyer-modal'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 
 export function Section3BuyerMatch({
@@ -655,7 +658,8 @@ export function Section3BuyerMatch({
       )}
 
       {editTarget && (
-        <BuyerEditSlideover
+        <BuyerModal
+          mode="edit"
           buyer={{
             id: editTarget.id,
             name: editTarget.name,
@@ -664,25 +668,25 @@ export function Section3BuyerMatch({
             tier: editTarget.tier,
             markets: editTarget.markets ?? [],
             verifiedFunding: editTarget.verifiedFunding ?? false,
-            // Canonical fields the kanban doesn't carry — slideover loads
-            // safe defaults; saving picks up any user-entered values.
+            // Canonical fields the kanban row doesn't carry — the modal
+            // loads safe defaults and the user-entered values flow back
+            // through onSaved.
             purchasedBefore: false,
             responseSpeed: '',
-            lastContactDate: null,
             buybox: [],
             notes: editTarget.notes ?? null,
           }}
           tenantSlug={tenantSlug}
           onClose={() => setEditTarget(null)}
-          onSaved={(patch) => {
+          onSaved={(next) => {
             applyBuyerPatch({
-              name: patch.name,
-              phone: patch.phone ?? null,
-              email: patch.email ?? null,
-              tier: patch.tier,
-              markets: patch.markets,
-              verifiedFunding: patch.verifiedFunding,
-              notes: patch.notes ?? null,
+              name: next.name,
+              phone: next.phone ?? null,
+              email: next.email ?? null,
+              tier: next.tier,
+              markets: next.markets,
+              verifiedFunding: next.verifiedFunding,
+              notes: next.notes ?? null,
             } as Partial<BuyerItem>)
           }}
         />
