@@ -279,6 +279,10 @@ async function computeBuyerAggregates(): Promise<BuyerResult[]> {
 //   sold_us_this             → dealsSourcedToUsCount (treat wholesaler
 //                              who sold us a contract as a source)
 //   jv_partner               → jvHistoryCount
+//   leadSource='JV Partner'  → jvHistoryCount (Phase B3 — JV intake
+//                              writes role=sourced_to_us, so the
+//                              property's leadSource is the authoritative
+//                              JV signal regardless of role)
 //   (any role) + property
 //   status in CLOSED_STATUSES → dealsClosedWithUsCount
 //
@@ -301,7 +305,7 @@ async function computePartnerAggregates(): Promise<PartnerResult[]> {
         select: {
           role: true,
           createdAt: true,
-          property: { select: { acqStatus: true, dispoStatus: true } },
+          property: { select: { acqStatus: true, dispoStatus: true, leadSource: true } },
         },
       })
 
@@ -313,9 +317,10 @@ async function computePartnerAggregates(): Promise<PartnerResult[]> {
 
       for (const l of links) {
         const role = l.role
+        const isJv = role === 'jv_partner' || l.property?.leadSource === 'JV Partner'
         if (role === 'sourced_to_us' || role === 'sold_us_this') dealsSourcedToUsCount++
         else if (role === 'taking_to_clients' || role === 'we_sold_them_this') dealsTakenFromUsCount++
-        else if (role === 'jv_partner') jvHistoryCount++
+        if (isJv) jvHistoryCount++
 
         if (l.property && isClosed(l.property)) {
           dealsClosedWithUsCount++

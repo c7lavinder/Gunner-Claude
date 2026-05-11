@@ -43,6 +43,7 @@ export default async function DispositionPage({ params }: { params: { tenant: st
       arv: true,
       description: true,
       assignmentFee: true,
+      leadSource: true,
       googlePhotoThumbnailUrl: true,
       _count: {
         select: {
@@ -107,6 +108,7 @@ export default async function DispositionPage({ params }: { params: { tenant: st
       status,
       askingPrice: p.askingPrice ? p.askingPrice.toString() : null,
       assignmentFee: p.assignmentFee ? p.assignmentFee.toString() : null,
+      leadSource: p.leadSource,
       stage: journey.stage,
     }
   })

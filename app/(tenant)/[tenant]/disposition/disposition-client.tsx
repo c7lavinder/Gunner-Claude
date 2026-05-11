@@ -4,6 +4,7 @@
 // (Ready to Blast → Awaiting Responses → In Offer → Closing). Each row
 // click-throughs to /inventory/{id} → Disposition tab.
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronRight, ArrowRight } from 'lucide-react'
 import type { JourneyStatus } from '@/lib/disposition/journey-status'
@@ -16,6 +17,7 @@ export interface DispositionRow {
   status: string
   askingPrice: string | null
   assignmentFee: string | null
+  leadSource: string | null
   stage: JourneyStatus['stage']
 }
 
@@ -33,13 +35,17 @@ const fmtMoney = (v: string | null) => {
 }
 
 export function DispositionClient({ tenantSlug, rows }: { tenantSlug: string; rows: DispositionRow[] }) {
+  const [jvOnly, setJvOnly] = useState(false)
+  const jvCount = rows.filter(r => r.leadSource === 'JV Partner').length
+  const filteredRows = jvOnly ? rows.filter(r => r.leadSource === 'JV Partner') : rows
+
   const grouped: Record<JourneyStatus['stage'], DispositionRow[]> = {
     ready_to_blast: [],
     awaiting_responses: [],
     in_offer: [],
     closing: [],
   }
-  for (const r of rows) grouped[r.stage].push(r)
+  for (const r of filteredRows) grouped[r.stage].push(r)
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -49,6 +55,28 @@ export function DispositionClient({ tenantSlug, rows }: { tenantSlug: string; ro
           Every property in disposition or under contract, grouped by the current journey stage.
           Click a row to open its disposition workflow.
         </p>
+      </div>
+
+      {/* Filter chips — currently just JV vs All. Easy to extend with
+          more lead-source / market chips later. */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setJvOnly(false)}
+          className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${
+            !jvOnly ? 'bg-txt-primary text-white' : 'bg-surface-secondary text-txt-secondary hover:bg-surface-tertiary'
+          }`}
+        >
+          All <span className="text-[10px] opacity-70 ml-0.5">({rows.length})</span>
+        </button>
+        <button
+          onClick={() => setJvOnly(true)}
+          className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${
+            jvOnly ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+          }`}
+          disabled={jvCount === 0}
+        >
+          JV only <span className="text-[10px] opacity-80 ml-0.5">({jvCount})</span>
+        </button>
       </div>
 
       {rows.length === 0 ? (
@@ -89,7 +117,13 @@ export function DispositionClient({ tenantSlug, rows }: { tenantSlug: string; ro
                           >
                             <ChevronRight size={14} className="text-txt-muted flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-[13px] font-medium text-txt-primary truncate">{r.address}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-[13px] font-medium text-txt-primary truncate">{r.address}</p>
+                                {r.leadSource === 'JV Partner' && (
+                                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 shrink-0"
+                                        title="JV Partner deal">JV</span>
+                                )}
+                              </div>
                               <p className="text-[11px] text-txt-secondary">{r.city}, {r.state}</p>
                             </div>
                             <div className="flex items-center gap-3 text-[11px] text-txt-secondary flex-shrink-0">

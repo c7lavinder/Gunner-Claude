@@ -598,7 +598,15 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedS
                   {cleanStageName(p.ghlStageName)}
                 </span>
               )}
-              {p.leadSource && (
+              {/* JV deals get a distinct purple pill so they're easy to
+                  pick out in the list. Suppresses the regular lead-source
+                  chip to avoid showing "JV" + "JV Partner" side by side. */}
+              {p.leadSource === 'JV Partner' ? (
+                <span className="text-[10px] font-semibold px-2 py-[2px] rounded-full whitespace-nowrap bg-purple-100 text-purple-700 border border-purple-200"
+                      title="JV Partner deal — partner brought this under contract">
+                  JV
+                </span>
+              ) : p.leadSource && (
                 <span className={`text-[10px] font-medium px-2 py-[2px] rounded-full whitespace-nowrap ${sourceColor}`}>
                   {p.leadSource}
                 </span>
