@@ -43,6 +43,12 @@ export function Section3BuyerMatch({
   const [buyers, setBuyers] = useState<BuyerItem[]>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
+  const [diagnostics, setDiagnostics] = useState<{
+    propertyMarkets: string[]
+    totalBuyers: number
+    buyersWithMarkets: number
+    marketMatchedCount: number
+  } | null>(null)
   const [addedBuyers, setAddedBuyers] = useState<BuyerItem[]>([])
   const [addedLoaded, setAddedLoaded] = useState(false)
   // Add buyer flow — opens the same BuyerModal in mode='add'. The inline
@@ -147,6 +153,7 @@ export function Section3BuyerMatch({
       if (data.buyerStages) setBuyerStages(data.buyerStages)
       if (data.buyerIntents) setBuyerIntents(data.buyerIntents)
       if (data.everResponded) setEverResponded(data.everResponded)
+      if (data.diagnostics) setDiagnostics(data.diagnostics)
       setSyncMsg('')
       setFetched(true)
     } catch { setBuyers([]) }
@@ -325,6 +332,22 @@ export function Section3BuyerMatch({
             (or are nationwide). Clicking 5 chips to filter by market never
             made sense in a per-property view. */}
       </div>
+
+      {fetched && allBuyers.length === 0 && diagnostics && diagnostics.totalBuyers > 0 && (
+        <div className="bg-amber-50 border-[0.5px] border-amber-200 rounded-[10px] px-3 py-2.5">
+          <p className="text-ds-fine text-amber-800 font-medium">No buyers matched this property&apos;s markets.</p>
+          <p className="text-[10px] text-amber-700 mt-1">
+            Targeting: <span className="font-semibold">{diagnostics.propertyMarkets.join(', ') || '(none)'}</span>.{' '}
+            {diagnostics.totalBuyers} buyer{diagnostics.totalBuyers === 1 ? '' : 's'} in your DB,{' '}
+            {diagnostics.buyersWithMarkets} with a market set.
+            {diagnostics.buyersWithMarkets === 0
+              ? ' None of your buyers have their Markets custom field populated in GHL.'
+              : diagnostics.buyersWithMarkets < diagnostics.totalBuyers
+                ? ` ${diagnostics.totalBuyers - diagnostics.buyersWithMarkets} buyer${diagnostics.totalBuyers - diagnostics.buyersWithMarkets === 1 ? ' is' : 's are'} missing their Markets field in GHL — they can&apos;t be matched.`
+                : ' Check the spelling of your market name in the property Overview vs. the buyer Markets field in GHL.'}
+          </p>
+        </div>
+      )}
 
       {loading && !fetched ? (
         <div className="py-10 text-center">

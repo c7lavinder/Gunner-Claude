@@ -329,6 +329,47 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
         responseAt: true, movedToRespondedAt: true,
       },
     })
+
+    // Always include any buyer that has a PropertyBuyerStage row for this
+    // property — even if their `primaryMarkets` doesn't match the property
+    // markets. Reasoning: once someone's been blasted, replied, or had a
+    // walkthrough logged, they belong on the deal's kanban regardless of
+    // whether their GHL market data lines up. Without this, walkthroughs
+    // logged for buyers whose `primaryMarkets` is empty/mismatched silently
+    // vanish from Section 3.
+    const matchedIds = new Set(matched.map(m => m.id))
+    const linkedButUnmatchedIds = buyerStages
+      .map(bs => bs.buyerId)
+      .filter(id => !matchedIds.has(id))
+    if (linkedButUnmatchedIds.length > 0) {
+      const linkedBuyers = await db.buyer.findMany({
+        where: { tenantId, id: { in: linkedButUnmatchedIds } },
+      })
+      for (const lb of linkedBuyers) {
+        const criteria = (lb.customFields ?? {}) as Record<string, unknown>
+        const tags = Array.isArray(lb.tags) ? lb.tags as string[] : []
+        const markets = Array.isArray(lb.primaryMarkets) ? lb.primaryMarkets as string[] : []
+        matched.push({
+          id: lb.id,
+          name: lb.name,
+          phone: lb.phone ?? '',
+          email: lb.email ?? '',
+          ghlContactId: lb.ghlContactId ?? null,
+          tier: (criteria.tier as string) ?? 'unqualified',
+          markets,
+          secondaryMarkets: (criteria.secondaryMarkets as string[]) ?? [],
+          buybox: (criteria.buybox as string) ?? '',
+          verifiedFunding: (criteria.verifiedFunding as boolean) ?? false,
+          hasPurchased: (criteria.hasPurchased as boolean) ?? false,
+          responseSpeed: (criteria.responseSpeed as string) ?? '',
+          maxBuyPrice: (criteria.maxBuyPrice as number) ?? null,
+          buyerNotes: lb.internalNotes ?? '',
+          tags,
+          matchScore: 0,
+          scoreBreakdown: 'Linked to this deal',
+        })
+      }
+    }
     const stageMap: Record<string, string> = {}
     const intentMap: Record<string, string> = {}
     const everRespondedMap: Record<string, boolean> = {}
@@ -381,6 +422,12 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
       buyerStages: stageMap,
       buyerIntents: intentMap,
       everResponded: everRespondedMap,
+      diagnostics: {
+        propertyMarkets: allPropertyMarkets,
+        totalBuyers: allBuyers.length,
+        buyersWithMarkets: allBuyers.filter(b => b.markets.length > 0 || b.secondaryMarkets.length > 0).length,
+        marketMatchedCount: marketMatched.length,
+      },
     })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to match buyers' }, { status: 500 })

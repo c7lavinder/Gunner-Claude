@@ -209,29 +209,59 @@ export const POST = withTenant<{ propertyId: string }>(async (req, ctx, params) 
     // The log itself surfaces the offer/showing in Section 5; this update
     // makes sure the Section-3/4 kanban also reflects the buyer's furthest
     // point in the deal. Match buyer by ghlContactId.
+    //
+    // If the picked GHL contact isn't in db.buyer yet (sync lag, or the
+    // contact isn't in the buyer pipeline), create a stub Buyer row so
+    // the PropertyBuyerStage upsert has something to link to. Without
+    // this, the Responded column stays empty for legitimate walkthroughs.
+    // movedToRespondedAt is also set — that's the column the Section-3
+    // UI reads to keep the card visible forever (Phase A4 sticky).
     if ((type === 'offer' || type === 'showing') && ghlContactId) {
       try {
-        const buyer = await db.buyer.findFirst({
+        let buyer = await db.buyer.findFirst({
           where: { tenantId: ctx.tenantId, ghlContactId },
           select: { id: true },
         })
-        if (buyer) {
-          await db.propertyBuyerStage.upsert({
-            where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId: buyer.id } },
-            create: {
+        if (!buyer) {
+          const stubId = `ghl_${ghlContactId}`
+          // Parse phone/email from recipientContact when possible so the
+          // stub row isn't completely blind to who this is.
+          const contactStr = recipientContact ?? ''
+          const isPhone = /^\+?\d[\d\s()-]{6,}$/.test(contactStr)
+          const stub = await db.buyer.create({
+            data: {
+              id: stubId,
               tenantId: ctx.tenantId,
-              propertyId: params.propertyId,
-              buyerId: buyer.id,
-              stage: 'showing_scheduled',
-              source: 'manual',
-              movedToInterestedAt: new Date(),
-            },
-            update: {
-              stage: 'showing_scheduled',
-              movedToInterestedAt: new Date(),
+              name: titleCase(recipientName),
+              phone: isPhone ? contactStr : null,
+              email: !isPhone && contactStr.includes('@') ? contactStr : null,
+              ghlContactId,
+              primaryMarkets: [],
+              customFields: { tier: 'unqualified' },
+              tags: [],
+              isActive: true,
             },
           })
+          buyer = { id: stub.id }
         }
+        const stageNow = new Date()
+        await db.propertyBuyerStage.upsert({
+          where: { propertyId_buyerId: { propertyId: params.propertyId, buyerId: buyer.id } },
+          create: {
+            tenantId: ctx.tenantId,
+            propertyId: params.propertyId,
+            buyerId: buyer.id,
+            stage: 'showing_scheduled',
+            source: 'manual',
+            movedToInterestedAt: stageNow,
+            movedToRespondedAt: stageNow,
+          },
+          update: {
+            stage: 'showing_scheduled',
+            movedToInterestedAt: stageNow,
+            movedToRespondedAt: stageNow,
+          },
+        })
       } catch (err) {
         console.warn(`[Outreach] Fast-forward stage update failed:`, err instanceof Error ? err.message : err)
       }
