@@ -46,3 +46,6 @@ audit-results/
 
 # Stray CSV exports at repo root (call lists, inventory dumps, etc.)
 /*.csv
+
+# Backfill data — source JSON + match/preview reports, kept out of git
+scripts/data/

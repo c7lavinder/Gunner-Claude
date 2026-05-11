@@ -626,6 +626,10 @@ export interface GHLContact {
   tags: string[]
   customFields: Array<{ id: string; value: string }>
   assignedTo?: string
+  // Timestamp the contact was created in GHL — returned by GET /contacts/{id}
+  // but not previously declared here. Used by the LEAD milestone backfill
+  // (scripts/backfill-milestones.ts) as the authoritative "lead came in" date.
+  dateAdded?: string
 }
 
 export interface GHLContactUpdate {
