@@ -166,9 +166,12 @@ export function Section3BuyerMatch({
     } catch { /* modal still works; markets dropdown just won't show GHL picklist */ }
   }
 
-  async function openAddModal() {
-    await ensureFormOptionsLoaded()
+  function openAddModal() {
+    // Open the modal instantly; market dropdown + stage default hydrate in
+    // the background. BuyerModal already tolerates empty marketOptions and
+    // a missing defaultStageId.
     setShowAddModal(true)
+    ensureFormOptionsLoaded()
   }
 
   const allBuyers: BuyerItem[] = [...addedBuyers, ...buyers.filter(b => !addedBuyers.some(a => a.id === b.id))]
@@ -292,7 +295,7 @@ export function Section3BuyerMatch({
           {syncMsg && <p className="text-[10px] text-txt-muted mt-0.5">{syncMsg}</p>}
         </div>
         <div className="flex gap-2">
-          <button onClick={async () => { await ensureFormOptionsLoaded(); setShowBulkAdd(true) }} disabled={loading}
+          <button onClick={() => { setShowBulkAdd(true); ensureFormOptionsLoaded() }} disabled={loading}
             className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors disabled:opacity-50">
             <Upload size={11} />
             Bulk Add
