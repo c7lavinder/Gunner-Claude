@@ -1,7 +1,8 @@
 # Disposition + JV Rebuild — Locked Spec
 
 > Owner: Corey Lavinder
-> Status: **Awaiting approval** — do not start coding until Corey signs off.
+> Status: **SHIPPED 2026-05-11** — all 7 phases live on main. See
+> PROGRESS.md Session 83 for the commit list and verification ritual.
 > Created: 2026-05-11
 
 This document captures the user-stated requirements verbatim and turns them
@@ -256,8 +257,10 @@ Two reasonable orders:
 
 ## Approval
 
-- [ ] Corey signs off on the spec
-- [ ] Corey picks the sequencing (disposition first vs JV first)
+- [x] Corey signed off on the spec (2026-05-11).
+- [x] Sequencing locked: disposition first (A1 → A1.1 → A2 → A3 → A4),
+      then JV (B2 → B1 → B3; B2 jumped ahead of B1 because the
+      inability to advance JV stages was the active blocker).
 - [x] **JV semantics locked (2026-05-11)**: a JV partner brings us a
       property they already have under contract and wants us to assign
       the contract to a buyer (or buy it ourselves). They act like a
