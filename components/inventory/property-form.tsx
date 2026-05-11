@@ -8,10 +8,9 @@
 // All other property fields (financials, beds/baths, description, etc.)
 // are edited on the property detail page after creation, not at intake.
 
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, Save, Loader2, Plus, Search, X } from 'lucide-react'
+import { Save, Loader2, Plus, Search, X } from 'lucide-react'
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -38,25 +37,20 @@ const STAGE_OPTIONS: StageOption[] = [
   { key: 'longterm.dead',               label: 'Dead',            group: 'Long-Term' },
 ]
 
-// Common lead-source values. The select also has "Other" which reveals
-// a free-text input — sources land in the same column either way.
+// Locked list — the only sources the team currently runs. Keep in sync
+// with the Source chip-row colors in inventory-client.tsx.
 const SOURCE_OPTIONS = [
-  'JV Partner',
+  'PPL',
+  'Form',
+  'Texts',
   'PPC',
-  'SEO',
-  'Direct Mail',
-  'Cold Call',
-  'Text Blast',
-  'Referral',
-  'Driving for Dollars',
-  'Wholesaler',
-  'Agent',
-  'Auction',
-  'MLS',
+  'Dialer',
+  'JV',
 ]
 
 interface Props {
   tenantSlug: string
+  onClose: () => void
   defaultStage?: string
 }
 
@@ -77,7 +71,7 @@ type SelectedContact = {
   email: string
 }
 
-export function PropertyForm({ tenantSlug, defaultStage = 'acquisition.new_lead' }: Props) {
+export function PropertyForm({ tenantSlug, onClose, defaultStage = 'acquisition.new_lead' }: Props) {
   const router = useRouter()
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
@@ -85,15 +79,15 @@ export function PropertyForm({ tenantSlug, defaultStage = 'acquisition.new_lead'
   const [zip, setZip] = useState('')
   const [stage, setStage] = useState(defaultStage)
   const [source, setSource] = useState('')
-  const [sourceOther, setSourceOther] = useState('')
   const [contact, setContact] = useState<SelectedContact | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const resolvedSource = source === '__other__' ? sourceOther.trim() : source
+  const resolvedSource = source
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault()
+    if (saving || !canSubmit) return
     setSaving(true)
     setError('')
 
@@ -146,26 +140,42 @@ export function PropertyForm({ tenantSlug, defaultStage = 'acquisition.new_lead'
 
   const inputCls = 'w-full bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-4 py-2.5 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none focus:border-gunner-red/60 transition-colors'
   const labelCls = 'block text-ds-fine font-medium text-txt-secondary mb-1.5'
-  const sectionCls = 'bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-6 space-y-4'
+  const sectionCls = 'bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[12px] p-5 space-y-4'
 
   const canSubmit = address.trim() && city.trim() && state.trim() && stage && contact && (
     contact.mode === 'existing' || (contact.mode === 'new' && contact.name.trim().length > 0)
   )
 
-  return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href={`/${tenantSlug}/inventory`}
-          className="inline-flex items-center gap-1.5 text-ds-body text-txt-secondary hover:text-txt-primary transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to inventory
-        </Link>
-      </div>
-      <h1 className="text-ds-page font-semibold text-txt-primary">Add property</h1>
+  // Close on Escape — standard modal expectation.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && !saving) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, saving])
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={() => { if (!saving) onClose() }}
+    >
+      <div
+        className="bg-white rounded-[16px] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(0,0,0,0.06)]">
+          <h2 className="text-ds-label font-semibold text-txt-primary">Add property</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="text-txt-muted hover:text-txt-primary disabled:opacity-40 transition-colors"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
         {/* Address */}
         <div className={sectionCls}>
           <h2 className="text-ds-label font-medium text-txt-primary">Address</h2>
@@ -214,16 +224,7 @@ export function PropertyForm({ tenantSlug, defaultStage = 'acquisition.new_lead'
           <select value={source} onChange={e => setSource(e.target.value)} className={inputCls}>
             <option value="">Select source…</option>
             {SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-            <option value="__other__">Other…</option>
           </select>
-          {source === '__other__' && (
-            <input
-              value={sourceOther}
-              onChange={e => setSourceOther(e.target.value)}
-              placeholder="Enter source name"
-              className={inputCls}
-            />
-          )}
         </div>
 
         {/* Contact */}
@@ -233,29 +234,32 @@ export function PropertyForm({ tenantSlug, defaultStage = 'acquisition.new_lead'
           <ContactPicker value={contact} onChange={setContact} />
         </div>
 
-        {error && (
-          <div className="bg-semantic-red-bg border-[0.5px] border-semantic-red/20 rounded-[14px] px-4 py-3 text-semantic-red text-ds-body">
-            {error}
+            {error && (
+              <div className="bg-semantic-red-bg border-[0.5px] border-semantic-red/20 rounded-[12px] px-4 py-3 text-semantic-red text-ds-body">
+                {error}
+              </div>
+            )}
           </div>
-        )}
-
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/${tenantSlug}/inventory`}
-            className="px-5 py-2.5 text-ds-body text-txt-secondary hover:text-txt-primary bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] transition-colors font-medium"
-          >
-            Cancel
-          </Link>
-          <button
-            type="submit"
-            disabled={saving || !canSubmit}
-            className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-6 py-2.5 rounded-[10px] transition-colors"
-          >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {saving ? 'Saving…' : 'Add property'}
-          </button>
-        </div>
-      </form>
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[rgba(0,0,0,0.06)] bg-surface-secondary/40">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="px-5 py-2.5 text-ds-body text-txt-secondary hover:text-txt-primary bg-white border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] transition-colors font-medium disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !canSubmit}
+              className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-6 py-2.5 rounded-[10px] transition-colors"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? 'Saving…' : 'Add property'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

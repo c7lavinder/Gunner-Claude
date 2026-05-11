@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { formatPhone, titleCase } from '@/lib/format'
 import { useToast } from '@/components/ui/toaster'
 import { PipelineStageTabs } from './PipelineStageTabs'
+import { PropertyForm } from './property-form'
 import { PriceMatrixCard, ComputedSpreadCard } from './property-detail-client'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
@@ -123,6 +124,7 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
   const [visibleCount, setVisibleCount] = useState(50)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   // Local state so drawer edits immediately reflect in the table row.
   // Re-syncs if the server re-fetches (e.g., via router.refresh).
@@ -316,12 +318,13 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
             {showArchived ? 'Hide archived' : 'Show archived'}
           </Link>
           {canManage && (
-            <Link
-              href={`/${tenantSlug}/inventory/new`}
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
               className="flex items-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark text-white text-ds-body font-semibold px-4 py-[9px] rounded-[10px] transition-colors"
             >
               <Plus size={14} /> Add property
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -493,6 +496,14 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
           />
         )}
       </div>
+
+      {/* Add property modal — replaces the old /inventory/new full page. */}
+      {showAddModal && (
+        <PropertyForm
+          tenantSlug={tenantSlug}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
 
       {/* Cross-pipeline drop confirmation. Same-pipeline drops happen
           instantly; only cross-pipeline drops surface here because they

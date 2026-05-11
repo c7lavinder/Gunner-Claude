@@ -186,7 +186,7 @@ export const POST = withTenant(async (request, ctx) => {
             data: {
               propertyId: prop.id,
               partnerId,
-              role: leadSource === 'JV Partner' ? 'jv_partner' : 'sourced_to_us',
+              role: leadSource === 'JV' ? 'jv_partner' : 'sourced_to_us',
             },
           })
         }
