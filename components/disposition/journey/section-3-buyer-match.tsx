@@ -53,6 +53,12 @@ export function Section3BuyerMatch({
 
   const [buyerStages, setBuyerStages] = useState<Record<string, KanbanStage>>({})
   const [buyerIntents, setBuyerIntents] = useState<Record<string, string>>({})
+  // Phase A4 — "ever responded" persistence. Once true, a buyer stays
+  // visible in Section 3's Responded column forever, even after
+  // Section 4 promotes them to interested / showing_scheduled. Hydrated
+  // from the buyer-match API; optimistically set when the rep manually
+  // moves a buyer to Responded via the kanban arrows.
+  const [everResponded, setEverResponded] = useState<Record<string, boolean>>({})
   const [leftTab, setLeftTab] = useState<'matched' | 'added'>('matched')
 
   const [editTarget, setEditTarget] = useState<BuyerItem | null>(null)
@@ -130,6 +136,7 @@ export function Section3BuyerMatch({
           setBuyers(d2.buyers ?? [])
           if (d2.buyerStages) setBuyerStages(d2.buyerStages)
           if (d2.buyerIntents) setBuyerIntents(d2.buyerIntents)
+          if (d2.everResponded) setEverResponded(d2.everResponded)
           setSyncMsg('')
         }
         setFetched(true)
@@ -139,6 +146,7 @@ export function Section3BuyerMatch({
       setBuyers(data.buyers ?? [])
       if (data.buyerStages) setBuyerStages(data.buyerStages)
       if (data.buyerIntents) setBuyerIntents(data.buyerIntents)
+      if (data.everResponded) setEverResponded(data.everResponded)
       setSyncMsg('')
       setFetched(true)
     } catch { setBuyers([]) }
@@ -186,16 +194,32 @@ export function Section3BuyerMatch({
   }
 
   function buyersInColumn(col: KanbanStage) {
+    if (col === 'responded') {
+      // Phase A4 — responded column is sticky. Once a buyer has ever
+      // responded (replied, was manually moved here, or Section 4
+      // promoted them to interested/showing_scheduled), they live here
+      // forever even though Section 4 simultaneously tracks them.
+      return filteredAllBuyers.filter(b => everResponded[b.id] || getBuyerStage(b.id) === 'responded')
+    }
+    // Matched / Sent columns: exclude any buyer who has ever responded
+    // so they don't appear in two columns at once.
     if (col === 'matched') {
-      const inCol = filteredAllBuyers.filter(b => getBuyerStage(b.id) === 'matched')
+      const inCol = filteredAllBuyers.filter(b => !everResponded[b.id] && getBuyerStage(b.id) === 'matched')
       if (leftTab === 'added') return inCol.filter(b => addedBuyers.some(a => a.id === b.id))
       return inCol.filter(b => !addedBuyers.some(a => a.id === b.id))
     }
-    return filteredAllBuyers.filter(b => getBuyerStage(b.id) === col)
+    return filteredAllBuyers.filter(b => !everResponded[b.id] && getBuyerStage(b.id) === col)
   }
 
   function moveBuyerStage(buyerId: string, newStage: KanbanStage) {
     setBuyerStages(prev => ({ ...prev, [buyerId]: newStage }))
+    // Moving forward into 'responded' flips the sticky flag. Moving back
+    // (e.g., to Matched/Sent) does NOT clear the flag — once responded,
+    // they stay in the Responded column. The rep can fix this via a
+    // full reset, not via the kanban arrows.
+    if (newStage === 'responded') {
+      setEverResponded(prev => ({ ...prev, [buyerId]: true }))
+    }
     fetch(`/api/properties/${property.id}/buyer-stage`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -317,11 +341,11 @@ export function Section3BuyerMatch({
                       <div className="flex items-center gap-1 bg-surface-tertiary rounded-lg p-0.5">
                         <button onClick={() => setLeftTab('matched')}
                           className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${leftTab === 'matched' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}>
-                          Matched <span className="text-[9px] font-normal ml-0.5">({allBuyers.filter(b => getBuyerStage(b.id) === 'matched' && !addedBuyers.some(a => a.id === b.id)).length})</span>
+                          Matched <span className="text-[9px] font-normal ml-0.5">({allBuyers.filter(b => !everResponded[b.id] && getBuyerStage(b.id) === 'matched' && !addedBuyers.some(a => a.id === b.id)).length})</span>
                         </button>
                         <button onClick={() => setLeftTab('added')}
                           className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${leftTab === 'added' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}>
-                          Added <span className="text-[9px] font-normal ml-0.5">({addedBuyers.filter(b => getBuyerStage(b.id) === 'matched').length})</span>
+                          Added <span className="text-[9px] font-normal ml-0.5">({addedBuyers.filter(b => !everResponded[b.id] && getBuyerStage(b.id) === 'matched').length})</span>
                         </button>
                       </div>
                       <div className="flex items-center gap-2">

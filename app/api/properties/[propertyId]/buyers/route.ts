@@ -324,13 +324,33 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
     // Fetch buyer pipeline stages for this property (include responseIntent for UI highlighting)
     const buyerStages = await db.propertyBuyerStage.findMany({
       where: { propertyId: params.propertyId, tenantId },
-      select: { id: true, buyerId: true, stage: true, responseIntent: true, matchScore: true },
+      select: {
+        id: true, buyerId: true, stage: true, responseIntent: true, matchScore: true,
+        responseAt: true, movedToRespondedAt: true,
+      },
     })
     const stageMap: Record<string, string> = {}
     const intentMap: Record<string, string> = {}
+    const everRespondedMap: Record<string, boolean> = {}
+    // Phase A4 — a buyer has "ever responded" if a response was logged
+    // (responseAt or responseIntent), they were manually moved to the
+    // Responded column at any point (movedToRespondedAt), or their
+    // current stage is past Responded (interested / showing_scheduled).
+    // Section 3 uses this to keep responded buyers visible forever even
+    // after Section 4 promotes them to interested.
     for (const bs of buyerStages) {
       stageMap[bs.buyerId] = bs.stage
       if (bs.responseIntent) intentMap[bs.buyerId] = bs.responseIntent
+      if (
+        bs.responseAt ||
+        bs.movedToRespondedAt ||
+        bs.responseIntent ||
+        bs.stage === 'responded' ||
+        bs.stage === 'interested' ||
+        bs.stage === 'showing_scheduled'
+      ) {
+        everRespondedMap[bs.buyerId] = true
+      }
     }
 
     // v1.1 Wave 4 — fire-and-forget persist matchScore for buyers that
@@ -355,7 +375,13 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
       }).catch(err => console.warn('[Buyers] matchScore persist failed:', err instanceof Error ? err.message : err))
     }
 
-    return NextResponse.json({ buyers: matched, total: matched.length, buyerStages: stageMap, buyerIntents: intentMap })
+    return NextResponse.json({
+      buyers: matched,
+      total: matched.length,
+      buyerStages: stageMap,
+      buyerIntents: intentMap,
+      everResponded: everRespondedMap,
+    })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to match buyers' }, { status: 500 })
   }
