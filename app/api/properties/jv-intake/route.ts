@@ -31,9 +31,16 @@ const jvIntakeSchema = z.object({
   state: z.string().length(2, 'State must be 2 letters'),
   zip: z.string().optional(),
   arv: z.string().nullable().optional(),
+  // Initial asking we'll show to our buyer list. Can change later in Dispo.
   askingPrice: z.string().nullable().optional(),
+  // What the partner has the property locked up for with the original
+  // seller. We're effectively buying their contract.
   contractPrice: z.string().nullable().optional(),
-  assignmentFee: z.string().nullable().optional(),
+  // Phase B1 — what WE pay the partner at close. Stored on
+  // PropertyPartner.assignmentFeePaid (the deal-level partner economics
+  // column) rather than Property.assignmentFee (which is the fee WE
+  // collect from OUR buyer in dispo and stays editable separately).
+  feeToPartner: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   assignedToId: z.string().nullable().optional(),
 })
@@ -49,7 +56,7 @@ export const POST = withTenant(async (request, ctx) => {
 
   const {
     partnerId, address: rawAddr, city: rawCity, state: rawState, zip: rawZip,
-    arv, askingPrice, contractPrice, assignmentFee, notes, assignedToId,
+    arv, askingPrice, contractPrice, feeToPartner, notes, assignedToId,
   } = parsed.data
 
   // Verify partner belongs to this tenant.
@@ -79,7 +86,10 @@ export const POST = withTenant(async (request, ctx) => {
           arv: arv ? parseFloat(arv) : null,
           askingPrice: askingPrice ? parseFloat(askingPrice) : null,
           contractPrice: contractPrice ? parseFloat(contractPrice) : null,
-          assignmentFee: assignmentFee ? parseFloat(assignmentFee) : null,
+          // Property.assignmentFee is intentionally NOT written here.
+          // It's the fee WE collect from our buyer at dispo, decided
+          // later. The fee WE pay the partner goes on PropertyPartner
+          // below.
           assignedToId: assignedToId ?? null,
         },
       })
@@ -89,6 +99,7 @@ export const POST = withTenant(async (request, ctx) => {
           propertyId: prop.id,
           partnerId: partner.id,
           role: 'sourced_to_us',
+          assignmentFeePaid: feeToPartner ? parseFloat(feeToPartner) : null,
         },
       })
 
