@@ -102,53 +102,23 @@ function normalizeMarket(m: string): string {
     .trim()
 }
 
-// Check if a buyer's markets match the property. Pulls from every
-// geography source on the Buyer record so a buyer in our DB with their
-// market in citiesOfInterest / countiesOfInterest / mailingCity / tags
-// still matches — the prior version only looked at primaryMarkets +
-// custom-field secondaryMarkets and silently filtered out hundreds of
-// buyers whose market data lived elsewhere.
-function buyerMatchesMarket(
-  buyer: {
-    markets: string[]
-    secondaryMarkets: string[]
-    citiesOfInterest?: string[]
-    countiesOfInterest?: string[]
-    zipCodesOfInterest?: string[]
-    mailingCity?: string | null
-    tags?: string[]
-    isNationalBuyer?: boolean
-  },
-  matchTargets: string[],
-): boolean {
-  // National buyer — matches every property.
-  if (buyer.isNationalBuyer) return true
+// Check if a buyer's Markets field matches the property's markets.
+// Single source of truth: Buyer.primaryMarkets — the "Markets" field on
+// the buyer profile. No fallbacks to mailing city / tags / counties etc.
+// Per owner direction those fields are unreliable noise.
+function buyerMatchesMarket(buyer: { markets: string[] }, matchTargets: string[]): boolean {
+  const buyerMarkets = buyer.markets.filter(m => m && normalizeMarket(m) !== 'other')
+  if (buyerMarkets.length === 0) return false
 
-  const propertyZips = matchTargets.filter(m => /^\d{5}/.test(m))
-  if (buyer.zipCodesOfInterest && buyer.zipCodesOfInterest.length > 0 && propertyZips.length > 0) {
-    if (buyer.zipCodesOfInterest.some(z => propertyZips.includes(z.trim()))) return true
-  }
-
-  const allBuyerMarkets = [
-    ...buyer.markets,
-    ...buyer.secondaryMarkets,
-    ...(buyer.citiesOfInterest ?? []),
-    ...(buyer.countiesOfInterest ?? []),
-    ...(buyer.mailingCity ? [buyer.mailingCity] : []),
-    ...(buyer.tags ?? []),
-  ].filter(m => m && normalizeMarket(m) !== 'other')
-
-  if (allBuyerMarkets.length === 0) return false
-
-  // "Nationwide" string in any market field matches everything.
-  if (allBuyerMarkets.some(m => normalizeMarket(m) === 'nationwide')) return true
+  // "Nationwide" in the Markets field matches every property.
+  if (buyerMarkets.some(m => normalizeMarket(m) === 'nationwide')) return true
 
   const normalizedTargets = matchTargets.map(normalizeMarket).filter(Boolean)
   if (normalizedTargets.length === 0) return false
 
   // Substring match both ways, normalized — handles "Chattanooga" vs
   // "Chattanooga, TN" vs "chattanooga".
-  return allBuyerMarkets.some(m => {
+  return buyerMarkets.some(m => {
     const nm = normalizeMarket(m)
     if (!nm) return false
     return normalizedTargets.some(pm => pm.includes(nm) || nm.includes(pm))
@@ -296,23 +266,12 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
       const markets = Array.isArray(lb.primaryMarkets) ? lb.primaryMarkets as string[] : []
       const criteria = (lb.customFields ?? {}) as Record<string, unknown>
       const tags = Array.isArray(lb.tags) ? lb.tags as string[] : []
-      const citiesOfInterest = Array.isArray(lb.citiesOfInterest) ? lb.citiesOfInterest as string[] : []
-      const countiesOfInterest = Array.isArray(lb.countiesOfInterest) ? lb.countiesOfInterest as string[] : []
-      const zipCodesOfInterest = Array.isArray(lb.zipCodesOfInterest) ? lb.zipCodesOfInterest as string[] : []
       return {
         id: lb.id, name: lb.name, phone: lb.phone ?? '', email: lb.email ?? '',
         ghlContactId: lb.ghlContactId ?? null,
         tier: (criteria.tier as string) ?? 'unqualified',
         markets,
         secondaryMarkets: (criteria.secondaryMarkets as string[]) ?? [],
-        // Extra geography surfaces — buyerMatchesMarket reads all of these
-        // so a buyer whose Chattanooga is in citiesOfInterest / mailing
-        // city / tags still matches.
-        citiesOfInterest,
-        countiesOfInterest,
-        zipCodesOfInterest,
-        mailingCity: lb.mailingCity ?? null,
-        isNationalBuyer: lb.isNationalBuyer === true,
         buybox: (criteria.buybox as string) ?? '',
         verifiedFunding: (criteria.verifiedFunding as boolean) ?? false,
         hasPurchased: (criteria.hasPurchased as boolean) ?? false,
@@ -396,11 +355,6 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
           tier: (criteria.tier as string) ?? 'unqualified',
           markets,
           secondaryMarkets: (criteria.secondaryMarkets as string[]) ?? [],
-          citiesOfInterest: Array.isArray(lb.citiesOfInterest) ? lb.citiesOfInterest as string[] : [],
-          countiesOfInterest: Array.isArray(lb.countiesOfInterest) ? lb.countiesOfInterest as string[] : [],
-          zipCodesOfInterest: Array.isArray(lb.zipCodesOfInterest) ? lb.zipCodesOfInterest as string[] : [],
-          mailingCity: lb.mailingCity ?? null,
-          isNationalBuyer: lb.isNationalBuyer === true,
           buybox: (criteria.buybox as string) ?? '',
           verifiedFunding: (criteria.verifiedFunding as boolean) ?? false,
           hasPurchased: (criteria.hasPurchased as boolean) ?? false,
@@ -468,15 +422,8 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
       diagnostics: {
         propertyMarkets: allPropertyMarkets,
         totalBuyers: allBuyers.length,
-        buyersWithMarkets: allBuyers.filter(b =>
-          b.markets.length > 0
-          || b.secondaryMarkets.length > 0
-          || b.citiesOfInterest.length > 0
-          || b.countiesOfInterest.length > 0
-          || !!b.mailingCity
-          || (b.tags && b.tags.length > 0)
-          || b.isNationalBuyer
-        ).length,
+        // Only the profile Markets field counts — matches the matcher.
+        buyersWithMarkets: allBuyers.filter(b => b.markets.length > 0).length,
         marketMatchedCount: marketMatched.length,
       },
     })
