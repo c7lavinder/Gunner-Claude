@@ -1046,7 +1046,36 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
     setSaving(false)
   }
 
-  function ProgressRow({ steps, activeIdx }: { steps: typeof ACQ_STEPS; activeIdx: number; color: string }) {
+  // Phase B2 — "Move here" inline status change. PATCHes the property
+  // with an explicit lane hint so JV deals (no GHL opp) can advance
+  // through stages from Gunner. Regular deals also get a manual override
+  // path; reverse-sync will push to GHL automatically when the opp
+  // exists and the feature flag is on.
+  async function moveToStage(stepKey: string, lane: 'acq' | 'dispo') {
+    // ACQ_STEPS uses 'SOLD' for closed, DISPO_STEPS uses 'DISPO_CLOSED'.
+    // The DB enum is just 'CLOSED' on each lane — normalize.
+    const status = stepKey === 'SOLD' || stepKey === 'DISPO_CLOSED' ? 'CLOSED' : stepKey
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, lane }),
+      })
+      if (res.ok) {
+        toast(`Moved to ${stepKey === 'SOLD' || stepKey === 'DISPO_CLOSED' ? 'Closed' : stepKey}`, 'success')
+        setExpandedStep(null)
+        router.refresh()
+      } else {
+        toast('Failed to move stage', 'error')
+      }
+    } catch {
+      toast('Failed to move stage', 'error')
+    }
+    setSaving(false)
+  }
+
+  function ProgressRow({ steps, activeIdx, lane }: { steps: typeof ACQ_STEPS; activeIdx: number; color: string; lane: 'acq' | 'dispo' }) {
     // Find the latest milestone date among all LATER stages (for stale detection)
     function hasLaterStageMilestone(stepIdx: number): boolean {
       for (let j = stepIdx + 1; j < steps.length; j++) {
@@ -1131,20 +1160,32 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
               : everVisited || isPast ? 'bg-surface-secondary border-gunner-red/10'
               : 'bg-surface-secondary border-[rgba(0,0,0,0.06)]'
             }`}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className={`text-[10px] font-semibold ${popoverCaution ? 'text-amber-700' : isCurrent ? 'text-gunner-red' : everVisited || isPast ? 'text-txt-primary' : 'text-txt-muted'}`}>
                   {popoverCaution && <AlertTriangle size={9} className="inline mr-1 -mt-0.5" />}
                   {step.label}
                   {stepMilestones.length > 1 && <span className="text-txt-muted font-normal ml-1">({stepMilestones.length} times)</span>}
                 </p>
-                {canLog && !isAdding && (
-                  <button
-                    onClick={() => { setAddingMilestone(milestoneType); setMilestoneNotes(''); setMilestoneDate('') }}
-                    className="text-[8px] text-gunner-red hover:text-gunner-red-dark flex items-center gap-0.5"
-                  >
-                    <Plus size={8} /> Log
-                  </button>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {canEdit && !isCurrent && !isAdding && (
+                    <button
+                      onClick={() => moveToStage(step.key, lane)}
+                      disabled={saving}
+                      className="text-[8px] font-semibold text-white bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 px-1.5 py-0.5 rounded transition-colors"
+                      title="Set this property's stage to this point"
+                    >
+                      Move here
+                    </button>
+                  )}
+                  {canLog && !isAdding && (
+                    <button
+                      onClick={() => { setAddingMilestone(milestoneType); setMilestoneNotes(''); setMilestoneDate('') }}
+                      className="text-[8px] text-gunner-red hover:text-gunner-red-dark flex items-center gap-0.5"
+                    >
+                      <Plus size={8} /> Log
+                    </button>
+                  )}
+                </div>
               </div>
               {popoverCaution ? (
                 <p className="text-[9px] text-amber-600 mt-0.5">No milestone — this stage won&apos;t count in KPIs. Log with the correct date.</p>
@@ -1271,11 +1312,11 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
     <div className="bg-surface-secondary/50 border-[0.5px] border-[rgba(0,0,0,0.04)] rounded-[8px] px-3 py-2 mt-3 space-y-2">
       <div>
         <p className="text-[7px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Acquisition</p>
-        <ProgressRow steps={ACQ_STEPS} activeIdx={acqIdx} color="bg-gunner-red" />
+        <ProgressRow steps={ACQ_STEPS} activeIdx={acqIdx} color="bg-gunner-red" lane="acq" />
       </div>
       <div>
         <p className="text-[7px] font-semibold text-txt-muted uppercase tracking-wider mb-1">Disposition</p>
-        <ProgressRow steps={DISPO_STEPS} activeIdx={dispoIdx} color="bg-semantic-blue" />
+        <ProgressRow steps={DISPO_STEPS} activeIdx={dispoIdx} color="bg-semantic-blue" lane="dispo" />
       </div>
     </div>
   )

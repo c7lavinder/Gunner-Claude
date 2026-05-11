@@ -20,6 +20,13 @@ const updateSchema = z.object({
   zip: z.string().optional(),
   market: z.string().nullable().optional(),
   status: z.string().optional(),
+  // Phase B2 (JV rebuild) — explicit lane hint for status changes.
+  // Without this, CLOSED is ambiguous (acq + dispo both terminate there)
+  // and the server falls back to a heuristic that closes whichever lane
+  // is currently active. The DealProgress UI knows which row the user
+  // clicked (acq vs dispo) so it sends the lane explicitly. Optional —
+  // existing callers (offer flow, etc.) without a hint still work.
+  lane: z.enum(['acq', 'dispo', 'longterm']).optional(),
   arv: z.string().nullable().optional(),
   askingPrice: z.string().nullable().optional(),
   mao: z.string().nullable().optional(),
@@ -130,7 +137,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
   const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
 
   const {
-    address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status,
+    address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status, lane,
     arv, askingPrice, mao, contractPrice, assignmentFee,
     offerPrice, repairCost, wholesalePrice,
     currentOffer, highestOffer, acceptedPrice, finalProfit,
@@ -228,14 +235,19 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
           ...(rawZip !== undefined && { zip: standardizeZip(rawZip ?? '') }),
           ...(status && status !== effectiveStatus(property) && (() => {
             // Lane dispatch — Phase 1 multi-pipeline: a single incoming
-            // status value writes to the matching per-lane column. CLOSED
-            // is ambiguous (acq + dispo both terminate there); disambiguate
-            // by the property's current state — if dispo lane is active,
-            // close dispo; otherwise close acq.
+            // status value writes to the matching per-lane column.
+            //
+            // Phase B2: if the caller provides an explicit `lane` hint, it
+            // overrides the heuristic — critical for CLOSED (acq + dispo
+            // both terminate there) and for JV deals where the DealProgress
+            // UI knows which lane the user is editing.
             const ACQ = new Set(['NEW_LEAD','APPOINTMENT_SET','OFFER_MADE','UNDER_CONTRACT'])
             const DISPO = new Set(['IN_DISPOSITION','DISPO_PUSHED','DISPO_OFFERS','DISPO_CONTRACTED'])
             const LONGTERM = new Set(['FOLLOW_UP','DEAD'])
             const now = new Date()
+            if (lane === 'acq') return { acqStatus: status as AcqStatus, acqStageEnteredAt: now }
+            if (lane === 'dispo') return { dispoStatus: status as DispoStatus, dispoStageEnteredAt: now }
+            if (lane === 'longterm') return { longtermStatus: status as LongtermStatus, longtermStageEnteredAt: now }
             if (ACQ.has(status)) return { acqStatus: status as AcqStatus, acqStageEnteredAt: now }
             if (DISPO.has(status)) return { dispoStatus: status as DispoStatus, dispoStageEnteredAt: now }
             if (LONGTERM.has(status)) return { longtermStatus: status as LongtermStatus, longtermStageEnteredAt: now }
@@ -373,10 +385,13 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     // CRM stays in sync. Behind REVERSE_SYNC_ENABLED feature flag (default
     // off). Fire-and-forget — never blocks the user's UI action.
     if (status && status !== effectiveStatus(property)) {
+      // Honor explicit lane hint (Phase B2). Falls back to heuristic when
+      // caller didn't specify.
+      const explicitLane = lane === 'acq' ? 'acquisition' : lane === 'dispo' ? 'disposition' : lane === 'longterm' ? 'longterm' : null
       const closedHint: 'acquisition' | 'disposition' = property.dispoStatus ? 'disposition' : 'acquisition'
-      const lane = laneForStatus(status, closedHint)
-      if (lane) {
-        syncStatusToGHL({ tenantId: ctx.tenantId, propertyId: params.propertyId, lane, newStatus: status })
+      const resolvedLane = explicitLane ?? laneForStatus(status, closedHint)
+      if (resolvedLane) {
+        syncStatusToGHL({ tenantId: ctx.tenantId, propertyId: params.propertyId, lane: resolvedLane, newStatus: status })
           .catch(err => console.error('[reverse-sync] failed:', err))
       }
     }
