@@ -2,7 +2,7 @@
 // components/inventory/inventory-client.tsx
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   Building2, Phone, CheckSquare, Search, Plus,
@@ -10,10 +10,35 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { formatPhone, titleCase } from '@/lib/format'
+import { useToast } from '@/components/ui/toaster'
 import { PipelineStageTabs } from './PipelineStageTabs'
 import { PriceMatrixCard, ComputedSpreadCard } from './property-detail-client'
 import { STATUS_TO_APP_STAGE, APP_STAGE_LABELS, APP_STAGE_BADGE_COLORS } from '@/types/property'
 import type { AppStage } from '@/types/property'
+
+// AppStage → { status, lane } for the PATCH payload. Mirrors
+// lib/ghl/webhooks.ts APP_STAGE_TO_STATUS so drag-drop and webhook
+// writes agree on the status enum.
+const APP_STAGE_TO_STATUS_LANE: Record<AppStage, { status: string; lane: 'acq' | 'dispo' | 'longterm' }> = {
+  'acquisition.new_lead':       { status: 'NEW_LEAD',         lane: 'acq' },
+  'acquisition.appt_set':       { status: 'APPOINTMENT_SET',  lane: 'acq' },
+  'acquisition.offer_made':     { status: 'OFFER_MADE',       lane: 'acq' },
+  'acquisition.contract':       { status: 'UNDER_CONTRACT',   lane: 'acq' },
+  'acquisition.closed':         { status: 'CLOSED',           lane: 'acq' },
+  'disposition.new_deal':       { status: 'IN_DISPOSITION',   lane: 'dispo' },
+  'disposition.pushed_out':     { status: 'DISPO_PUSHED',     lane: 'dispo' },
+  'disposition.offers_received':{ status: 'DISPO_OFFERS',     lane: 'dispo' },
+  'disposition.contracted':     { status: 'DISPO_CONTRACTED', lane: 'dispo' },
+  'disposition.closed':         { status: 'CLOSED',           lane: 'dispo' },
+  'longterm.follow_up':         { status: 'FOLLOW_UP',        lane: 'longterm' },
+  'longterm.dead':              { status: 'DEAD',             lane: 'longterm' },
+}
+
+const LANE_LABEL: Record<'acq' | 'dispo' | 'longterm', string> = {
+  acq: 'Acquisition',
+  dispo: 'Disposition',
+  longterm: 'Long-Term',
+}
 
 // Lane-aware status → stage maps. The shared STATUS_TO_APP_STAGE in
 // types/property.ts collapses dispo CLOSED + acq CLOSED into one bucket
@@ -105,6 +130,94 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
   useEffect(() => { setProperties(initialProperties) }, [initialProperties])
   const updateProperty = (id: string, patch: Partial<Property>) => {
     setProperties(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)))
+  }
+
+  // Drag-drop wiring: rows drag, stage chips drop. Same-pipeline drop is
+  // an instant move (mirrors property-detail's "Move here" — local-only,
+  // skipReverseSync: true). Cross-pipeline drop opens a confirmation
+  // modal so the user picks between Move (clear old lane) and Add (keep
+  // in both).
+  const { toast } = useToast()
+  const router = useRouter()
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [pendingDrop, setPendingDrop] = useState<{
+    propertyId: string
+    fromLane: 'acq' | 'dispo' | 'longterm'
+    toLane: 'acq' | 'dispo' | 'longterm'
+    toStatus: string
+    toStage: AppStage
+  } | null>(null)
+
+  function rowLane(p: Property): 'acq' | 'dispo' | 'longterm' {
+    // Mirrors pipelinePair's track logic: prefer dispo when this row is
+    // actively a dispo deal, else longterm if it's the only populated
+    // lane, otherwise acq.
+    if (p.dispoStatus && !p.dispoLostAt) return 'dispo'
+    if (p.longtermStatus && !p.longtermLostAt && !p.acqStatus) return 'longterm'
+    return 'acq'
+  }
+
+  async function patchStage(args: {
+    propertyId: string
+    status: string
+    lane: 'acq' | 'dispo' | 'longterm'
+    clearLane?: 'acq' | 'dispo' | 'longterm'
+  }) {
+    // Optimistic local update so the row jumps to the new stage before
+    // the network round-trip lands.
+    const laneField = args.lane === 'acq' ? 'acqStatus' : args.lane === 'dispo' ? 'dispoStatus' : 'longtermStatus'
+    const clearField = args.clearLane === 'acq' ? 'acqStatus' : args.clearLane === 'dispo' ? 'dispoStatus' : args.clearLane === 'longterm' ? 'longtermStatus' : null
+    updateProperty(args.propertyId, {
+      [laneField]: args.status,
+      ...(clearField && { [clearField]: null }),
+    } as Partial<Property>)
+
+    try {
+      const res = await fetch(`/api/properties/${args.propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: args.status,
+          lane: args.lane,
+          skipReverseSync: true,
+          ...(args.clearLane && { clearLane: args.clearLane }),
+        }),
+      })
+      if (res.ok) {
+        toast('Stage updated', 'success')
+        // Pull fresh lane-aware data (stage counts on the chips) without
+        // discarding the local optimistic edit — the useEffect on
+        // initialProperties will reconcile.
+        router.refresh()
+      } else {
+        toast('Failed to update stage', 'error')
+        // Roll back optimistic update would require remembering the prior
+        // value — router.refresh() will reconcile from the server.
+        router.refresh()
+      }
+    } catch {
+      toast('Failed to update stage', 'error')
+      router.refresh()
+    }
+  }
+
+  function handleStageDrop(targetStage: AppStage) {
+    const propertyId = draggingId
+    setDraggingId(null)
+    if (!propertyId) return
+    const property = properties.find(p => p.id === propertyId)
+    if (!property) return
+    const { status, lane: toLane } = APP_STAGE_TO_STATUS_LANE[targetStage]
+    const fromLane = rowLane(property)
+    if (fromLane === toLane) {
+      // Same pipeline → instant move (skip if status already matches).
+      const currentStatus = toLane === 'acq' ? property.acqStatus : toLane === 'dispo' ? property.dispoStatus : property.longtermStatus
+      if (currentStatus === status) return
+      patchStage({ propertyId, status, lane: toLane })
+      return
+    }
+    // Cross-pipeline → ask the user how they want to handle the old lane.
+    setPendingDrop({ propertyId, fromLane, toLane, toStatus: status, toStage: targetStage })
   }
 
   // Handle ?filter= deeplinks from KPI page
@@ -226,6 +339,7 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
         stageCounts={stageCounts}
         selectedStage={selectedStage}
         onStageSelect={(stage) => { setSelectedStage(stage); setSelectedPropertyId(null) }}
+        onStageDrop={handleStageDrop}
       />
 
       {/* Toolbar: search + view toggle + filter info */}
@@ -353,6 +467,9 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
                 onSelect={setSelectedPropertyId}
                 ghlLocationId={ghlLocationId}
                 selectedStage={selectedStage}
+                draggingId={draggingId}
+                onDragStartRow={(id) => setDraggingId(id)}
+                onDragEndRow={() => setDraggingId(null)}
               />
               {filtered.length > visibleCount && (
                 <div className="flex items-center justify-between px-4 py-3 mt-2 bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px]">
@@ -384,6 +501,58 @@ export function InventoryClient({ properties: initialProperties, stageCounts: st
           />
         )}
       </div>
+
+      {/* Cross-pipeline drop confirmation. Same-pipeline drops happen
+          instantly; only cross-pipeline drops surface here because they
+          need a "Move (clear old)" vs "Add (keep in both)" decision. */}
+      {pendingDrop && (() => {
+        const property = properties.find(p => p.id === pendingDrop.propertyId)
+        const addr = property?.address ?? 'this property'
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setPendingDrop(null)}>
+            <div className="bg-white rounded-[14px] shadow-xl max-w-md w-full mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-[rgba(0,0,0,0.06)]">
+                <h3 className="text-ds-label font-semibold text-txt-primary">Move across pipelines?</h3>
+                <p className="text-ds-fine text-txt-muted mt-1">
+                  Drop <span className="font-medium text-txt-primary">{addr}</span> into{' '}
+                  <span className="font-semibold text-gunner-red">{APP_STAGE_LABELS[pendingDrop.toStage]}</span>{' '}
+                  ({LANE_LABEL[pendingDrop.toLane]})?
+                </p>
+              </div>
+              <div className="p-4 space-y-2">
+                <button
+                  onClick={() => {
+                    const drop = pendingDrop
+                    setPendingDrop(null)
+                    patchStage({ propertyId: drop.propertyId, status: drop.toStatus, lane: drop.toLane, clearLane: drop.fromLane })
+                  }}
+                  className="w-full text-left px-4 py-3 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] hover:bg-surface-secondary transition-colors"
+                >
+                  <p className="text-ds-body font-semibold text-txt-primary">Move</p>
+                  <p className="text-ds-fine text-txt-muted">Remove from {LANE_LABEL[pendingDrop.fromLane]}. Property only shows in {LANE_LABEL[pendingDrop.toLane]} after.</p>
+                </button>
+                <button
+                  onClick={() => {
+                    const drop = pendingDrop
+                    setPendingDrop(null)
+                    patchStage({ propertyId: drop.propertyId, status: drop.toStatus, lane: drop.toLane })
+                  }}
+                  className="w-full text-left px-4 py-3 rounded-[10px] border-[0.5px] border-[rgba(0,0,0,0.08)] hover:bg-surface-secondary transition-colors"
+                >
+                  <p className="text-ds-body font-semibold text-txt-primary">Add to {LANE_LABEL[pendingDrop.toLane]}</p>
+                  <p className="text-ds-fine text-txt-muted">Keep in {LANE_LABEL[pendingDrop.fromLane]} too. Property shows in both pipelines.</p>
+                </button>
+                <button
+                  onClick={() => setPendingDrop(null)}
+                  className="w-full text-center px-4 py-2.5 rounded-[10px] text-ds-fine font-medium text-txt-muted hover:text-txt-primary hover:bg-surface-secondary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -543,13 +712,16 @@ const MARKET_COLORS: Record<string, string> = {
   'Global': 'bg-gray-100 text-gray-600',
 }
 
-function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedStage }: {
+function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedStage, draggingId, onDragStartRow, onDragEndRow }: {
   properties: Property[]
   tenantSlug: string
   selectedId: string | null
   onSelect: (id: string | null) => void
   ghlLocationId?: string
   selectedStage: AppStage | null
+  draggingId?: string | null
+  onDragStartRow?: (id: string) => void
+  onDragEndRow?: () => void
 }) {
   return (
     <div className="bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] overflow-hidden">
@@ -570,9 +742,16 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedS
           <button
             key={p.id}
             onClick={() => onSelect(isSelected ? null : p.id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors ${
+            draggable={!!onDragStartRow}
+            onDragStart={onDragStartRow ? (e) => {
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData('text/plain', p.id)
+              onDragStartRow(p.id)
+            } : undefined}
+            onDragEnd={onDragEndRow ? () => onDragEndRow() : undefined}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[rgba(0,0,0,0.04)] hover:bg-surface-secondary transition-colors cursor-grab active:cursor-grabbing ${
               isSelected ? 'bg-gunner-red-light' : ''
-            }`}
+            } ${draggingId === p.id ? 'opacity-40' : ''}`}
           >
             {/* Days in current pipeline · days in current stage (pipeline = acq or dispo based on filter / property state) */}
             <div className="flex items-center gap-1 shrink-0" title={`${domPipeline}d in ${trackLabel} · ${domStage}d in stage`}>
@@ -621,6 +800,7 @@ function PropertyTable({ properties, tenantSlug, selectedId, onSelect, selectedS
             <Link
               href={`/${tenantSlug}/inventory/${p.id}`}
               onClick={e => e.stopPropagation()}
+              draggable={false}
               className="text-txt-muted hover:text-gunner-red transition-colors shrink-0"
             >
               <ExternalLink size={12} />

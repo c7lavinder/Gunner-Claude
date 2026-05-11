@@ -40,9 +40,15 @@ interface PipelineStageTabsProps {
   stageCounts: Partial<Record<AppStage, number>>
   selectedStage: AppStage | null
   onStageSelect: (stage: AppStage | null) => void
+  // Optional: when provided, every stage chip becomes a drop target for
+  // drag-from-list. Fires with the dropped-on stage so the parent can
+  // dispatch the stage change (same-pipeline = instant; cross-pipeline =
+  // confirmation modal in the parent).
+  onStageDrop?: (stage: AppStage) => void
 }
 
-export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }: PipelineStageTabsProps) {
+export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect, onStageDrop }: PipelineStageTabsProps) {
+  const [dragOverKey, setDragOverKey] = useState<AppStage | null>(null)
   const [acqOpen, setAcqOpen] = useState(() => { try { return localStorage.getItem('pipeline.acq') !== 'false' } catch { return true } })
   const [dispoOpen, setDispoOpen] = useState(() => { try { return localStorage.getItem('pipeline.dispo') !== 'false' } catch { return true } })
   const [ltOpen, setLtOpen] = useState(() => { try { return localStorage.getItem('pipeline.lt') !== 'false' } catch { return true } })
@@ -64,7 +70,7 @@ export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }:
         open={acqOpen}
         onToggle={toggleAcq}
       >
-        <StageRow stages={ACQ_STAGES} stageCounts={stageCounts} selectedStage={selectedStage} onSelect={handleSelect} />
+        <StageRow stages={ACQ_STAGES} stageCounts={stageCounts} selectedStage={selectedStage} onSelect={handleSelect} onStageDrop={onStageDrop} dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
       </Section>
 
       {/* Disposition */}
@@ -75,7 +81,7 @@ export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }:
         onToggle={toggleDispo}
         border
       >
-        <StageRow stages={DISPO_STAGES} stageCounts={stageCounts} selectedStage={selectedStage} onSelect={handleSelect} />
+        <StageRow stages={DISPO_STAGES} stageCounts={stageCounts} selectedStage={selectedStage} onSelect={handleSelect} onStageDrop={onStageDrop} dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
       </Section>
 
       {/* Long-Term */}
@@ -92,16 +98,22 @@ export function PipelineStageTabs({ stageCounts, selectedStage, onStageSelect }:
             const isSelected = selectedStage === bucket.key
             const Icon = bucket.icon
             const isFollowUp = bucket.key === 'longterm.follow_up'
+            const isDragOver = dragOverKey === bucket.key
             return (
               <button
                 key={bucket.key}
                 onClick={() => handleSelect(bucket.key)}
+                onDragOver={onStageDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverKey !== bucket.key) setDragOverKey(bucket.key) } : undefined}
+                onDragLeave={onStageDrop ? () => setDragOverKey(null) : undefined}
+                onDrop={onStageDrop ? (e) => { e.preventDefault(); setDragOverKey(null); onStageDrop(bucket.key) } : undefined}
                 className={`flex items-center gap-2.5 flex-1 px-3.5 py-2.5 rounded-[10px] border-[0.5px] transition-all ${
-                  isSelected
-                    ? isFollowUp
-                      ? 'bg-amber-50 border-amber-300 shadow-sm'
-                      : 'bg-gray-100 border-gray-300 shadow-sm'
-                    : 'bg-surface-secondary border-[rgba(0,0,0,0.06)] hover:border-[rgba(0,0,0,0.14)]'
+                  isDragOver
+                    ? 'bg-gunner-red-light border-gunner-red ring-2 ring-gunner-red scale-[1.02]'
+                    : isSelected
+                      ? isFollowUp
+                        ? 'bg-amber-50 border-amber-300 shadow-sm'
+                        : 'bg-gray-100 border-gray-300 shadow-sm'
+                      : 'bg-surface-secondary border-[rgba(0,0,0,0.06)] hover:border-[rgba(0,0,0,0.14)]'
                 }`}
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -157,23 +169,30 @@ function Section({ label, icon, open, onToggle, border, children }: {
 
 // ─── Pipeline stage row ──────────────────────────────────────────────────────
 
-function StageRow({ stages, stageCounts, selectedStage, onSelect }: {
+function StageRow({ stages, stageCounts, selectedStage, onSelect, onStageDrop, dragOverKey, setDragOverKey }: {
   stages: Array<{ key: AppStage; label: string; icon: typeof UserPlus; step: number }>
   stageCounts: Partial<Record<AppStage, number>>
   selectedStage: AppStage | null
   onSelect: (stage: AppStage) => void
+  onStageDrop?: (stage: AppStage) => void
+  dragOverKey?: AppStage | null
+  setDragOverKey?: (k: AppStage | null) => void
 }) {
   return (
     <div className="flex items-start justify-between px-4 pb-4">
       {stages.map((stage, i) => {
         const count = stageCounts[stage.key] ?? 0
         const isSelected = selectedStage === stage.key
+        const isDragOver = dragOverKey === stage.key
         const Icon = stage.icon
         return (
           <div key={stage.key} className="flex items-start flex-1 min-w-0">
             <button
               onClick={() => onSelect(stage.key)}
-              className="flex flex-col items-center gap-1 w-full"
+              onDragOver={onStageDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (setDragOverKey && dragOverKey !== stage.key) setDragOverKey(stage.key) } : undefined}
+              onDragLeave={onStageDrop ? () => { if (setDragOverKey) setDragOverKey(null) } : undefined}
+              onDrop={onStageDrop ? (e) => { e.preventDefault(); if (setDragOverKey) setDragOverKey(null); onStageDrop(stage.key) } : undefined}
+              className={`flex flex-col items-center gap-1 w-full rounded-lg p-1 transition-all ${isDragOver ? 'bg-gunner-red-light ring-2 ring-gunner-red scale-105' : ''}`}
             >
               {/* Circle */}
               <div className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all ${

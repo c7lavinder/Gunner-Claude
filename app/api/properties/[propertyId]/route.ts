@@ -33,6 +33,12 @@ const updateSchema = z.object({
   // collapse detailed stage state (many-to-one in reverse). The Move
   // here UI passes this to keep manual stage changes local.
   skipReverseSync: z.boolean().optional(),
+  // Cross-pipeline drag-drop on the inventory list. When the user drags
+  // a property from one pipeline (e.g. Acquisition) onto a stage in a
+  // different pipeline (e.g. Disposition) and confirms "Move", the new
+  // lane's status is set above AND the source lane is cleared here so
+  // the property disappears from the old pipeline.
+  clearLane: z.enum(['acq', 'dispo', 'longterm']).optional(),
   arv: z.string().nullable().optional(),
   askingPrice: z.string().nullable().optional(),
   mao: z.string().nullable().optional(),
@@ -143,7 +149,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
   const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
 
   const {
-    address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status, lane, skipReverseSync,
+    address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status, lane, skipReverseSync, clearLane,
     arv, askingPrice, mao, contractPrice, assignmentFee,
     offerPrice, repairCost, wholesalePrice,
     currentOffer, highestOffer, acceptedPrice, finalProfit,
@@ -264,6 +270,15 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
             }
             return {}
           })()),
+          // Cross-pipeline drag-drop: when the caller asks to clear the
+          // source lane (e.g. dragging from Acquisition into Disposition
+          // and choosing "Move"), null out the old lane's status so the
+          // property disappears from the old pipeline. Applies after the
+          // status dispatch above so the target lane is set in the same
+          // write.
+          ...(clearLane === 'acq' && { acqStatus: null }),
+          ...(clearLane === 'dispo' && { dispoStatus: null }),
+          ...(clearLane === 'longterm' && { longtermStatus: null }),
           ...(arv !== undefined && { arv: arv ? parseFloat(arv) : null }),
           ...(askingPrice !== undefined && { askingPrice: askingPrice ? parseFloat(askingPrice) : null }),
           ...(mao !== undefined && { mao: mao ? parseFloat(mao) : null }),
