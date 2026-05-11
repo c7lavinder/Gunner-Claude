@@ -85,7 +85,7 @@ on throw (then re-throws so the outer `.catch` sets exit code 1).
 
 ## Pages roster
 
-23 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`. (Session 68: `/dashboard` and `/buyers` list page deleted; `/disposition` added.)
+22 tenant-scoped pages under `app/(tenant)/[tenant]/`. 5 auth pages under `app/(auth)/`. (Session 68: `/dashboard` and `/buyers` list page deleted; `/disposition` added. Session 84: `/disposition` removed — per-property Disposition tab covered everything. `/inventory/new` and `/inventory/[id]/edit` also removed — Add Property is now a modal on the inventory page, edit happens inline on the detail page.)
 
 ### Tenant-scoped (`/{tenant}/...`)
 
@@ -94,8 +94,7 @@ on throw (then re-throws so the outer `.catch` sets exit code 1).
 | `/{tenant}/day-hub` | Morning planner — fetches GHL tasks live, classifies + scores them, AM/PM dial pills, KPI Ledger modal, in-app GHL action modals (Add Note, Create Apt, Workflow, Update Task). **Canonical Tasks/Day Hub surface per CLAUDE.md Rule 3 § 7.** Consolidated from `/tasks` in Session 66 (2026-05-03) — the richer page logic moved here, old `/day-hub` simpler variant overwritten. | Live, primary |
 | `/{tenant}/tasks` | Redirect stub → `/{tenant}/day-hub`. Preserves Chris's bookmark and any external links. Single `redirect()` call, no UI. | Legacy redirect |
 | `/{tenant}/calls` + `/{tenant}/calls/[callId]` | Calls list + call detail (5-tab: coaching, transcript, next steps, property tabs, manual upload). | Live |
-| `/{tenant}/inventory` + `/{tenant}/inventory/[propertyId]` + `/{tenant}/inventory/new` + `/{tenant}/inventory/[propertyId]/edit` | Property list + 4-tab detail (Overview · Activity · Data · **Disposition**) + manual create + edit forms. Disposition tab mounts the 5-section `<DispositionJourney>`. `<ContactsPanel>` at top of Overview + Data shows linked sellers/buyers/partners (replaces prior Sellers/Buyers/Partners tabs). Property-detail rebuilt Session 68 (2026-05-05). | Live |
-| `/{tenant}/disposition` | Admin pipeline view — properties with `status ∈ (IN_DISPOSITION, UNDER_CONTRACT)` grouped by journey stage (Ready to Blast → Awaiting Responses → In Offer → Closing). Click-through to `/inventory/{id}?tab=disposition`. Replaces the prior `/buyers` list page. Session 68. | Live (admin-only) |
+| `/{tenant}/inventory` + `/{tenant}/inventory/[propertyId]` | Property list + 4-tab detail (Overview · Activity · Data · **Disposition**) + Add Property modal (Session 84) directly on the list page. List rows are draggable onto stage chips for same-pipeline instant moves or cross-pipeline confirm modal. Disposition tab mounts the 5-section `<DispositionJourney>`. `<ContactsPanel>` at top of Overview + Data shows linked sellers/buyers/partners. | Live |
 | `/{tenant}/sellers/[id]` | Seller-centric detail view. Court records, portfolio, voice analytics aggregates. | Live (added Sessions 41-42) |
 | `/{tenant}/sellers` | Standalone Sellers list. **No nav link as of Session 68** — `/contacts` Sellers tab is canonical. URL still resolves; Buy Signal feature lives here pending revisit. | Live, **hidden from nav** |
 | `/{tenant}/buyers/[id]` | Buyer detail page. Click-through from `/contacts` Buyers tab + `<ContactsPanel>`. | Live |

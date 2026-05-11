@@ -62,6 +62,154 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 84 — Intake unification + drag-drop pipeline + Buyer-match fixes (2026-05-11)
+
+Owner brought a string of UX + correctness asks, each one tightening a
+sharp edge from prior phases. Eight commits, all green on
+`npx tsc --noEmit`, straight to main.
+
+**Buyer modal latency (`481122e3`).** "The add button in match buyers
+section does not work. Actually it does work but takes forever to
+load." Root cause: `openAddModal` / Bulk Add both `await`-ed
+`ensureFormOptionsLoaded()` (a GHL round-trip) **before** showing the
+modal. Fix: open the modal instantly, hydrate options in the
+background. `BuyerModal` already tolerated empty `marketOptions` and
+missing `defaultStageId`. Same pattern applied to Bulk Add.
+
+**Drag-and-drop in inventory list (`bb547313`).** Rows in the list view
+are now draggable onto `PipelineStageTabs` chips. Same-pipeline drop =
+instant PATCH (mirrors "Move here" — `skipReverseSync: true`).
+Cross-pipeline drop opens a confirmation modal with three options:
+- **Move** — clear the source lane's status, set the target lane's →
+  property only shows in the new pipeline.
+- **Add to [Pipeline]** — set the target lane without clearing source
+  → property shows in both pipelines.
+- **Cancel**.
+
+API gained `clearLane: z.enum(['acq','dispo','longterm'])` on the
+property PATCH — when set, the matching lane status is nulled in the
+same write. Drop targets ring red on hover. Stays local — no GHL push,
+consistent with Move here. Dragging row dims to 40% opacity. Long-Term
+buttons are also drop targets.
+
+**Intake unification — Add Property + Log JV Deal collapsed into one
+modal (`cd1ce5d7`, `c59f0f83`).** Owner: "we need to get rid of log JV
+deal and update the add property button. It can be simplified by
+address, stage, source. The contact can search GHL or create new
+contact that goes in to GHL and gunner DB for partners with their
+contact info." Then on a follow-up: "the source needs to be limited to
+the ones we currently have: PPL, Form, Texts, PPC, Dialer JV. And can
+we make it a centered page modal that pops up instead of full page?"
+
+What got deleted:
+- `app/(tenant)/[tenant]/inventory/log-jv-deal/page.tsx`
+- `components/inventory/log-jv-deal-form.tsx`
+- `app/api/properties/jv-intake/route.ts`
+- `app/(tenant)/[tenant]/inventory/[propertyId]/edit/page.tsx`
+  (orphan — no inbound links, detail page handles inline edits)
+- `app/(tenant)/[tenant]/inventory/new/page.tsx` (replaced by the
+  inline modal)
+
+What replaced them — a centered modal on the inventory page with four
+sections:
+1. **Address** — street, city, state, ZIP.
+2. **Stage** — single `<optgroup>` dropdown covering all 12 stages
+   across Acquisition / Disposition / Long-Term so the user can land a
+   deal anywhere on intake.
+3. **Source** — locked list: PPL, Form, Texts, PPC, Dialer, JV.
+4. **Contact** — toggle between "Search GHL" and "Create new". Once
+   picked or typed, a confirmation card shows the contact info plus a
+   **Role on this deal: Seller / Partner** toggle.
+
+API: `POST /api/properties` rewritten. Accepts `{ stage, leadSource,
+contact }`. Stage maps to `{status, lane}` via the canonical
+`APP_STAGE_TO_STATUS_LANE` (mirrors lib/ghl/webhooks.ts so list view,
+drag-drop, and intake all agree on the status enum). For new contacts,
+the route calls `ghl.createContact()` **before** opening the DB
+transaction so a real `ghlContactId` exists. Failure aborts intake (no
+orphan property). A `Partner` or `Seller` row is upserted by
+`ghlContactId` (dedup repeats), linked via `PropertyPartner` or
+`PropertySeller`. JV source → `role='jv_partner'` on
+PropertyPartner; everything else → `'sourced_to_us'`. ~1100 lines
+deleted across the unification — net -1091 LOC.
+
+**Disposition portfolio page removed (`da1b75eb`).** Owner: "Can we
+get rid of disposition page? Not needed with disposition tab." Top-nav
+entry deleted, `app/(tenant)/[tenant]/disposition/{page.tsx,
+disposition-client.tsx}` deleted. Per-property Disposition tab uses
+`components/disposition/journey/*` (untouched) + `lib/disposition/*`
+(shared journey-status logic, also untouched). Only the standalone
+portfolio surface went away.
+
+**Walkthroughs not landing in Responded (`87498bf3`).** When a showing
+was logged via Section 5, the outreach route's fast-forward upsert
+silently no-op'd if `db.buyer` didn't already have a row for the
+chosen GHL contact (sync lag, or contact not in the buyer pipeline).
+Fix: auto-create a stub Buyer row from `recipientName` +
+`recipientContact` before the upsert. Also stamps `movedToRespondedAt`
+alongside `movedToInterestedAt` so Section 3's sticky-Responded flag
+(Phase A4) fires immediately. Same commit added a diagnostic banner in
+Section 3 ("Targeting: Chattanooga. 87 buyers in your DB, 12 with a
+market set.") and also taught the buyers GET to return any buyer with
+a `PropertyBuyerStage` row for this property regardless of market —
+so once someone's on the deal they're always visible in the kanban.
+
+**Stage persistence — Sent column was silently 400'ing (`14b611b2`).**
+Owner: "if I move them from matched to sent then refresh they go back
+to matched buyers rather than persist stage." Root cause: the PATCH
+`/api/properties/[id]/buyer-stage` Zod schema only accepted
+`'matched' | 'responded' | 'interested'`. Moving Matched → Sent
+returned 400; the frontend's `.catch(() => {})` swallowed the failure.
+Schema now accepts `'matched' | 'sent' | 'responded' | 'interested' |
+'showing_scheduled'`.
+
+**Buyer-match scope walked back to single source (`14b611b2` →
+`ab4dd1db`).** Same commit as the Sent fix had widened the matcher to
+pull from `primaryMarkets` + `secondaryMarkets` + `citiesOfInterest` +
+`countiesOfInterest` + `zipCodesOfInterest` + `mailingCity` + `tags` +
+`isNationalBuyer`. Owner pushed back: "I think you are pulling from
+not important fields. In buyer profile, there is a field for markets.
+That is only one we need to pull from." Reverted to a single-source
+match on `primaryMarkets` only. Diagnostic banner now counts buyers
+whose `primaryMarkets` is non-empty (matches the matcher). Locked as
+`D-049` in DECISIONS.md.
+
+**Sub-conversation worth keeping in memory** — owner asked about
+bidirectional stage sync between Gunner and GHL after the drag-drop
+shipped. Confirmed:
+- Move here / drag-drop in Gunner → **does NOT** push to GHL
+  (`skipReverseSync: true`).
+- A subsequent GHL stage change → **overwrites** Gunner's stage unless
+  `Property.ghlSyncLocked` is set on that row.
+- JV properties never have `ghlAcqOppId` / `ghlContactId` populated by
+  default, so no GHL webhook can touch them — safe for any
+  Gunner-side stage moves.
+
+**Files touched (net):**
+- Modified:
+  `components/inventory/inventory-client.tsx`,
+  `components/inventory/PipelineStageTabs.tsx`,
+  `components/inventory/property-form.tsx`,
+  `components/disposition/journey/section-3-buyer-match.tsx`,
+  `components/ui/top-nav.tsx`,
+  `app/(tenant)/[tenant]/inventory/new/page.tsx` (later deleted),
+  `app/api/properties/route.ts`,
+  `app/api/properties/[propertyId]/route.ts`,
+  `app/api/properties/[propertyId]/buyers/route.ts`,
+  `app/api/properties/[propertyId]/buyer-stage/route.ts`,
+  `app/api/properties/[propertyId]/outreach/route.ts`.
+- Deleted:
+  `app/(tenant)/[tenant]/inventory/{log-jv-deal,new}/page.tsx`,
+  `app/(tenant)/[tenant]/inventory/[propertyId]/edit/page.tsx`,
+  `app/(tenant)/[tenant]/disposition/{page.tsx,disposition-client.tsx}`,
+  `app/api/properties/jv-intake/route.ts`,
+  `components/inventory/log-jv-deal-form.tsx`.
+
+**Verification:** every commit passed pre-push `npx tsc --noEmit`.
+Net diff: ~+225 / ~-1200 LOC.
+
+---
+
 ### Session 83 — Disposition + JV rebuild + dup property race fix (2026-05-11)
 
 Owner brought 1 production hygiene issue ("1311 La Loma is duplicated")
@@ -2089,6 +2237,65 @@ but leaner.
 ## Next Session — exact first task
 
 **First thing next session (owner-side, ~10 minutes):**
+Walk the Session 84 changes end-to-end on Railway.
+
+1. **Add property modal** — Inventory → click "Add property". Modal
+   opens centered, backdrop click / Esc / Cancel / X all close. Fill
+   address, pick a stage (any of the 12 across all 3 pipelines), pick
+   a source (PPL / Form / Texts / PPC / Dialer / JV). In Contact,
+   first try "Search GHL" — pick an existing contact, confirmation
+   card shows Seller/Partner toggle. Save. Verify in inventory the
+   property lands in the stage you picked, with the right pipeline
+   chip showing.
+2. **Add property → create new contact** — same flow but choose
+   "Create new" in the Contact section. Type a name + phone, click
+   "Use this contact", flip Role to Partner if it isn't already. Save.
+   Verify: (a) property exists in Gunner, (b) a Partner row exists in
+   Gunner with that GHL contact id, (c) the GHL contact actually
+   exists in GHL too (Contacts → search). If JV was the source, the
+   PropertyPartner role should be `jv_partner`.
+3. **Drag-drop within a pipeline** — Inventory list view, drag a row
+   onto a different stage in the same pipeline (e.g. Acq Lead → Acq
+   Appt Set). Toast: "Stage updated". List row jumps. Refresh — stays
+   in the new stage. GHL pipeline untouched.
+4. **Drag-drop across pipelines** — drag an Acq row onto Disposition
+   New Deal. Confirmation modal appears with property address. Click
+   **Move** — old lane clears, new lane sets. Click **Add to Disposition**
+   on a different property — both lanes set. Verify via the pipeline
+   chips in the list.
+5. **Disposition page is gone** — top-nav no longer shows "Disposition".
+   `/{tenant}/disposition` returns 404. The per-property Disposition tab
+   is untouched (sections 1-5 still render).
+6. **Match Buyers — Chattanooga test** — open a property with market
+   set to Chattanooga. Section 3 should now show matched buyers based
+   ONLY on the buyer profile's Markets field. If 0 buyers show despite
+   "tons of Chattanooga buyers," the new amber diagnostic banner
+   tells you exactly what's happening: "X buyers in your DB, Y with
+   a market set." If Y is low, the issue is upstream — populate the
+   Markets field on those buyer profiles.
+7. **Match Buyers — Sent persistence** — move any buyer Matched → Sent
+   via the chevron arrow. Refresh the page. Buyer should stay in
+   **Sent**. (Pre-fix: silently 400'd, reverted to Matched.)
+8. **Match Buyers — Responded for walkthroughs** — log a walkthrough
+   in Section 5 with a buyer-pipeline GHL contact who isn't already
+   in `db.buyer` (sync lag scenario). Then check Section 3 → that
+   buyer should appear in the Responded column with a "Linked to
+   this deal" score badge.
+
+If anything's off, each piece has its own commit (`481122e3`,
+`bb547313`, `cd1ce5d7`, `c59f0f83`, `da1b75eb`, `87498bf3`,
+`14b611b2`, `ab4dd1db`) so `git revert <hash>` cleanly backs out one
+slice without disturbing the others.
+
+**Tomorrow:** nothing scheduled to fire automatically against the
+Session 84 changes. Nightly `compute-aggregates` keeps refreshing JV
+partner counts from Session 83's logic — that pipeline is unchanged.
+
+---
+
+**Older walk-throughs still on the board (Session 83 — not yet
+confirmed end-to-end on prod):**
+
 Walk the Session 83 disposition + JV rebuild end-to-end on Railway.
 Spec lives at [docs/plans/disposition-jv-rebuild.md](docs/plans/disposition-jv-rebuild.md);
 each phase has its own commit so reverts are clean if anything's off.
@@ -2194,11 +2401,13 @@ Sessions 79 + 80):**
 
 **First prompt for the next session:**
 
-> Read PROGRESS.md Sessions 80 + 81 to catch up. Then ask the owner
-> whether the post-deploy verification on Day Hub speed + Disposition
-> Lost-hiding + Inventory "New Deal" chip count went cleanly, and
-> pick from the open work list at the bottom of the Next Session
-> block.
+> Read PROGRESS.md Session 84 to catch up. Then ask the owner whether
+> the Session 84 walk-through (Add Property modal, drag-drop pipeline
+> moves, Disposition page removal, Match Buyers Sent persistence +
+> Chattanooga match) went cleanly on Railway. If anything's off, each
+> phase is its own commit so we can revert cleanly. If everything
+> looks good, pick from the open Claude-side work list at the bottom
+> of the Next Session block, or wait for the owner's next ask.
 
 **Older owner action items still on the board (Session 78 buyer-arch wave):**
 

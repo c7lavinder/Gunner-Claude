@@ -473,6 +473,54 @@ persist tenant-wide).
 
 ---
 
+### D-049 — Buyer ↔ property market match uses ONLY `Buyer.primaryMarkets`
+
+**Decision**
+
+`buyerMatchesMarket()` in
+[app/api/properties/[propertyId]/buyers/route.ts](app/api/properties/%5BpropertyId%5D/buyers/route.ts)
+reads exactly one field on the Buyer record: `primaryMarkets`. No
+fallbacks to `customFields.secondaryMarkets`, `citiesOfInterest`,
+`countiesOfInterest`, `zipCodesOfInterest`, `mailingCity`, `tags`, or
+`isNationalBuyer`. The buyer profile UI's "Markets" chip multi-select
+is the single source of truth.
+
+**Why**
+
+- An interim widening (Session 84) pulled from all six geography
+  surfaces to recover buyers whose Markets field was unpopulated. Owner
+  rejected: "I think you are pulling from not important fields. In
+  buyer profile, there is a field for markets. That is only one we
+  need to pull from."
+- Matching from multiple fields makes the kanban results unpredictable
+  for ops — reps can't tell which field a match came from. Single
+  source = "if the buyer profile shows Chattanooga, they match."
+- `mailingCity` / `tags` etc. drift over time and reflect things other
+  than the buyer's actual buy zone (a Knoxville flipper might have a
+  Nashville mailing address; tags hold legacy GHL pipeline labels).
+- Composes cleanly with D-048: storage is one field, matching reads
+  one field, the UI edits one field.
+
+**Behavior preserved across the narrowing**
+- Substring + normalization still handles "Chattanooga" ↔ "Chattanooga,
+  TN" ↔ lowercase variants.
+- "Nationwide" inside `primaryMarkets` still matches every property.
+- The diagnostic banner in Section 3 (Buyer Match) counts buyers whose
+  `primaryMarkets` is non-empty, so reps can see at a glance whether a
+  0-matches situation is "no buyers tagged with this market" vs
+  "Markets field empty across the whole buyer DB".
+
+**Operational implication**
+
+If a buyer should match but doesn't, the fix is upstream — populate
+the buyer's profile Markets field. Don't add new fallback fields to
+the matcher.
+
+**Status:** Locked. Date: 2026-05-11 (Session 84). No backfill needed
+— D-048 already migrated everyone's market data into `primaryMarkets`.
+
+---
+
 ## Decisions Still Open
 
 | # | Question | Options | Notes |
