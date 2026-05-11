@@ -18,7 +18,6 @@ import type { PropertyDetail } from '@/components/inventory/property-detail-clie
 import { BulkAddModal } from './bulk-add-modal'
 import { SendModal } from './send-modal'
 import { BuyerModal } from './buyer-modal'
-import { SearchableSelect } from '@/components/ui/searchable-select'
 
 export function Section3BuyerMatch({
   property,
@@ -46,17 +45,11 @@ export function Section3BuyerMatch({
   const [fetched, setFetched] = useState(false)
   const [addedBuyers, setAddedBuyers] = useState<BuyerItem[]>([])
   const [addedLoaded, setAddedLoaded] = useState(false)
-  const [showAddForm, setShowAddForm] = useState(false)
+  // Add buyer flow — opens the same BuyerModal in mode='add'. The inline
+  // expanding form was replaced as part of disposition rebuild Phase A2.
+  const [showAddModal, setShowAddModal] = useState(false)
   const [stages, setStages] = useState<Array<{ id: string; name: string }>>([])
   const [formOptions, setFormOptions] = useState<{ tiers: string[]; buybox: string[]; markets: string[]; speeds: string[] } | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [loadingOptions, setLoadingOptions] = useState(false)
-  const [addForm, setAddForm] = useState({
-    firstName: '', lastName: '', phone: '', email: '',
-    buyerTier: '', buybox: [] as string[], markets: [] as string[],
-    secondaryMarket: '', source: '', stageId: '',
-    verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '',
-  })
 
   const [buyerStages, setBuyerStages] = useState<Record<string, KanbanStage>>({})
   const [buyerIntents, setBuyerIntents] = useState<Record<string, string>>({})
@@ -152,48 +145,22 @@ export function Section3BuyerMatch({
     setLoading(false)
   }
 
-  async function openAddForm() {
-    setShowAddForm(true)
-    if (!formOptions) {
-      setLoadingOptions(true)
-      try {
-        const res = await fetch(`/api/properties/${property.id}/buyers`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'getFormOptions' }),
-        })
-        const data = await res.json()
-        setStages(data.stages ?? [])
-        setFormOptions(data.options ?? { tiers: [], buybox: [], markets: [], speeds: [] })
-        if (data.stages?.length > 0) setAddForm(f => ({ ...f, stageId: data.stages[0].id }))
-        if (data.options?.tiers?.length > 0) setAddForm(f => ({ ...f, buyerTier: data.options.tiers[0] }))
-      } catch {}
-      setLoadingOptions(false)
-    }
-  }
-
-  async function submitBuyer() {
-    if (!addForm.firstName || !addForm.phone || !addForm.stageId || addForm.buybox.length === 0 || addForm.markets.length === 0 || !addForm.source) return
-    setSaving(true)
+  async function ensureFormOptionsLoaded() {
+    if (formOptions && stages.length > 0) return
     try {
       const res = await fetch(`/api/properties/${property.id}/buyers`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify({ action: 'getFormOptions' }),
       })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.buyer) setAddedBuyers(prev => [...prev, data.buyer])
-        setShowAddForm(false)
-        setAddForm({ firstName: '', lastName: '', phone: '', email: '', buyerTier: '', buybox: [], markets: [], secondaryMarket: '', source: '', stageId: stages[0]?.id ?? '', verifiedFunding: false, hasPurchased: false, responseSpeed: '', notes: '', tags: '' })
-      }
-    } catch {}
-    setSaving(false)
+      const data = await res.json()
+      setStages(data.stages ?? [])
+      setFormOptions(data.options ?? { tiers: [], buybox: [], markets: [], speeds: [] })
+    } catch { /* modal still works; markets dropdown just won't show GHL picklist */ }
   }
 
-  function toggleArrayField(field: 'buybox' | 'markets', val: string) {
-    setAddForm(f => ({
-      ...f,
-      [field]: f[field].includes(val) ? f[field].filter(v => v !== val) : [...f[field], val],
-    }))
+  async function openAddModal() {
+    await ensureFormOptionsLoaded()
+    setShowAddModal(true)
   }
 
   const allBuyers: BuyerItem[] = [...addedBuyers, ...buyers.filter(b => !addedBuyers.some(a => a.id === b.id))]
@@ -252,19 +219,7 @@ export function Section3BuyerMatch({
 
   async function openEditModal(b: BuyerItem) {
     setEditTarget(b)
-    // Eagerly load formOptions so the modal's Markets dropdown has the
-    // full tenant-wide market list (otherwise the user can only see
-    // markets already attached to this buyer).
-    if (!formOptions) {
-      try {
-        const res = await fetch(`/api/properties/${property.id}/buyers`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'getFormOptions' }),
-        })
-        const data = await res.json()
-        if (data.options) setFormOptions(data.options)
-      } catch { /* modal still works with whatever markets the buyer carries */ }
-    }
+    ensureFormOptionsLoaded()
   }
 
   // Buyer edits go through <BuyerModal/>. The modal does its own PATCH;
@@ -326,165 +281,6 @@ export function Section3BuyerMatch({
           have already been blasted (stage = sent or responded). */}
       <TierSummary buyers={allBuyers} stages={buyerStages} />
 
-      {showAddForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAddForm(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto p-5 space-y-3 animate-in zoom-in-95">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[12px] font-semibold text-txt-primary">Add Buyer</p>
-              <p className="text-[10px] text-txt-muted">Creates a contact in GHL and a Buyer in Gunner. Buyer-info fields are owned by Gunner from here on.</p>
-            </div>
-            <button onClick={() => setShowAddForm(false)} className="text-txt-muted hover:text-txt-secondary"><X size={14} /></button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">First Name *</label>
-              <input value={addForm.firstName} onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))}
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Last Name</label>
-              <input value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))}
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Phone *</label>
-              <input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
-                placeholder="(615) 555-1234"
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Email</label>
-              <input value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="buyer@example.com"
-                className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-            </div>
-          </div>
-
-          {loadingOptions && <p className="text-ds-fine text-txt-muted">Loading options from GHL...</p>}
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Buyer Tier *</label>
-              <SearchableSelect
-                value={addForm.buyerTier}
-                onChange={v => setAddForm(f => ({ ...f, buyerTier: v }))}
-                options={formOptions?.tiers ?? []}
-                placeholder="Type to search tiers..."
-              />
-            </div>
-            <div>
-              <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Pipeline Stage *</label>
-              <SearchableSelect
-                value={addForm.stageId}
-                onChange={v => setAddForm(f => ({ ...f, stageId: v }))}
-                options={stages.map(s => ({ value: s.id, label: s.name }))}
-                placeholder="Type to search stages..."
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Source *</label>
-            <input value={addForm.source} onChange={e => setAddForm(f => ({ ...f, source: e.target.value }))}
-              placeholder="e.g. Referral, Website, Cold Call"
-              className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-          </div>
-
-          <div>
-            <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Buybox * (select all that apply)</label>
-            <div className="flex flex-wrap gap-1.5">
-              {(formOptions?.buybox ?? []).map(b => (
-                <button key={b} onClick={() => toggleArrayField('buybox', b)}
-                  className={`text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
-                    addForm.buybox.includes(b) ? 'bg-gunner-red text-white' : 'bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary hover:bg-surface-tertiary'
-                  }`}>{b}</button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Market(s) * (select all that apply)</label>
-            <div className="flex flex-wrap gap-1.5">
-              {(formOptions?.markets ?? []).map(m => (
-                <button key={m} onClick={() => toggleArrayField('markets', m)}
-                  className={`text-[10px] font-medium px-2 py-1 rounded-full transition-colors ${
-                    addForm.markets.includes(m) ? 'bg-gunner-red text-white' : 'bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] text-txt-secondary hover:bg-surface-tertiary'
-                  }`}>{m}</button>
-              ))}
-            </div>
-          </div>
-
-          <details className="text-ds-fine">
-            <summary className="text-[9px] text-txt-muted uppercase cursor-pointer hover:text-txt-secondary">Optional Fields</summary>
-            <div className="mt-2 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Response Speed</label>
-                  <SearchableSelect
-                    value={addForm.responseSpeed}
-                    onChange={v => setAddForm(f => ({ ...f, responseSpeed: v }))}
-                    options={formOptions?.speeds ?? []}
-                    placeholder="Type to search..."
-                    allowClear
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Secondary Market</label>
-                  <input value={addForm.secondaryMarket} onChange={e => setAddForm(f => ({ ...f, secondaryMarket: e.target.value }))}
-                    placeholder="e.g. Arkansas"
-                    className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-1.5 text-ds-fine text-txt-secondary cursor-pointer">
-                  <input type="checkbox" checked={addForm.verifiedFunding} onChange={e => setAddForm(f => ({ ...f, verifiedFunding: e.target.checked }))} className="accent-gunner-red" />
-                  Verified Funding
-                </label>
-                <label className="flex items-center gap-1.5 text-ds-fine text-txt-secondary cursor-pointer">
-                  <input type="checkbox" checked={addForm.hasPurchased} onChange={e => setAddForm(f => ({ ...f, hasPurchased: e.target.checked }))} className="accent-gunner-red" />
-                  Purchased Before
-                </label>
-              </div>
-              <div>
-                <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Tags (comma separated)</label>
-                <input value={addForm.tags} onChange={e => setAddForm(f => ({ ...f, tags: e.target.value }))}
-                  placeholder="flipper, knoxville"
-                  className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none" />
-              </div>
-              <div>
-                <label className="text-[9px] text-txt-muted uppercase block mb-0.5">Notes</label>
-                <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
-                  rows={2} className="w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.1)] rounded-[6px] px-2.5 py-1.5 text-ds-fine focus:outline-none resize-none" />
-              </div>
-            </div>
-          </details>
-
-          {/* Defaults footer — shows the values that auto-fill when a
-              field is left empty. Pulled from the live GHL formOptions
-              so the rep sees the actual options at a glance. */}
-          <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] px-3 py-2 text-[10px] text-txt-muted space-y-0.5">
-            <p className="font-semibold text-[9px] uppercase tracking-wider text-txt-muted">Defaults</p>
-            <p>Tier: <span className="text-txt-secondary">{formOptions?.tiers?.[0] ?? '—'}</span></p>
-            <p>Buybox options: <span className="text-txt-secondary">{(formOptions?.buybox ?? []).slice(0, 4).join(', ') || '—'}{(formOptions?.buybox?.length ?? 0) > 4 ? '...' : ''}</span></p>
-            <p>Markets: <span className="text-txt-secondary">{(formOptions?.markets ?? []).slice(0, 4).join(', ') || '—'}{(formOptions?.markets?.length ?? 0) > 4 ? '...' : ''}</span></p>
-            <p>Response speeds: <span className="text-txt-secondary">{(formOptions?.speeds ?? []).join(', ') || '—'}</span></p>
-          </div>
-
-          <button onClick={submitBuyer}
-            disabled={!addForm.firstName || !addForm.phone || !addForm.stageId || addForm.buybox.length === 0 || addForm.markets.length === 0 || !addForm.source || saving}
-            className="w-full bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold py-2 rounded-[8px] transition-colors">
-            {saving ? 'Creating in GHL...' : 'Add Buyer'}
-          </button>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-2 mb-4">
         <div className="relative">
           <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted" />
@@ -529,7 +325,7 @@ export function Section3BuyerMatch({
                         </button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={openAddForm}
+                        <button onClick={openAddModal}
                           className="text-[10px] font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-0.5 transition-colors">
                           <Plus size={10} /> Add
                         </button>
@@ -665,6 +461,37 @@ export function Section3BuyerMatch({
             )
           })}
         </div>
+      )}
+
+      {showAddModal && (
+        <BuyerModal
+          mode="add"
+          propertyId={property.id}
+          tenantSlug={tenantSlug}
+          marketOptions={formOptions?.markets ?? []}
+          defaultStageId={stages[0]?.id}
+          onClose={() => setShowAddModal(false)}
+          onSaved={(created) => {
+            // The API returns a normalized buyer record; promote it onto
+            // the kanban as a manually-added buyer so the rep sees their
+            // entry immediately without a full refetch.
+            const next: BuyerItem = {
+              id: created.id ?? '',
+              name: created.name,
+              phone: created.phone ?? null,
+              email: created.email ?? null,
+              company: created.company ?? null,
+              tier: created.tier,
+              markets: created.markets ?? [],
+              tags: [],
+              notes: created.notes ?? null,
+              matchScore: 0,
+              scoreBreakdown: 'Manually added',
+              verifiedFunding: created.verifiedFunding,
+            }
+            setAddedBuyers(prev => [...prev, next])
+          }}
+        />
       )}
 
       {editTarget && (

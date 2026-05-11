@@ -81,6 +81,7 @@ export function BuyerModal({
   propertyId,
   tenantSlug,
   marketOptions = [],
+  defaultStageId,
   onClose,
   onSaved,
 }: {
@@ -89,6 +90,10 @@ export function BuyerModal({
   propertyId?: string
   tenantSlug: string
   marketOptions?: string[]
+  // GHL pipeline stageId to drop the new buyer into. Required by the
+  // add-buyer API. Section 3 passes the first stage of the buyer
+  // pipeline so the user never sees this field — matches edit-mode UX.
+  defaultStageId?: string
   onClose: () => void
   onSaved: (next: BuyerModalValue) => void
 }) {
@@ -221,24 +226,30 @@ export function BuyerModal({
           setSaving(false)
           return
         }
+        if (!defaultStageId) {
+          setError('Internal error: GHL buyer pipeline stages not loaded')
+          setSaving(false)
+          return
+        }
         const [firstName, ...rest] = form.name.trim().split(/\s+/)
         const lastName = rest.join(' ')
         const addPayload = {
           firstName, lastName,
           phone: form.phone.trim(),
-          email: form.email.trim() || null,
-          buyerTier: form.tier,
-          buybox: form.buybox,
-          markets: form.markets,
-          source: 'manual',
-          verifiedFunding: form.verifiedFunding,
-          hasPurchased: form.purchasedBefore,
-          responseSpeed: form.responseSpeed || null,
-          notes: form.notes.trim() || null,
+          email: form.email.trim() || undefined,
           mobilePhone: form.mobilePhone.trim() || null,
           secondaryPhone: form.secondaryPhone.trim() || null,
           secondaryEmail: form.secondaryEmail.trim() || null,
           company: form.company.trim() || null,
+          buyerTier: form.tier,
+          buybox: form.buybox,
+          markets: form.markets,
+          source: 'manual',
+          stageId: defaultStageId,
+          verifiedFunding: form.verifiedFunding,
+          hasPurchased: form.purchasedBefore,
+          responseSpeed: form.responseSpeed || undefined,
+          notes: form.notes.trim() || undefined,
         }
         const res = await fetch(`/api/properties/${propertyId}/buyers`, {
           method: 'POST',
