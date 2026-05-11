@@ -1,11 +1,17 @@
 'use client'
 // components/inventory/property-form.tsx
-// Shared form for creating and editing properties
+// Create-only intake form. Four sections: address, stage, source, contact.
+// The contact section lets the user search existing GHL contacts OR
+// create a new one — a new contact is pushed to GHL AND saved locally
+// as either a Partner (agent/wholesaler/JV/etc.) or a Seller (homeowner).
+//
+// All other property fields (financials, beds/baths, description, etc.)
+// are edited on the property detail page after creation, not at intake.
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, Plus, Search, X } from 'lucide-react'
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -14,152 +20,123 @@ const US_STATES = [
   'VA','WA','WV','WI','WY',
 ]
 
-// GHL sends full state names, dropdown uses abbreviations — normalize
-const STATE_NAME_TO_ABBR: Record<string, string> = {
-  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
-  'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
-  'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
-  'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
-  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH',
-  'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC',
-  'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA',
-  'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN',
-  'texas': 'TX', 'utah': 'UT', 'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA',
-  'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
-}
-
-function normalizeState(raw: string): string {
-  if (!raw) return ''
-  const upper = raw.trim().toUpperCase()
-  if (US_STATES.includes(upper)) return upper
-  return STATE_NAME_TO_ABBR[raw.trim().toLowerCase()] ?? raw
-}
-
-const STATUS_OPTIONS = [
-  { value: 'NEW_LEAD', label: 'New lead' },
-  { value: 'CONTACTED', label: 'Contacted' },
-  { value: 'APPOINTMENT_SET', label: 'Appointment set' },
-  { value: 'APPOINTMENT_COMPLETED', label: 'Appointment completed' },
-  { value: 'OFFER_MADE', label: 'Offer made' },
-  { value: 'UNDER_CONTRACT', label: 'Under contract' },
-  { value: 'IN_DISPOSITION', label: 'In disposition' },
-  { value: 'SOLD', label: 'Sold' },
-  { value: 'DEAD', label: 'Dead' },
+// All 3 pipelines. Stored as the AppStage key — the API maps to
+// status+lane internally so the property lands in the right column.
+type StageOption = { key: string; label: string; group: string }
+const STAGE_OPTIONS: StageOption[] = [
+  { key: 'acquisition.new_lead',        label: 'New Lead',        group: 'Acquisition' },
+  { key: 'acquisition.appt_set',        label: 'Appt Set',        group: 'Acquisition' },
+  { key: 'acquisition.offer_made',      label: 'Offer Made',      group: 'Acquisition' },
+  { key: 'acquisition.contract',        label: 'Under Contract',  group: 'Acquisition' },
+  { key: 'acquisition.closed',          label: 'Closed (Acq)',    group: 'Acquisition' },
+  { key: 'disposition.new_deal',        label: 'New Deal',        group: 'Disposition' },
+  { key: 'disposition.pushed_out',      label: 'Pushed Out',      group: 'Disposition' },
+  { key: 'disposition.offers_received', label: 'Offers Received', group: 'Disposition' },
+  { key: 'disposition.contracted',      label: 'Contracted',      group: 'Disposition' },
+  { key: 'disposition.closed',          label: 'Closed (Dispo)',  group: 'Disposition' },
+  { key: 'longterm.follow_up',          label: 'Follow Up',       group: 'Long-Term' },
+  { key: 'longterm.dead',               label: 'Dead',            group: 'Long-Term' },
 ]
 
-interface TeamMember {
-  id: string
-  name: string
-  role: string
-}
-
-interface PropertyFormData {
-  id: string
-  address: string
-  city: string
-  state: string
-  zip: string
-  status: string
-  arv: string
-  askingPrice: string
-  mao: string
-  contractPrice: string
-  assignmentFee: string
-  offerPrice: string
-  repairCost: string
-  wholesalePrice: string
-  assignedToId: string
-  ghlContactId: string
-  sellerName: string
-  sellerPhone: string
-  sellerEmail: string
-  beds: string
-  baths: string
-  sqft: string
-  yearBuilt: string
-  lotSize: string
-  propertyType: string
-  occupancy: string
-  lockboxCode: string
-  description: string
-  internalNotes: string
-}
+// Common lead-source values. The select also has "Other" which reveals
+// a free-text input — sources land in the same column either way.
+const SOURCE_OPTIONS = [
+  'JV Partner',
+  'PPC',
+  'SEO',
+  'Direct Mail',
+  'Cold Call',
+  'Text Blast',
+  'Referral',
+  'Driving for Dollars',
+  'Wholesaler',
+  'Agent',
+  'Auction',
+  'MLS',
+]
 
 interface Props {
-  mode: 'create' | 'edit'
   tenantSlug: string
-  teamMembers: TeamMember[]
-  initialData: PropertyFormData
+  defaultStage?: string
 }
 
-export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Props) {
+type ContactKind = 'partner' | 'seller'
+
+type SelectedContact = {
+  mode: 'existing'
+  kind: ContactKind
+  id: string
+  name: string
+  phone: string
+  email: string
+} | {
+  mode: 'new'
+  kind: ContactKind
+  name: string
+  phone: string
+  email: string
+}
+
+export function PropertyForm({ tenantSlug, defaultStage = 'acquisition.new_lead' }: Props) {
   const router = useRouter()
-  const [form, setForm] = useState<PropertyFormData>({
-    ...initialData,
-    state: normalizeState(initialData.state),
-  })
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [zip, setZip] = useState('')
+  const [stage, setStage] = useState(defaultStage)
+  const [source, setSource] = useState('')
+  const [sourceOther, setSourceOther] = useState('')
+  const [contact, setContact] = useState<SelectedContact | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function update(field: keyof PropertyFormData) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-      setForm(prev => ({ ...prev, [field]: e.target.value }))
-  }
+  const resolvedSource = source === '__other__' ? sourceOther.trim() : source
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError('')
 
-    const url = mode === 'create' ? '/api/properties' : `/api/properties/${form.id}`
-    const method = mode === 'create' ? 'POST' : 'PATCH'
+    const payload: Record<string, unknown> = {
+      address,
+      city,
+      state,
+      zip,
+      stage,
+      leadSource: resolvedSource || null,
+    }
+    if (contact?.mode === 'existing') {
+      payload.contact = {
+        mode: 'existing',
+        kind: contact.kind,
+        ghlContactId: contact.id,
+        name: contact.name,
+        phone: contact.phone || null,
+        email: contact.email || null,
+      }
+    } else if (contact?.mode === 'new') {
+      payload.contact = {
+        mode: 'new',
+        kind: contact.kind,
+        name: contact.name,
+        phone: contact.phone || null,
+        email: contact.email || null,
+      }
+    }
 
     try {
-      const res = await fetch(url, {
-        method,
+      const res = await fetch('/api/properties', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address: form.address,
-          city: form.city,
-          state: form.state,
-          zip: form.zip,
-          status: form.status,
-          arv: form.arv || null,
-          askingPrice: form.askingPrice || null,
-          mao: form.mao || null,
-          contractPrice: form.contractPrice || null,
-          assignmentFee: form.assignmentFee || null,
-          offerPrice: form.offerPrice || null,
-          repairCost: form.repairCost || null,
-          wholesalePrice: form.wholesalePrice || null,
-          assignedToId: form.assignedToId || null,
-          sellerName: form.sellerName || null,
-          sellerPhone: form.sellerPhone || null,
-          sellerEmail: form.sellerEmail || null,
-          beds: form.beds ? parseInt(form.beds) : null,
-          baths: form.baths ? parseInt(form.baths) : null,
-          sqft: form.sqft ? parseInt(form.sqft) : null,
-          yearBuilt: form.yearBuilt ? parseInt(form.yearBuilt) : null,
-          lotSize: form.lotSize || null,
-          propertyType: form.propertyType || null,
-          occupancy: form.occupancy || null,
-          lockboxCode: form.lockboxCode || null,
-          description: form.description || null,
-          internalNotes: form.internalNotes || null,
-        }),
+        body: JSON.stringify(payload),
       })
-
       const data = await res.json()
-
       if (!res.ok) {
         setError(data.error || 'Something went wrong')
         setSaving(false)
         return
       }
-
-      const propertyId = mode === 'create' ? data.property.id : form.id
-      router.push(`/${tenantSlug}/inventory/${propertyId}`)
+      router.push(`/${tenantSlug}/inventory/${data.property.id}`)
       router.refresh()
     } catch {
       setError('Network error — please try again')
@@ -171,208 +148,89 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
   const labelCls = 'block text-ds-fine font-medium text-txt-secondary mb-1.5'
   const sectionCls = 'bg-white border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[14px] p-6 space-y-4'
 
+  const canSubmit = address.trim() && city.trim() && state.trim() && stage && contact && (
+    contact.mode === 'existing' || (contact.mode === 'new' && contact.name.trim().length > 0)
+  )
+
   return (
     <div className="max-w-2xl space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <Link
-          href={mode === 'edit' ? `/${tenantSlug}/inventory/${form.id}` : `/${tenantSlug}/inventory`}
+          href={`/${tenantSlug}/inventory`}
           className="inline-flex items-center gap-1.5 text-ds-body text-txt-secondary hover:text-txt-primary transition-colors"
         >
           <ArrowLeft size={14} />
-          {mode === 'edit' ? 'Back to property' : 'Back to inventory'}
+          Back to inventory
         </Link>
       </div>
-      <h1 className="text-ds-page font-semibold text-txt-primary">
-        {mode === 'create' ? 'Add property' : 'Edit property'}
-      </h1>
+      <h1 className="text-ds-page font-semibold text-txt-primary">Add property</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Property address */}
+        {/* Address */}
         <div className={sectionCls}>
-          <h2 className="text-ds-label font-medium text-txt-primary">Property address</h2>
+          <h2 className="text-ds-label font-medium text-txt-primary">Address</h2>
           <div>
             <label className={labelCls}>Street address *</label>
-            <input
-              value={form.address}
-              onChange={update('address')}
-              required
-              placeholder="123 Main St"
-              className={inputCls}
-            />
+            <input value={address} onChange={e => setAddress(e.target.value)} required placeholder="123 Main St" className={inputCls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>City *</label>
-              <input
-                value={form.city}
-                onChange={update('city')}
-                required
-                placeholder="Memphis"
-                className={inputCls}
-              />
+              <input value={city} onChange={e => setCity(e.target.value)} required placeholder="Memphis" className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>State *</label>
-              <select value={form.state} onChange={update('state')} required className={inputCls}>
+              <select value={state} onChange={e => setState(e.target.value)} required className={inputCls}>
                 <option value="">Select state</option>
                 {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>ZIP code</label>
-              <input value={form.zip} onChange={update('zip')} placeholder="38104" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Status</label>
-              <select value={form.status} onChange={update('status')} className={inputCls}>
-                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Financials */}
-        <div className={sectionCls}>
-          <h2 className="text-ds-label font-medium text-txt-primary">Financials</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Asking price ($)</label>
-              <input value={form.askingPrice} onChange={update('askingPrice')} type="number" placeholder="95000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>ARV ($)</label>
-              <input value={form.arv} onChange={update('arv')} type="number" placeholder="180000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>MAO ($)</label>
-              <input value={form.mao} onChange={update('mao')} type="number" placeholder="90000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Contract price ($)</label>
-              <input value={form.contractPrice} onChange={update('contractPrice')} type="number" placeholder="88000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Assignment fee ($)</label>
-              <input value={form.assignmentFee} onChange={update('assignmentFee')} type="number" placeholder="12000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Offer price ($)</label>
-              <input value={form.offerPrice} onChange={update('offerPrice')} type="number" placeholder="85000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Repair cost ($)</label>
-              <input value={form.repairCost} onChange={update('repairCost')} type="number" placeholder="25000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Wholesale price ($)</label>
-              <input value={form.wholesalePrice} onChange={update('wholesalePrice')} type="number" placeholder="110000" className={inputCls} />
-            </div>
-          </div>
-        </div>
-
-        {/* Property details */}
-        <div className={sectionCls}>
-          <h2 className="text-ds-label font-medium text-txt-primary">Property details</h2>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className={labelCls}>Beds</label>
-              <input value={form.beds} onChange={update('beds')} type="number" placeholder="3" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Baths</label>
-              <input value={form.baths} onChange={update('baths')} type="number" placeholder="2" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Sqft</label>
-              <input value={form.sqft} onChange={update('sqft')} type="number" placeholder="1450" className={inputCls} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Year built</label>
-              <input value={form.yearBuilt} onChange={update('yearBuilt')} type="number" placeholder="1985" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Lot size</label>
-              <input value={form.lotSize} onChange={update('lotSize')} placeholder="0.25 acres" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Property type</label>
-              <select value={form.propertyType} onChange={update('propertyType')} className={inputCls}>
-                <option value="">Select type</option>
-                <option value="House">House</option>
-                <option value="Land">Land</option>
-                <option value="Multi-Family">Multi-Family</option>
-                <option value="Commercial">Commercial</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Occupancy</label>
-              <select value={form.occupancy} onChange={update('occupancy')} className={inputCls}>
-                <option value="">Select occupancy</option>
-                <option value="Vacant">Vacant</option>
-                <option value="Owner Occupied">Owner Occupied</option>
-                <option value="Tenant Occupied">Tenant Occupied</option>
-                <option value="Unknown">Unknown</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Lockbox / Access Code</label>
-              <input value={form.lockboxCode} onChange={update('lockboxCode')} placeholder="1234" className={inputCls} />
-            </div>
-          </div>
           <div>
-            <label className={labelCls}>Description</label>
-            <textarea value={form.description} onChange={update('description')} placeholder="Property description..." rows={3} className={inputCls + ' resize-none'} />
-          </div>
-          <div>
-            <label className={labelCls}>Internal notes</label>
-            <textarea value={form.internalNotes} onChange={update('internalNotes')} placeholder="Team-only notes..." rows={2} className={inputCls + ' resize-none'} />
+            <label className={labelCls}>ZIP code</label>
+            <input value={zip} onChange={e => setZip(e.target.value)} placeholder="38104" className={inputCls} />
           </div>
         </div>
 
-        {/* GHL Contact (required) */}
+        {/* Stage */}
         <div className={sectionCls}>
-          <h2 className="text-ds-label font-medium text-txt-primary">Linked Contact *</h2>
-          <p className="text-ds-fine text-txt-muted mb-2">Search GHL contacts to link to this property. GHL is the source of truth for contact info.</p>
-          <GHLContactSearch
-            value={form.ghlContactId}
-            selectedName={form.sellerName}
-            selectedPhone={form.sellerPhone}
-            selectedEmail={form.sellerEmail}
-            onChange={(contact) => {
-              setForm(prev => ({
-                ...prev,
-                ghlContactId: contact?.id ?? '',
-                sellerName: contact?.name ?? '',
-                sellerPhone: contact?.phone ?? '',
-                sellerEmail: contact?.email ?? '',
-              }))
-            }}
-          />
-          {!form.ghlContactId && mode === 'create' && (
-            <p className="text-ds-fine text-semantic-red mt-1">A GHL contact is required to save the property</p>
+          <h2 className="text-ds-label font-medium text-txt-primary">Stage *</h2>
+          <p className="text-ds-fine text-txt-muted -mt-2">Where this property enters the pipeline.</p>
+          <select value={stage} onChange={e => setStage(e.target.value)} required className={inputCls}>
+            {(['Acquisition', 'Disposition', 'Long-Term'] as const).map(group => (
+              <optgroup key={group} label={group}>
+                {STAGE_OPTIONS.filter(s => s.group === group).map(s => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
+        {/* Source */}
+        <div className={sectionCls}>
+          <h2 className="text-ds-label font-medium text-txt-primary">Source</h2>
+          <p className="text-ds-fine text-txt-muted -mt-2">How did this deal come to us?</p>
+          <select value={source} onChange={e => setSource(e.target.value)} className={inputCls}>
+            <option value="">Select source…</option>
+            {SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            <option value="__other__">Other…</option>
+          </select>
+          {source === '__other__' && (
+            <input
+              value={sourceOther}
+              onChange={e => setSourceOther(e.target.value)}
+              placeholder="Enter source name"
+              className={inputCls}
+            />
           )}
         </div>
 
-        {/* Assignment */}
+        {/* Contact */}
         <div className={sectionCls}>
-          <h2 className="text-ds-label font-medium text-txt-primary">Assignment</h2>
-          <div>
-            <label className={labelCls}>Assigned to</label>
-            <select value={form.assignedToId} onChange={update('assignedToId')} className={inputCls}>
-              <option value="">Unassigned</option>
-              {teamMembers.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.role.replace(/_/g, ' ').toLowerCase()})
-                </option>
-              ))}
-            </select>
-          </div>
+          <h2 className="text-ds-label font-medium text-txt-primary">Contact *</h2>
+          <p className="text-ds-fine text-txt-muted -mt-2">Search an existing GHL contact, or create a new one.</p>
+          <ContactPicker value={contact} onChange={setContact} />
         </div>
 
         {error && (
@@ -381,21 +239,20 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center gap-3">
           <Link
-            href={mode === 'edit' ? `/${tenantSlug}/inventory/${form.id}` : `/${tenantSlug}/inventory`}
+            href={`/${tenantSlug}/inventory`}
             className="px-5 py-2.5 text-ds-body text-txt-secondary hover:text-txt-primary bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] transition-colors font-medium"
           >
             Cancel
           </Link>
           <button
             type="submit"
-            disabled={saving || !form.address || !form.city || !form.state || (mode === 'create' && !form.ghlContactId)}
+            disabled={saving || !canSubmit}
             className="flex items-center gap-2 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-body font-semibold px-6 py-2.5 rounded-[10px] transition-colors"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {saving ? 'Saving…' : mode === 'create' ? 'Add property' : 'Save changes'}
+            {saving ? 'Saving…' : 'Add property'}
           </button>
         </div>
       </form>
@@ -403,14 +260,143 @@ export function PropertyForm({ mode, tenantSlug, teamMembers, initialData }: Pro
   )
 }
 
+// ─── Contact picker ──────────────────────────────────────────────────────────
+
+function ContactPicker({ value, onChange }: {
+  value: SelectedContact | null
+  onChange: (next: SelectedContact | null) => void
+}) {
+  const [mode, setMode] = useState<'search' | 'new'>('search')
+
+  // Selected (either existing or new) — render a confirmation card with
+  // an inline Partner/Seller toggle and a Change action. The toggle
+  // applies to both modes so the user always tags the contact's role on
+  // this deal (drives whether we write a Partner row or Seller row).
+  if (value) {
+    const modeLabel = value.mode === 'new' ? 'New contact' : 'Existing GHL contact'
+    function setKind(kind: ContactKind) {
+      if (value!.mode === 'existing') onChange({ ...value!, kind })
+      else onChange({ ...value!, kind })
+    }
+    return (
+      <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] p-3 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-ds-body font-medium text-txt-primary">{value.name || '(no name)'}</p>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-white text-txt-muted border-[0.5px] border-[rgba(0,0,0,0.08)]">
+                {modeLabel}
+              </span>
+            </div>
+            <div className="flex gap-3 text-ds-fine text-txt-secondary">
+              {value.phone && <span>{value.phone}</span>}
+              {value.email && <span>{value.email}</span>}
+            </div>
+          </div>
+          <button type="button" onClick={() => onChange(null)} className="text-ds-fine text-txt-muted hover:text-semantic-red transition-colors">
+            Change
+          </button>
+        </div>
+        <div>
+          <p className="text-ds-fine font-medium text-txt-secondary mb-1.5">Role on this deal</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setKind('seller')}
+              className={`flex-1 text-ds-fine font-medium px-3 py-2 rounded-[8px] border-[0.5px] transition-colors ${value.kind === 'seller' ? 'bg-gunner-red-light border-gunner-red text-gunner-red' : 'bg-white border-[rgba(0,0,0,0.14)] text-txt-secondary hover:border-[rgba(0,0,0,0.24)]'}`}
+            >
+              Seller
+              <p className="text-[10px] font-normal text-txt-muted mt-0.5">Homeowner who owns the property</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setKind('partner')}
+              className={`flex-1 text-ds-fine font-medium px-3 py-2 rounded-[8px] border-[0.5px] transition-colors ${value.kind === 'partner' ? 'bg-gunner-red-light border-gunner-red text-gunner-red' : 'bg-white border-[rgba(0,0,0,0.14)] text-txt-secondary hover:border-[rgba(0,0,0,0.24)]'}`}
+            >
+              Partner
+              <p className="text-[10px] font-normal text-txt-muted mt-0.5">JV, agent, wholesaler, contractor…</p>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-1 bg-surface-tertiary rounded-lg p-0.5 w-fit">
+        <button
+          type="button"
+          onClick={() => setMode('search')}
+          className={`text-[11px] font-semibold uppercase tracking-wider px-3 py-1 rounded-md transition-colors flex items-center gap-1 ${mode === 'search' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}
+        >
+          <Search size={11} /> Search GHL
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('new')}
+          className={`text-[11px] font-semibold uppercase tracking-wider px-3 py-1 rounded-md transition-colors flex items-center gap-1 ${mode === 'new' ? 'bg-white text-txt-primary shadow-sm' : 'text-txt-muted hover:text-txt-secondary'}`}
+        >
+          <Plus size={11} /> Create new
+        </button>
+      </div>
+      {mode === 'search'
+        ? <GHLContactSearch onPick={(c) => onChange({ mode: 'existing', kind: 'seller', id: c.id, name: c.name, phone: c.phone, email: c.email })} />
+        : <NewContactForm onCreate={(c) => onChange({ mode: 'new', ...c })} />
+      }
+    </div>
+  )
+}
+
+// ─── New contact form ────────────────────────────────────────────────────────
+// Local-only at this stage — the actual GHL contact + Partner/Seller row
+// are created server-side when the parent form submits, so the user can
+// still back out without leaving orphan records in GHL.
+
+function NewContactForm({ onCreate }: {
+  onCreate: (c: { kind: ContactKind; name: string; phone: string; email: string }) => void
+}) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+
+  const inputCls = 'w-full bg-white border-[0.5px] border-[rgba(0,0,0,0.14)] rounded-[10px] px-3 py-2 text-ds-body text-txt-primary placeholder-txt-muted focus:outline-none focus:border-gunner-red/60 transition-colors'
+
+  return (
+    <div className="space-y-3 bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.06)] rounded-[10px] p-3">
+      <div>
+        <p className="text-ds-fine font-medium text-txt-secondary mb-1.5">Name *</p>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" className={inputCls} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-ds-fine font-medium text-txt-secondary mb-1.5">Phone</p>
+          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(555) 555-1212" className={inputCls} />
+        </div>
+        <div>
+          <p className="text-ds-fine font-medium text-txt-secondary mb-1.5">Email</p>
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com" className={inputCls} />
+        </div>
+      </div>
+      <button
+        type="button"
+        disabled={!name.trim()}
+        onClick={() => onCreate({ kind: 'partner', name: name.trim(), phone: phone.trim(), email: email.trim() })}
+        className="w-full flex items-center justify-center gap-1.5 bg-gunner-red hover:bg-gunner-red-dark disabled:opacity-40 text-white text-ds-fine font-semibold px-3 py-2 rounded-[8px] transition-colors"
+      >
+        <Plus size={12} /> Use this contact
+      </button>
+      <p className="text-[10px] text-txt-muted text-center">
+        Pick the role (Partner / Seller) on the next screen. The contact is saved to GHL + Gunner when you click <span className="font-medium">Add property</span>.
+      </p>
+    </div>
+  )
+}
+
 // ─── GHL Contact Search ──────────────────────────────────────────────────────
 
-function GHLContactSearch({ value, selectedName, selectedPhone, selectedEmail, onChange }: {
-  value: string
-  selectedName: string
-  selectedPhone: string
-  selectedEmail: string
-  onChange: (contact: { id: string; name: string; phone: string; email: string } | null) => void
+function GHLContactSearch({ onPick }: {
+  onPick: (contact: { id: string; name: string; phone: string; email: string }) => void
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Array<{ id: string; name: string; phone: string | null; email: string | null; address: string }>>([])
@@ -434,23 +420,6 @@ function GHLContactSearch({ value, selectedName, selectedPhone, selectedEmail, o
     }, 300)
   }
 
-  if (value && selectedName) {
-    return (
-      <div className="bg-surface-secondary border-[0.5px] border-[rgba(0,0,0,0.08)] rounded-[10px] p-3 flex items-center gap-3">
-        <div className="flex-1">
-          <p className="text-ds-body font-medium text-txt-primary">{selectedName}</p>
-          <div className="flex gap-3 text-ds-fine text-txt-secondary">
-            {selectedPhone && <span>{selectedPhone}</span>}
-            {selectedEmail && <span>{selectedEmail}</span>}
-          </div>
-        </div>
-        <button type="button" onClick={() => onChange(null)} className="text-ds-fine text-txt-muted hover:text-semantic-red transition-colors">
-          Change
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div className="relative">
       <input
@@ -466,7 +435,7 @@ function GHLContactSearch({ value, selectedName, selectedPhone, selectedEmail, o
             <button
               key={c.id}
               type="button"
-              onClick={() => { onChange({ id: c.id, name: c.name, phone: c.phone ?? '', email: c.email ?? '' }); setOpen(false); setQuery('') }}
+              onClick={() => { onPick({ id: c.id, name: c.name, phone: c.phone ?? '', email: c.email ?? '' }); setOpen(false); setQuery('') }}
               className="w-full text-left px-3 py-2.5 hover:bg-surface-secondary transition-colors border-b border-[rgba(0,0,0,0.04)] last:border-b-0"
             >
               <p className="text-ds-body font-medium text-txt-primary">{c.name}</p>
@@ -478,6 +447,11 @@ function GHLContactSearch({ value, selectedName, selectedPhone, selectedEmail, o
             </button>
           ))}
         </div>
+      )}
+      {open && query.length >= 2 && !searching && results.length === 0 && (
+        <p className="text-ds-fine text-txt-muted mt-2 flex items-center gap-1">
+          <X size={12} /> No GHL contacts matched. Switch to <span className="font-semibold">Create new</span> above.
+        </p>
       )}
     </div>
   )
