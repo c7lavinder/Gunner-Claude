@@ -495,6 +495,32 @@ export const POST = withTenant<{ propertyId: string }>(async (request, ctx, para
         }
       }
 
+      // Augment marketValues with every market name actually in use in
+      // Gunner — Buyer.primaryMarkets arrays and Market table rows. The
+      // GHL picklist alone misses markets reps have added inline via the
+      // BuyerModal's "add new" affordance, so the dropdown looked empty
+      // even when other buyers in the tenant had markets assigned.
+      const [tenantBuyerMarkets, tenantMarkets] = await Promise.all([
+        db.buyer.findMany({
+          where: { tenantId: ctx.tenantId },
+          select: { primaryMarkets: true },
+        }),
+        db.market.findMany({
+          where: { tenantId: ctx.tenantId },
+          select: { name: true },
+        }),
+      ])
+      for (const b of tenantBuyerMarkets) {
+        for (const m of (b.primaryMarkets ?? []) as string[]) {
+          const trimmed = m.trim()
+          if (trimmed) marketValues.add(trimmed)
+        }
+      }
+      for (const m of tenantMarkets) {
+        const trimmed = m.name.trim()
+        if (trimmed) marketValues.add(trimmed)
+      }
+
       return NextResponse.json({
         pipelineId: buyerPipeline.id,
         stages: buyerPipeline.stages.map(s => ({ id: s.id, name: s.name })),
