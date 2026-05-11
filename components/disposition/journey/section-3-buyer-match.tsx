@@ -268,7 +268,7 @@ export function Section3BuyerMatch({
           {syncMsg && <p className="text-[10px] text-txt-muted mt-0.5">{syncMsg}</p>}
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowBulkAdd(true)} disabled={loading}
+          <button onClick={async () => { await ensureFormOptionsLoaded(); setShowBulkAdd(true) }} disabled={loading}
             className="text-ds-fine font-medium text-semantic-blue hover:text-semantic-blue/80 flex items-center gap-1 transition-colors disabled:opacity-50">
             <Upload size={11} />
             Bulk Add
@@ -534,6 +534,7 @@ export function Section3BuyerMatch({
       {showBulkAdd && (
         <BulkAddModal
           propertyId={property.id}
+          marketOptions={formOptions?.markets ?? []}
           onClose={() => setShowBulkAdd(false)}
           onComplete={() => {
             // Reload to pick up the new buyers + their PropertyBuyerStage rows.

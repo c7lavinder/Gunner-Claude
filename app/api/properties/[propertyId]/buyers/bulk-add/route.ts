@@ -31,6 +31,16 @@ const rowSchema = z.object({
   tier: z.string().nullable().optional(),     // priority/qualified/jv/unqualified/realtor
   markets: z.array(z.string()).nullable().optional(),
   notes: z.string().nullable().optional(),
+  // Phase A3 extras — match the BuyerModal field set so bulk-add can
+  // populate the same canonical fields as single-add / edit.
+  mobilePhone: z.string().nullable().optional(),
+  secondaryPhone: z.string().nullable().optional(),
+  secondaryEmail: z.string().nullable().optional(),
+  company: z.string().nullable().optional(),
+  buybox: z.array(z.string()).nullable().optional(),
+  verifiedFunding: z.boolean().nullable().optional(),
+  purchasedBefore: z.boolean().nullable().optional(),
+  responseSpeed: z.string().nullable().optional(),
 })
 
 const bodySchema = z.object({
@@ -163,13 +173,18 @@ export const POST = withTenant<{ propertyId: string }>(async (request, ctx, para
           // (rep can sync to GHL later; not ideal but avoids losing data).
         }
 
-        // Create local Buyer row. Buyer doesn't have a top-level `tier`
-        // column — tier lives in customFields (GHL field id) and is read
-        // back via GHL_FIELD_MAP when matchBuyers re-pulls. Bulk-add
-        // stamps the tier into tags so it's discoverable + the rep can
-        // edit it via the buyer edit modal which writes to GHL.
+        // Create local Buyer row. Stamps canonical fields into both tags
+        // (tier:X for legacy discovery) and customFields (read by the edit
+        // modal as canonical) so bulk-added buyers behave identically to
+        // single-added ones.
         const tagSet = ['gunner-bulk-add']
         if (row.tier) tagSet.push(`tier:${row.tier}`)
+        const customFields: Record<string, unknown> = {}
+        if (row.tier) customFields.tier = row.tier
+        if (row.verifiedFunding !== undefined && row.verifiedFunding !== null) customFields.verifiedFunding = row.verifiedFunding
+        if (row.purchasedBefore !== undefined && row.purchasedBefore !== null) customFields.hasPurchased = row.purchasedBefore
+        if (row.responseSpeed) customFields.responseSpeed = row.responseSpeed
+        if (row.buybox && row.buybox.length > 0) customFields.buybox = row.buybox
         const newBuyer = await db.buyer.create({
           data: {
             tenantId: ctx.tenantId,
@@ -177,9 +192,14 @@ export const POST = withTenant<{ propertyId: string }>(async (request, ctx, para
             name: (row.name ?? '').trim() || `Buyer ${phone.slice(-4)}`,
             phone,
             email: row.email ?? null,
+            mobilePhone: row.mobilePhone ?? null,
+            secondaryPhone: row.secondaryPhone ?? null,
+            secondaryEmail: row.secondaryEmail ?? null,
+            company: row.company ?? null,
             primaryMarkets: (row.markets ?? []) as string[],
             tags: tagSet,
             internalNotes: row.notes ?? null,
+            customFields: Object.keys(customFields).length > 0 ? JSON.parse(JSON.stringify(customFields)) : undefined,
             isActive: true,
           },
           select: { id: true },
