@@ -19,7 +19,7 @@
 // - Per-section delete + star buttons, "Download all" zips everything,
 //   header carries an editable external photos link.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Upload, Loader2, Trash2, X, ChevronLeft, ChevronRight, ChevronDown,
   Download, Link as LinkIcon, ExternalLink, Pencil, Check, Star,
@@ -97,6 +97,11 @@ export function PropertyPhotosPanel({
   // deliberately do NOT track a global "active drop target" key because
   // setting state on every pointermove is what made the panel lag.
   const [draggingPhotoId, setDraggingPhotoId] = useState<string | null>(null)
+  // Bulk selection. When `selectMode` is on, tile taps toggle membership in
+  // `selectedIds` instead of opening the lightbox. Dragging any selected
+  // tile moves the whole set together.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const fileInput = useRef<HTMLInputElement>(null)
 
   // Hydrate expanded state from localStorage on mount (client-only).
@@ -222,18 +227,22 @@ export function PropertyPhotosPanel({
     }
   }
 
-  async function reclassifyPhoto(id: string, nextCategory: string) {
-    const current = photos.find(p => p.id === id)
-    if (!current) return
-    const currentCat = current.classificationStatus === 'pending' ? 'uncategorized' : (current.category ?? 'uncategorized')
-    if (currentCat === nextCategory) return
-    // Optimistic — flip category locally and clear the "pending" overlay if it
-    // was still classifying. User intent wins over Claude vision.
-    setPhotos(prev => prev.map(p => p.id === id
+  async function reclassifyMany(ids: string[], nextCategory: string) {
+    if (ids.length === 0) return
+    // Skip photos already in the target category — saves needless PATCHes.
+    const toMove = photos.filter(p => {
+      if (!ids.includes(p.id)) return false
+      const currentCat = p.classificationStatus === 'pending' ? 'uncategorized' : (p.category ?? 'uncategorized')
+      return currentCat !== nextCategory
+    })
+    if (toMove.length === 0) return
+    const movingIds = new Set(toMove.map(p => p.id))
+    // Optimistic — flip category locally for all in the set.
+    setPhotos(prev => prev.map(p => movingIds.has(p.id)
       ? { ...p, category: nextCategory, classificationStatus: 'done' }
       : p,
     ))
-    // Auto-expand the destination section so the user sees where it landed.
+    // Auto-expand the destination so the user sees where they landed.
     setExpanded(prev => {
       if (prev.has(nextCategory)) return prev
       const next = new Set(prev)
@@ -241,12 +250,15 @@ export function PropertyPhotosPanel({
       persistExpanded(next)
       return next
     })
-    const res = await fetch(`/api/properties/${propertyId}/photos/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category: nextCategory }),
-    })
-    if (!res.ok) load()
+    // Fire PATCHes in parallel. If any fail, reload from server to reconcile.
+    const results = await Promise.all(
+      toMove.map(p => fetch(`/api/properties/${propertyId}/photos/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: nextCategory }),
+      }).catch(() => null)),
+    )
+    if (results.some(r => !r || !r.ok)) load()
   }
 
   async function downloadAll() {
@@ -325,6 +337,14 @@ export function PropertyPhotosPanel({
     () => (draggingPhotoId ? photos.find(p => p.id === draggingPhotoId) ?? null : null),
     [draggingPhotoId, photos],
   )
+  // The set of photo ids being moved by the current drag. If the user
+  // started dragging a *selected* tile, the whole selection moves
+  // together. Otherwise just the one tile.
+  const dragSet = useMemo<Set<string>>(() => {
+    if (!draggingPhotoId) return new Set()
+    if (selectedIds.has(draggingPhotoId) && selectedIds.size > 1) return selectedIds
+    return new Set([draggingPhotoId])
+  }, [draggingPhotoId, selectedIds])
 
   // Pointer for mouse/trackpad (5px before drag starts so a click still
   // opens the lightbox). Touch sensor uses a short hold so tap-to-open
@@ -334,16 +354,68 @@ export function PropertyPhotosPanel({
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   )
 
+  // Refs to the latest state so tile callbacks can be stable across
+  // renders. Stable callbacks are what let DraggableTile use React.memo
+  // and skip re-rendering when unrelated state changes.
+  const stateRef = useRef({ photos, selectMode, selectedIds })
+  useEffect(() => {
+    stateRef.current = { photos, selectMode, selectedIds }
+  })
+
+  const handleTileTap = useCallback((id: string) => {
+    const { selectMode, photos } = stateRef.current
+    if (selectMode) {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+    } else {
+      const idx = photos.findIndex(p => p.id === id)
+      if (idx >= 0) setLightboxIndex(idx)
+    }
+  }, [])
+
+  const handleTileStar = useCallback((id: string) => {
+    const { photos } = stateRef.current
+    const p = photos.find(x => x.id === id)
+    if (p) toggleStar(p.id, p.isStarred)
+    // toggleStar/deletePhoto are closures over component scope — fine.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleTileDelete = useCallback((id: string) => {
+    deletePhoto(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function handleDragStart(e: DragStartEvent) {
     setDraggingPhotoId(String(e.active.id))
   }
 
   function handleDragEnd(e: DragEndEvent) {
-    const id = String(e.active.id)
+    const draggedId = String(e.active.id)
     const targetKey = e.over ? String(e.over.id) : null
+    // Snapshot the set BEFORE we clear drag state — clearing nukes selectedIds.
+    const ids = selectedIds.has(draggedId) && selectedIds.size > 1
+      ? Array.from(selectedIds)
+      : [draggedId]
     setDraggingPhotoId(null)
     if (!targetKey || !WRITABLE_CATEGORIES.includes(targetKey)) return
-    reclassifyPhoto(id, targetKey)
+    reclassifyMany(ids, targetKey)
+    // Exit select mode + clear selection after a successful bulk move.
+    if (ids.length > 1) {
+      setSelectMode(false)
+      setSelectedIds(new Set())
+    }
+  }
+
+  function toggleSelectMode() {
+    setSelectMode(prev => {
+      if (prev) setSelectedIds(new Set())
+      return !prev
+    })
   }
 
   function toggleSection(key: string) {
@@ -452,6 +524,21 @@ export function PropertyPhotosPanel({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {photos.length > 0 && (
+            <button
+              onClick={toggleSelectMode}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-[6px] flex items-center gap-1 transition-colors border-[0.5px] ${
+                selectMode
+                  ? 'bg-gunner-red text-white border-gunner-red'
+                  : 'text-txt-secondary hover:text-gunner-red border-[rgba(0,0,0,0.12)] hover:border-gunner-red'
+              }`}
+              title={selectMode ? 'Exit select mode' : 'Select multiple photos to drag together'}
+            >
+              {selectMode
+                ? `${selectedIds.size} selected · Done`
+                : 'Select'}
+            </button>
+          )}
           {grouped.length > 0 && (
             <button
               onClick={allExpanded ? collapseAll : expandAll}
@@ -599,12 +686,12 @@ export function PropertyPhotosPanel({
                         <DraggableTile
                           key={p.id}
                           photo={p}
-                          onOpen={() => {
-                            const idx = photos.findIndex(x => x.id === p.id)
-                            if (idx >= 0) setLightboxIndex(idx)
-                          }}
-                          onStar={() => toggleStar(p.id, p.isStarred)}
-                          onDelete={() => deletePhoto(p.id)}
+                          selectMode={selectMode}
+                          isSelected={selectedIds.has(p.id)}
+                          isInDragSet={dragSet.has(p.id)}
+                          onTap={handleTileTap}
+                          onStar={handleTileStar}
+                          onDelete={handleTileDelete}
                         />
                       ))}
                     </div>
@@ -620,8 +707,13 @@ export function PropertyPhotosPanel({
           </div>
           <DragOverlay dropAnimation={null}>
             {draggingPhoto && draggingPhoto.url ? (
-              <div className="w-20 h-20 rounded-[6px] overflow-hidden shadow-2xl ring-2 ring-gunner-red bg-white">
+              <div className="relative w-20 h-20 rounded-[6px] overflow-hidden shadow-2xl ring-2 ring-gunner-red bg-white">
                 <img src={draggingPhoto.url} alt="" className="w-full h-full object-cover" />
+                {dragSet.size > 1 && (
+                  <div className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-gunner-red text-white text-[11px] font-bold flex items-center justify-center shadow-md ring-2 ring-white">
+                    {dragSet.size}
+                  </div>
+                )}
               </div>
             ) : null}
           </DragOverlay>
@@ -676,33 +768,44 @@ export function PropertyPhotosPanel({
 // mouse + touch. We suppress the click handler if the user actually
 // dragged (dnd-kit gives us isDragging) so a tap still opens the lightbox
 // but a drag doesn't accidentally open it on drop.
-function DraggableTile({
+//
+// Memoized with custom equality so re-renders only fire when this tile's
+// own data or selection state changes. Stable callbacks from the parent
+// (via useRef + useCallback) are what make the memo effective.
+function DraggableTileImpl({
   photo,
-  onOpen,
+  selectMode,
+  isSelected,
+  isInDragSet,
+  onTap,
   onStar,
   onDelete,
 }: {
   photo: Photo
-  onOpen: () => void
-  onStar: () => void
-  onDelete: () => void
+  selectMode: boolean
+  isSelected: boolean
+  isInDragSet: boolean
+  onTap: (id: string) => void
+  onStar: (id: string) => void
+  onDelete: (id: string) => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: photo.id })
   const classifying = photo.classificationStatus === 'pending'
+  const dimmed = isDragging || isInDragSet
   return (
     <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
       style={{ touchAction: 'none' }}
-      className={`aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-grab active:cursor-grabbing ${photo.isStarred ? 'ring-2 ring-amber-400' : ''} ${isDragging ? 'opacity-30' : ''}`}
+      className={`aspect-square relative group rounded-[4px] overflow-hidden bg-surface-secondary cursor-grab active:cursor-grabbing ${
+        isSelected ? 'ring-2 ring-blue-500' : photo.isStarred ? 'ring-2 ring-amber-400' : ''
+      } ${dimmed ? 'opacity-30' : ''}`}
       onClick={e => {
-        // dnd-kit cancels the click if a drag actually happened, but guard
-        // anyway: don't open lightbox while a drag is in flight.
         if (isDragging) { e.preventDefault(); return }
-        onOpen()
+        onTap(photo.id)
       }}
-      title="Drag to move to another section · click to open"
+      title={selectMode ? 'Tap to select · drag any selected photo to move them together' : 'Drag to move to another section · click to open'}
     >
       {photo.url ? (
         <img src={photo.url} alt={photo.filename} className="w-full h-full object-cover pointer-events-none" loading="lazy" draggable={false} />
@@ -714,33 +817,66 @@ function DraggableTile({
           <Loader2 size={10} className="text-white animate-spin" />
         </div>
       )}
-      {photo.isStarred && (
+      {/* Selection checkmark — replaces the star/hover actions while in
+          select mode so there's no overlap. */}
+      {selectMode && (
+        <div className={`absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center pointer-events-none ${
+          isSelected ? 'bg-blue-500 text-white' : 'bg-white/80 border border-black/20'
+        }`}>
+          {isSelected && <Check size={9} strokeWidth={3} />}
+        </div>
+      )}
+      {!selectMode && photo.isStarred && (
         <div className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-amber-400 text-white pointer-events-none">
           <Star size={9} fill="currentColor" />
         </div>
       )}
-      {/* Hover actions. onPointerDown stop is critical — without it the
-          dnd-kit listener swallows the button press and the click never
-          fires. */}
-      <button
-        onPointerDown={e => e.stopPropagation()}
-        onClick={e => { e.stopPropagation(); onStar() }}
-        className={`absolute top-0.5 left-0.5 p-0.5 rounded-full ${photo.isStarred ? 'opacity-0' : 'bg-black/60 text-white opacity-0 group-hover:opacity-100'} transition-opacity`}
-        title={photo.isStarred ? 'Unstar' : 'Star (set as cover photo)'}
-      >
-        <Star size={9} />
-      </button>
-      <button
-        onPointerDown={e => e.stopPropagation()}
-        onClick={e => { e.stopPropagation(); onDelete() }}
-        className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-        title="Delete"
-      >
-        <Trash2 size={9} />
-      </button>
+      {/* Hover actions (hidden in select mode). onPointerDown stop is
+          critical — without it the dnd-kit listener swallows the press
+          and the click never fires. */}
+      {!selectMode && (
+        <>
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onStar(photo.id) }}
+            className={`absolute top-0.5 left-0.5 p-0.5 rounded-full ${photo.isStarred ? 'opacity-0' : 'bg-black/60 text-white opacity-0 group-hover:opacity-100'} transition-opacity`}
+            title={photo.isStarred ? 'Unstar' : 'Star (set as cover photo)'}
+          >
+            <Star size={9} />
+          </button>
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onDelete(photo.id) }}
+            className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Delete"
+          >
+            <Trash2 size={9} />
+          </button>
+        </>
+      )}
     </div>
   )
 }
+
+const DraggableTile = memo(DraggableTileImpl, (prev, next) => {
+  // Re-render only when the tile's own data or selection state changes.
+  // The parent's `photos` array changes whenever any tile is added /
+  // removed / starred / recategorized, so without this gate every tile
+  // would re-render on every state change — that's the lag the user felt.
+  return (
+    prev.photo.id === next.photo.id
+    && prev.photo.url === next.photo.url
+    && prev.photo.isStarred === next.photo.isStarred
+    && prev.photo.category === next.photo.category
+    && prev.photo.classificationStatus === next.photo.classificationStatus
+    && prev.selectMode === next.selectMode
+    && prev.isSelected === next.isSelected
+    && prev.isInDragSet === next.isInDragSet
+    && prev.onTap === next.onTap
+    && prev.onStar === next.onStar
+    && prev.onDelete === next.onDelete
+  )
+})
 
 // Section card that acts as a drop target via useDroppable. Header toggles
 // expand/collapse with a normal click. The whole card is the drop zone so
