@@ -27,6 +27,12 @@ const updateSchema = z.object({
   // clicked (acq vs dispo) so it sends the lane explicitly. Optional —
   // existing callers (offer flow, etc.) without a hint still work.
   lane: z.enum(['acq', 'dispo', 'longterm']).optional(),
+  // Phase B2 — when true, suppress reverse-sync to GHL. Gunner's
+  // pipeline is intentionally a simplified roll-up of GHL's detailed
+  // sub-stages, so pushing a simplified status back to GHL would
+  // collapse detailed stage state (many-to-one in reverse). The Move
+  // here UI passes this to keep manual stage changes local.
+  skipReverseSync: z.boolean().optional(),
   arv: z.string().nullable().optional(),
   askingPrice: z.string().nullable().optional(),
   mao: z.string().nullable().optional(),
@@ -137,7 +143,7 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
   const { standardizeStreet, standardizeCity, standardizeState, standardizeZip } = await import('@/lib/address')
 
   const {
-    address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status, lane,
+    address: rawAddress, city: rawCity, state: rawState, zip: rawZip, status, lane, skipReverseSync,
     arv, askingPrice, mao, contractPrice, assignmentFee,
     offerPrice, repairCost, wholesalePrice,
     currentOffer, highestOffer, acceptedPrice, finalProfit,
@@ -384,7 +390,12 @@ export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params)
     // Reverse sync (Phase 4.3) — push the new status back to GHL so the
     // CRM stays in sync. Behind REVERSE_SYNC_ENABLED feature flag (default
     // off). Fire-and-forget — never blocks the user's UI action.
-    if (status && status !== effectiveStatus(property)) {
+    //
+    // Phase B2: callers can opt out via skipReverseSync. Gunner's pipeline
+    // is a simplified roll-up of GHL's detailed sub-stages; reverse-sync
+    // would collapse that detail back to a single canonical stage. The
+    // Move here UI sets the flag so manual stage changes stay local.
+    if (!skipReverseSync && status && status !== effectiveStatus(property)) {
       // Honor explicit lane hint (Phase B2). Falls back to heuristic when
       // caller didn't specify.
       const explicitLane = lane === 'acq' ? 'acquisition' : lane === 'dispo' ? 'disposition' : lane === 'longterm' ? 'longterm' : null

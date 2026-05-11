@@ -1048,9 +1048,11 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
 
   // Phase B2 — "Move here" inline status change. PATCHes the property
   // with an explicit lane hint so JV deals (no GHL opp) can advance
-  // through stages from Gunner. Regular deals also get a manual override
-  // path; reverse-sync will push to GHL automatically when the opp
-  // exists and the feature flag is on.
+  // through stages from Gunner. Reverse-sync is explicitly disabled on
+  // this path: Gunner's pipeline is a simplified roll-up of GHL's
+  // detailed sub-stages, so pushing the simplified status back would
+  // collapse GHL detail (many-to-one in reverse). GHL-driven changes
+  // still flow into Gunner via the existing forward sync (webhooks).
   async function moveToStage(stepKey: string, lane: 'acq' | 'dispo') {
     // ACQ_STEPS uses 'SOLD' for closed, DISPO_STEPS uses 'DISPO_CLOSED'.
     // The DB enum is just 'CLOSED' on each lane — normalize.
@@ -1060,7 +1062,7 @@ function DealProgress({ currentStatus, dispoStatus, milestones, propertyId, canE
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, lane }),
+        body: JSON.stringify({ status, lane, skipReverseSync: true }),
       })
       if (res.ok) {
         toast(`Moved to ${stepKey === 'SOLD' || stepKey === 'DISPO_CLOSED' ? 'Closed' : stepKey}`, 'success')
