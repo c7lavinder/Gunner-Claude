@@ -4,9 +4,14 @@ import { withTenant } from '@/lib/api/withTenant'
 import { db } from '@/lib/db/client'
 import { z } from 'zod'
 
+// Stages used across Sections 3 + 4. 'sent' was missing previously — the
+// Section-3 kanban writes it when the rep moves a buyer Matched → Sent,
+// and the API silently 400'd. The frontend swallowed the error, so the
+// UI looked optimistic but the row never persisted; on refresh the
+// buyer reverted to 'matched'.
 const schema = z.object({
   buyerId: z.string().min(1),
-  stage: z.enum(['matched', 'responded', 'interested']),
+  stage: z.enum(['matched', 'sent', 'responded', 'interested', 'showing_scheduled']),
 })
 
 export const PATCH = withTenant<{ propertyId: string }>(async (req, ctx, params) => {
