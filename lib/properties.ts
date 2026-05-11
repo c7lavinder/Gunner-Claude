@@ -196,30 +196,53 @@ export async function createPropertyFromContact(
 
     const now = new Date()
 
-    // Create property — Gunner is source of truth
-    const property = await db.property.create({
-      data: {
-        tenantId,
-        ghlContactId,
-        leadSource,
-        address: address || '',
-        city: city || '',
-        state: state || '',
-        zip: zip || '',
-        acqStatus,
-        dispoStatus,
-        longtermStatus,
-        ghlAcqStageName: acqStageName,
-        ghlDispoStageName: dispoStageName,
-        ghlLongtermStageName: longtermStageName,
-        acqStageEnteredAt: acqStatus ? now : null,
-        dispoStageEnteredAt: dispoStatus ? now : null,
-        longtermStageEnteredAt: longtermStatus ? now : null,
-        assignedToId,
-        marketId,
-        ...(context.markPendingEnrichment ? { pendingEnrichment: true } : {}),
-      },
-    })
+    // Create property — Gunner is source of truth.
+    //
+    // The two findFirst checks above ARE NOT sufficient on their own —
+    // two GHL webhooks for the same contact can race and both pass the
+    // pre-check before either insert lands (observed: 21-128ms apart in
+    // prod, Session 82). The partial unique index on
+    // (tenant_id, ghl_contact_id, lower(address)) — migration
+    // 20260511185452_unique_property_contact_address — makes the second
+    // insert fail with P2002. Catch it, fetch the winner's row, return.
+    let property
+    try {
+      property = await db.property.create({
+        data: {
+          tenantId,
+          ghlContactId,
+          leadSource,
+          address: address || '',
+          city: city || '',
+          state: state || '',
+          zip: zip || '',
+          acqStatus,
+          dispoStatus,
+          longtermStatus,
+          ghlAcqStageName: acqStageName,
+          ghlDispoStageName: dispoStageName,
+          ghlLongtermStageName: longtermStageName,
+          acqStageEnteredAt: acqStatus ? now : null,
+          dispoStageEnteredAt: dispoStatus ? now : null,
+          longtermStageEnteredAt: longtermStatus ? now : null,
+          assignedToId,
+          marketId,
+          ...(context.markPendingEnrichment ? { pendingEnrichment: true } : {}),
+        },
+      })
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const winner = await db.property.findFirst({
+          where: { tenantId, ghlContactId, address: { equals: address || '', mode: 'insensitive' } },
+          select: { id: true },
+        })
+        if (winner) {
+          console.log(`[Property] Race resolved by unique index — returning existing ${winner.id} for contact ${ghlContactId} at ${address}`)
+          return winner.id
+        }
+      }
+      throw err
+    }
 
     // Create or find the seller and link to property
     let seller = await db.seller.findFirst({

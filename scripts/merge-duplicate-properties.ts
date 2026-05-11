@@ -42,6 +42,19 @@
 import { db } from '../lib/db/client'
 import type { Prisma } from '@prisma/client'
 
+// Mirrors lib/properties.ts normalizeStreetAddress — keep in sync.
+function normalizeStreetAddress(address: string): string {
+  if (!address) return ''
+  return address.toLowerCase().trim()
+    .replace(/[.,#]+/g, '').replace(/\s+/g, ' ')
+    .replace(/\bstreet\b/g, 'st').replace(/\broad\b/g, 'rd')
+    .replace(/\bdrive\b/g, 'dr').replace(/\bavenue\b/g, 'ave')
+    .replace(/\bboulevard\b/g, 'blvd').replace(/\blane\b/g, 'ln')
+    .replace(/\bcourt\b/g, 'ct').replace(/\bplace\b/g, 'pl')
+    .replace(/\bcircle\b/g, 'cir').replace(/\bnorth\b/g, 'n')
+    .replace(/\bsouth\b/g, 's').replace(/\beast\b/g, 'e').replace(/\bwest\b/g, 'w')
+}
+
 const args = process.argv.slice(2)
 const APPLY = args.includes('--apply')
 const TENANT_SLUG = (() => {
@@ -246,12 +259,18 @@ async function main() {
     orderBy: { createdAt: 'asc' },
   })
 
-  // Group by canonical key
+  // Group by canonical key — uses the same normalizer as the live dedup
+  // path in lib/properties.ts so "Dr" vs "Drive" / "St" vs "Street" cluster
+  // together. City is intentionally dropped from the key (zip is firmer and
+  // city varies for properties straddling municipal lines, e.g. Knoxville
+  // vs Farragut for 37934). State + zip + normalized street is strict
+  // enough to avoid false positives while catching the real-world dups
+  // we've seen from GHL.
   const groups = new Map<string, PropertyWithCounts[]>()
   for (const r of rows) {
-    const addr = (r.address ?? '').trim()
-    if (!addr) continue
-    const canon = `${addr.toLowerCase()}|${(r.city ?? '').toLowerCase()}|${(r.state ?? '').toLowerCase()}|${r.zip ?? ''}`
+    const norm = normalizeStreetAddress(r.address ?? '')
+    if (!norm) continue
+    const canon = `${norm}|${(r.state ?? '').toUpperCase()}|${r.zip ?? ''}`
     const arr = groups.get(canon) ?? []
     arr.push(r)
     groups.set(canon, arr)
