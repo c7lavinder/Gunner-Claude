@@ -92,10 +92,11 @@ export function PropertyPhotosPanel({
   const [savingLink, setSavingLink] = useState(false)
   // Drag-and-drop reclassification state. `draggingPhotoId` is set while a
   // tile is being dragged so we can render every canonical section as a
-  // drop target (even empty ones) and dim the source tile.
-  // `dropTargetKey` highlights the section header the cursor is over.
+  // drop target (even empty ones) and dim the source tile. Per-section
+  // hover highlighting comes from `useDroppable().isOver` locally — we
+  // deliberately do NOT track a global "active drop target" key because
+  // setting state on every pointermove is what made the panel lag.
   const [draggingPhotoId, setDraggingPhotoId] = useState<string | null>(null)
-  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
   // Hydrate expanded state from localStorage on mount (client-only).
@@ -341,7 +342,6 @@ export function PropertyPhotosPanel({
     const id = String(e.active.id)
     const targetKey = e.over ? String(e.over.id) : null
     setDraggingPhotoId(null)
-    setDropTargetKey(null)
     if (!targetKey || !WRITABLE_CATEGORIES.includes(targetKey)) return
     reclassifyPhoto(id, targetKey)
   }
@@ -566,59 +566,57 @@ export function PropertyPhotosPanel({
         </div>
       )}
 
-      {/* Categorized grid — every section collapsed by default. Photos are
-          draggable between sections via @dnd-kit so it works for mouse,
-          trackpad, and touch (mobile/iPad). Tap/click still opens the
-          lightbox; drag only starts after 5px movement (mouse) or a 200ms
-          hold (touch) so we never confuse a tap with a drag. */}
+      {/* Categorized grid — sections stay in whatever open/closed state the
+          user set, even during drag. The whole section card is a droppable
+          (via useDroppable), so a user can drop on a collapsed section
+          header just fine — nothing expands, nothing reflows. Empty
+          writable sections appear as small header-only drop zones only
+          while a drag is in flight. */}
       {!loading && photos.length > 0 && (
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          onDragCancel={() => { setDraggingPhotoId(null); setDropTargetKey(null) }}
-          onDragOver={e => setDropTargetKey(e.over ? String(e.over.id) : null)}
+          onDragCancel={() => setDraggingPhotoId(null)}
         >
           <div className="p-3 space-y-2">
-            {/* While dragging, show a sticky hint so the user knows to drop on a section header. */}
-            {draggingPhotoId && (
-              <div className="sticky top-0 z-10 mb-1 px-3 py-1.5 rounded-[8px] bg-gunner-red text-white text-[11px] font-semibold text-center shadow-sm">
-                Drop on a section below to move this photo
-              </div>
-            )}
-            {grouped.map(group => (
-              <DroppableSection
-                key={group.key}
-                groupKey={group.key}
-                label={group.label}
-                count={group.photos.length}
-                isOpen={expanded.has(group.key)}
-                isActiveDrag={draggingPhotoId !== null}
-                onToggle={() => toggleSection(group.key)}
-              >
-                {(group.photos.length > 0 || (draggingPhotoId !== null && WRITABLE_CATEGORIES.includes(group.key))) && (
-                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1 p-1.5 min-h-[44px]">
-                    {group.photos.length === 0 && draggingPhotoId !== null && (
-                      <div className="col-span-full flex items-center justify-center text-[10px] text-txt-muted py-2">
-                        Drop here to move into {group.label}
-                      </div>
-                    )}
-                    {group.photos.map(p => (
-                      <DraggableTile
-                        key={p.id}
-                        photo={p}
-                        onOpen={() => {
-                          const idx = photos.findIndex(x => x.id === p.id)
-                          if (idx >= 0) setLightboxIndex(idx)
-                        }}
-                        onStar={() => toggleStar(p.id, p.isStarred)}
-                        onDelete={() => deletePhoto(p.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </DroppableSection>
-            ))}
+            {grouped.map(group => {
+              const isOpen = expanded.has(group.key)
+              const isEmptyDuringDrag = group.photos.length === 0 && draggingPhotoId !== null
+              return (
+                <DroppableSection
+                  key={group.key}
+                  groupKey={group.key}
+                  label={group.label}
+                  count={group.photos.length}
+                  isOpen={isOpen}
+                  isActiveDrag={draggingPhotoId !== null}
+                  onToggle={() => toggleSection(group.key)}
+                >
+                  {isOpen && group.photos.length > 0 && (
+                    <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1 p-1.5">
+                      {group.photos.map(p => (
+                        <DraggableTile
+                          key={p.id}
+                          photo={p}
+                          onOpen={() => {
+                            const idx = photos.findIndex(x => x.id === p.id)
+                            if (idx >= 0) setLightboxIndex(idx)
+                          }}
+                          onStar={() => toggleStar(p.id, p.isStarred)}
+                          onDelete={() => deletePhoto(p.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {isEmptyDuringDrag && (
+                    <div className="px-2.5 py-1.5 text-[10px] text-txt-muted italic">
+                      Drop here to move into {group.label}
+                    </div>
+                  )}
+                </DroppableSection>
+              )
+            })}
           </div>
           <DragOverlay dropAnimation={null}>
             {draggingPhoto && draggingPhoto.url ? (
@@ -745,8 +743,9 @@ function DraggableTile({
 }
 
 // Section card that acts as a drop target via useDroppable. Header toggles
-// expand/collapse with a normal click; the whole card is the drop zone so
-// users can drop anywhere inside it, not just on the header.
+// expand/collapse with a normal click. The whole card is the drop zone so
+// dropping on a collapsed header works — no need to expand the section
+// (and no layout reflow / scroll-jump while dragging).
 function DroppableSection({
   groupKey,
   label,
@@ -764,38 +763,39 @@ function DroppableSection({
   onToggle: () => void
   children: React.ReactNode
 }) {
+  const writable = WRITABLE_CATEGORIES.includes(groupKey)
   const { setNodeRef, isOver } = useDroppable({
     id: groupKey,
-    disabled: !WRITABLE_CATEGORIES.includes(groupKey),
+    disabled: !writable,
   })
-  const canDropHere = isActiveDrag && WRITABLE_CATEGORIES.includes(groupKey)
+  const showDropHint = isActiveDrag && writable
   return (
     <div
       ref={setNodeRef}
-      className={`border-[0.5px] rounded-[8px] overflow-hidden transition-colors ${
+      className={`border-[0.5px] rounded-[8px] overflow-hidden ${
         isOver ? 'border-gunner-red bg-gunner-red/5' : 'border-[rgba(0,0,0,0.06)]'
       }`}
     >
       <button
         type="button"
         onClick={onToggle}
-        className={`w-full flex items-center gap-2 px-2.5 py-1.5 transition-colors text-left ${
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left ${
           isOver ? 'bg-gunner-red/10' : 'bg-surface-secondary hover:bg-surface-tertiary'
         }`}
       >
         <ChevronDown
           size={11}
-          className={`text-txt-muted transition-transform ${isOpen || canDropHere ? '' : '-rotate-90'}`}
+          className={`text-txt-muted ${isOpen ? '' : '-rotate-90'}`}
         />
         <span className="text-[10px] font-bold text-txt-primary uppercase tracking-[0.08em]">{label}</span>
         <span className="text-[10px] text-txt-muted">({count})</span>
-        {canDropHere && (
+        {showDropHint && (
           <span className="ml-auto text-[9px] font-semibold text-gunner-red uppercase tracking-wider">
             Drop to move
           </span>
         )}
       </button>
-      {(isOpen || canDropHere) && children}
+      {children}
     </div>
   )
 }
