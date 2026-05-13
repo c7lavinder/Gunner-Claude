@@ -632,6 +632,65 @@ routes — both endpoints handle the read-merge-write atomically.
 
 ---
 
+## AI prompt versioning convention (added Session 89 — LLM Rewiring Phase 8)
+
+Every prompt that drives an Anthropic API call carries a semver `VERSION`
+constant. Every `logAiCall` site passes that VERSION through
+`promptVersion`, which lands in `ai_logs.prompt_version`. `scripts/drift-report.ts`
+groups `ai_logs` by `(type, page-context bucket, prompt_version)` to surface
+cost / latency / quality deltas across prompt revisions — flagging any
+metric that moves ≥20% between versions within the same surface.
+
+**Two flavors of source location:**
+
+1. **Extracted module** (`lib/ai/prompts/<surface>.ts`) — the canonical
+   pattern. Exports `VERSION` + `build…SystemPrompt()`. Consumer module
+   re-exports as `<SURFACE>_PROMPT_VERSION` and threads through
+   `logAiCall({ ..., promptVersion: <SURFACE>_PROMPT_VERSION })`.
+   Current modules: grading, next-steps, deal-intel, coach, assistant,
+   story, dispo, user-profile, session-summarizer, enrich-property,
+   photo-classifier, role-overrides (data module — no VERSION).
+
+2. **Inline (API-route-local)** — small one-off prompts that don't
+   justify a module. Declare a local `const X_PROMPT_VERSION = '1.0.0'`
+   at the top of the route file, same threading via `logAiCall`.
+   Current sites: `ai-edit`, `generate-next-steps` (manual variant,
+   distinct from `prompts/next-steps.ts`), `property-suggestions`,
+   `blast` (legacy per-tier prompts), `outreach-action`,
+   `buyer-response` classify, `buyers` route's buyer-scoring inner
+   function.
+
+**The rule:** if you edit prompt content — text, examples, schema
+prose, ordering of operating rules, anything that changes what the
+model receives — bump the VERSION constant in the same commit. The
+drift signal collapses if a silent edit lands without a bump (different
+runtime behavior, same `prompt_version` label).
+
+**Bump conventions:**
+- `1.0.0` → `1.0.1`: typo / wording polish, no behavior change expected.
+- `1.0.0` → `1.1.0`: new rule added, expected behavior change but
+  output contract stays compatible.
+- `1.0.0` → `2.0.0`: output contract (JSON shape, required keys)
+  changed — downstream consumers need to be updated in the same PR.
+
+**Pre-commit hook gate:** `.git/hooks/pre-commit` fires smoke evals
+(5 prompts, ~$0.82) when the diff touches `lib/ai/**`. The full
+`.github/workflows/evals.yml` fires smoke + medium (~$3) on every PR
+touching `lib/ai/**`, `evals/**`, or `package*.json`. Weekly full
+drift cron (Sunday 4:30am UTC) runs the full 49-eval suite (~$5).
+
+**Phase 10 corollary — typed calibration shape:** when persisting human
+feedback on AI output to `Call.calibrationNotes`, use the convention
+`"<kind>: <free-text notes>"` where kind ∈ {good, bad}. Established
+twice already (`app/api/ai/assistant/execute/route.ts:952` for the
+assistant `flag_calibration` tool, `app/api/[tenant]/calls/[id]/calibration/route.ts`
+for the user-facing popover). `scripts/mine-eval-candidates.ts`
+parses this prefix to bucket calibration entries into 👍 Good / 👎 Bad
+/ Un-typed for eval-fixture promotion. Un-typed (legacy `Flag`-only)
+rows are a re-classify-needed signal — don't write them deliberately.
+
+---
+
 ## Current Agent Toolset
 
 | Tool | Location | Purpose |

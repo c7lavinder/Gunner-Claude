@@ -864,3 +864,91 @@ References:
 - `docs/LLM_REWIRING_PLAN.md` (the plan, patches integrated inline)
 - `docs/LLM_AUDIT_BASELINE.md` (Phase 0 baseline + open issues)
 - `lib/kpis/lm-deac.ts` (LM-DEAC implementation)
+
+---
+
+### D-052 — Prompt-version drift signal on every `logAiCall`
+
+**Decision:** Every Anthropic API call routed through `lib/ai/log.ts`
+stamps the semver of the prompt-source-of-truth into
+`ai_logs.prompt_version`. The column is the foundation for Phase 9
+drift detection — `scripts/drift-report.ts` groups by
+`(type, page-context bucket, prompt_version)` and surfaces score /
+latency / cost / error deltas across prompt revisions.
+
+**Implementation contract:**
+
+1. Every prompt-source module under `lib/ai/prompts/<surface>.ts`
+   exports `VERSION = 'major.minor.patch'`. Caller (e.g.
+   `lib/ai/grading.ts`) re-exports as `<SURFACE>_PROMPT_VERSION` and
+   threads through `logAiCall({ ..., promptVersion })`.
+
+2. Inline / route-local prompts (small one-offs that don't justify a
+   module) declare a local `const X_PROMPT_VERSION = '1.0.0'` at the
+   top of the route file. Same threading.
+
+3. Schema: `ai_logs.prompt_version TEXT` (nullable; legacy rows stay
+   NULL) + composite index `(type, prompt_version)`. Migration:
+   `20260513200000_add_ai_log_prompt_version` (additive). `logAiCall`
+   has an internal try/catch at `lib/ai/log.ts:56` that swallows
+   P2022 errors — deploy ordering is FLEXIBLE.
+
+4. Bump rule: any prompt content edit (text, examples, schema prose,
+   rule ordering) bumps the VERSION constant in the SAME commit.
+   Without that, the drift signal collapses because runtime behavior
+   changes but the version label doesn't.
+
+**Coverage at adoption (2026-05-13):** 16 prompt-version sources / 22
+`logAiCall` call sites covering every production Anthropic surface
+(grading, next-steps, coach, deal-intel, property-story, dispo
+description/listing/social/tier-messages, user-profile,
+session-summarizer, assistant, enrich-property, ai-edit, manual-next-
+steps, property-suggestions, blast-legacy, outreach-action,
+buyer-response classify, buyer-scoring). Only unwired site:
+`scripts/audit.ts` daily self-audit cron (dev-facing, 1 row/day, low
+priority).
+
+**Photo-classifier exception:** `lib/ai/photo-classifier.ts` exports
+`VERSION` but is intentionally NOT wired to `logAiCall` — ~250
+classifications per photo-upload session would dominate `ai_logs`
+without producing meaningful drift signal (single-token classification
+into one of 7 buckets; the volume drowns everything else).
+
+**Why semver:** the bump pattern matches engineer intuition. `1.0.1` is
+a polish-only edit (no behavior change expected); `1.1.0` adds a
+behavioral rule (compatible output contract); `2.0.0` changes the
+output contract (downstream consumers update in the same PR).
+
+**Alternatives considered:**
+
+- Auto-derive version from a SHA hash of the prompt content. Rejected
+  — hash collisions in version-grouping queries are nonzero, and a
+  rolling hash makes it impossible to label "this was the version we
+  shipped to prod in week 19" in user-facing surfaces.
+- Per-tenant prompt versions (allow tenants to customize). Rejected
+  — turning prompts into per-tenant config is a much bigger lift and
+  isn't the drift problem we're solving today. The current rule
+  assumes one prompt per surface across all tenants.
+- Stamp version into `ai_logs.input_summary` instead of a new column.
+  Rejected — un-indexable; can't run the group-by queries that make
+  drift detection cheap.
+
+**Companion convention — Phase 10 typed calibration shape:** when
+human feedback on AI output is persisted to `Call.calibrationNotes`,
+the format is `"<kind>: <free-text notes>"` with `kind ∈ {good, bad}`.
+Established at `app/api/ai/assistant/execute/route.ts:952` (assistant
+flag_calibration tool) and
+`app/api/[tenant]/calls/[id]/calibration/route.ts` (user-facing Good/Bad
+popover). `scripts/mine-eval-candidates.ts` parses this prefix to
+bucket entries for eval-fixture promotion.
+
+**Status:** Locked. Date: 2026-05-13 (Session 89 pass 11).
+References:
+- `prisma/migrations/20260513200000_add_ai_log_prompt_version/`
+- `lib/ai/log.ts` (the single `db.aiLog.create` choke point)
+- `scripts/drift-report.ts` (Phase 9b drift signal CLI)
+- `scripts/_phase8-check.ts` (transient — Phase 8 wiring health check)
+- `scripts/mine-eval-candidates.ts` (Phase 10 — mines feedback signals)
+- `AGENTS.md` — "AI prompt versioning convention" section
+- `docs/LLM_AUDIT_BASELINE.md` — Sections 30e-30o for the rollout story
+
