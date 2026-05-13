@@ -12,7 +12,7 @@ import {
   Heart, AlertTriangle, Target, RotateCcw, Tag, MessageSquare, X, Loader2,
   User, MapPin, Clipboard, PhoneOutgoing, PhoneIncoming, Plus, RefreshCw,
   Play, Pause, SkipBack, SkipForward, Volume2, ChevronDown, Home, Sparkles, Info,
-  Trash2,
+  Trash2, ThumbsUp, ThumbsDown,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useToast } from '@/components/ui/toaster'
@@ -339,6 +339,19 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
   const [dealIntelLoading, setDealIntelLoading] = useState(true)
   const propertyPendingCount = dealIntelChanges.filter(c => !c.decision).length
   const [isCalibration, setIsCalibration] = useState(call.isCalibration)
+  // Phase 10 — feedback loop. Derive `kind` from the `<kind>: <notes>`
+  // prefix the calibration API now writes (matches the convention in
+  // app/api/ai/assistant/execute/route.ts:952). Legacy rows without a
+  // prefix surface as `null` (un-typed); the UI shows them as a single
+  // Calibration pill so the manager can re-classify in one click.
+  const initialKind: 'good' | 'bad' | null = call.calibrationNotes?.startsWith('good:')
+    ? 'good'
+    : call.calibrationNotes?.startsWith('bad:')
+    ? 'bad'
+    : null
+  const [calibrationKind, setCalibrationKind] = useState<'good' | 'bad' | null>(initialKind)
+  const [calibrationMenuOpen, setCalibrationMenuOpen] = useState(false)
+  const [calibrationNotesDraft, setCalibrationNotesDraft] = useState('')
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // Data for next steps edit forms
@@ -449,18 +462,55 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
     }
   }
 
-  async function toggleCalibration() {
-    const newValue = !isCalibration
-    setIsCalibration(newValue)
+  // Phase 10 — typed calibration. Sends `kind` + optional `notes` to the
+  // calibration route so the mine script can surface real signal.
+  async function markCalibration(kind: 'good' | 'bad', notes: string) {
+    const prevKind = calibrationKind
+    const prevIs = isCalibration
+    setCalibrationKind(kind)
+    setIsCalibration(true)
     try {
       const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/calibration`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isCalibration: newValue }),
+        body: JSON.stringify({ kind, notes }),
       })
-      if (res.ok) toast(newValue ? 'Marked as calibration example' : 'Removed calibration flag', 'success')
-      else { setIsCalibration(!newValue); toast('Failed to update', 'error') }
-    } catch { setIsCalibration(!newValue); toast('Failed to update', 'error') }
+      if (res.ok) {
+        toast(`Marked as ${kind} example`, 'success')
+        setCalibrationMenuOpen(false)
+        setCalibrationNotesDraft('')
+      } else {
+        setCalibrationKind(prevKind); setIsCalibration(prevIs)
+        toast('Failed to mark calibration', 'error')
+      }
+    } catch {
+      setCalibrationKind(prevKind); setIsCalibration(prevIs)
+      toast('Failed to mark calibration', 'error')
+    }
+  }
+
+  async function clearCalibration() {
+    const prevKind = calibrationKind
+    const prevIs = isCalibration
+    setCalibrationKind(null)
+    setIsCalibration(false)
+    try {
+      const res = await fetch(`/api/${tenantSlug}/calls/${call.id}/calibration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isCalibration: false }),
+      })
+      if (res.ok) {
+        toast('Removed calibration flag', 'success')
+        setCalibrationMenuOpen(false)
+      } else {
+        setCalibrationKind(prevKind); setIsCalibration(prevIs)
+        toast('Failed to clear', 'error')
+      }
+    } catch {
+      setCalibrationKind(prevKind); setIsCalibration(prevIs)
+      toast('Failed to clear', 'error')
+    }
   }
 
   async function saveReclassify() {
@@ -721,19 +771,91 @@ export function CallDetailClient({ call, tenantSlug, isOwn }: {
               </>
             )}
           </div>
-          <button
-            onClick={toggleCalibration}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium transition-all ${
-              isCalibration
-                ? 'text-semantic-purple bg-semantic-purple-bg border-semantic-purple/30'
-                : 'text-txt-secondary hover:text-txt-primary'
-            }`}
-            style={!isCalibration ? { borderColor: 'var(--border-medium)' } : undefined}
-            title={isCalibration ? 'Remove calibration flag' : 'Flag as calibration example (good/bad reference for AI grading)'}
-          >
-            <Star size={13} fill={isCalibration ? 'currentColor' : 'none'} />
-            {isCalibration ? 'Calibration' : 'Flag'}
-          </button>
+          {/* Phase 10 calibration affordance — typed good/bad + optional notes.
+              Replaces the single Flag toggle (Session 89). The mine script
+              (scripts/mine-eval-candidates.ts) parses `calibrationNotes` for
+              the "good:" / "bad:" prefix to seed eval fixtures. */}
+          <div className="relative">
+            <button
+              onClick={() => setCalibrationMenuOpen(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-[10px] border-[0.5px] text-[13px] font-medium transition-all ${
+                calibrationKind === 'good'
+                  ? 'text-semantic-green bg-semantic-green-bg border-semantic-green/30'
+                  : calibrationKind === 'bad'
+                  ? 'text-semantic-red bg-semantic-red-bg border-semantic-red/30'
+                  : isCalibration
+                  ? 'text-semantic-purple bg-semantic-purple-bg border-semantic-purple/30'
+                  : 'text-txt-secondary hover:text-txt-primary'
+              }`}
+              style={!isCalibration ? { borderColor: 'var(--border-medium)' } : undefined}
+              title="Mark this call as a good or bad example for AI grading calibration"
+            >
+              {calibrationKind === 'good' ? (
+                <ThumbsUp size={13} />
+              ) : calibrationKind === 'bad' ? (
+                <ThumbsDown size={13} />
+              ) : (
+                <Star size={13} fill={isCalibration ? 'currentColor' : 'none'} />
+              )}
+              {calibrationKind === 'good'
+                ? 'Good example'
+                : calibrationKind === 'bad'
+                ? 'Bad example'
+                : isCalibration
+                ? 'Calibration'
+                : 'Mark example'}
+              <ChevronDown size={12} className="opacity-60" />
+            </button>
+            {calibrationMenuOpen && (
+              <>
+                {/* Click-outside guard */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setCalibrationMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-50 w-[280px] rounded-[10px] border border-border-medium bg-bg-card shadow-lg p-3">
+                  <div className="text-[11px] text-txt-secondary mb-2 uppercase tracking-wide">
+                    Mark as calibration example
+                  </div>
+                  <textarea
+                    value={calibrationNotesDraft}
+                    onChange={(e) => setCalibrationNotesDraft(e.target.value)}
+                    placeholder="Why? (optional — e.g. 'rep nailed the close' or 'should have asked about timeline')"
+                    rows={2}
+                    maxLength={500}
+                    className="w-full text-[12px] px-2 py-1.5 rounded-[6px] border border-border-medium bg-bg-input text-txt-primary placeholder-txt-tertiary mb-2 resize-none focus:outline-none focus:border-gunner-red"
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => markCalibration('good', calibrationNotesDraft)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-[8px] text-[12px] font-medium text-semantic-green bg-semantic-green-bg hover:bg-semantic-green-bg/80 border border-semantic-green/30"
+                    >
+                      <ThumbsUp size={12} /> Good
+                    </button>
+                    <button
+                      onClick={() => markCalibration('bad', calibrationNotesDraft)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-[8px] text-[12px] font-medium text-semantic-red bg-semantic-red-bg hover:bg-semantic-red-bg/80 border border-semantic-red/30"
+                    >
+                      <ThumbsDown size={12} /> Bad
+                    </button>
+                    {isCalibration && (
+                      <button
+                        onClick={clearCalibration}
+                        className="px-2 py-1.5 rounded-[8px] text-[12px] font-medium text-txt-secondary hover:text-txt-primary border border-border-medium"
+                        title="Remove calibration flag"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-2 text-[10px] text-txt-tertiary leading-tight">
+                    Helps the AI grader learn from your judgment.
+                    Mined weekly by `scripts/mine-eval-candidates.ts`.
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={deleteCall}
             disabled={actionLoading === 'delete'}

@@ -5,13 +5,16 @@
 // Mines existing production feedback signals and surfaces examples that
 // would make good NEW eval fixtures. Read-only, no DB writes, no AI calls.
 //
-// Sources mined:
-//   - AiLog rows with status='rejected' or 'edited' (user denied/changed
-//     an AI action — strong signal the AI got it wrong)
+// Sources mined (corrected Session 89 pass 13 after audit found reject/edit
+// telemetry lives on ActionLog, not AiLog.status):
+//   - ActionLog rows with wasRejected=true OR wasEdited=true (user denied or
+//     changed an AI-proposed tool call — strongest signal the AI got it wrong)
 //   - BugReport rows whose description mentions AI surfaces ("AI", "grade",
 //     "coach", "assistant", etc.) — users explicitly flagged a problem
 //   - Call rows with isCalibration=true + calibrationNotes (explicit
-//     good/bad markers from the calibration UI — highest-quality eval seed)
+//     good/bad markers from the call-detail Good/Bad popover; mine parses
+//     the `<kind>: <text>` prefix that the calibration POST route writes —
+//     highest-quality eval seed)
 //   - AiLog rows with status='error' (system-level failures worth a fixture)
 //
 // Output: markdown report listed to stdout. The human reviews + decides
@@ -54,49 +57,67 @@ async function main() {
   console.log(`turning into a new eval fixture in \`evals/golden/{smoke,medium,full}.ts\`.\n`)
   console.log(`---\n`)
 
-  // ── 1. Rejected / edited AI actions ─────────────────────────────────
-  // Strong signal — the user actively denied or rewrote what the AI proposed.
+  // ── 1. Rejected / edited AI tool calls (ActionLog) ──────────────────
+  // Strong signal — the user actively denied or rewrote what the assistant
+  // proposed via the propose→edit→confirm flow. Lives on ActionLog (not
+  // AiLog.status — that enum exists in schema but no production code writes
+  // 'rejected'/'edited' there; the assistant execute route persists to
+  // ActionLog with the wasRejected / wasEdited booleans instead).
+  // Note: typeFilter doesn't apply here — ActionLog.actionType is the tool
+  // name (send_sms, create_task, etc.), not an ai_logs.type value.
   const rejectedEdited = await db.$queryRaw<{
     id: string
-    type: string
+    action_type: string
     page_context: string | null
-    prompt_version: string | null
-    input_summary: string
-    output_summary: string
-    status: string
-    error_message: string | null
+    proposed: unknown
+    executed: unknown
+    edit_diff: unknown
+    was_rejected: boolean
+    was_edited: boolean
     created_at: Date
   }[]>(Prisma.sql`
-    SELECT id, type::text AS type, page_context, prompt_version, input_summary, output_summary, status::text AS status, error_message, created_at
-    FROM ai_logs
-    WHERE status IN ('rejected', 'edited')
+    SELECT id, action_type, page_context, proposed, executed, edit_diff,
+           was_rejected, was_edited, created_at
+    FROM action_logs
+    WHERE (was_rejected = TRUE OR was_edited = TRUE)
       AND created_at >= NOW() - (${days}::int || ' days')::interval
-      ${typeFilter ? Prisma.sql`AND type = ${typeFilter}` : Prisma.empty}
     ORDER BY created_at DESC
     LIMIT 50
   `)
 
-  console.log(`## 1. Rejected / edited AI actions (${rejectedEdited.length} found)\n`)
+  console.log(`## 1. Rejected / edited AI tool calls — ActionLog (${rejectedEdited.length} found)\n`)
   if (rejectedEdited.length === 0) {
-    console.log('_None in window. Either rejected/edited tracking isn\'t wired for this surface yet,_')
-    console.log('_or the surface is performing well enough that users aren\'t rejecting._\n')
+    console.log('_None in window. The propose→edit→confirm flow exists in the Role Assistant_')
+    console.log('_sidebar but no production user has clicked Reject or Edit in this window._')
+    console.log('_That is itself a signal — the AI is either nailing every proposal_')
+    console.log('_(unlikely at zero-volume) or users are blindly approving (much more likely_')
+    console.log('_at zero-volume). Phase 10 product work: surface the Reject/Edit affordance_')
+    console.log('_more prominently in `components/ui/coach-sidebar.tsx`._\n')
   } else {
-    // Group by (type, status) and surface counts + a representative example
+    // Group by (actionType, kind) and surface counts + a representative example
     const groups = new Map<string, typeof rejectedEdited>()
     for (const r of rejectedEdited) {
-      const key = `${r.type}|${r.status}`
+      const kind = r.was_rejected ? 'rejected' : 'edited'
+      const key = `${r.action_type}|${kind}`
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(r)
     }
     for (const [key, rows] of groups) {
-      const [type, status] = key.split('|')
-      console.log(`### ${type} — ${status} (${rows.length})\n`)
+      const [actionType, kind] = key.split('|')
+      console.log(`### ${actionType} — ${kind} (${rows.length})\n`)
       const sample = rows.slice(0, 3)
       for (const r of sample) {
-        console.log(`- **${r.created_at.toISOString().slice(0, 16)}** · pv=\`${r.prompt_version ?? 'null'}\` · ctx=\`${r.page_context ?? '-'}\``)
-        console.log(`  - input: ${r.input_summary.slice(0, 120).replace(/\n/g, ' ')}…`)
-        console.log(`  - output: ${r.output_summary.slice(0, 120).replace(/\n/g, ' ')}…`)
-        if (r.error_message) console.log(`  - error: ${r.error_message.slice(0, 100)}`)
+        console.log(`- **${r.created_at.toISOString().slice(0, 16)}** · ctx=\`${r.page_context ?? '-'}\``)
+        try {
+          const proposedStr = JSON.stringify(r.proposed).slice(0, 150).replace(/\n/g, ' ')
+          console.log(`  - proposed: \`${proposedStr}\``)
+        } catch { /* ignore */ }
+        if (r.was_edited && r.edit_diff) {
+          try {
+            const diffStr = JSON.stringify(r.edit_diff).slice(0, 150).replace(/\n/g, ' ')
+            console.log(`  - edit_diff: \`${diffStr}\``)
+          } catch { /* ignore */ }
+        }
       }
       if (rows.length > 3) console.log(`  _…and ${rows.length - 3} more_`)
       console.log()
@@ -168,16 +189,36 @@ async function main() {
 
   console.log(`## 3. Calibration-marked calls (${calibration.length} found)\n`)
   if (calibration.length === 0) {
-    console.log('_No calibration markers in window. Calibration is the highest-quality eval seed,_')
-    console.log('_because managers explicitly chose these as examples of good/bad. Worth_')
-    console.log('_promoting calibration UI usage if this stays empty._\n')
+    console.log('_No calibration markers in window. The Good/Bad popover lives on the_')
+    console.log('_call detail page (`components/calls/call-detail-client.tsx` — the chip_')
+    console.log('_to the right of the reclassify toolbar). Calibration is the_')
+    console.log('_highest-quality eval seed because managers explicitly chose these as_')
+    console.log('_good/bad examples. Promote calibration UI usage if this stays empty._\n')
   } else {
-    for (const c of calibration.slice(0, 10)) {
-      console.log(`- **${c.created_at?.toISOString().slice(0, 16) ?? '?'}** · rep=${c.rep_name ?? '?'} · type=${c.call_type ?? '?'} · score=${c.score ?? '?'}`)
-      console.log(`  - notes: ${(c.calibration_notes ?? '').slice(0, 200).replace(/\n/g, ' ')}`)
+    // Parse the "<kind>: <notes>" convention written by the calibration POST
+    // route and split into good / bad / untyped buckets so the report makes
+    // the human signal obvious at a glance.
+    const buckets = { good: [] as typeof calibration, bad: [] as typeof calibration, untyped: [] as typeof calibration }
+    for (const c of calibration) {
+      const n = (c.calibration_notes ?? '').trimStart()
+      if (n.startsWith('good:')) buckets.good.push(c)
+      else if (n.startsWith('bad:')) buckets.bad.push(c)
+      else buckets.untyped.push(c)
     }
-    if (calibration.length > 10) console.log(`\n_…and ${calibration.length - 10} more_`)
-    console.log()
+    const renderBucket = (label: string, rows: typeof calibration) => {
+      if (rows.length === 0) return
+      console.log(`### ${label} (${rows.length})\n`)
+      for (const c of rows.slice(0, 10)) {
+        const notes = (c.calibration_notes ?? '').replace(/^(good|bad):\s*/, '').slice(0, 200).replace(/\n/g, ' ')
+        console.log(`- **${c.created_at?.toISOString().slice(0, 16) ?? '?'}** · rep=${c.rep_name ?? '?'} · type=${c.call_type ?? '?'} · score=${c.score ?? '?'}`)
+        if (notes) console.log(`  - "${notes}"`)
+      }
+      if (rows.length > 10) console.log(`  _…and ${rows.length - 10} more_`)
+      console.log()
+    }
+    renderBucket('👍 Good examples', buckets.good)
+    renderBucket('👎 Bad examples', buckets.bad)
+    renderBucket('Un-typed (legacy "Flag" toggle — re-classify in UI)', buckets.untyped)
   }
 
   // ── 4. System errors (status='error') ───────────────────────────────
