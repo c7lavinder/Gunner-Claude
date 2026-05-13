@@ -7,14 +7,21 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { transcribeRecording } from '@/lib/ai/transcribe'
 import { calculateTCP } from '@/lib/ai/scoring'
-import { getCallTypeAIContext, getRubricForCallType, getResultsForCallType, getRedFlagsForCallType, getCriticalFailuresForCallType, CALL_TYPES } from '@/lib/call-types'
-import { INDUSTRY_KNOWLEDGE } from '@/lib/ai/industry-knowledge'
+import { getRubricForCallType, getResultsForCallType } from '@/lib/call-types'
 import { awardCallXP } from '@/lib/gamification/xp'
 import { triggerWorkflows } from '@/lib/workflows/engine'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
 import { effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 import { stripJsonFences, extractFirstJsonArray } from '@/lib/ai/json-utils'
+import {
+  buildGradingSystemPrompt,
+  buildSummaryOnlySystemPrompt,
+  buildGradingUserPrompt,
+  VERSION as GRADING_PROMPT_VERSION,
+} from '@/lib/ai/prompts/grading'
+
+export { GRADING_PROMPT_VERSION }
 
 // ─── Main grading function ──────────────────────────────────────────────────
 
@@ -194,7 +201,7 @@ export async function gradeCall(callId: string): Promise<void> {
       ? buildSummaryOnlySystemPrompt()
       : buildGradingSystemPrompt(rubricCriteria, call.callType ?? null, knowledgeContext)
     const callWithTranscript = { ...call, transcript }
-    const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext, knowledgeContext)
+    const userPrompt = buildGradingUserPrompt(callWithTranscript, rubricCriteria, ghlContext)
 
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const timer = startTimer()
@@ -520,326 +527,12 @@ async function fetchGHLCallContext(tenantId: string, ghlConversationId: string):
 }
 
 // ─── Prompt builders ────────────────────────────────────────────────────────
-
-function buildSummaryOnlySystemPrompt(): string {
-  return `You are a sales call analyst for a real estate wholesaling company.
-
-This was a SHORT call (30-60 seconds). Provide a brief summary and basic score.
-Do not deeply evaluate rubric criteria — there isn't enough call content.
-
-You MUST respond with valid JSON only.
-
-Response format:
-{
-  "overallScore": <number 0-100 — be generous for short calls that seem productive>,
-  "rubricScores": {},
-  "summary": "<1-2 sentence summary of what likely happened>",
-  "feedback": "<brief note on the call>",
-  "coachingTips": ["<one tip>"],
-  "callType": "<cold_call|qualification_call|admin_call|follow_up_call|offer_call|purchase_agreement_call|dispo_call or null>",
-  "callOutcome": "<best guess from metadata: interested|not_interested|appointment_set|follow_up_scheduled|etc or null>",
-  "followUpScheduled": false,
-  "keyMoments": [],
-  "sentiment": null,
-  "sellerMotivation": null
-}`
-}
-
-function buildGradingSystemPrompt(
-  criteria: RubricCriteria[],
-  callType: string | null,
-  ctx: import('@/lib/ai/context-builder').GradingContext,
-): string {
-  const sections: string[] = []
-
-  // Layer 1: Company identity + grading methodology (from playbook if available)
-  if (ctx.gradingMethodology) {
-    sections.push(`GRADING METHODOLOGY (from company playbook):\n${ctx.gradingMethodology}`)
-  }
-  if (ctx.companyOverview) {
-    sections.push(`COMPANY CONTEXT:\n${ctx.companyOverview}`)
-  }
-
-  sections.push(`You are an expert sales call coach and grader for New Again Houses, a wholesale real estate company that buys properties cash, as-is, at discounted prices below market value.
-
-GRADING PHILOSOPHY:
-- Grade based on the 7 Core Beliefs (Dr. Frame): Fatal Problem Belief, Solution Conviction, Transformation Focus, Abundance Mindset, Selective Enrollment, Resourcefulness Recognition, Outcome-Centered Communication
-- Apply the C3 Framework to all feedback: Caring (genuine empathy), Certainty (conviction in solution), Clarity (clear explanations)
-- Use "Never Split the Difference" techniques as grading criteria: mirroring, labeling, calibrated questions
-- Reps have different communication styles — BOTH scripted and conversational are valid. Focus on WHETHER the rep accomplished the GOAL, not whether they used specific phrases.
-- FEEDBACK MUST BE TRANSCRIPT-SPECIFIC — reference exact moments, exact quotes, exact scripts they should have used.
-- When evaluating, account for challenging seller behaviors (interruptions, hostility, noise) — credit the rep for persistence or quick disqualification.`)
-
-  // Layer 2: Industry + company knowledge (from playbook) — full corpus
-  if (ctx.industryKnowledge.length > 0) {
-    sections.push(`INDUSTRY & COMPANY KNOWLEDGE:\n${ctx.industryKnowledge.join('\n\n')}`)
-  } else {
-    sections.push(INDUSTRY_KNOWLEDGE)
-  }
-
-  // Layer 3: Call-type-specific scripts and training
-  if (callType) {
-    const callTypeInstructions = buildCallTypeInstructions(callType)
-    if (callTypeInstructions) sections.push(callTypeInstructions)
-  }
-
-  // Full company script corpus for this call type
-  if (ctx.scripts.length > 0) {
-    sections.push(`COMPANY SCRIPTS FOR THIS CALL TYPE — grade the rep against these specific scripts:\n${ctx.scripts.join('\n\n')}`)
-  }
-
-  // Full objection-handling corpus
-  if (ctx.objectionHandling.length > 0) {
-    sections.push(`OBJECTION HANDLING REFERENCE — use these to evaluate how the rep handled objections:\n${ctx.objectionHandling.join('\n\n')}`)
-  }
-
-  // Full training materials corpus
-  if (ctx.trainingMaterials.length > 0) {
-    sections.push(`TRAINING MATERIALS — additional context for grading:\n${ctx.trainingMaterials.join('\n\n')}`)
-  }
-
-  // Layer 4: User-specific context (personalized coaching)
-  if (ctx.userProfile) {
-    sections.push(`REP PERFORMANCE PROFILE — personalize coaching to this specific rep:
-Known Strengths (acknowledge, don't re-teach): ${ctx.userProfile.strengths.join('; ')}
-Known Weaknesses (watch for these specifically): ${ctx.userProfile.weaknesses.join('; ')}
-Common Mistakes: ${ctx.userProfile.commonMistakes.join('; ')}
-Communication Style: ${ctx.userProfile.communicationStyle ?? 'Unknown'}
-Coaching Priorities (ranked): ${ctx.userProfile.coachingPriorities.join('; ')}
-Total Calls Graded: ${ctx.userProfile.totalCallsGraded}
-
-IMPORTANT: If this rep makes one of their known common mistakes, call it out specifically in improvements. Reference that this is a pattern, not a one-time thing.`)
-  }
-
-  // Layer 5: Cross-call context — full prior-call history with full summaries
-  if (ctx.priorCalls.length > 0) {
-    const priorSummary = ctx.priorCalls.map(c =>
-      `- ${c.calledAt?.slice(0, 10) ?? '?'}: Score ${c.score ?? '?'}, Type: ${c.callType ?? '?'}, Outcome: ${c.callOutcome ?? '?'}, Rep: ${c.assignedToName ?? '?'}\n  Summary: ${c.aiSummary ?? 'N/A'}`
-    ).join('\n')
-    sections.push(`PRIOR CALLS WITH THIS CONTACT (most recent first):
-${priorSummary}
-
-IMPORTANT: Do NOT penalize the rep for skipping qualification steps that were already covered in prior calls. Evaluate THIS call in context of the relationship history.`)
-  }
-
-  if (ctx.dealIntelSummary) {
-    sections.push(`ACCUMULATED DEAL INTELLIGENCE:\n${ctx.dealIntelSummary}`)
-  }
-
-  // Layer 6: Calibration + corrections — full summaries, no truncation
-  if (ctx.calibrationExamples.length > 0) {
-    const examples = ctx.calibrationExamples.map(c =>
-      `- ${c.type.toUpperCase()} example (score: ${c.score}): ${c.summary ?? 'N/A'}${c.notes ? `\n  Notes: ${c.notes}` : ''}`
-    ).join('\n')
-    sections.push(`CALIBRATION EXAMPLES — use these as reference for what good/bad looks like at this company:\n${examples}`)
-  }
-
-  if (ctx.feedbackCorrections) {
-    sections.push(`GRADING CORRECTIONS FROM MANAGERS — incorporate these calibrations:\n${ctx.feedbackCorrections}`)
-  }
-
-  if (ctx.reclassificationCorrections) {
-    // Recent human overrides of AI classification. Treat as high-priority
-    // calibration — if the same mistake repeats, adjust classification logic.
-    sections.push(`RECENT CLASSIFICATION CORRECTIONS — the team overrode the AI's call_type or outcome on recent calls. Study these patterns and bias your classification to match human judgment where similar:\n${ctx.reclassificationCorrections}`)
-  }
-
-  if (ctx.companyStandards) {
-    sections.push(`COMPANY STANDARDS AND RULES:\n${ctx.companyStandards}`)
-  }
-
-  // Layer 7: Rubric criteria with keyPhrases
-  const criteriaText = criteria.map((c, i) => {
-    let text = `${i + 1}. ${c.category} (max ${c.maxPoints} pts)\n   ${c.description}`
-    if (c.keyPhrases && c.keyPhrases.length > 0) {
-      text += `\n   Positive signals to look for: "${c.keyPhrases.join('", "')}"`
-    }
-    return text
-  }).join('\n\n')
-
-  const callTypeRedFlags = callType ? getRedFlagsForCallType(callType) : []
-
-  sections.push(`GRADING RUBRIC — SCORE EACH CATEGORY:
-
-${criteriaText}
-
-RED FLAGS TO IDENTIFY (call these out explicitly in feedback if observed):
-${callTypeRedFlags.length > 0
-    ? callTypeRedFlags.map(f => `• ${f}`).join('\n')
-    : '• No specific red flags defined — use general wholesale RE best practices'}`)
-
-  // (Layers 4-6 now handled via context builder above)
-
-  // Response format
-  const validResults = callType ? getResultsForCallType(callType) : []
-  const validOutcomes = validResults.length > 0
-    ? validResults.map(r => `"${r.id}" (${r.name})`).join(', ')
-    : '"interested", "not_interested", "appointment_set", "follow_up_scheduled", "accepted", "rejected", "signed", "not_signed", "solved", "not_solved", "showing_scheduled", "offer_collected"'
-
-  sections.push(`RESPONSE FORMAT — valid JSON only, no markdown, no preamble:
-
-{
-  "overallScore": <number 0-100>,
-  "rubricScores": {
-    "<category>": {
-      "score": <number>,
-      "maxScore": <number>,
-      "notes": "<STRICT 2-3 sentences MAX: what happened on the call for this criterion, one supporting quote or moment, and the outcome. NO coaching advice — coaching goes in improvements only.>"
-    }
-  },
-  "summary": "<2-4 sentences. Factual and neutral. Must include any specific numbers mentioned (offer price, asking price, etc.), who called who, the outcome, and the key turning points. No editorial opinion. Think 'what happened on this call' not 'what went wrong.'>",
-  "strengths": [
-    "<short bullet, 1-2 sentences. Purely positive. Must reference a specific moment or quote from the call.>"
-  ],
-  "redFlags": [
-    "<1 sentence each. Concise labels for things that were missing or risky. e.g. 'Weak or uncertain price delivery.' No explanation needed.>"
-  ],
-  "improvements": [
-    {
-      "what_went_wrong": "<1-2 sentences. What specifically happened and why it was a problem. Reference the actual moment.>",
-      "call_example": "<Verbatim quote or exchange from the call that illustrates the mistake. Just the relevant line(s).>",
-      "coaching_tip": "<2-3 sentences. What they should have done instead, including a word-for-word example script they could have used. Concrete and ready to use.>"
-    }
-  ],
-  "objectionReplies": [
-    {
-      "objection_label": "<Short name for the objection, e.g. 'Price is too low'>",
-      "call_quote": "<Verbatim exchange from the call where this objection occurred>",
-      "suggested_responses": [
-        "<First-person ready-to-say scripted response>",
-        "<Second alternative scripted response>"
-      ]
-    }
-  ],
-  "callType": <"cold_call"|"qualification_call"|"admin_call"|"follow_up_call"|"offer_call"|"purchase_agreement_call"|"dispo_call"|null — return null if call type was already provided>,
-  "callOutcome": "<must be one of the valid outcomes listed below>",
-  "followUpScheduled": <boolean — true if any specific future contact was agreed to>,
-  "keyMoments": [
-    {
-      "timestamp": "<MM:SS estimated from conversation>",
-      "type": "<objection_handled|appointment_set|price_discussion|rapport_building|red_flag|closing_attempt|motivation_revealed>",
-      "description": "<what happened>",
-      "quote": "<direct quote from transcript if available>"
-    }
-  ],
-  "sentiment": <number -1.0 to 1.0>,
-  "sellerMotivation": <number 0.0 to 1.0 or null>
-}
-
-IMPORTANT COACHING OUTPUT RULES:
-- strengths: 2-4 items. Short bullets only. No "however" or critique mixed in.
-- redFlags: 2-4 items. 1 sentence each. No explanation, just the flag.
-- improvements: 2-4 items. Each MUST have all three fields (what_went_wrong, call_example, coaching_tip). The coaching_tip MUST include a word-for-word script example.
-- objectionReplies: 1-3 objections IF objections occurred. Each suggested_response must be a first-person line the rep could say verbatim. If no objections occurred, return an empty array.
-- Do NOT produce generic coaching tips. Every piece of feedback must reference a specific moment from THIS call.
-
-VALID OUTCOMES FOR THIS CALL: ${validOutcomes}
-
-Pick the highest-priority outcome that actually occurred. Set followUpScheduled: true if a future contact was agreed to at any point, regardless of primary outcome.`)
-
-  return sections.join('\n\n')
-}
-
-// Call-type-specific critical instructions injected into the system prompt
-function buildCallTypeInstructions(callType: string): string | null {
-  const criticalInfo = getCriticalFailuresForCallType(callType)
-
-  switch (callType) {
-    case 'cold_call':
-      return `COLD CALL INSTRUCTIONS:
-Goal is to gauge interest only — NOT to qualify, set appointments, or close. Do NOT penalize for skipping deep qualification. A 2-minute cold call that correctly identifies an uninterested seller is an efficient call — reward it (70-90% range).`
-
-    case 'follow_up_call':
-      return `FOLLOW-UP CALL INSTRUCTIONS:
-Full qualification already happened. DO NOT penalize for skipping qualification steps. Focus ONLY on: referencing the previous conversation + offer, confirming decision maker, checking situation changes, surfacing roadblocks (and PAUSING), and pushing for a binary yes/no. Talk ratio target: seller talks ≥50%.
-${criticalInfo ? `\n⚠️ CRITICAL FAILURE CAP — Score CANNOT exceed ${criticalInfo.cap}% if ANY of these occurred:\n${criticalInfo.failures.map(f => `• ${f}`).join('\n')}\nState any critical failure clearly in the summary.` : ''}`
-
-    case 'offer_call':
-      return `OFFER CALL INSTRUCTIONS:
-The proposal comes LAST — after motivation is restated. A rep who jumps to price before restating motivation should be penalized. The offer should be delivered with conviction — no apologies, no hedging.`
-
-    case 'dispo_call':
-      return `DISPO CALL INSTRUCTIONS:
-Rep is selling a deal to an investor — peer-to-peer business call. Rep should know the deal numbers cold. Grade on deal knowledge, compelling presentation, urgency creation, and driving toward a commitment.
-${criticalInfo ? `\n⚠️ CRITICAL FAILURE CAP — Score CANNOT exceed ${criticalInfo.cap}% if ANY of these occurred:\n${criticalInfo.failures.map(f => `• ${f}`).join('\n')}\nState any critical failure clearly in the summary.` : ''}`
-
-    case 'admin_call':
-      return `ADMIN CALL INSTRUCTIONS:
-Low-stakes operational call. No critical failures. Grade generously unless rep was clearly unprofessional, failed to accomplish the call's purpose, or ended with vague non-commitments.`
-
-    case 'purchase_agreement_call':
-      return `PURCHASE AGREEMENT INSTRUCTIONS:
-Closing call — seller is about to sign. Last-minute hesitations are common and should be handled with patience, not pressure. Grade on: clear contract explanation, handling cold feet, maintaining momentum, confirming terms, and getting the signature.`
-
-    default:
-      return null
-  }
-}
-
-function buildGradingUserPrompt(
-  call: {
-    transcript?: string | null
-    recordingUrl?: string | null
-    callType?: string | null
-    durationSeconds?: number | null
-    direction: string
-    assignedTo?: { name: string; role: string } | null
-  },
-  criteria: RubricCriteria[],
-  ghlContext: GHLCallContext | null,
-  ctx?: import('@/lib/ai/context-builder').GradingContext,
-): string {
-  const sections: string[] = []
-
-  // Call type context — gives the AI detailed understanding of what this call type means
-  const callTypeContext = call.callType ? getCallTypeAIContext(call.callType) : null
-  if (callTypeContext) {
-    sections.push(`CALL TYPE CONTEXT:\n${callTypeContext}`)
-  }
-
-  // Call metadata
-  sections.push(`CALL METADATA:
-Rep: ${call.assignedTo?.name ?? 'Unknown'}
-Role: ${call.assignedTo?.role ?? 'Unknown'}
-Call type: ${call.callType ?? 'Not specified'}
-Direction: ${ghlContext?.direction || call.direction}
-Duration: ${ghlContext?.duration ? `${Math.round(ghlContext.duration / 60)} min ${ghlContext.duration % 60}s (${ghlContext.duration}s total)` : call.durationSeconds ? `${Math.round(call.durationSeconds / 60)} minutes` : 'Unknown'}
-Outcome: ${ghlContext?.callStatus || 'Unknown'}`)
-
-  // Contact context
-  if (ghlContext) {
-    sections.push(`CONTACT CONTEXT:
-Name: ${ghlContext.contactName}
-Phone: ${ghlContext.contactPhone}
-Lead source: ${ghlContext.contactSource || 'Unknown'}
-Tags: ${ghlContext.contactTags.length > 0 ? ghlContext.contactTags.join(', ') : 'None'}`)
-  }
-
-  // Conversation history
-  if (ghlContext?.conversationHistory && ghlContext.conversationHistory.length > 0) {
-    sections.push(`PRIOR CONVERSATION HISTORY (most recent first):
-${ghlContext.conversationHistory.join('\n')}`)
-  }
-
-  // Transcript if available
-  if (call.transcript) {
-    sections.push(`FULL TRANSCRIPT:
-${call.transcript}`)
-  } else {
-    sections.push(`(No transcript available — grade based on call metadata, duration, outcome, and contact context above)`)
-  }
-
-  sections.push(`RUBRIC CRITERIA:
-${criteria.map((c) => `- ${c.category} (max ${c.maxPoints} pts): ${c.description}`).join('\n')}
-
-Grade this call now. Provide your JSON response.`)
-
-  return sections.join('\n\n')
-}
+// Moved to lib/ai/prompts/grading.ts (Phase 6 of LLM Rewiring Plan, Session 87).
+// VERSION export re-exported above as GRADING_PROMPT_VERSION for traceability.
 
 // ─── Response parser ────────────────────────────────────────────────────────
 
-function parseGradingResponse(text: string): GradingResult {
+export function parseGradingResponse(text: string): GradingResult {
   // Strip markdown fences and find the JSON object
   let clean = stripJsonFences(text)
 

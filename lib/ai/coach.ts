@@ -10,6 +10,12 @@ import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
 import { effectiveStatus } from '@/lib/property-status'
 import { anthropic } from '@/config/anthropic'
+import {
+  buildCoachSystemPrompt,
+  VERSION as COACH_PROMPT_VERSION,
+} from '@/lib/ai/prompts/coach'
+
+export { COACH_PROMPT_VERSION }
 
 export interface CoachMessage {
   role: 'user' | 'assistant'
@@ -213,37 +219,17 @@ When the user asks about "this property" or "this deal", they mean the property 
 
   // Prompt caching — see app/api/ai/assistant/route.ts for the rationale.
   //
-  //   stablePersona — identity, personality, rules. Same for every coach
-  //                   conversation. CACHED.
-  //   contextBlock  — user metrics + property + recent calls + playbook.
-  //                   Stable across this user's session today. CACHED.
-  //                   (Even if recentCalls changes between sessions, the
-  //                   cache TTL is 5 minutes so this is just a one-turn
-  //                   miss; subsequent turns hit.)
-  const stablePersona = `You are Gunner, an elite AI coach for real estate wholesaling teams.
-
-You are talking with ${userName}, who is a ${formatRole(userRole)} on their wholesaling team.
-
-YOUR PERSONALITY:
-- Direct, high-energy, like a world-class sales coach
-- Give specific, actionable advice — no fluff
-- Use wholesaling industry language naturally
-- Push them to be better, celebrate wins
-- Short answers for simple questions, deeper for complex ones
-
-NOTE TO USER (this surface is READ-ONLY):
-- You are a coach, not an executor. You cannot send SMS, create tasks, change
-  pipeline stages, or modify any data. If the user asks you to take an
-  action, tell them to use the "Ask Gunner" assistant sidebar (the one
-  with the Actions button), which has tools for that.
-
-RULES:
-- Never make up specific market data or prices
-- If they ask about their calls/scores, reference the context block below
-- When coaching, reference SPECIFIC scripts and techniques from the playbook below. Quote exact phrases and steps the rep should use.
-- Keep answers conversational, not listy unless a list is truly the best format`
-
-  const contextBlock = `THEIR CURRENT CONTEXT:
+  //   stableSystem    — identity, voice, user context, operating rules.
+  //                     Same across every coach turn for this user. CACHED.
+  //   variableContext — per-user metrics + property + recent calls +
+  //                     playbook knowledge. Stable across this user's
+  //                     session today (5-min cache TTL). CACHED.
+  //
+  // Stable + variable blocks come from lib/ai/prompts/coach.ts as of
+  // Phase 6 (Session 87, 2026-05-13). Identity / voice / rules live in
+  // the prompt module — coach.ts assembles the variable block from
+  // database queries.
+  const variableContext = `THEIR CURRENT CONTEXT:
 ${avgScore !== null ? `- Recent avg call score: ${avgScore}/100 (last 5 calls)` : '- No graded calls yet'}
 ${weekAvg !== null ? `- This week avg: ${weekAvg}/100 across ${weekCalls.length} calls` : ''}
 ${activeTasks > 0 ? `- ${activeTasks} open tasks` : '- No open tasks'}
@@ -265,13 +251,19 @@ ${recentCalls.map((c, i) => {
 
 ${knowledgeBlock}`
 
+  const { stableSystem, variableContext: ctxOut } = buildCoachSystemPrompt({
+    userName,
+    userRole,
+    businessContext: variableContext,
+  })
+
   const timer = startTimer()
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: [
-      { type: 'text', text: stablePersona, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: contextBlock, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: stableSystem, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: ctxOut, cache_control: { type: 'ephemeral' } },
     ],
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   })
@@ -319,14 +311,3 @@ ${knowledgeBlock}`
   return content.text
 }
 
-function formatRole(role: UserRole): string {
-  const labels: Record<UserRole, string> = {
-    OWNER: 'business owner',
-    ADMIN: 'admin',
-    TEAM_LEAD: 'team lead',
-    LEAD_MANAGER: 'lead manager',
-    ACQUISITION_MANAGER: 'acquisition manager',
-    DISPOSITION_MANAGER: 'disposition manager',
-  }
-  return labels[role] ?? role
-}

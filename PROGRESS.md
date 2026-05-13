@@ -62,6 +62,357 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 87 — Phase 6 of LLM Rewiring: grading.ts prompt extraction + script_adherence (2026-05-13)
+
+Phase 6 of the LLM Rewiring Plan. Started with `lib/ai/grading.ts` because
+it's the highest-cost surface in the system (561 calls/30d × $0.105/call ≈
+$59/mo on NAH alone — a regression costs real money on every call).
+
+**Code shipped:**
+
+- **`lib/ai/prompts/grading.ts`** (new, 348 lines). `VERSION = '1.0.0'`.
+  Exports `buildGradingSystemPrompt`, `buildSummaryOnlySystemPrompt`,
+  `buildGradingUserPrompt`, `buildCallTypeInstructions`. Restructured into
+  the 5-section pattern with named headers (IDENTITY / VOICE / OPERATING
+  RULES / BUSINESS CONTEXT / REP CONTEXT) + a RUBRIC + RESPONSE FORMAT
+  trailer. Prompt content preserved verbatim wherever possible to keep
+  the score baseline intact.
+- **One behavioural delta vs the pre-refactor prompt**: the model is now
+  required to emit a dedicated `script_adherence` rubric category (0-100,
+  same `{score, maxScore, notes}` shape as the rest) in addition to the
+  call-type / role rubric. Stated in OPERATING RULES, restated in RUBRIC,
+  shape locked in RESPONSE FORMAT. Resolves Open issue F from the
+  baseline doc.
+- **`lib/ai/grading.ts`** refactored: ~310 lines of inline prompt code
+  removed. Imports the new builders, re-exports `GRADING_PROMPT_VERSION`
+  for future Phase 8 `ai_logs.prompt_version` traceability. Also exports
+  `parseGradingResponse` so the verification script can reuse it.
+- **`lib/kpis/lm-deac.ts`** rewired to read `rubricScores.script_adherence.score`
+  directly when present. Falls back to averaging the `.score` field of
+  every rubric object for legacy calls graded before 2026-05-13. **Also
+  fixed a silent zero-bug** — the old `averageRubricScore` filtered
+  `Object.values(...)` for `typeof v === 'number'` but the values are
+  objects (`{score, maxScore, notes}`), so the "average" was over an
+  empty set and `scriptAdherenceScore` was always 0 for every user every
+  day. New implementation correctly walks `.score` on each rubric value.
+  The notes field on `LmDeacResult` now records which path was used.
+- **`scripts/_phase6-grading-verify.ts`** (new, single-shot). Picks 5
+  most-recently COMPLETED graded calls for NAH with transcripts and
+  duration ≥ 90s. Rebuilds GradingContext via the live builder, calls
+  Opus 4.6 with the new prompts (no DB writes), parses with
+  `parseGradingResponse`, compares `overallScore` and
+  `script_adherence.score` against the stored values. Reports any
+  >10pt swing as a regression. ~$0.50 one-time cost. Delete post-run
+  per the `_baseline-prompts.ts` convention.
+
+**JSON output contract unchanged for downstream consumers:**
+
+| Consumer | Reads | Status |
+|---|---|---|
+| `lib/kpis/lm-deac.ts` | `rubricScores.script_adherence.score` | rewired in this session |
+| `app/(tenant)/[tenant]/calls/[callId]/page.tsx` | `rubricScores` as `Record<category, {score, maxScore, notes}>` | unchanged — script_adherence renders naturally |
+| `lib/ai/generate-user-profiles.ts` | `rubricScores` as `Record<string, number>` — broken, same bug as lm-deac | parallel fix queued for its Phase 6 turn |
+| `lib/ai/extract-deal-intel.ts` | `aiSummary`, `callOutcome`, `score` — not rubricScores | unchanged |
+
+**Done-when (Phase 6 — grading.ts only):**
+
+- [x] `lib/ai/prompts/grading.ts` exists with `VERSION = '1.0.0'`
+- [x] `lib/ai/grading.ts` refactored to use it
+- [x] JSON output structure unchanged for existing consumers
+- [x] `script_adherence` rubric category required in new gradings
+- [x] LM-DEAC reads `rubricScores.script_adherence.score` directly
+- [x] Legacy fallback in `averageRubricScore` fixed (was always 0)
+- [x] Verify script shipped at `scripts/_phase6-grading-verify.ts`
+- [x] 5-call regression check ran — **PASS**. Deltas: -4 / -6 / -4 / -4 / -2.
+      All within the 10pt threshold. script_adherence present in 5/5 new
+      gradings vs 0/5 stored. Latencies match the Phase 0 p95. See
+      baseline doc Section 16d for the full table.
+- [x] `npx tsc --noEmit` exit 0
+- [x] Verification done — Corey sign-off pending; next surface coach.ts
+      already drafted in this session (see below).
+
+**Phase 6 — coach.ts (also this session, after grading verified):**
+
+- **`lib/ai/prompts/coach.ts`** (new). `VERSION = '1.0.0'`. 5-section
+  structure (IDENTITY / VOICE / USER CONTEXT / OPERATING RULES). Returns
+  `{ stableSystem, variableContext }` so the caller can preserve the
+  existing two-block `cache_control: ephemeral` caching pattern from
+  Session 82's Phase C1.
+- **Surface-specific OPERATING RULES**:
+  1. Read-only surface — coach can't execute actions; defers to the
+     Role Assistant sidebar.
+  2. Quote the playbook — specific scripts/techniques from BUSINESS
+     CONTEXT, never generic best practices.
+  3. Use the data you have — recent calls, current property block.
+  4. No fabrication — if a number isn't in context, say so.
+  5. Length discipline — match length to question complexity.
+- **`lib/ai/coach.ts`** refactored: inline `stablePersona` removed (~25
+  lines), `formatRole` helper removed (now lives in prompts/coach.ts).
+  Re-exports `COACH_PROMPT_VERSION`. The per-turn business context
+  (metrics + property + recent calls + playbook) is still assembled in
+  coach.ts because it queries the database — only the static prompt
+  content moved.
+
+**Phase 6 — extract-deal-intel.ts (also this session):**
+
+- **`lib/ai/prompts/deal-intel.ts`** (new, 290+ lines). `VERSION = '1.0.0'`.
+  6-section structure (IDENTITY / VOICE / OPERATING RULES groups / optional
+  BUSINESS CONTEXT / FIELD CATALOG / RESPONSE FORMAT). The OPERATING RULES
+  span 6 subsections (extraction task, reconciliation, confidence levels,
+  extraction priorities, proposal target, list semantics, time-relative
+  fields, IMPORTANT).
+- **One additive content change vs the pre-refactor prompt**: the new
+  module accepts an optional `settingsBlock` parameter that injects
+  tenant settings (markets, KPI vocab, call types) as the BUSINESS
+  CONTEXT section. Closes audit baseline Section 11d's note that
+  extract-deal-intel "should get markets + buy box context."
+- **JSON output contract unchanged.** The schema in RESPONSE FORMAT is
+  byte-for-byte identical (proposedChanges + perCallExtractions +
+  propertySellerExtractions + rolling summary + topics + dealHealthScore
+  + dealRedFlags + dealGreenFlags). `parseExtractionResponse` and
+  every downstream consumer (`call.dealIntelHistory`,
+  `propertySeller.lastConversationSummary`, the propose→edit→confirm
+  UI) read the same shape.
+- **`lib/ai/extract-deal-intel.ts`** refactored:
+  - Inline 255-line `buildExtractionSystemPrompt` removed.
+  - Imports the new builder + re-exports `DEAL_INTEL_PROMPT_VERSION`.
+  - Threads `buildSettingsContext` + `formatSettingsForPrompt` (best-effort;
+    failure falls through with no settings block — extraction continues).
+  - `buildExtractionUserPrompt` stays in extract-deal-intel.ts — it's
+    data formatting, not prompt content.
+- **Cost impact:** the new BUSINESS CONTEXT block adds ~500-2000 chars
+  per call (capped at 2000). At Opus rates × 731 calls/30d that's
+  roughly +$0.50/mo — negligible vs the $94/mo baseline for this surface.
+  Quality lift expected to be material on geographic/market questions.
+
+**Phase 6 — generate-property-story.ts (also this session):**
+
+- **`lib/ai/prompts/story.ts`** (new). `VERSION = '1.0.0'`. 5-section
+  structure with optional `settingsBlock` injection for markets.
+- **`lib/ai/generate-property-story.ts`** refactored: inline
+  `STORY_SYSTEM_PROMPT` constant removed (~23 lines); threads
+  `buildSettingsContext` + `formatSettingsForPrompt(settings, 1500)`
+  best-effort. `STORY_PROMPT_VERSION` re-exported.
+- Output contract unchanged: still a single 180-260 word paragraph
+  written to `property.story`. Strict-fact rule preserved verbatim.
+- Cost impact: ~+1000 input chars per generation × 367 calls/30d ×
+  Sonnet rates ≈ +$0.10/mo. Trivial.
+
+**Phase 6 — dispo-generators.ts (also this session):**
+
+- **`lib/ai/prompts/dispo.ts`** (new). `VERSION = '1.0.0'`. Exports
+  `buildDispoSystemPrompt({ kind, settingsBlock? })` for all 3 artifact
+  kinds (description / listing / social) plus
+  `buildDispoTierMessagesSystemPrompt()` for the 5-tier JSON producer.
+  5-section structure shared across all kinds (IDENTITY / VOICE
+  TONE RULES / STRICT FACT RULE / BUSINESS CONTEXT / OUTPUT FORMAT).
+- **`lib/ai/dispo-generators.ts`** refactored: inline `systemPromptFor`
+  function (~77 lines) and the inline tier-messages system prompt both
+  removed; threads `buildSettingsContext` + `formatSettingsForPrompt(
+  settings, 1200)` best-effort. `DISPO_PROMPT_VERSION` re-exported.
+- Output contracts unchanged. The TIER MESSAGES generator still
+  returns the same `{ priority, qualified, jv, unqualified, realtor }`
+  JSON shape; the listing post still has `## Property Details`,
+  `## Finance & Status`, `## Comps` sections.
+- Customer-facing surface — the dispo UI's approval flow remains the
+  gate. Prompt enforces strict-fact + no-fabrication so a stray send
+  can't leak invented numbers. No new gating added at the prompt level
+  (`pending_approval` handling is UI-layer).
+- Cost impact: ~+700 input chars per generation × ~5 calls/30d ≈
+  immeasurable.
+
+**Phase 6 — generate-user-profiles.ts (also this session):**
+
+- **`lib/ai/prompts/user-profile.ts`** (new). `VERSION = '1.0.0'`.
+  5-section structure with optional `settingsBlock` for KPI vocab —
+  lets the AI calibrate "good" against tenant KPI targets (e.g.
+  LEAD_MANAGER 150 dials / 20 convos / 3 appts).
+- **`lib/ai/generate-user-profiles.ts`** refactored:
+  - Inline system prompt removed.
+  - Threads `buildSettingsContext` + `formatSettingsForPrompt(settings, 1500)`.
+  - `USER_PROFILE_PROMPT_VERSION` re-exported.
+- **Silent zero-bug FIXED** (parallel to LM-DEAC bug in
+  Section 16c): rubricScores aggregation was treating values as
+  `Record<string, number>` but actual stored shape is
+  `Record<category, {score, maxScore, notes}>`. Old `typeof score !==
+  'number'` filter skipped every entry, producing empty `rubricAverages`
+  every week. Fix walks `.score` on object values with a number-typed
+  fallback for any legacy flat-shape rows. Profiles regenerated on the
+  next Sunday cron will now include real rubric averages.
+- Output contract unchanged — same JSON shape (`strengths /
+  weaknesses / commonMistakes / communicationStyle / coachingPriorities`).
+
+**Phase 6 — photo-classifier.ts (also this session):**
+
+- **`lib/ai/prompts/photo-classifier.ts`** (new, ~40 lines).
+  `VERSION = '1.0.0'`. 4-section structure (IDENTITY / OPERATING RULES /
+  OUTPUT FORMAT — no VOICE/BUSINESS since this is a one-word vision
+  task). Content preserved verbatim.
+- **`lib/ai/photo-classifier.ts`** refactored to use the new module.
+  `PHOTO_CLASSIFIER_PROMPT_VERSION` re-exported.
+- No settings injection (narrow vision task; tenant context wouldn't
+  help). Open issue D (zero traffic) left for Phase 8 instrumentation
+  to diagnose — refactor doesn't change traffic; it just modernizes
+  the prompt module.
+
+**Phase 6 — session-summarizer.ts (also this session):**
+
+- **`lib/ai/prompts/session-summarizer.ts`** (new, ~50 lines).
+  `VERSION = '1.0.0'`. 5-section structure (IDENTITY / VOICE /
+  OPERATING RULES / OUTPUT FORMAT — no BUSINESS CONTEXT since this is
+  a meta task summarizing the user's own conversation).
+- **`lib/ai/session-summarizer.ts`** refactored to use the new module.
+  `SESSION_SUMMARIZER_PROMPT_VERSION` re-exported.
+- Output contract unchanged — still emits `SUMMARY:` + `KEY_FACTS:`
+  sections that the existing parser extracts via regex.
+
+---
+
+**Phase 6 — COMPLETE.** All 8 LLM surfaces now have versioned prompt
+modules under `lib/ai/prompts/`:
+
+| Surface | Module | VERSION | Settings injected? |
+|---|---|---|---|
+| `assistant.ts` (Phase 2) | `prompts/assistant.ts` | 1.0.0 | inherited via context-builder |
+| `grading.ts` | `prompts/grading.ts` | 1.0.0 | inherited via buildGradingContext |
+| `coach.ts` | `prompts/coach.ts` | 1.0.0 | inherited via buildKnowledgeContext |
+| `extract-deal-intel.ts` | `prompts/deal-intel.ts` | 1.0.0 | **NEW — markets + KPI** |
+| `generate-property-story.ts` | `prompts/story.ts` | 1.0.0 | **NEW — markets + KPI** |
+| `dispo-generators.ts` | `prompts/dispo.ts` | 1.0.0 | **NEW — markets (1200 cap)** |
+| `generate-user-profiles.ts` | `prompts/user-profile.ts` | 1.0.0 | **NEW — KPI vocab** |
+| `photo-classifier.ts` | `prompts/photo-classifier.ts` | 1.0.0 | intentionally none |
+| `session-summarizer.ts` | `prompts/session-summarizer.ts` | 1.0.0 | intentionally none |
+
+Plus:
+- **grading.ts: `script_adherence` required rubric**; verified 5/5 on real
+  calls (deltas -2 to -6, all under 10pt bar).
+- **LM-DEAC silent-zero bug fixed**; reads `script_adherence.score`
+  directly with a corrected `.score`-extracting legacy fallback.
+- **generate-user-profiles silent-zero bug fixed**; same parallel
+  parsing bug as LM-DEAC.
+
+**Phase 7 — Tiered eval framework foundation (also this session):**
+
+Phase 7 ships in two cuts. This session's cut is the **smoke tier**: the
+foundation modules + 5 golden evals + runner + npm script. Medium / full
+tiers, pre-commit hook, CI workflow, and nightly cron are the next session.
+
+What shipped this session:
+
+- **`evals/types.ts`** (new). Shared types: `Eval`, `EvalRunResult`,
+  `EvalScoreResult`, `BehaviorVerdict`, `ViolationVerdict`,
+  `SuiteReport`. Defines the contract every eval implements.
+- **`evals/scorer.ts`** (new). Claude-as-judge scorer using Haiku 4.5
+  (~$0.005/scoring-pass). Given an eval definition + the surface's raw
+  output, returns a structured verdict per expected behavior + per
+  must-not-do rule. Defaults to ALL-failed if the judge JSON parse
+  fails (false-positive over silent-pass).
+- **`evals/fixtures/grading-context.ts`** (new). Synthetic
+  GradingContext + a 215-second qualification-call transcript. Lets
+  the suite exercise `lib/ai/prompts/grading.ts` without any DB rows.
+- **`evals/golden/smoke.ts`** (new). 5 smoke evals covering grading,
+  coach, deal-intel, property-story, and dispo. Each invokes its
+  prompt module + a single Anthropic call (no DB, no tools). The
+  assistant surface is deferred to medium tier — it depends on tool
+  execution + role-gates which need a different harness.
+- **`evals/runners/smoke.ts`** (new). Parallel runner. Loads
+  `.env.local` (same no-dotenv pattern as `scripts/verify-calls-
+  pipeline.ts`), executes all 5 evals concurrently, scores them, prints
+  a markdown report to stdout, and writes a JSON sidecar to
+  `evals/reports/smoke-<timestamp>.json`. Exit 0 if all pass, 1 if any
+  fails, 2 on runner error.
+- **`package.json`**: new `evals:smoke` script.
+
+**Live verification (4 iterations, captured):**
+
+Final run #4 — **4/5 PASS, $1.63, 231s end-to-end**:
+
+| Eval | Surface | Result | Behaviors | Violations | Cost |
+|---|---|---|---|---|---|
+| smoke-grading-001 | grading | PASS | 8/8 | 0 | $0.44 |
+| smoke-coach-001 | coach | PASS | 5/5 | 0 | $0.01 |
+| smoke-story-001 | property-story | PASS | 6/6 | 0 | $0.01 |
+| smoke-dispo-001 | dispo | PASS | 4/5 | 0 | $0.01 |
+| smoke-deal-intel-001 | deal-intel | FAIL | 3/8 | 1 | $1.16 |
+
+The deal-intel failure is **a real production-relevant finding, not a
+test bug**: even with `max_tokens: 16000` + `thinking_budget: 8000`
+(matches production), Opus truncates JSON output on dense input
+(my fixture had a long transcript + prior deal-intel context). The
+parser likely handles partial JSON gracefully in prod (it strips
+fences + finds first/last brace + retries fixup), but truncation
+means some `proposedChanges` rows + the `perCallExtractions` +
+`propertySellerExtractions` blocks may silently drop on dense calls.
+Flagged as open issue H in baseline doc.
+
+Iterations across runs:
+- Run #1: env not loaded → all 5 errored (auth). Fixed via no-dotenv
+  loader in `evals/runners/smoke.ts`.
+- Run #2 (3/5 PASS, $1.15): deal-intel under-sized (8K → bumped to
+  16K to match prod). Story judge over-strict on lowercase plain
+  English. First clarified rule wording.
+- Run #3 (3/5 PASS, $0.45 — deal-intel stream-terminated; story
+  judge still flagged "appointment set stage" as enum echo).
+  Tightened story `mustNotDo` to case-sensitive ALL-CAPS only with
+  explicit not-a-violation examples.
+- Run #4 (4/5 PASS, $1.63): story now 6/6, 0 violations. Coach +
+  dispo + grading all green. Deal-intel still truncates — accepted
+  as a real production finding, not a test bug.
+
+Total iteration cost: ~$4.40 across 4 runs.
+
+**Cost shape (final):**
+
+- Per smoke run: $0.45 (when deal-intel flakes) to $1.63 (full run).
+- Plan target was ~$0.50 — landed higher because deal-intel's Opus
+  call alone is ~$1.16 when it produces a full 16K-token response.
+- The cost-driver is Opus + extended thinking on grading +
+  deal-intel. Future cost work (Phase 7 continuation): cache identical-
+  prompt smoke results 24h, and/or downsize deal-intel fixture so
+  output fits in a smaller budget.
+
+**What's NOT in this session's cut (Phase 7 continuation):**
+
+- Medium tier (15-20 evals, CI workflow)
+- Full tier (50+ evals, nightly cron)
+- Adversarial tier (Phase 9)
+- Pre-commit hook
+- Caching for identical-prompt smoke runs (24h TTL — per the plan)
+- Eval dashboard
+
+---
+
+**Next session entry point:**
+
+> Read PROGRESS.md Session 87 entry + Sections 16-24 of
+> docs/LLM_AUDIT_BASELINE.md. Phase 6 is COMPLETE; Phase 7 smoke
+> foundation is shipped. \`npm run evals:smoke\` works against
+> production-style fixtures with no DB writes.
+>
+> Phase 6 sign-off checklist (do these first, before Phase 7 medium):
+> 1. Spot-check 1 fresh grading post-deploy — verify `script_adherence`
+>    appears in `calls.rubricScores`.
+> 2. Spot-check 1 fresh deal-intel extraction — verify the BUSINESS
+>    CONTEXT markets line shows up in `ai_logs.input` snapshot.
+> 3. Run the weekly user-profile cron manually (or wait for Sunday) —
+>    verify `user_profiles.scoringPatterns` is no longer empty.
+> 4. Delete `scripts/_phase6-grading-verify.ts` after sign-off.
+>
+> Phase 7 continuation tasks:
+> 1. Build the medium tier (15-20 evals covering all 8 surfaces +
+>    cross-surface scenarios + role variations).
+> 2. Build the full tier (50+ evals — the long tail of edge cases).
+> 3. Add 24h smoke result caching keyed by file-content hashes of
+>    `lib/ai/` + `lib/ai/prompts/`.
+> 4. Wire a pre-commit hook that triggers smoke when files in those
+>    directories change.
+> 5. Wire a CI workflow that runs medium on every PR.
+> 6. Wire a nightly cron in `railway.toml` that runs full.
+
+`npx tsc --noEmit` exit 0. Files unstaged for commit.
+
+---
+
 ### Session 86 — LLM Rewiring Plan patched + Phase 0 baseline shipped (2026-05-12)
 
 Reviewed Corey's "LLM Rewiring Plan (Elite Edition)" against the Session 85

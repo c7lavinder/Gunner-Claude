@@ -7,20 +7,17 @@
 
 import { anthropic } from '@/config/anthropic'
 import { fetchPhotoBuffer } from '@/lib/storage/property-assets'
+import {
+  buildPhotoClassifierSystemPrompt,
+  VERSION as PHOTO_CLASSIFIER_PROMPT_VERSION,
+} from '@/lib/ai/prompts/photo-classifier'
+
+export { PHOTO_CLASSIFIER_PROMPT_VERSION }
 
 export const PHOTO_CATEGORIES = [
   'front', 'exterior', 'kitchen', 'bathroom', 'living', 'basement', 'other',
 ] as const
 export type PhotoCategory = (typeof PHOTO_CATEGORIES)[number]
-
-const SYSTEM_PROMPT = `You categorize property photos for a real estate wholesaling app. Reply with EXACTLY ONE word from this list and nothing else:
-front      — front of the house, curb view, primary façade with the front door
-exterior   — side, back, yard, driveway, garage, outside structures, roof shots
-kitchen    — kitchen interior, countertops, appliances, kitchen island
-bathroom   — bathroom interior, tub, shower, toilet, vanity
-living     — living room, dining room, bedroom, hallway, finished interior rooms
-basement   — basement, mechanical room, crawl space, unfinished lower level
-other      — anything that doesn't clearly fit (documents, screenshots, close-up details)`
 
 const SUPPORTED_VISION_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'])
 
@@ -47,7 +44,7 @@ export async function classifyPhoto(opts: {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 16,
-      system: SYSTEM_PROMPT,
+      system: buildPhotoClassifierSystemPrompt(),
       messages: [{
         role: 'user',
         content: [

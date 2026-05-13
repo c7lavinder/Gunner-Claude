@@ -19,6 +19,17 @@ import type { Prisma, AcqStatus, DispoStatus, LongtermStatus } from '@prisma/cli
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
 import { describePropertyStage, formatOutreachOutcome } from '@/lib/format/status'
+import {
+  buildStorySystemPrompt,
+  VERSION as STORY_PROMPT_VERSION,
+} from '@/lib/ai/prompts/story'
+import {
+  buildSettingsContext,
+  formatSettingsForPrompt,
+} from '@/lib/ai/settings-context'
+
+export { STORY_PROMPT_VERSION }
+
 const STORY_MODEL = 'claude-sonnet-4-6'
 const MAX_CALLS_IN_CONTEXT = 10
 const MAX_TOKENS = 700
@@ -95,6 +106,17 @@ export async function generatePropertyStory(
 
   const userPrompt = buildStoryPrompt(property, bd, dealIntel)
 
+  // Phase 6 (Session 87): inject tenant settings (markets + KPI vocab)
+  // so the model frames the property in real tenant scope. Best-effort —
+  // failure falls through with no settings block.
+  let settingsBlock: string | undefined
+  try {
+    const settings = await buildSettingsContext({ tenantId: property.tenant.id })
+    settingsBlock = formatSettingsForPrompt(settings, 1500)
+  } catch (err) {
+    logFailure(property.tenant.id, 'property_story.settings_load_failed', `property:${propertyId}`, err)
+  }
+
   try {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
     const timer = startTimer()
@@ -102,7 +124,7 @@ export async function generatePropertyStory(
     const response = await anthropic.messages.create({
       model: STORY_MODEL,
       max_tokens: MAX_TOKENS,
-      system: STORY_SYSTEM_PROMPT,
+      system: buildStorySystemPrompt({ settingsBlock }),
       messages: [{ role: 'user', content: userPrompt }],
     })
 
@@ -145,30 +167,8 @@ export async function generatePropertyStory(
 }
 
 // ─── Prompt builders ─────────────────────────────────────────────────────────
-
-const STORY_SYSTEM_PROMPT = `You are writing the Deal Story for a real estate wholesaling CRM. The story is a single, readable paragraph (target 180-260 words; shorter when data is thin) that gives an internal team member the full situational picture in under a minute.
-
-TONE: Direct, specific, and factual. Reference names, dollar amounts, dates, and concrete quotes when they exist in the input. Plain English only. Do not editorialize. Do not use marketing language. Do not hedge with "it appears" / "it seems".
-
-STRICT FACT RULE — read carefully, this is the most important rule:
-- Use ONLY facts present in the structured input. Do not infer, estimate, or guess any number, date, name, status, or relationship that isn't there.
-- Every dollar amount you mention must appear verbatim in the FINANCIALS or DEAL INTEL or CALL summaries. Never round, average, or invent.
-- Stage / status labels are pre-translated to plain English in the input under "STAGE". Use those exact phrases. Never write internal codes like NEW_LEAD, IN_DISPOSITION, DISPO_PUSHED — those will not appear in your input. If you see all-caps underscore strings anywhere, treat them as a bug and skip rather than echo.
-- If a section has no data, skip it silently. Never write "No buyer activity yet" or "Equity unknown" — just leave it out.
-
-PLAIN ENGLISH RULE:
-- Translate any technical term to what a person on the team would say out loud. "Pre-foreclosure" not "preForeclosure". "Owner is absentee" not "absenteeOwner=true". "Mortgage rate" not "loanInterestRate".
-- No JSON, no underscores, no enum values, no field names.
-
-STRUCTURE (single paragraph, no headings, no bullets):
-1. Open with how and when the lead came in (source / campaign / days ago — only if present).
-2. Property + seller facts (address, condition, beds/baths, equity, mortgage posture if present; who the seller is and what their situation is).
-3. Conversation arc across calls — motivation, objections, commitments, key quotes from aiSummary.
-4. Deal state — current stage in plain English, recent milestones, offers made, negotiation posture.
-5. Buyer activity — matched buyers, blasts sent, responses received, movement through stages.
-6. What matters most right now — the one or two things a team member should watch or act on, anchored to actual data above.
-
-OUTPUT: ONE paragraph, no headings, no lists, no markdown. Past tense for history, present tense for current state. Length scales with available data — sparse data = shorter story.`
+// System prompt extracted to lib/ai/prompts/story.ts (Phase 6, Session 87).
+// User-prompt assembly stays here — it's data formatting, not prompt content.
 
 interface StoryPromptInput {
   address: string; city: string; state: string; zip: string

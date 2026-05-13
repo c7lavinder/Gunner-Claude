@@ -23,6 +23,12 @@ import { db } from '@/lib/db/client'
 import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
+import {
+  buildSessionSummarizerSystemPrompt,
+  VERSION as SESSION_SUMMARIZER_PROMPT_VERSION,
+} from '@/lib/ai/prompts/session-summarizer'
+
+export { SESSION_SUMMARIZER_PROMPT_VERSION }
 
 const SUMMARIZER_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -74,18 +80,7 @@ export async function summarizeSession(
 
   if (!transcript.trim()) return null
 
-  const systemPrompt = `You write 1-paragraph memory summaries of AI assistant conversations.
-
-The summary will be loaded as context in future conversations so the assistant remembers what was discussed. Be specific, mention names/addresses/numbers, and capture decisions and open threads.
-
-Rules:
-- 3-5 sentences MAX. No bullet points.
-- Lead with the user's main goal or topic.
-- Mention specific entities by name (people, properties, deals).
-- Note any commitments made or actions taken.
-- End with anything still open or pending.
-- Past tense. Third person ("the user asked about X").
-- No fluff. No restating context the reader already has.`
+  const systemPrompt = buildSessionSummarizerSystemPrompt()
 
   const timer = startTimer()
   let summary: string | null = null

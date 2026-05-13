@@ -15,9 +15,11 @@
 //   - apptsSet uses property.updatedAt as a proxy because no audit_log action
 //     reliably captures stage transitions today. Phase 0e of the Rewiring Plan
 //     adds proper instrumentation; once that ships, swap the implementation.
-//   - scriptAdherenceScore averages ALL rubric categories instead of reading
-//     a dedicated `script_adherence` key (which doesn't exist in the rubric
-//     yet). Phase 6 of the Rewiring Plan may introduce one — revisit then.
+//   - scriptAdherenceScore reads `rubricScores.script_adherence.score` (0-100)
+//     directly when present — added to the grading prompt in Phase 6 of the
+//     LLM Rewiring Plan (Session 87, 2026-05-13). Falls back to averaging the
+//     `.score` field of all rubric category objects for old graded calls that
+//     pre-date the script_adherence key. Both paths normalize to a 0-10 scale.
 //   - tasksCompleted: NAH (and likely all tenants) does NOT use the local
 //     `tasks` table — 0 rows ever written. The team completes tasks in GHL.
 //     We count the GHL `TaskComplete` webhook (mapped via user.ghlUserId)
@@ -130,18 +132,34 @@ export async function calculateLmDeac(
   })
 
   let scriptAdherenceScore = 0
+  let usedDedicatedKey = false
   if (scoredCalls.length > 0) {
-    const perCallAverages = scoredCalls
-      .map((c) => averageRubricScore(c.rubricScores))
+    // Prefer the dedicated `script_adherence` rubric key (Phase 6+, 2026-05-13).
+    // Falls back to averaging .score across all rubric objects for legacy
+    // calls graded before script_adherence was added to the prompt.
+    const perCallAdherence = scoredCalls
+      .map((c) => extractScriptAdherence(c.rubricScores))
       .filter((n): n is number => n !== null)
-    if (perCallAverages.length > 0) {
+    if (perCallAdherence.length > 0) {
       const overall =
-        perCallAverages.reduce((a, b) => a + b, 0) / perCallAverages.length
+        perCallAdherence.reduce((a, b) => a + b, 0) / perCallAdherence.length
       scriptAdherenceScore = overall / 10
+      usedDedicatedKey = true
+    } else {
+      const perCallAverages = scoredCalls
+        .map((c) => averageRubricScore(c.rubricScores))
+        .filter((n): n is number => n !== null)
+      if (perCallAverages.length > 0) {
+        const overall =
+          perCallAverages.reduce((a, b) => a + b, 0) / perCallAverages.length
+        scriptAdherenceScore = overall / 10
+      }
     }
   }
   notes.push(
-    'scriptAdherenceScore = avg of all rubric categories ÷ 10. No dedicated script_adherence key yet.',
+    usedDedicatedKey
+      ? 'scriptAdherenceScore from rubricScores.script_adherence.score ÷ 10.'
+      : 'scriptAdherenceScore = avg of all rubric category .score values ÷ 10 (legacy fallback; calls graded pre-2026-05-13 lack the dedicated key).',
   )
 
   const composite =
@@ -185,13 +203,38 @@ export async function calculateLmDeacRange(
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 
+// Read the dedicated `script_adherence.score` from rubricScores. Returns null
+// when the key is missing or the score isn't a finite number.
+// Calls graded under prompt VERSION 1.0.0+ (Phase 6, 2026-05-13) include this
+// key; older calls return null and fall through to averageRubricScore.
+function extractScriptAdherence(rubricScores: unknown): number | null {
+  if (!rubricScores || typeof rubricScores !== 'object') return null
+  const obj = (rubricScores as Record<string, unknown>).script_adherence
+  if (!obj || typeof obj !== 'object') return null
+  const score = (obj as Record<string, unknown>).score
+  if (typeof score === 'number' && Number.isFinite(score)) return score
+  return null
+}
+
+// Average .score across all rubric category objects. Used as a fallback for
+// legacy calls graded before script_adherence existed. Note: rubricScores
+// values are objects like { score, maxScore, notes } — earlier versions of
+// this function treated them as raw numbers (always null), which silently
+// produced scriptAdherenceScore=0 for every call. Phase 6 fix.
 function averageRubricScore(rubricScores: unknown): number | null {
   if (!rubricScores || typeof rubricScores !== 'object') return null
-  const numerics = Object.values(rubricScores as Record<string, unknown>).filter(
-    (v): v is number => typeof v === 'number' && Number.isFinite(v),
-  )
-  if (numerics.length === 0) return null
-  return numerics.reduce((a, b) => a + b, 0) / numerics.length
+  const scores: number[] = []
+  for (const v of Object.values(rubricScores as Record<string, unknown>)) {
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      // Older shape — a flat Record<string, number>.
+      scores.push(v)
+    } else if (v && typeof v === 'object') {
+      const s = (v as Record<string, unknown>).score
+      if (typeof s === 'number' && Number.isFinite(s)) scores.push(s)
+    }
+  }
+  if (scores.length === 0) return null
+  return scores.reduce((a, b) => a + b, 0) / scores.length
 }
 
 function round2(n: number): number {

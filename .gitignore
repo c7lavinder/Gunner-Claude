@@ -49,3 +49,7 @@ audit-results/
 
 # Backfill data — source JSON + match/preview reports, kept out of git
 scripts/data/
+
+# Eval suite reports — timestamped run outputs (Phase 7).
+# Local-only; canonical reports get summarized in docs/ instead.
+evals/reports/

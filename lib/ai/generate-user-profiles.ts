@@ -11,6 +11,16 @@ import { db } from '@/lib/db/client'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
+import {
+  buildUserProfileSystemPrompt,
+  VERSION as USER_PROFILE_PROMPT_VERSION,
+} from '@/lib/ai/prompts/user-profile'
+import {
+  buildSettingsContext,
+  formatSettingsForPrompt,
+} from '@/lib/ai/settings-context'
+
+export { USER_PROFILE_PROMPT_VERSION }
 
 interface ProfileAnalysis {
   strengths: string[]
@@ -61,15 +71,28 @@ export async function generateUserProfiles(tenantId: string): Promise<{
         continue // No graded calls — can't generate profile
       }
 
-      // Aggregate rubric scores across all calls
+      // Aggregate rubric scores across all calls.
+      // Phase 6 fix (Session 87): rubricScores is Record<category, {score,
+      // maxScore, notes}> — not Record<category, number>. The legacy
+      // implementation tested `typeof score !== 'number'` and skipped every
+      // entry, producing empty rubricAverages. Now we walk into .score on
+      // each object, with a number-typed fallback for any old rows that
+      // stored the flat shape.
       const rubricTotals: Record<string, { total: number; count: number }> = {}
       for (const call of calls) {
-        const scores = call.rubricScores as Record<string, number> | null
+        const scores = call.rubricScores as Record<string, unknown> | null
         if (!scores) continue
-        for (const [category, score] of Object.entries(scores)) {
-          if (typeof score !== 'number') continue
+        for (const [category, raw] of Object.entries(scores)) {
+          let n: number | null = null
+          if (typeof raw === 'number' && Number.isFinite(raw)) {
+            n = raw
+          } else if (raw && typeof raw === 'object') {
+            const s = (raw as Record<string, unknown>).score
+            if (typeof s === 'number' && Number.isFinite(s)) n = s
+          }
+          if (n === null) continue
           if (!rubricTotals[category]) rubricTotals[category] = { total: 0, count: 0 }
-          rubricTotals[category].total += score
+          rubricTotals[category].total += n
           rubricTotals[category].count++
         }
       }
@@ -162,15 +185,22 @@ ${existingContext}
 
 Generate a coaching profile as JSON. If data is limited, use the existing profile and role-based defaults. Always return valid JSON.`
 
+      // Phase 6 (Session 87): inject tenant settings (markets + KPI vocab)
+      // so the coaching AI calibrates "good" against the tenant's actual
+      // KPI targets (e.g. LEAD_MANAGER 150 dials / 20 convos / 3 appts).
+      // Best-effort — settings fetch failure falls through.
+      let settingsBlock: string | undefined
+      try {
+        const settings = await buildSettingsContext({ tenantId, userId: user.id })
+        settingsBlock = formatSettingsForPrompt(settings, 1500)
+      } catch (err) {
+        logFailure(tenantId, 'generate_profiles.settings_load_failed', `user:${user.id}`, err)
+      }
+
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 1000,
-        system: `You are a sales coaching AI. You MUST respond with ONLY a valid JSON object, no other text. No markdown, no explanation, no preamble.
-
-The JSON must have this exact structure:
-{"strengths":["..."],"weaknesses":["..."],"commonMistakes":["..."],"communicationStyle":"...","coachingPriorities":["..."]}
-
-Each array should have 3-5 items. Be specific to wholesale real estate. If data is limited, base your analysis on the rep's role and whatever data is available. Never say you can't generate a profile — always produce one.`,
+        system: buildUserProfileSystemPrompt({ settingsBlock }),
         messages: [{ role: 'user', content: prompt }],
       })
 

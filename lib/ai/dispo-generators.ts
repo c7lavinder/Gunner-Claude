@@ -24,6 +24,17 @@ import { Prisma } from '@prisma/client'
 import { anthropic } from '@/config/anthropic'
 import { logFailure } from '@/lib/audit'
 import { isDispoManagerRole } from '@/lib/disposition/property-details-readiness'
+import {
+  buildDispoSystemPrompt,
+  buildDispoTierMessagesSystemPrompt,
+  VERSION as DISPO_PROMPT_VERSION,
+} from '@/lib/ai/prompts/dispo'
+import {
+  buildSettingsContext,
+  formatSettingsForPrompt,
+} from '@/lib/ai/settings-context'
+
+export { DISPO_PROMPT_VERSION }
 
 const DISPO_MODEL = 'claude-sonnet-4-6'
 const MAX_TOKENS = 1500
@@ -139,7 +150,19 @@ export async function generateDispoArtifact(
   }
 
   const userPrompt = buildPrompt(kind, ctx)
-  const systemPrompt = systemPromptFor(kind)
+
+  // Phase 6 (Session 87): inject tenant settings (markets, KPI vocab).
+  // Customer-facing surface — keep the budget tight so generated copy
+  // stays focused on the property, not the company. Best-effort.
+  let settingsBlock: string | undefined
+  try {
+    const settings = await buildSettingsContext({ tenantId })
+    settingsBlock = formatSettingsForPrompt(settings, 1200)
+  } catch (err) {
+    logFailure(tenantId, `dispo_${kind}.settings_load_failed`, `property:${propertyId}`, err).catch(() => {})
+  }
+
+  const systemPrompt = buildDispoSystemPrompt({ kind, settingsBlock })
 
   try {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
@@ -271,7 +294,7 @@ Per-message rules:
 - No invented numbers, ranges, or percentages — only what's in the facts above.
 - No internal codes or enum names.`
 
-  const systemPrompt = `You are generating per-tier outreach messages for a wholesale real estate deal blast. Output ONLY a JSON object — no commentary, no markdown fences, no surrounding text. The JSON must parse with JSON.parse on first try. Plain English only. Never invent numbers or facts that aren't in the property facts.`
+  const systemPrompt = buildDispoTierMessagesSystemPrompt()
 
   try {
     const { logAiCall, startTimer } = await import('@/lib/ai/log')
@@ -537,85 +560,8 @@ function inferWorkNeeded(p: InferenceSnapshot): string[] {
 }
 
 // ─── Prompt builders ────────────────────────────────────────────────
-
-function systemPromptFor(kind: DispoArtifactKind): string {
-  // Shared tone + truthfulness rules carved out so all 3 generators share
-  // the same floor. Specific format is in the user prompt.
-  const shared = `TONE RULES (apply to all output):
-- Professional, factual, trustworthy. Investor audience.
-- Plain English only. Simple, direct. No fluff.
-- Do NOT use hype words: "steal", "gem", "massive", "explosive", "insane", "amazing", "incredible", "unbelievable".
-- Do NOT use emojis.
-- Always close with the assigned Disposition Manager's name + phone number as the call to action.
-
-STRICT FACT RULE — most important rule, read carefully:
-- Use ONLY facts present in the property facts above. Every dollar amount, percentage, date, condition note, or distress flag must come from the structured input.
-- Do NOT estimate, infer, guess, round, or invent any number. If repair estimate is missing, say "repair scope to be confirmed" — do NOT make one up.
-- Do NOT add filler claims like "great rental area", "rates around 6.5%", "should rent for $1,800+" unless those exact values appear in the facts.
-- Do NOT mention distress (foreclosure, probate, bankruptcy, liens, eviction, tax delinquency) UNLESS it's listed under "Distress signals" in the facts.
-- If a section has no data, leave it out silently.
-- Plain English: never use internal codes or enum names ("DISPO_NEW", "preForeclosure", "ownerOccupied=false"). Translate to natural language.`
-
-  if (kind === 'description') {
-    return `${shared}
-
-OUTPUT: A short, clean opening paragraph (2-4 sentences) for a property listing.
-- Target: real estate investors.
-- Create mild curiosity. Clearly state the opportunity in concrete terms (the actual numbers from the facts).
-- Mention the most important positives + the main work needed (only if listed in the facts).
-- If finance / distress signals are in the facts and relevant to the primary offer type, weave them in.
-- End with: "Contact [Dispo Manager Name] at [phone] for details."
-- Output ONLY the paragraph. No headers, no extra commentary.`
-  }
-
-  if (kind === 'listing') {
-    return `${shared}
-
-OUTPUT: A property listing post in this EXACT structure:
-
-[Opening paragraph - 2-4 sentences, professional and factual, with concrete numbers from the facts]
-
-## Property Details
-- Beds/Baths: X / X
-- Sqft: XXX
-- Year built: XXXX
-- Condition: [short description from facts]
-- ARV: $XXX,XXX
-- Asking: $XXX,XXX
-- Repair estimate: $XXX,XXX  (omit this line if no estimate in facts)
-- Location: [City], [State]
-- Pros: [bullets — only items in the facts]
-- Work needed: [bullets — only items in the facts]
-
-## Finance & Status  (omit this section entirely if NONE of the lines below have data)
-- Existing mortgage balance: $XXX,XXX  (only if in facts)
-- Mortgage rate: X.X%  (only if in facts)
-- Available equity: $XXX,XXX (X%)  (only if in facts)
-- MLS status: [status text from facts]  (only if in facts)
-- Distress: [comma-list from facts]  (only if facts include any distress signals)
-
-## Comps
-- [Address] – $XXX,XXX
-- [Address] – $XXX,XXX
-(omit the entire ## Comps section if no comps were provided)
-
-[Closing block: 2-3 sentences with funding link, collaboration note, and disposition manager contact (name + phone). The funding link is an invitation to learn about the house-flipping franchise.]
-
-Output ONLY the post. No commentary, no surrounding quotes.`
-  }
-
-  // social
-  return `${shared}
-
-OUTPUT: A Facebook Marketplace / social media post for cash investors and rehabbers.
-- Under 180 words total.
-- Short paragraphs (2-3 lines max each).
-- Highlight the best 2-3 features, the work needed (if listed), and the spread (ARV vs asking) using the actual numbers.
-- If a relevant distress signal is in the facts AND fits the primary offer type, mention it once in plain English.
-- Conversational but professional — not stiff, not hyped.
-- Clear call to action with disposition manager's name + phone.
-- Output ONLY the post.`
-}
+// System prompt extracted to lib/ai/prompts/dispo.ts (Phase 6, Session 87).
+// User-prompt assembly + voice helpers stay here.
 
 // Voice hint per offer type. Keeps the AI focused on what the buying
 // audience actually cares about for that strategy. New types fall back
