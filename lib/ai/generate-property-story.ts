@@ -144,6 +144,7 @@ export async function generatePropertyStory(
       tokensOut: response.usage?.output_tokens,
       durationMs: timer(),
       model: STORY_MODEL,
+      promptVersion: STORY_PROMPT_VERSION,
     }).catch(err => {
       logFailure(property.tenant.id, 'property_story.ai_log_failed', `property:${propertyId}`, err)
     })

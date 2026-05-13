@@ -189,6 +189,7 @@ export async function generateDispoArtifact(
       tokensOut: response.usage?.output_tokens,
       durationMs: timer(),
       model: DISPO_MODEL,
+      promptVersion: DISPO_PROMPT_VERSION,
     }).catch(err => {
       logFailure(tenantId, `dispo_${kind}.ai_log_failed`, `property:${propertyId}`, err).catch(() => {})
     })
@@ -344,6 +345,7 @@ Per-message rules:
       tokensOut: response.usage?.output_tokens,
       durationMs: timer(),
       model: DISPO_MODEL,
+      promptVersion: DISPO_PROMPT_VERSION,
     }).catch(err => {
       logFailure(tenantId, `dispo_tiers.ai_log_failed`, `property:${propertyId}`, err).catch(() => {})
     })

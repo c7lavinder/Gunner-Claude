@@ -8,6 +8,13 @@ import { db } from '@/lib/db/client'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
 import { anthropic } from '@/config/anthropic'
+import {
+  buildEnrichPropertyPrompt,
+  VERSION as ENRICH_PROPERTY_PROMPT_VERSION,
+} from '@/lib/ai/prompts/enrich-property'
+
+// Re-exported so callers can stamp ai_logs.prompt_version (Phase 8).
+export { ENRICH_PROPERTY_PROMPT_VERSION }
 
 export async function enrichPropertyWithAI(propertyId: string, tenantId: string) {
   try {
@@ -31,20 +38,17 @@ export async function enrichPropertyWithAI(propertyId: string, tenantId: string)
     const timer = startTimer()
 
     // Use Claude to generate estimates
-    const prompt = `You are a real estate analyst. For this property, provide estimates:
-Address: ${property.address}, ${property.city}, ${property.state} ${property.zip}
-${property.beds ? `Beds: ${property.beds}` : ''} ${property.baths ? `Baths: ${property.baths}` : ''} ${property.sqft ? `Sqft: ${property.sqft}` : ''} ${property.yearBuilt ? `Year: ${property.yearBuilt}` : ''} ${property.propertyType ? `Type: ${property.propertyType}` : ''}
-
-Return ONLY JSON:
-{
-  "arv": number or null (after-repair value estimate in dollars),
-  "repairEstimate": number or null (estimated repair costs),
-  "rentalEstimate": number or null (monthly rent estimate),
-  "neighborhoodSummary": "brief 2-3 sentence market/neighborhood description",
-  "description": "deal summary paragraph if no description exists"
-}
-
-Base estimates on the location, size, and year. If insufficient data, use null.`
+    const prompt = buildEnrichPropertyPrompt({
+      address: property.address,
+      city: property.city,
+      state: property.state,
+      zip: property.zip,
+      beds: property.beds,
+      baths: property.baths,
+      sqft: property.sqft,
+      yearBuilt: property.yearBuilt,
+      propertyType: property.propertyType,
+    })
 
     const res = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -60,6 +64,7 @@ Base estimates on the location, size, and year. If insufficient data, use null.`
       input: `Enrich ${property.address}`, output: text.slice(0, 5000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: timer(), model: 'claude-sonnet-4-6',
+      promptVersion: ENRICH_PROPERTY_PROMPT_VERSION,
     }).catch((err) => {
       logFailure(tenantId, 'enrich_property.ai_log_failed', `property:${propertyId}`, err)
     })

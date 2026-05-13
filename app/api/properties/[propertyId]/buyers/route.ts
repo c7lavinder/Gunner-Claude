@@ -5,7 +5,11 @@ import { db } from '@/lib/db/client'
 import { getGHLClient } from '@/lib/ghl/client'
 import { CONTACT_FIELDS, TIER_MAP, getMarketsForZip } from '@/lib/config/crm.config'
 import { anthropic } from '@/config/anthropic'
+import { logAiCall, startTimer } from '@/lib/ai/log'
 import { z } from 'zod'
+
+// Phase 8 drift signal: bump on any prompt change in this file.
+const BUYER_SCORING_PROMPT_VERSION = '1.0.0'
 
 // GHL custom field ID → field name mapping (from live GHL location)
 // These are the actual field IDs from the New Again Houses GHL account
@@ -129,6 +133,7 @@ function buyerMatchesMarket(buyer: { markets: string[] }, matchTargets: string[]
 async function llmScoreBuyers(
   projectTypes: string[],
   buyers: Array<{ id: string; tier: string; buybox: string; verifiedFunding: boolean; hasPurchased: boolean; responseSpeed: string }>,
+  telemetry?: { tenantId: string; userId: string | null; propertyId: string },
 ): Promise<Record<string, { score: number; breakdown: string }>> {
   if (buyers.length === 0) return {}
 
@@ -186,19 +191,38 @@ async function llmScoreBuyers(
         `${b.id}: tier=${b.tier}, buybox=${b.buybox || 'none'}, funding=${b.verifiedFunding}, purchased=${b.hasPurchased}, speed=${b.responseSpeed || 'unknown'}`
       ).join('\n')
 
-      const res = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: `Score these buyers for property types: ${JSON.stringify(projectTypes)}
+      const timer = startTimer()
+      const userPrompt = `Score these buyers for property types: ${JSON.stringify(projectTypes)}
 
 RULES (max 50 pts added to base 50): Buybox match +20, Tier (Priority+15/Qualified+10/JV+5/Unqualified+0/Halted-25), Purchased+5, Speed (Lightning+5/Same Day+3/Slow+0/Ghost-5), Funding+5.
 
 BUYERS:\n${buyerSummaries}
 
-Return ONLY JSON: {"id": {"score": N, "breakdown": "..."}, ...}. Score is 0-50 (before +50 base). Keep breakdown concise.` }],
+Return ONLY JSON: {"id": {"score": N, "breakdown": "..."}, ...}. Score is 0-50 (before +50 base). Keep breakdown concise.`
+
+      const res = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: userPrompt }],
       })
 
       const text = res.content[0].type === 'text' ? res.content[0].text : '{}'
+
+      if (telemetry) {
+        logAiCall({
+          tenantId: telemetry.tenantId,
+          userId: telemetry.userId,
+          type: 'buyer_scoring',
+          pageContext: `property:${telemetry.propertyId}`,
+          input: `Score ${batch.length} buyers for project types ${JSON.stringify(projectTypes)}`,
+          output: text.slice(0, 2000),
+          tokensIn: res.usage?.input_tokens,
+          tokensOut: res.usage?.output_tokens,
+          durationMs: timer(),
+          model: 'claude-haiku-4-5-20251001',
+          promptVersion: BUYER_SCORING_PROMPT_VERSION,
+        }).catch(() => {})
+      }
       const match = text.match(/\{[\s\S]*\}/)
       if (match) {
         const raw = JSON.parse(match[0]) as Record<string, { score: number; breakdown: string } | number>
@@ -213,7 +237,7 @@ Return ONLY JSON: {"id": {"score": N, "breakdown": "..."}, ...}. Score is 0-50 (
     }
   } catch (err) {
     console.error('[Buyers] LLM scoring failed, using deterministic fallback:', err)
-    return llmScoreBuyers(projectTypes, buyers) // will hit deterministic path since allResults check fails
+    return llmScoreBuyers(projectTypes, buyers, telemetry) // will hit deterministic path since allResults check fails
   }
 
   // Fill any missing with base 50
@@ -304,6 +328,7 @@ export const GET = withTenant<{ propertyId: string }>(async (req, ctx, params) =
         verifiedFunding: b.verifiedFunding, hasPurchased: b.hasPurchased,
         responseSpeed: b.responseSpeed,
       })),
+      { tenantId, userId: ctx.userId ?? null, propertyId: params.propertyId },
     )
     console.log(`[Buyers] LLM scored ${Object.keys(scores).length} buyers`)
 

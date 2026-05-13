@@ -5,6 +5,9 @@ import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { logFailure } from '@/lib/audit'
 
+// Phase 8 drift signal: bump on any prompt change in this file.
+const OUTREACH_ACTION_PROMPT_VERSION = '1.0.0'
+
 export const POST = withTenant(async (request, ctx) => {
   const { message, propertyId } = await request.json()
   if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
@@ -50,6 +53,7 @@ RULES:
       input: message, output: text.slice(0, 500),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: timer(), model: 'claude-haiku-4-5-20251001',
+      promptVersion: OUTREACH_ACTION_PROMPT_VERSION,
     }).catch(err => logFailure(ctx.tenantId, 'outreach.ai_call_log_failed', 'aiCall', err))
 
     const match = text.match(/\{[\s\S]*\}/)

@@ -5,6 +5,9 @@ import { withTenant } from '@/lib/api/withTenant'
 import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
+// Phase 8 drift signal: bump on any prompt change in this file.
+const AI_EDIT_PROMPT_VERSION = '1.0.0'
+
 export const POST = withTenant<{ tenant: string; id: string }>(async (req, ctx, params) => {
   const { instruction, currentLabel } = await req.json()
   if (!instruction || !currentLabel) {
@@ -35,6 +38,7 @@ Updated action:`,
       input: `Edit: "${currentLabel}" → "${instruction}"`, output: newLabel,
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: timer(), model: 'claude-haiku-4-5-20251001',
+      promptVersion: AI_EDIT_PROMPT_VERSION,
     }).catch(() => {})
 
     return NextResponse.json({ newLabel })

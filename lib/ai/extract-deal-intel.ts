@@ -105,6 +105,7 @@ export async function extractDealIntel(callId: string): Promise<void> {
       pageContext: `call:${callId}`, input: userPrompt.slice(0, 3000), output: responseText.slice(0, 3000),
       tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
       durationMs: timer(), model: DEAL_INTEL_MODEL,
+      promptVersion: DEAL_INTEL_PROMPT_VERSION,
     }).catch((err) => {
       logFailure(call.tenant.id, 'extract_deal_intel.ai_log_failed', `call:${callId}`, err)
     })

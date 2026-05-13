@@ -128,6 +128,7 @@ export async function summarizeSession(
       tokensOut: resp.usage?.output_tokens,
       durationMs: timer(),
       model: SUMMARIZER_MODEL,
+      promptVersion: SESSION_SUMMARIZER_PROMPT_VERSION,
     }).catch(err => logFailure(tenantId, 'session_summary.log_failed', 'aiLog', err))
   } catch (err) {
     await logFailure(tenantId, 'session_summary.generation_failed', `user:${userId}`, err)

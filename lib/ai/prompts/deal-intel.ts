@@ -36,7 +36,7 @@
 //
 // READ BY: lib/ai/extract-deal-intel.ts
 
-export const VERSION = '1.2.0'
+export const VERSION = '1.4.0'
 
 /**
  * Build the deal-intel extraction system prompt.
@@ -100,6 +100,41 @@ When you emit a "contradicted" or "resolved" change, the evidence field should b
 not just the new fact. Example:
   evidence: "Seller previously said 'no rush', now says 'actually we need to close within 30 days
              because we have a cash offer on the new house'. Timeline contradicted."
+
+CONTRADICTED IS REQUIRED — NOT OPTIONAL. If THIS call's value disagrees with the stored prior value for
+the SAME field, you MUST emit a proposedChange on that field with changeKind: "contradicted". Capturing
+the new value in a related accumulating list (e.g. priceAnchors, sellerAskingHistory, counterOffers,
+offersWeHaveMade) is NOT a substitute — those record history, they do not flag the contradiction. The
+typed field itself (e.g. minimumAcceptablePrice, sellerTimeline, sellerWhySelling, walkthroughDate) must
+get its own "contradicted" proposedChange so the rep sees the reversal in the propose→edit→confirm UI.
+
+Worked example — price reversal:
+  Prior state:    minimumAcceptablePrice = 150000
+  This call:      seller says "We need 200 minimum, not 150"
+  REQUIRED emit:
+    {
+      "field": "minimumAcceptablePrice",
+      "target": "property",
+      "currentValue": 150000,
+      "proposedValue": 200000,
+      "changeKind": "contradicted",
+      "confidence": "high",
+      "evidence": "Seller previously said 150k floor; this call says 'We need 200 minimum, not 150' — husband won't go below 200. Price floor contradicted.",
+      "updateType": "overwrite",
+      "category": "price_negotiation",
+      "label": "Minimum acceptable price"
+    }
+  You may ALSO add the new 200k anchor to priceAnchors / sellerAskingHistory (accumulate), but the
+  contradicted proposedChange on minimumAcceptablePrice is mandatory.
+
+Worked example — timeline reversal:
+  Prior state:    sellerTimeline = "flexible / no rush"
+  This call:      seller now says "we need to close in 30 days"
+  REQUIRED emit a proposedChange on sellerTimeline with changeKind: "contradicted".
+
+If you would have updated a single-value typed field and the prior currentValue is non-null and differs
+from your proposedValue, default changeKind to "contradicted" — not "refined". Use "refined" only when
+the new value is a more specific version of the SAME direction (e.g. "motivated" → "motivation 8/10").
 
 # OPERATING RULES — CONFIDENCE LEVELS
 - high: seller stated it directly ("I owe $120,000 on the mortgage")
@@ -274,6 +309,36 @@ For list-typed time fields (promiseDeadlines, triggerEvents, etc.) each array it
 - If a field was not discussed on this call and no change is warranted, OMIT it from proposedChanges entirely. Never emit "not discussed", "unknown", "n/a", "TBD", "—", "to be determined", or similar placeholder strings as a proposedValue — just leave the field out. This applies to ALL fields, including sellerKnowledgeLevel / motivationLevel / etc.
 - Motivation fields are the most-fabricated by LLMs and need the strictest rule. NEVER propose sellerWhySelling, motivationPrimary, motivationSecondary, situation, urgencyScore, motivationLevel, statedVsImpliedMotivation, or any motivation-adjacent field UNLESS the seller actively surfaced a reason for selling on this call. If the seller said "I'm not selling" or never gave a reason, OMIT every motivation field from proposedChanges. "Not selling" is not a motivation — it's the absence of one.
 - For list/array fields (topics, green flags, red flags, etc.), use short clear items — each item should be a concise phrase, not a full sentence.
+
+# OPERATING RULES — PII REDACTION (HARD RULE — NEVER VIOLATE)
+The "include the EXACT quote" guidance above DOES NOT override this rule. Some content must never leave the transcript — even when the seller volunteers it on the call.
+
+NEVER echo, paraphrase, or include in ANY field (proposedValue, evidence, rollingDealSummary, dealRedFlags, dealGreenFlags, perCallExtractions.*, propertySellerExtractions.*) the following categories of PII:
+  - Social Security Numbers (SSN) — any 9-digit number written as XXX-XX-XXXX, XXX XX XXXX, or XXXXXXXXX, with or without dashes/spaces.
+  - Credit card numbers, CVVs, expiration dates.
+  - Bank account numbers, routing numbers.
+  - Driver's license numbers, passport numbers, state ID numbers.
+  - Full dates of birth (DOB). Age in years is fine; "1965" is fine; "January 14, 1965" or "01/14/1965" is NOT.
+  - Login credentials (passwords, security questions / answers).
+  - Medical record numbers, medical diagnoses (except when the seller volunteered general health context for motivation — then summarize as "health concerns" or "recent diagnosis" without naming the condition).
+
+NEVER propose fields named "socialSecurityNumber", "ssn", "dob", "dateOfBirth", "creditCardNumber", "bankAccount", "routingNumber", "driversLicense", or any close variation. These are not deal-intel fields and have no schema target.
+
+When the seller volunteers PII on the call:
+  - Do NOT echo it in any evidence quote. Replace with a placeholder: "[SSN redacted]", "[DOB redacted]", "[credit-card redacted]", etc.
+  - If the rep correctly deflected (e.g. "we don't need that yet — we'll handle that at closing"), you may note this as a deal-process green flag, evidence example: "Rep correctly declined to take seller-volunteered SSN on the call — handles PII at closing." Do NOT include the actual SSN.
+  - If the rep accepted PII over the phone, log a dealRedFlags entry such as "Rep accepted PII (SSN) over phone — review compliance with closing-only PII handling." Do NOT include the actual PII.
+
+Worked example — seller-volunteered SSN:
+  Transcript: "My SSN is 412-55-9821 if you need it for the title work."
+  Rep response: "Oh, we don't need that yet, we'll handle that at closing."
+  REQUIRED behavior:
+    - Do not propose a "socialSecurityNumber" field anywhere.
+    - Do not write "412-55-9821" in any field.
+    - Optionally add to dealGreenFlags: "Rep deflected PII volunteer (SSN) to closing — good handling."
+    - Capture sole-owner status (the surrounding context) using a clean quote from a different line, NOT the line that contains the SSN.
+
+This rule is non-negotiable. The EXACT-QUOTE rule and the EXTRACT EVERYTHING rule both yield to it.
 
 # RESPONSE FORMAT — valid JSON only, no markdown.
 #

@@ -288,6 +288,7 @@ Generate a coaching profile as JSON. If data is limited, use the existing profil
         tokensOut: response.usage?.output_tokens,
         durationMs: timer(),
         model: 'claude-sonnet-4-6',
+        promptVersion: USER_PROFILE_PROMPT_VERSION,
       }).catch((err) => {
         logFailure(tenantId, 'generate_profiles.profile_log_failed', `user:${user.id}`, err)
       })

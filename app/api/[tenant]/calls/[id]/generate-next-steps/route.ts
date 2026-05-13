@@ -6,6 +6,12 @@ import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { effectiveStatus, effectiveStageName, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
+// Phase 8 drift signal — DISTINCT from lib/ai/prompts/next-steps.ts because
+// this manual-trigger variant has a different action-type catalog (adds
+// update_task / add_to_workflow / remove_from_workflow) and an optional
+// requested-type branch. Bump on any prompt change in this file.
+const NEXT_STEPS_MANUAL_PROMPT_VERSION = '1.0.0'
+
 export const POST = withTenant<{ tenant: string; id: string }>(async (request, ctx, params) => {
   const body = await request.json().catch(() => ({}))
   const requestedType = (body as { actionType?: string }).actionType ?? null
@@ -195,6 +201,7 @@ ${knowledgeBlock ? `\nCOMPANY PLAYBOOK CONTEXT — use these to inform your acti
       input: userContent.slice(0, 5000), output: text.text.slice(0, 5000),
       tokensIn: response.usage?.input_tokens, tokensOut: response.usage?.output_tokens,
       durationMs: timer(), model: 'claude-sonnet-4-6',
+      promptVersion: NEXT_STEPS_MANUAL_PROMPT_VERSION,
     }).catch(() => {})
 
     // Walk brackets with a string-aware counter so trailing prose after the

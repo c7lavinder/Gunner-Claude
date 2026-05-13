@@ -234,6 +234,7 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
       durationMs: timer(),
       model: 'claude-sonnet-4-6',
       toolsCalled: toolCalls.length > 0 ? toolCalls : undefined,
+      promptVersion: ASSISTANT_PROMPT_VERSION,
     }).catch(err => logFailure(tenantId, 'assistant.ai_call_log_failed', 'aiCall', err))
 
     return NextResponse.json({

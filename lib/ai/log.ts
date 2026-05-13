@@ -18,6 +18,12 @@ interface AiLogParams {
   tokensOut?: number | null
   durationMs?: number | null
   model?: string | null
+  // Phase 8 (LLM Rewiring Plan): semver of the prompts/<surface>.ts VERSION
+  // constant in effect at call time. Pass the imported VERSION (or the
+  // surface-specific re-export like GRADING_PROMPT_VERSION). Lets Phase 9
+  // drift queries group ai_logs by prompt version to detect score deltas
+  // across prompt revisions.
+  promptVersion?: string | null
 }
 
 export async function logAiCall(params: AiLogParams): Promise<void> {
@@ -44,6 +50,7 @@ export async function logAiCall(params: AiLogParams): Promise<void> {
         estimatedCost: estimatedCost > 0 ? estimatedCost : null,
         durationMs: params.durationMs ?? null,
         model: params.model ?? null,
+        promptVersion: params.promptVersion ?? null,
       },
     })
   } catch (err) {

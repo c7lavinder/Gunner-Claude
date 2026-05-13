@@ -20,8 +20,12 @@ import {
   buildGradingUserPrompt,
   VERSION as GRADING_PROMPT_VERSION,
 } from '@/lib/ai/prompts/grading'
+import {
+  buildNextStepsUserPrompt,
+  VERSION as NEXT_STEPS_PROMPT_VERSION,
+} from '@/lib/ai/prompts/next-steps'
 
-export { GRADING_PROMPT_VERSION }
+export { GRADING_PROMPT_VERSION, NEXT_STEPS_PROMPT_VERSION }
 
 // ─── Main grading function ──────────────────────────────────────────────────
 
@@ -244,6 +248,7 @@ export async function gradeCall(callId: string): Promise<void> {
       tokensOut: response.usage?.output_tokens,
       durationMs: timer(),
       model: GRADING_MODEL,
+      promptVersion: GRADING_PROMPT_VERSION,
     }).catch((err) => {
       logFailure(call.tenantId, 'grading.ai_log_failed', `call:${callId}`, err)
     })
@@ -810,57 +815,25 @@ async function generateAndSaveNextSteps(callId: string, tenantId: string, gradin
       max_tokens: 16000,
       messages: [{
         role: 'user',
-        content: `You are a real estate wholesaling CRM assistant. Based on this graded call, generate 3-5 specific next step actions the rep should take.
-
-TODAY'S DATE: ${todayIso} (${todayDow}, America/Chicago). Any appointmentTime or sendAt you produce MUST be at or after today — past dates are a bug.
-
-THE REP ON THIS CALL: ${repFirst} (${repName}, role ${repRole}). Any SMS you write is FROM ${repFirst} — sign it with their first name, not a placeholder or a hallucinated name.
-
-CRITICAL RULES:
-- Each action type can only appear ONCE. Do NOT generate two actions of the same type.
-- Every label must be specific with real names, addresses, and details from the call.
-- Only suggest actions the call actually supports.
-- For add_note: "label" is a short action-card title like "Follow-up call with {contactName} — walkthrough scheduled". "noteBody" is the FULL paragraph in first person as ${repFirst} that gets pushed to GHL as the CRM note — include exact numbers (prices, dates, percentages), seller name, property address, key outcomes, and what was discussed. noteBody must be the full narrative; label is just the Gunner card title. Never duplicate the short label into noteBody.
-- For create_task: Write a specific title like "Contact Name: Follow up on Address after outcome". The reasoning should serve as the task description.
-
-- For send_sms: The "label" field is a short summary shown on the action card. The "smsBody" field MUST contain the actual message text the contact will receive — written as ${repFirst} in first person, casual/friendly but professional. Sign off as ${repFirst}, not anyone else. Do not put the SMS copy in the label field.
-- For create_appointment: ONLY emit this type if a matching appointment type exists below. Set "appointmentTypeId" to the matching id, "calendarId" to that type's calendarId, and "appointmentTime" to an ISO datetime AT OR AFTER ${todayIso}. If the transcript mentions a day like "Friday", resolve it to the NEXT ${todayIso}-or-later Friday — never a past date. Weekdays only, 10am or 2pm local default. Set "label" using the type's titleTemplate if given, otherwise "{typeLabel} at {address} w/ {contactName}".
-- For change_stage: ALWAYS emit explicit "pipelineId" AND "stageId" picked from the pipelines list below. If no appropriate stage exists, do NOT emit change_stage. Never return stage names instead of IDs.
-
-AVAILABLE APPOINTMENT TYPES (use these exact ids and calendarIds):
-${appointmentTypesBlock}
-
-AVAILABLE PIPELINES AND STAGES (use these exact ids for change_stage):
-${pipelinesBlock}
-
-Contact name: ${contactName}
-Property: ${propertyAddress}
-Property Condition: ${call.property?.propertyCondition ?? 'Unknown'}
-Current pipeline stage: ${call.property ? (effectiveStageName(call.property) ?? 'Unknown') : 'Unknown'}
-Current pipeline id: Unknown
-Call summary: ${gradingResult.summary}
-Call outcome: ${call.callOutcome ?? 'Unknown'}
-Call type: ${call.callType ?? 'Unknown'}
-Score: ${gradingResult.overallScore}/100
-Feedback: ${gradingResult.feedback}
-
-Full transcript:
-${fullTranscript}
-
-Return JSON array only:
-[{
-  "type": "add_note"|"create_task"|"send_sms"|"create_appointment"|"change_stage"|"check_off_task",
-  "label": "specific action description",
-  "reasoning": "why this action matters",
-  "noteBody": "only for add_note — the full paragraph pushed to GHL as the CRM note",
-  "smsBody": "only for send_sms — the actual SMS text",
-  "appointmentTypeId": "only for create_appointment",
-  "calendarId": "only for create_appointment",
-  "appointmentTime": "only for create_appointment — ISO datetime",
-  "durationMin": 30,
-  "pipelineId": "only for change_stage",
-  "stageId": "only for change_stage"
-}]`,
+        content: buildNextStepsUserPrompt({
+          todayIso,
+          todayDow,
+          repFirst,
+          repName,
+          repRole,
+          appointmentTypesBlock,
+          pipelinesBlock,
+          contactName,
+          propertyAddress,
+          propertyCondition: call.property?.propertyCondition ?? 'Unknown',
+          currentStageName: call.property ? (effectiveStageName(call.property) ?? 'Unknown') : 'Unknown',
+          callSummary: gradingResult.summary,
+          callOutcome: call.callOutcome ?? 'Unknown',
+          callType: call.callType ?? 'Unknown',
+          overallScore: gradingResult.overallScore,
+          feedback: gradingResult.feedback,
+          fullTranscript,
+        }),
       }],
     }).finalMessage()
 
@@ -872,6 +845,7 @@ Return JSON array only:
       input: `Next steps for call ${callId}`, output: text.slice(0, 2000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: nsTimer(), model: NEXT_STEPS_MODEL,
+      promptVersion: NEXT_STEPS_PROMPT_VERSION,
     }).catch((err) => {
       logFailure(tenantId, 'grading.next_steps_log_failed', `call:${callId}`, err)
     })

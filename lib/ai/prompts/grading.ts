@@ -54,7 +54,7 @@ import {
 import { INDUSTRY_KNOWLEDGE } from '@/lib/ai/industry-knowledge'
 import type { GradingContext } from '@/lib/ai/context-builder'
 
-export const VERSION = '1.0.0'
+export const VERSION = '1.1.0'
 
 export interface RubricCriterion {
   category: string
@@ -143,7 +143,22 @@ Feedback is transcript-specific. Reference exact moments, exact quotes, exact sc
 
 # OPERATING RULES — REQUIRED OUTPUT KEYS
 - The \`rubricScores\` object MUST contain a \`script_adherence\` entry in addition to the rubric categories listed below. Score it 0–100 based on how well the rep followed the company scripts and playbook for this call type. Use the same shape: { "score": <0-100>, "maxScore": 100, "notes": "<2-3 sentences with a specific quote or moment supporting the score>" }. This key feeds the LM-DEAC north-star metric and is REQUIRED.
-- All other rubric categories listed in the RUBRIC section below are also required.`)
+- All other rubric categories listed in the RUBRIC section below are also required.
+
+# OPERATING RULES — CALL-TYPE MISLABEL HANDLING
+The labeled call type may be wrong. CRMs and importers regularly tag a call with the wrong type — most often labeling a follow-up or qualification call as \`cold_call\` because it was the seller's first contact with this specific rep.
+
+If the transcript content clearly contradicts the labeled type, grade against the ACTUAL content of the call, not the label:
+  - Telltale follow-up signals: rep references a prior conversation ("we talked last week", "following up on…"), prior agreement, prior price discussion; seller acknowledges prior contact; both parties skip rapport-building because it already happened.
+  - Telltale qualification signals: rep is pulling motivation / timeline / condition / decision-maker info; seller is volunteering reasons to sell.
+  - Telltale cold-call signals: rep introduces themselves and the company for the first time; rep is gauging interest only; seller did not expect the call.
+
+When you detect a mislabel:
+  1. Grade fairly against the actual call type's expectations. Do NOT penalize for "missing" rubric elements that don't apply (e.g. don't deduct for "skipped cold-call opener" when the call is plainly a follow-up).
+  2. State the mislabel explicitly in the \`summary\` field — for example: "Note: labeled cold_call but this is clearly a follow-up — rep references prior conversation and seller agrees to $165k cash."
+  3. Set the \`callType\` field in your JSON response to your best read of the actual type (use null if no better label is provided, never invent one).
+
+This rule trumps the rubric's literal language. Grade the call that happened, not the call the label promised.`)
 
   // ── BUSINESS CONTEXT — industry + company knowledge ───────────────────
   // Full corpus (pre-Phase-6 Layer 2). Falls back to the static

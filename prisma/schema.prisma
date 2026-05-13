@@ -2395,8 +2395,15 @@ model AiLog {
   durationMs    Int?    @map("duration_ms")
   model         String? // claude-sonnet-4-6, etc
 
+  // Phase 8 (LLM Rewiring Plan): semver of the prompts/<surface>.ts VERSION
+  // constant in effect at call time. Lets us group ai_logs by prompt_version
+  // to detect score deltas across prompt revisions (drift signal).
+  // Nullable because legacy rows pre-Phase-8 won't have it.
+  promptVersion String? @map("prompt_version")
+
   @@index([tenantId, createdAt])
   @@index([tenantId, type])
+  @@index([type, promptVersion])
   @@map("ai_logs")
 }
 

@@ -13,6 +13,9 @@ import { db } from '@/lib/db/client'
 import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
+// Phase 8 drift signal: bump on any prompt change in this file.
+const BUYER_RESPONSE_CLASSIFY_PROMPT_VERSION = '1.0.0'
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -76,6 +79,7 @@ export async function POST(req: Request) {
           input: `Buyer response: "${message}"`, output: aiText.slice(0, 500),
           tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
           durationMs: timer(), model: 'claude-haiku-4-5-20251001',
+          promptVersion: BUYER_RESPONSE_CLASSIFY_PROMPT_VERSION,
         }).catch(() => {})
 
         if (intent) {

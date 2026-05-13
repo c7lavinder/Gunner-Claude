@@ -6,6 +6,9 @@ import { db } from '@/lib/db/client'
 import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 
+// Phase 8 drift signal: bump on any prompt change in this file.
+const PROPERTY_SUGGESTIONS_PROMPT_VERSION = '1.0.0'
+
 export const POST = withTenant<{ tenant: string; id: string }>(async (_request, ctx, params) => {
   try {
     const call = await db.call.findFirst({
@@ -79,6 +82,7 @@ Return ONLY the JSON array, no other text.`,
       input: `Property suggestions for ${prop.address}`, output: text.slice(0, 5000),
       tokensIn: res.usage?.input_tokens, tokensOut: res.usage?.output_tokens,
       durationMs: timer(), model: 'claude-sonnet-4-6',
+      promptVersion: PROPERTY_SUGGESTIONS_PROMPT_VERSION,
     }).catch(() => {})
 
     const match = text.match(/\[[\s\S]*\]/)

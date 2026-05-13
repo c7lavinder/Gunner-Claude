@@ -73,25 +73,34 @@ export async function scoreEval(
   let parsed: JudgeResponse | null = null
   let scoreCostUsd = 0
 
-  try {
-    const resp = await anthropic.messages.create({
-      model: SCORER_MODEL,
-      max_tokens: 2000,
-      system: JUDGE_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: judgePrompt }],
-    })
+  // ONE retry on judge-side flake. Haiku occasionally returns
+  // malformed JSON (missing comma / unterminated string / wrong shape)
+  // or the API throws transiently. The retry handles both cases.
+  // Doubles k=3 majority resilience for ~free cost (only fires on flake).
+  // Tracked as Session 89 keep-going pass 6 — without this retry, both
+  // medium-grading-short-001 and medium-session-summarizer-001 had all 3
+  // k=3 votes parse-fail in the same run despite well-formed eval outputs.
+  for (let attempt = 0; attempt < 2 && parsed === null; attempt++) {
+    try {
+      const resp = await anthropic.messages.create({
+        model: SCORER_MODEL,
+        max_tokens: 2000,
+        system: JUDGE_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: judgePrompt }],
+      })
 
-    // Rough cost: Haiku 4.5 is ~$1/M input, ~$5/M output. Tokens may be
-    // null on stream errors; fall back to 0 (the report stays useful).
-    const tokensIn = resp.usage?.input_tokens ?? 0
-    const tokensOut = resp.usage?.output_tokens ?? 0
-    scoreCostUsd = (tokensIn / 1_000_000) * 1 + (tokensOut / 1_000_000) * 5
+      // Rough cost: Haiku 4.5 is ~$1/M input, ~$5/M output. Tokens may be
+      // null on stream errors; fall back to 0 (the report stays useful).
+      const tokensIn = resp.usage?.input_tokens ?? 0
+      const tokensOut = resp.usage?.output_tokens ?? 0
+      scoreCostUsd += (tokensIn / 1_000_000) * 1 + (tokensOut / 1_000_000) * 5
 
-    const textBlock = resp.content.find((b) => b.type === 'text')
-    const rawText = textBlock && textBlock.type === 'text' ? textBlock.text : ''
-    parsed = parseJudgeResponse(rawText)
-  } catch (err) {
-    parsed = null
+      const textBlock = resp.content.find((b) => b.type === 'text')
+      const rawText = textBlock && textBlock.type === 'text' ? textBlock.text : ''
+      parsed = parseJudgeResponse(rawText)
+    } catch {
+      parsed = null
+    }
   }
 
   if (!parsed) {

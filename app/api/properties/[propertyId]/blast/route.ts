@@ -6,6 +6,12 @@ import { anthropic } from '@/config/anthropic'
 import { logAiCall, startTimer } from '@/lib/ai/log'
 import { approveAction } from '@/lib/gates/requireApproval'
 
+// Phase 8 drift signal. NOTE: this route's blast generator uses its own
+// inline email+SMS prompts (per-tier), separate from lib/ai/dispo-generators
+// which handles the description/listing/social/tier-message artifacts.
+// Bump on any prompt change in this file.
+const BLAST_LEGACY_PROMPT_VERSION = '1.0.0'
+
 export const GET = withTenant<{ propertyId: string }>(async (_req, ctx, params) => {
   try {
     const blasts = await db.dealBlast.findMany({
@@ -165,6 +171,7 @@ Max 160 characters. Include a clear CTA. Return ONLY the SMS text, nothing else.
             tokensIn: (emailRes.usage?.input_tokens ?? 0) + (smsRes.usage?.input_tokens ?? 0),
             tokensOut: (emailRes.usage?.output_tokens ?? 0) + (smsRes.usage?.output_tokens ?? 0),
             durationMs: blastTimer(), model: 'claude-sonnet-4-6',
+            promptVersion: BLAST_LEGACY_PROMPT_VERSION,
           }).catch(() => {})
         } catch {
           results[t] = {
