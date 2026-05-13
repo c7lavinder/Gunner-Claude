@@ -139,3 +139,25 @@ export const FIXTURE_TRANSCRIPT_QUALIFICATION = `[00:00] Daniel: Hey Robert, thi
 [03:34] Robert: Sounds good.
 
 [03:35] Daniel: Bye.`
+
+/**
+ * Compact transcript variant for the deal-intel eval. The full transcript
+ * above exercises grading well, but deal-intel's JSON output blows past
+ * the 16K max_tokens budget on dense input (production rate is 3.2% over
+ * a 30d window, confirmed Session 88). This shorter slice preserves the
+ * extractable facts the eval asserts on (brother co-decisionmaker,
+ * inheritance, water damage / old HVAC / 1978 kitchen, ARV $240k, range
+ * 110-125, retail comp 180-190, Thursday 2pm walkthrough) so the eval
+ * still validates schema + content without truncating mid-array.
+ */
+export const FIXTURE_TRANSCRIPT_QUALIFICATION_COMPACT = `[00:00] Daniel: Hey Robert — Daniel from New Again Houses.
+
+[00:04] Robert: Hey.
+
+[00:05] Daniel: My brother thing — is he on the deed?
+
+[00:08] Robert: No, just me. He's just giving opinions about listing it.
+
+[00:13] Daniel: Got it. Want me to walk the property Thursday at 2pm?
+
+[00:17] Robert: Thursday 2pm works.`

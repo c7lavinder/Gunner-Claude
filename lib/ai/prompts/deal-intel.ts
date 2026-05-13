@@ -36,7 +36,7 @@
 //
 // READ BY: lib/ai/extract-deal-intel.ts
 
-export const VERSION = '1.0.0'
+export const VERSION = '1.2.0'
 
 /**
  * Build the deal-intel extraction system prompt.
@@ -271,30 +271,19 @@ For list-typed time fields (promiseDeadlines, triggerEvents, etc.) each array it
 - Extract EVERYTHING mentioned. More data points = better. Don't leave value on the table.
 - Be generous with extractions but honest with confidence levels.
 - Do NOT propose a change if the exact same value is already stored.
-- If a field was not discussed on this call and no change is warranted, OMIT it from proposedChanges entirely. Never emit "not discussed", "unknown", "n/a", or similar placeholder strings as a proposedValue — just leave the field out.
+- If a field was not discussed on this call and no change is warranted, OMIT it from proposedChanges entirely. Never emit "not discussed", "unknown", "n/a", "TBD", "—", "to be determined", or similar placeholder strings as a proposedValue — just leave the field out. This applies to ALL fields, including sellerKnowledgeLevel / motivationLevel / etc.
+- Motivation fields are the most-fabricated by LLMs and need the strictest rule. NEVER propose sellerWhySelling, motivationPrimary, motivationSecondary, situation, urgencyScore, motivationLevel, statedVsImpliedMotivation, or any motivation-adjacent field UNLESS the seller actively surfaced a reason for selling on this call. If the seller said "I'm not selling" or never gave a reason, OMIT every motivation field from proposedChanges. "Not selling" is not a motivation — it's the absence of one.
 - For list/array fields (topics, green flags, red flags, etc.), use short clear items — each item should be a concise phrase, not a full sentence.
 
-# RESPONSE FORMAT — valid JSON only, no markdown:
+# RESPONSE FORMAT — valid JSON only, no markdown.
+#
+# KEY ORDER IS DELIBERATE. Emit perCallExtractions + propertySellerExtractions
+# FIRST, then rollingDealSummary and the flag arrays, THEN the variable-size
+# proposedChanges array LAST. This guarantees the required observational
+# blocks land even if max_tokens cuts off mid-extraction on a dense call
+# (Session 88 root-cause fix for the 3.21% production truncation rate
+# tracked as Issue H in LLM_AUDIT_BASELINE.md).
 {
-  "proposedChanges": [
-    {
-      "field": "<exact field name from the schema>",
-      "label": "<human-readable label>",
-      "category": "<seller_profile|decision_making|price_negotiation|property_condition|legal_title|communication_intel|deal_status|marketing>",
-      "target": "<property|seller>",
-      "currentValue": <what's currently stored, or null>,
-      "proposedValue": <the new/updated value>,
-      "confidence": "<high|medium|low>",
-      "evidence": "<exact quote or close paraphrase from transcript; for contradicted/resolved, explain the delta>",
-      "updateType": "<overwrite|accumulate>",
-      "changeKind": "<new|refined|contradicted|resolved>"
-    }
-  ],
-  "rollingDealSummary": "<cumulative paragraph summarizing ALL calls to date including this one>",
-  "topicsNotYetDiscussed": ["<topics relevant to wholesaling that haven't come up yet>"],
-  "dealHealthScore": <1-10 composite score based on all available data>,
-  "dealRedFlags": ["<specific red flags>"],
-  "dealGreenFlags": ["<specific green flags>"],
   "perCallExtractions": {
     "callPrimaryEmotion": "<anxious|hopeful|resigned|angry|grief|defensive|neutral>",
     "callVoiceEnergyLevel": "<high|medium|low|distressed>",
@@ -313,8 +302,27 @@ For list-typed time fields (promiseDeadlines, triggerEvents, etc.) each array it
     "estimatedDaysToDecision": <integer days estimated until seller decides, or null>,
     "currentObjections": ["<still-live objections on this deal, not historical>"],
     "negotiationStage": "<initial|anchored|compromising|accepted|declined>"
-  }
+  },
+  "rollingDealSummary": "<cumulative paragraph summarizing ALL calls to date including this one>",
+  "topicsNotYetDiscussed": ["<topics relevant to wholesaling that haven't come up yet>"],
+  "dealHealthScore": <1-10 composite score based on all available data>,
+  "dealRedFlags": ["<specific red flags>"],
+  "dealGreenFlags": ["<specific green flags>"],
+  "proposedChanges": [
+    {
+      "field": "<exact field name from the schema>",
+      "label": "<human-readable label>",
+      "category": "<seller_profile|decision_making|price_negotiation|property_condition|legal_title|communication_intel|deal_status|marketing>",
+      "target": "<property|seller>",
+      "currentValue": <what's currently stored, or null>,
+      "proposedValue": <the new/updated value>,
+      "confidence": "<high|medium|low>",
+      "evidence": "<exact quote or close paraphrase from transcript; for contradicted/resolved, explain the delta>",
+      "updateType": "<overwrite|accumulate>",
+      "changeKind": "<new|refined|contradicted|resolved>"
+    }
+  ]
 }
 
-The perCallExtractions and propertySellerExtractions blocks are ALWAYS required — these are observational reads of the call, not proposed changes. Use null for any value you cannot determine. Numbers must be numbers, not strings. Dates must be "YYYY-MM-DD". Do NOT propose these through proposedChanges — they write directly to typed columns for filtering.${learningContext}`
+The perCallExtractions and propertySellerExtractions blocks are ALWAYS required — these are observational reads of the call, not proposed changes. Use null for any value you cannot determine. Numbers must be numbers, not strings. Dates must be "YYYY-MM-DD". Do NOT propose these through proposedChanges — they write directly to typed columns for filtering. Emit them BEFORE proposedChanges so they always land even if the response gets truncated.${learningContext}`
 }

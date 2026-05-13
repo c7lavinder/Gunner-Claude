@@ -103,3 +103,17 @@ command = "npx tsx scripts/compute-aggregates.ts"
 # The previous standalone [[services]] grading-worker block was removed
 # 2026-04-27 (Wave 1 of v1-finish sprint, Blocker #3 closed). Manual debug
 # trigger remains available via app/api/cron/process-recording-jobs/route.ts.
+
+# Weekly drift-detection eval run (Phase 7, Session 88).
+# Runs the full eval tier against the live prompt modules every Sunday
+# at 4:30am UTC (after weekly-profiles at 3am, before any morning traffic).
+# EVAL_FORCE=1 bypasses the 24h cache so this is a real measurement, not
+# a cache replay — catches model + prompt drift week-over-week.
+# Cost: ~$5/run × 4 weeks = ~$20/month. Reports land in
+# evals/reports/full-<timestamp>.json inside the container (ephemeral).
+# To persist reports across runs, post-process to S3/Supabase in a
+# future enhancement.
+[[cron]]
+name = "weekly-evals"
+schedule = "30 4 * * 0"
+command = "EVAL_FORCE=1 npm run evals:full"

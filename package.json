@@ -20,7 +20,9 @@
     "audit": "tsx scripts/audit.ts",
     "onboard-tenant": "tsx scripts/onboard-tenant.ts",
     "sync-ghl": "tsx scripts/sync-ghl.ts",
-    "evals:smoke": "tsx evals/runners/smoke.ts"
+    "evals:smoke": "tsx evals/runners/smoke.ts",
+    "evals:medium": "tsx evals/runners/medium.ts",
+    "evals:full": "tsx evals/runners/full.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

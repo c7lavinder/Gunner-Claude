@@ -1,0 +1,151 @@
+# GitHub Actions — Eval gating for AI-surface changes
+#
+# Phase 7 (Session 88) — automated eval gating per the LLM Rewiring Plan.
+#
+# Triggers:
+#   - smoke (~$0.81 / 110s) on every PR that touches lib/ai/ or evals/.
+#     Smoke is also a local pre-commit hook (.git/hooks/pre-commit), so
+#     this run usually hits the 24h cache and exits in seconds.
+#   - medium (~$1.85 / 110s) on every PR that touches the same paths.
+#     Medium catches role variations + cross-surface regressions that
+#     smoke skips. Same 24h cache.
+#
+# Required GitHub Actions secrets (set under Settings → Secrets → Actions):
+#   - ANTHROPIC_API_KEY    — used by every eval surface call + the judge.
+#
+# Cost ceiling: ~$3/PR worst case (cold cache, both tiers). Most PRs
+# hit cache and cost $0.
+
+name: AI evals
+
+on:
+  pull_request:
+    paths:
+      - 'lib/ai/**'
+      - 'evals/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Which tier to run'
+        required: true
+        default: 'medium'
+        type: choice
+        options:
+          - smoke
+          - medium
+          - full
+
+concurrency:
+  group: evals-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: github.event_name == 'pull_request' || github.event.inputs.tier == 'smoke'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Restore eval cache
+        uses: actions/cache@v4
+        with:
+          path: evals/reports/.cache
+          key: evals-cache-${{ hashFiles('lib/ai/**/*.ts', 'lib/ai/prompts/**/*.ts') }}
+          restore-keys: |
+            evals-cache-
+
+      - name: Run smoke evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm run evals:smoke
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: evals/reports/smoke-*.json
+          retention-days: 30
+
+  medium:
+    if: github.event_name == 'pull_request' || github.event.inputs.tier == 'medium'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: smoke
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore eval cache
+        uses: actions/cache@v4
+        with:
+          path: evals/reports/.cache
+          key: evals-cache-${{ hashFiles('lib/ai/**/*.ts', 'lib/ai/prompts/**/*.ts') }}
+          restore-keys: |
+            evals-cache-
+
+      - name: Run medium evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm run evals:medium
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medium-report
+          path: evals/reports/medium-*.json
+          retention-days: 30
+
+  full:
+    # Manual dispatch only — full tier is ~$5/run and ~4 min. Don't
+    # run on every PR. The Railway `weekly-evals` cron handles the
+    # nightly/weekly drift signal.
+    if: github.event.inputs.tier == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EVAL_FORCE: '1'
+        run: npm run evals:full
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-report
+          path: evals/reports/full-*.json
+          retention-days: 90

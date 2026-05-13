@@ -30,6 +30,59 @@ interface ProfileAnalysis {
   coachingPriorities: string[]
 }
 
+/**
+ * Canonical grouping key for a rubric category — case-insensitive,
+ * punctuation- and whitespace-insensitive, with parenthesized unit
+ * annotations stripped. Used to dedupe variants from different
+ * call-type rubrics. Examples:
+ *   "Opening" / "opening" / "OPENING"                  → "opening"
+ *   "Opening (max 15 pts)" / "Opening (Max 20 pts)"    → "opening"
+ *   "Next Steps" / "Next steps" / "nextSteps"          → "nextsteps"
+ *   "Speed & Energy" / "speedAndEnergy"                → "speedandenergy"
+ * "Next Steps & Timeline" stays distinct from "Next Steps" — those
+ * are genuinely different rubric concepts.
+ */
+function normalizeRubricKey(category: string): string {
+  return category
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/&/g, 'and')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Strip the same parenthesized unit annotations from the display label
+ * so the output looks clean ("Opening" not "Opening (max 15 pts)").
+ */
+function cleanRubricLabel(label: string): string {
+  return label.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+}
+
+/**
+ * Given a frequency map of original-cased category labels seen across
+ * graded calls, pick the most readable variant for the output
+ * scoringPatterns key. Preference order:
+ *   1. Highest frequency (the form the team uses most).
+ *   2. Contains whitespace (natural English beats camelCase).
+ *   3. Title Case beats all-lowercase.
+ *   4. Lexicographic — deterministic tie-break.
+ */
+function chooseRubricLabel(labels: Record<string, number>): string {
+  const entries = Object.entries(labels)
+  if (entries.length === 1) return entries[0][0]
+  entries.sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1]
+    const aSp = /\s/.test(a[0]) ? 1 : 0
+    const bSp = /\s/.test(b[0]) ? 1 : 0
+    if (aSp !== bSp) return bSp - aSp
+    const aTitle = /^[A-Z]/.test(a[0]) ? 1 : 0
+    const bTitle = /^[A-Z]/.test(b[0]) ? 1 : 0
+    if (aTitle !== bTitle) return bTitle - aTitle
+    return a[0].localeCompare(b[0])
+  })
+  return entries[0][0]
+}
+
 export async function generateUserProfiles(tenantId: string): Promise<{
   updated: number
   skipped: number
@@ -78,7 +131,17 @@ export async function generateUserProfiles(tenantId: string): Promise<{
       // entry, producing empty rubricAverages. Now we walk into .score on
       // each object, with a number-typed fallback for any old rows that
       // stored the flat shape.
-      const rubricTotals: Record<string, { total: number; count: number }> = {}
+      //
+      // Session 88 fix: rubric category keys vary across call types
+      // ("Opening" vs "opening" vs "openingAndRapport" — same concept,
+      // 3 distinct keys). Aggregating raw keys produced 30+ entries with
+      // case/space duplicates per user. Normalize for grouping
+      // (lowercase + strip non-alphanumeric) then pick the most readable
+      // variant seen as the display label.
+      const rubricBuckets: Record<
+        string,
+        { total: number; count: number; labels: Record<string, number> }
+      > = {}
       for (const call of calls) {
         const scores = call.rubricScores as Record<string, unknown> | null
         if (!scores) continue
@@ -91,15 +154,19 @@ export async function generateUserProfiles(tenantId: string): Promise<{
             if (typeof s === 'number' && Number.isFinite(s)) n = s
           }
           if (n === null) continue
-          if (!rubricTotals[category]) rubricTotals[category] = { total: 0, count: 0 }
-          rubricTotals[category].total += n
-          rubricTotals[category].count++
+          const key = normalizeRubricKey(category)
+          if (!key) continue
+          if (!rubricBuckets[key]) rubricBuckets[key] = { total: 0, count: 0, labels: {} }
+          rubricBuckets[key].total += n
+          rubricBuckets[key].count++
+          rubricBuckets[key].labels[category] = (rubricBuckets[key].labels[category] ?? 0) + 1
         }
       }
 
       const rubricAverages: Record<string, number> = {}
-      for (const [cat, data] of Object.entries(rubricTotals)) {
-        rubricAverages[cat] = Math.round(data.total / data.count)
+      for (const data of Object.values(rubricBuckets)) {
+        const label = cleanRubricLabel(chooseRubricLabel(data.labels))
+        rubricAverages[label] = Math.round(data.total / data.count)
       }
 
       // Collect all coaching feedback
@@ -197,9 +264,14 @@ Generate a coaching profile as JSON. If data is limited, use the existing profil
         logFailure(tenantId, 'generate_profiles.settings_load_failed', `user:${user.id}`, err)
       }
 
+      // Session 88: bumped from 1000 → 2000. At 1000, real profile JSON
+      // (5 strengths + 5 weaknesses + 5 commonMistakes + style sentence +
+      // 5 coachingPriorities, each ~30-60 tokens) truncates mid-array on
+      // every call, the closing `}` never lands, and the parse regex
+      // silently drops the entire result. Verified via _phase6-profile-debug.ts.
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
+        max_tokens: 2000,
         system: buildUserProfileSystemPrompt({ settingsBlock }),
         messages: [{ role: 'user', content: prompt }],
       })
@@ -220,62 +292,90 @@ Generate a coaching profile as JSON. If data is limited, use the existing profil
         logFailure(tenantId, 'generate_profiles.profile_log_failed', `user:${user.id}`, err)
       })
 
-      // Strip markdown fences if present
+      // Session 88 fix: parse AI response separately from mechanical fields.
+      // Mechanical fields (scoringPatterns + improvementVelocity +
+      // totalCallsGraded) come from real call data — they shouldn't be
+      // blocked by an AI parse failure. The legacy code silently dropped
+      // them on every parse miss, which (a) hid real errors behind
+      // results.skipped++ and (b) prevented rubric-key normalization from
+      // taking effect when the AI flaked. Now: always upsert mechanical
+      // fields. Only upsert AI-narrative fields when parsing succeeded.
       const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
       const match = cleaned.match(/\{[\s\S]*\}/)
+      let profile: ProfileAnalysis | null = null
+      let parseFailureReason: string | null = null
       if (!match) {
-        // Fallback: if we already have a playbook profile, keep it
-        if (existingProfile && (existingProfile.strengths as string[]).length > 0) {
-          results.skipped++
-          continue
+        parseFailureReason = 'No JSON in AI response'
+      } else {
+        try {
+          profile = JSON.parse(match[0]) as ProfileAnalysis
+        } catch (parseErr) {
+          parseFailureReason =
+            parseErr instanceof Error
+              ? `Invalid JSON in AI response: ${parseErr.message}`
+              : 'Invalid JSON in AI response'
         }
-        results.errors.push(`${user.name}: No JSON in AI response`)
+      }
+
+      const mechanicalFields = {
+        scoringPatterns: rubricAverages,
+        improvementVelocity,
+        totalCallsGraded: calls.length,
+      }
+
+      if (profile) {
+        // AI parse succeeded — full update with both narrative + mechanical.
+        await db.userProfile.upsert({
+          where: { tenantId_userId: { tenantId, userId: user.id } },
+          create: {
+            tenantId,
+            userId: user.id,
+            strengths: profile.strengths,
+            weaknesses: profile.weaknesses,
+            commonMistakes: profile.commonMistakes,
+            communicationStyle: profile.communicationStyle,
+            coachingPriorities: profile.coachingPriorities,
+            ...mechanicalFields,
+            profileSource: 'auto',
+          },
+          update: {
+            strengths: profile.strengths,
+            weaknesses: profile.weaknesses,
+            commonMistakes: profile.commonMistakes,
+            communicationStyle: profile.communicationStyle,
+            coachingPriorities: profile.coachingPriorities,
+            ...mechanicalFields,
+            profileSource: 'auto',
+          },
+        })
+        results.updated++
+        console.log(
+          `[Profile Gen] Updated profile for ${user.name}: ${profile.strengths.length} strengths, ${profile.weaknesses.length} weaknesses`,
+        )
         continue
       }
 
-      let profile: ProfileAnalysis
-      try {
-        profile = JSON.parse(match[0]) as ProfileAnalysis
-      } catch {
-        if (existingProfile && (existingProfile.strengths as string[]).length > 0) {
-          results.skipped++
-          continue
-        }
-        results.errors.push(`${user.name}: Invalid JSON in AI response`)
-        continue
-      }
-
-      // Upsert the profile
-      await db.userProfile.upsert({
-        where: { tenantId_userId: { tenantId, userId: user.id } },
-        create: {
+      // AI parse failed. Update mechanical fields only when we have an
+      // existing profile to preserve the narrative on. If no existing
+      // profile, push the error (legacy behavior).
+      if (existingProfile) {
+        await db.userProfile.update({
+          where: { tenantId_userId: { tenantId, userId: user.id } },
+          data: mechanicalFields,
+        })
+        results.skipped++
+        logFailure(
           tenantId,
-          userId: user.id,
-          strengths: profile.strengths,
-          weaknesses: profile.weaknesses,
-          commonMistakes: profile.commonMistakes,
-          communicationStyle: profile.communicationStyle,
-          coachingPriorities: profile.coachingPriorities,
-          scoringPatterns: rubricAverages,
-          improvementVelocity,
-          totalCallsGraded: calls.length,
-          profileSource: 'auto',
-        },
-        update: {
-          strengths: profile.strengths,
-          weaknesses: profile.weaknesses,
-          commonMistakes: profile.commonMistakes,
-          communicationStyle: profile.communicationStyle,
-          coachingPriorities: profile.coachingPriorities,
-          scoringPatterns: rubricAverages,
-          improvementVelocity,
-          totalCallsGraded: calls.length,
-          profileSource: 'auto',
-        },
-      })
-
-      results.updated++
-      console.log(`[Profile Gen] Updated profile for ${user.name}: ${profile.strengths.length} strengths, ${profile.weaknesses.length} weaknesses`)
+          'generate_profiles.ai_parse_failed',
+          `user:${user.id}`,
+          new Error(`${parseFailureReason ?? 'unknown'} (mechanical fields refreshed)`),
+        )
+        console.log(
+          `[Profile Gen] ${user.name}: AI parse failed (${parseFailureReason}); refreshed scoringPatterns + totalCallsGraded`,
+        )
+        continue
+      }
+      results.errors.push(`${user.name}: ${parseFailureReason ?? 'AI response unparseable'}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       results.errors.push(`${user.name}: ${msg}`)

@@ -217,6 +217,97 @@ ${ev.mustNotDo.map(() => `    { "violated": <true|false>, "reason": "<1 sentence
 The number of items in each array MUST match the lists above exactly, in the same order.`
 }
 
+// ─── Multi-run majority scoring ────────────────────────────────────────
+//
+// Haiku-as-judge has ~5-10% sampling noise across identical inputs
+// (Section 24g of LLM_AUDIT_BASELINE.md). Multi-run majority eliminates
+// the flake for ~$0.01 extra per eval (k=3 × $0.005/run).
+//
+// Per-behavior majority: across k runs, the behavior is "met" if the
+// majority of runs voted met=true. Same for violations. The reason
+// string is taken from any run that voted with the majority (first
+// match wins) — concrete language beats consensus when explaining
+// to a human reader.
+
+/**
+ * Score one eval k times in parallel; aggregate via per-verdict majority.
+ * k=1 is identical to scoreEval. k=3 (default) is the recommended balance
+ * of stability vs cost.
+ */
+export async function scoreEvalMajority(
+  ev: Eval,
+  run: EvalRunResult,
+  k: number = 3,
+): Promise<EvalScoreResult> {
+  if (k <= 1) return scoreEval(ev, run)
+
+  // Each pass scores against the SAME run output (we charge the run cost
+  // once, not k times). Strip the run.costUsd from each pass's costUsd so
+  // we don't double-count.
+  const passes = await Promise.all(
+    Array.from({ length: k }, () => scoreEval(ev, run)),
+  )
+
+  // If every pass errored (run errored, or judge parse failed k times),
+  // return the first error result unchanged.
+  const allErrored = passes.every((p) => p.errored)
+  if (allErrored) return passes[0]
+
+  // Strip run cost from k-1 passes (it's the same underlying run).
+  const runCost = run.costUsd ?? 0
+  const totalScoreCost = passes.reduce(
+    (acc, p) => acc + Math.max(0, (p.costUsd ?? 0) - runCost),
+    0,
+  )
+
+  const behaviorsTotal = ev.expectedBehaviors.length
+  const violationsTotal = ev.mustNotDo.length
+
+  const aggBehaviors: BehaviorVerdict[] = ev.expectedBehaviors.map((b, i) => {
+    const votes = passes.map((p) => p.behaviors[i])
+    const metCount = votes.filter((v) => v?.met).length
+    const met = metCount > passes.length / 2
+    const reason =
+      votes.find((v) => v?.met === met)?.reason ?? 'no verdict from judge'
+    return { behavior: b, met, reason }
+  })
+
+  const aggViolations: ViolationVerdict[] = ev.mustNotDo.map((r, i) => {
+    const votes = passes.map((p) => p.violations[i])
+    const violatedCount = votes.filter((v) => v?.violated).length
+    const violated = violatedCount > passes.length / 2
+    const reason =
+      votes.find((v) => v?.violated === violated)?.reason ??
+      'no verdict from judge'
+    return { rule: r, violated, reason }
+  })
+
+  const behaviorsHit = aggBehaviors.filter((b) => b.met).length
+  const violationsCount = aggViolations.filter((v) => v.violated).length
+  const threshold = ev.passThreshold ?? { minBehaviorsPct: 0.8, maxViolations: 0 }
+  const passed =
+    behaviorsTotal > 0 &&
+    behaviorsHit / behaviorsTotal >= threshold.minBehaviorsPct &&
+    violationsCount <= threshold.maxViolations
+
+  return {
+    evalId: ev.id,
+    surface: ev.surface,
+    description: ev.description,
+    passed,
+    behaviorsHit,
+    behaviorsTotal,
+    violationsCount,
+    behaviors: aggBehaviors,
+    violations: aggViolations,
+    runDurationMs: run.durationMs,
+    scoreDurationMs: passes.reduce((acc, p) => acc + p.scoreDurationMs, 0),
+    costUsd: runCost + totalScoreCost,
+    errored: false,
+    outputPreview: passes[0].outputPreview,
+  }
+}
+
 function parseJudgeResponse(text: string): JudgeResponse | null {
   // Strip markdown fences and isolate the first JSON object.
   let cleaned = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim()
