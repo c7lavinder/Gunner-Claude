@@ -10,6 +10,7 @@ import { ASSISTANT_TOOLS } from '@/lib/ai/assistant-tools'
 import { filterToolsForRole } from '@/lib/ai/role-gates'
 import { checkRateLimit } from '@/lib/ai/rate-limit'
 import { getRecentSessionMemory, scheduleSessionSummary } from '@/lib/ai/session-summarizer'
+import { buildAssistantSystemPrompt, VERSION as ASSISTANT_PROMPT_VERSION } from '@/lib/ai/prompts/assistant'
 import { logFailure } from '@/lib/audit'
 import { effectiveStatus, PROPERTY_LANE_SELECT } from '@/lib/property-status'
 
@@ -132,44 +133,27 @@ ${call.transcript ? `Transcript excerpt: ${call.transcript.slice(0, 500)}` : 'No
     // prior sessions). See lib/ai/session-summarizer.ts.
     const memoryBlock = await getRecentSessionMemory(tenantId, userId, 3)
 
-    const roleName = ctx.userRole.replace(/_/g, ' ') || 'Team Member'
     const timer = startTimer()
 
-    // Prompt caching (Anthropic ephemeral cache, 5-minute TTL).
+    // Phase 2 (Session 86): assistant prompt now built in lib/ai/prompts/assistant.ts.
+    // Carries the 5-section structure (IDENTITY / VOICE / USER CONTEXT /
+    // OPERATING RULES) plus Rules 1-7 (always-text, traffic-light, no-tool-
+    // hallucination, real-data, no-placeholders, playbook-coaching, team-
+    // profiles). Prompt VERSION is logged with every ai_logs row for Phase 9
+    // drift detection.
     //
-    // The system prompt is split into 3 blocks so the cache hit rate stays
-    // high across turns inside the same chat session:
-    //
-    //   stableSystem  — persona, capabilities, rules. Identical for every
-    //                   turn this user makes today. CACHED.
-    //   pageBlock     — page-specific data (current property/call). Stable
-    //                   while the user is on the same page. CACHED.
-    //   variableTail  — knowledge RAG (recomputed per turn from semantic
-    //                   search) + recent rejections. NOT cached.
-    //
-    // Tools are also cached — they're a stable 30-50 entry list of ~6KB.
-    const stableSystem = `You are the ${roleName} Assistant for ${tenant?.name ?? 'this company'}, a wholesale real estate company.
-
-User: ${ctx.userName || 'Unknown'} (${roleName})
-
-YOUR CAPABILITIES:
-- Answer any question about properties, calls, deals, team performance, KPIs
-- Execute actions in GHL (send SMS, create tasks, change stages, add notes, etc.)
-- Execute actions in Gunner (update properties, log milestones, manage deals)
-- Reference company scripts, playbooks, and training materials
-- Provide personalized coaching based on the user's performance profile
-- Use the query tools (query_properties, search_calls, get_kpi_metrics, get_team_performance, query_sellers, query_buyers, cross_entity_query, etc.) to pull real data when answering analytical questions — do not make up numbers.
-
-RULES:
-- Be concise. Short, direct responses unless asked for detail.
-- When the user asks you to DO something (send SMS, create task, etc.), use the appropriate tool. Don't just describe what to do.
-- When the user asks for data ("how many calls did Mike take last week?", "show me cold leads with TCP > 0.6"), use the query tools — never guess.
-- When proposing actions, fill in ALL fields with real data from context. Never leave placeholders.
-- You are AI-assisted, not autonomous. Always propose actions for user approval before executing.
-- When coaching on calls or objections, reference the SPECIFIC scripts and techniques from the playbook. Quote exact phrases and steps.`
-
-    const pageBlock = pageData ? `\n${pageData}` : ''
-    const variableTail = `${memoryBlock}\n${knowledgeBlock}${rejectionContext}`
+    // Caching: stableSystem + pageBlock are cache-eligible; variableTail
+    // recomputed each turn (semantic search depends on the query).
+    const builtPrompt = buildAssistantSystemPrompt({
+      tenantName: tenant?.name ?? 'this company',
+      userName: ctx.userName || 'Unknown',
+      userRole: ctx.userRole,
+      businessContext: knowledgeBlock,
+      memoryBlock,
+      pageBlock: pageData ? `\n${pageData}` : '',
+      rejectionContext,
+    })
+    const { stableSystem, pageBlock, variableTail } = builtPrompt
 
     // Rule 4 (CLAUDE.md): role-based capability gating. Tools the user is
     // not allowed to use are removed before Claude sees them, so the LLM

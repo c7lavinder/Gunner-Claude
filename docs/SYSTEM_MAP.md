@@ -225,6 +225,24 @@ Library code lives in `lib/`. App routes live in `app/`. Components in
 
 See "AI Layer" section below. Lives in `lib/ai/`.
 
+### KPIs (lib/kpis/)
+
+Canonical aggregation modules. Single source of truth for any number that
+appears on the dashboard, in Day Hub, or in retrospectives. Drift between
+multiple "today's dials" implementations was a real bug class — these
+modules exist so every surface gets the same answer.
+
+- `lib/kpis/dial-counts.ts` — `countDialsToday`, `countConvosToday`,
+  `getDialKpisToday`. Uses `calledAt` (not `createdAt`) for day boundaries
+  and `getCentralDayBounds` for tenant-local time. 45s threshold defines
+  "convo" vs "dial."
+- `lib/kpis/lm-deac.ts` (Session 86) — `calculateLmDeac`,
+  `calculateLmDeacRange`. **The locked north-star metric** for the LLM
+  Rewiring Plan and any future AI/agent program. Formula:
+  `dials + tasksCompleted + (apptsSet × 3) + scriptAdherenceScore`.
+  Operational definition + caveats locked in DECISIONS.md D-051 and in
+  the file header.
+
 ### Multi-vendor enrichment (Sessions 41-42; flag-gated since Session 66)
 
 - `lib/enrichment/enrich-property.ts` — orchestrator. Routes property by

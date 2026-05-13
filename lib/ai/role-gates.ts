@@ -130,19 +130,15 @@ export const ROLE_TOOL_MATRIX: Record<string, UserRole[]> = {
 
   // ─── Information / read-only — everyone ───
   summarize_property: EVERYONE,
-  call_analysis: EVERYONE,
-  deal_blast_info: EVERYONE,
-  deal_health: EVERYONE,
-  compare_deals: EVERYONE,
-  what_next: EVERYONE,
-  rep_performance: EVERYONE,
-  team_overview: EVERYONE,
-  pipeline_health: EVERYONE,
-  explain_field: EVERYONE,
-  contact_objections: EVERYONE,
-  seller_profile: EVERYONE,
-  title_risk: EVERYONE,
-  market_analysis: EVERYONE,
+  // The 13 dispatcher tools below were removed in Phase 3b (Session 86,
+  // 2026-05-13). Entries kept here as deprecation markers — canUseTool
+  // still returns admin-only for tool names not in this map. If/when
+  // the assistant somehow invokes them, the execute endpoint will refuse
+  // for non-admins by default. See docs/TOOL_AUDIT.md for replacement map.
+  // Removed: call_analysis, deal_blast_info, deal_health, compare_deals,
+  // what_next, rep_performance, team_overview, pipeline_health,
+  // explain_field, contact_objections, seller_profile, title_risk,
+  // market_analysis.
 
   // ─── Query tools (Phase B) — everyone can read ───
   query_properties: EVERYONE,
@@ -207,28 +203,32 @@ export function filterToolsForRole<T extends { name: string }>(
  * HIGH_STAKES_TOOLS — tools that must additionally pass through the
  * approval gate (lib/gates/requireApproval.ts) regardless of role.
  *
- * These are the ones where an authorized user could still cause real
- * damage if Claude proposed something wrong. The UI already shows a
- * confirmation modal for many of these; this is the server-side mirror
- * so the gate cannot be bypassed.
+ * Phase 4 (Session 86, 2026-05-13): replaced the hard-coded 5-tool set
+ * with a derived view of the tier system in `lib/ai/approval-tiers.ts`.
+ * The high-stakes class is now equivalent to RED-tier — tools that need
+ * the FULL-TEXT preview modal before sending.
+ *
+ * For YELLOW-tier tools (state mutations like change_property_status),
+ * the execute endpoint enforces approval via `requiresExplicitApproval()`
+ * directly from the tier module — see app/api/ai/assistant/execute/route.ts.
+ *
+ * Kept as `HIGH_STAKES_TOOLS` for backwards compatibility with existing
+ * call sites. New code should import from `lib/ai/approval-tiers.ts`.
  */
-export const HIGH_STAKES_TOOLS = new Set<string>([
-  'send_sms_blast',
-  'send_email_blast',
-  'bulk_tag_contacts',
-  'update_user_role',
-  'update_pipeline_config',
-])
+import { RED_TIER_TOOLS, requiresExplicitApproval } from './approval-tiers'
+export const HIGH_STAKES_TOOLS = RED_TIER_TOOLS
 
 /**
  * isHighStakes — server-side check used by the execute endpoint to refuse
  * actions that the client did not explicitly mark as approved.
  *
- * The client sends `approved: true` in the request body for tools that
- * have been confirmed via the high-stakes modal. If the tool is in
- * HIGH_STAKES_TOOLS and `approved` is not true, we refuse — closes the
- * gap where a malicious or buggy client could bypass the UI gate.
+ * Phase 4 expansion: previously only the 5-tool HIGH_STAKES_TOOLS set
+ * required approval. Now any RED or YELLOW tool requires approval, per
+ * the traffic-light rule in lib/ai/prompts/assistant.ts.
+ *
+ * The execute endpoint calls this on every request. If true and
+ * `approved !== true`, the request returns 409 requiresApproval.
  */
 export function isHighStakes(toolName: string): boolean {
-  return HIGH_STAKES_TOOLS.has(toolName)
+  return requiresExplicitApproval(toolName)
 }

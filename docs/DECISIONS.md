@@ -699,3 +699,168 @@ ghlContactId."
   violates the GHL boundary rule.
 
 **Status:** Locked. Date: 2026-05-04 (Session 67).
+
+---
+
+### D-050 — Worker-agent architecture in 3 risk-ascending waves with mandatory send framework
+
+**Decision:** Gunner's automation layer will be built as 16 worker
+agents in three waves, risk-ascending. No customer-facing send agent
+ships before the shared send framework (template registry + approval
+queue + code-level send gate + suppression list + quiet hours +
+per-tenant caps + ESLint rule blocking direct provider imports).
+Each agent has its own spec doc under `docs/agents/<name>.md`
+following a fixed template.
+
+Wave 1 (site-keeping, autonomous): cron-sentinel, stuck-calls-recovery,
+tcp-anomaly-surfacer, webhook-drift-watchdog.
+
+Wave 2 (internal team work, autonomous, no customer contact):
+lead-triage, pipeline-janitor, followup-task-builder,
+property-enrichment-iterator, buyer-match-outreach-queue,
+daily-operations-briefing, internal-alert-hub.
+
+Wave 3 (customer-facing sends, vetted templates only, approval queue
+on first 30-90 days each): _send-framework, appointment-reminder,
+drip-cadence-migrator, missed-call-autoresponder, no-show-recovery,
+walkthrough-coordinator.
+
+**Why:**
+- Rule 4 (Worker Agent Architecture in CLAUDE.md) mandates `end_turn`
+  completion signals, code-level high-stakes gates, isolated context,
+  structured JSON tool returns. The wave order operationalizes this:
+  internal-only agents (Waves 1-2) can iterate fast under those
+  constraints; customer-facing agents (Wave 3) only ship once the
+  defense layer is in place.
+- Corey's autonomy bar (2026-05-11, saved as memory): customer-facing
+  SMS/email is restricted to narrow pre-approved scenarios with vetted
+  templates. Free-form LLM-generated outbound is disallowed initially.
+  The send framework enforces this at the code level — ESLint rule
+  blocks any direct import of `twilio`, `@sendgrid/mail`, etc., outside
+  the gate.
+- A unified send gate plus a versioned template registry means every
+  customer touch is auditable, dedupe-able, suppression-aware, and
+  rate-limited. Prompt instructions are not security boundaries —
+  code-level interceptors are.
+
+**Alternatives considered:**
+- Build customer-facing agents first ("kill GHL workflows ASAP").
+  Rejected — without the gate, a single regression or prompt injection
+  could blast hundreds of real customers. Risk of one disaster
+  outweighs migration speed.
+- Per-agent ad-hoc send paths (each agent calls Twilio directly).
+  Rejected — replicates the GHL workflow sprawl problem in our own
+  codebase. The whole point of the migration is to centralize.
+- LLM-generated personalized message bodies on each send. Rejected —
+  non-deterministic content can't be audited or compliance-reviewed,
+  and is the vector for prompt-injection-driven outbound abuse.
+  Personalization stays via variable substitution into vetted
+  templates only.
+- Skip the spec docs, "just build agents as needed." Rejected —
+  this is exactly how the prior Gunner build accumulated AI features
+  that didn't compose. Per-agent specs (purpose, trigger, tools,
+  outputs, approval gates, completion signal, failure modes, test
+  plan, implementation notes) force decisions before code, like
+  Rule 1 (Data Contract Rule) does for settings.
+
+**Status:** Locked at planning stage. Date: 2026-05-11 (Session 85).
+References: `docs/AI_AUDIT.md`, `docs/agents/README.md`,
+`docs/agents/_send-framework.md`, and 16 per-agent spec docs under
+`docs/agents/`.
+
+---
+
+### D-051 — LLM Rewiring Plan: tiered cost cap, measured budgets, tiered evals, LM-DEAC as code
+
+**Decision:** The LLM Rewiring Plan (Elite Edition) ships with five
+specific corrections applied to the original draft before execution.
+These corrections are non-negotiable for the plan to deliver its
+intended outcomes.
+
+The five corrections (all integrated into `docs/LLM_REWIRING_PLAN.md`):
+
+1. **Tiered cost cap, not blanket.** Critical-path LLM calls (call
+   grading, deal intel, property enrichment, property story regen,
+   photo classifier) are exempt from the per-tenant daily budget;
+   they are subject only to a hard tenant ceiling (default $500/day)
+   that pages Corey but does not refuse calls. Discretionary calls
+   (Role Assistant, AI Coach, dispo-on-demand, session-summarizer,
+   user-profile generation) are subject to the daily budget and
+   refused on cap-hit.
+
+2. **Tool count verified before Phase 3.** The original plan claimed
+   "74 → 15 tools." Phase 0 verified the count BUT used a flawed grep
+   that missed inline shorthand definitions; reported 38. Phase 3a
+   (2026-05-13) re-counted properly: **real total is 83 tools.**
+   Post-cleanup target per `docs/TOOL_AUDIT.md`: **43 tools (~2×
+   reduction)** — the 15-tool target would gut real product capability
+   (appointment management, buyer pipeline, CRM creation). See Section 2
+   + Section 13 of `docs/LLM_AUDIT_BASELINE.md`.
+
+3. **Per-tenant budget default is measured, not guessed.** The original
+   plan hard-coded $25/day. Phase 0 computed real spend from `ai_logs`:
+   NAH p95 daily spend is $22.07, p99 is $38.13. Default budget rule:
+   `max(10, ceil(1.5 × p95 / 5) × 5)`. NAH default = $35/day.
+
+4. **Tiered evals (smoke/medium/full) instead of full suite on every
+   pre-commit.** Smoke (5 prompts, pre-commit, ~$0.50/run, <30 sec)
+   catches obvious regressions. Medium (15-20 prompts, CI on PRs,
+   ~$2/run, 1-2 min) catches cross-surface drift. Full (50+ prompts,
+   nightly cron + manual, ~$5/run, 5-10 min) catches everything.
+   Original "full on every pre-commit" would have been bypassed within
+   a week.
+
+5. **LM-DEAC implemented as code in Phase 0, not described as a
+   metric.** `lib/kpis/lm-deac.ts` ships with `calculateLmDeac` and
+   `calculateLmDeacRange`. Operational definition locked:
+   `LM-DEAC = dials + tasksCompleted + (apptsSet × 3) +
+   scriptAdherenceScore`. Pre-soak 14-day baseline persisted per
+   user before Phase 1 starts; +25% target measured against this
+   baseline.
+
+**Why these specific corrections:**
+
+- Correction (1): the blanket cap would have silently blocked 99.9% of
+  legitimate spend mid-day on busy days. Critical-path is the product;
+  it cannot be cap-refused. Verified by 30-day spend split: $166.42
+  critical / $0.24 discretionary.
+- Correction (2): the original "74 → 15" framing was inaccurate.
+  Phase 3 still does useful work, but the headline narrative shifts.
+- Correction (3): hard-coding $25/day was unsafe — NAH has had days
+  hit $38, and the $25 cap would have blocked the rest of those days'
+  legitimate spend.
+- Correction (4): expensive pre-commit hooks get bypassed (`--no-verify`)
+  within a week of friction. The eval safety net only works if it's
+  actually run; tiered shape keeps friction low at commit time and
+  comprehensive at PR/merge/nightly time.
+- Correction (5): a metric described in prose drifts. Multiple reviewers
+  produce multiple numbers from the same data. Code is the contract.
+
+**Alternatives considered:**
+
+- Keep the original plan and discover these issues during execution.
+  Rejected — at least three of the five would have caused production
+  incidents (cost-cap blocking grading, $25 budget blocking NAH).
+- Add the corrections as separate ADRs over the course of execution.
+  Rejected — coupling them into one decision keeps the plan reviewable
+  as a unit.
+- Defer LM-DEAC implementation to Phase 1 or later. Rejected — without
+  a working LM-DEAC at Phase 0, every downstream phase's "did this
+  help?" question becomes unanswerable.
+
+**Known limitations of the locked decisions:**
+
+- LM-DEAC `apptsSet` field uses `property.updatedAt` proxy until
+  Phase 0e instruments proper stage-transition audit logging.
+- LM-DEAC `scriptAdherenceScore` averages all rubric categories
+  because no `script_adherence` key exists yet. Phase 6 may introduce
+  one.
+- LM-DEAC `tasksCompleted = 0` for all NAH users in baseline. Either
+  team doesn't use Gunner tasks or completion paths skip `completedAt`.
+  Phase 1 investigates.
+
+**Status:** Locked. Date: 2026-05-12 (Session 86).
+References:
+- `docs/LLM_REWIRING_PLAN.md` (the plan, patches integrated inline)
+- `docs/LLM_AUDIT_BASELINE.md` (Phase 0 baseline + open issues)
+- `lib/kpis/lm-deac.ts` (LM-DEAC implementation)

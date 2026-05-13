@@ -5,6 +5,11 @@
 
 import { db } from '@/lib/db/client'
 import { logFailure } from '@/lib/audit'
+import {
+  buildSettingsContext,
+  formatSettingsForPrompt,
+  type SettingsContext,
+} from '@/lib/ai/settings-context'
 
 export interface GradingContext {
   // Company knowledge
@@ -324,6 +329,9 @@ export interface KnowledgeContext {
     coachingPriorities: string[]
     communicationStyle: string | null
   } | null
+  // Phase 1 of LLM Rewiring (Session 86): structured tenant settings —
+  // identity, KPI goals, markets, team roster. See lib/ai/settings-context.ts.
+  settings: SettingsContext | null
 }
 
 export async function buildKnowledgeContext(params: {
@@ -349,7 +357,7 @@ export async function buildKnowledgeContext(params: {
     }
   }
 
-  const [allDocs, tenant, userProfileRecord] = await Promise.all([
+  const [allDocs, tenant, userProfileRecord, settings] = await Promise.all([
     db.knowledgeDocument.findMany({
       where: { tenantId, isActive: true },
       select: { title: true, type: true, callType: true, role: true, content: true },
@@ -362,6 +370,11 @@ export async function buildKnowledgeContext(params: {
       where: { tenantId_userId: { tenantId, userId } },
       select: { strengths: true, weaknesses: true, coachingPriorities: true, communicationStyle: true },
     }) : null,
+    // Phase 1: structured tenant settings (identity, KPI goals, markets, team)
+    buildSettingsContext({ tenantId, userId }).catch((err) => {
+      logFailure(tenantId, 'context_builder.settings_context_failed', userId ?? '', err)
+      return null
+    }),
   ])
 
   // Merge semantic results with type-filtered results (dedup by title)
@@ -409,6 +422,7 @@ export async function buildKnowledgeContext(params: {
       coachingPriorities: (userProfileRecord.coachingPriorities as string[]) ?? [],
       communicationStyle: userProfileRecord.communicationStyle,
     } : null,
+    settings,
   }
 }
 
@@ -421,6 +435,13 @@ export function formatKnowledgeForPrompt(ctx: KnowledgeContext, tokenBudget = 60
     if (charCount + content.length > tokenBudget) return
     sections.push(`${label}:\n${content}`)
     charCount += label.length + content.length + 2
+  }
+
+  // Phase 1: structured settings come FIRST — tenant identity, KPI goals,
+  // markets, team roster. Tight budget (3000 chars) so docs still get room.
+  if (ctx.settings) {
+    const settingsBlock = formatSettingsForPrompt(ctx.settings, 3000)
+    addIfRoom('TENANT SETTINGS', settingsBlock)
   }
 
   if (ctx.companyOverview) addIfRoom('COMPANY OVERVIEW', ctx.companyOverview)

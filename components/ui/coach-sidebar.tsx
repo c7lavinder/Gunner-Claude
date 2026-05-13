@@ -16,6 +16,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { Bot, Send, Sparkles, Zap, Loader2, X, CheckCircle, XCircle, Pencil } from 'lucide-react'
 import { ConfirmActionModal } from '@/components/ui/confirm-action-modal'
+import { RED_TIER_TOOLS } from '@/lib/ai/approval-tiers'
 
 interface AssistantMessage {
   role: 'user' | 'assistant'
@@ -42,16 +43,13 @@ const ROLE_NAMES: Record<string, string> = {
 }
 
 // Which action types route through the confirmation modal before executing.
-// Mirrors call-detail HIGH_STAKES_TYPES, expanded for the assistant's
-// broader action surface (audit rows 1-7 of ACTION_EXECUTION_AUDIT.md).
-const HIGH_STAKES_TYPES = new Set([
-  'send_sms',
-  'send_email',
-  'change_pipeline_stage',
-  'create_contact',
-  'update_contact',
-  'create_opportunity',
-])
+// Phase 4 (Session 86, 2026-05-13): now derived from server's RED-tier
+// classification in lib/ai/approval-tiers.ts. Modal fires for every
+// customer-facing tool (send_sms, send_email, blasts, workflow attach,
+// etc.). YELLOW-tier state mutations go through the regular approve
+// button which now also sends approved=true to satisfy server's
+// requiresExplicitApproval() check.
+const HIGH_STAKES_TYPES = RED_TIER_TOOLS
 
 type PipelineList = Array<{ id: string; name: string; stages: Array<{ id: string; name: string }> }>
 type TeamMember = { name: string; phone: string | null; userId: string }
@@ -271,6 +269,12 @@ export function CoachSidebar() {
     const payload: Record<string, unknown> = {
       toolCallId: toolId,
       pageContext: getPageContext(),
+      // Phase 4 (Session 86, 2026-05-13): the regular approve button IS
+      // the user's confirmation for YELLOW-tier actions. Server now
+      // requires approved=true for any RED or YELLOW tool (see
+      // lib/ai/approval-tiers.ts). The RED-tier modal sets this in its
+      // own confirm flow below; the regular approve button sets it here.
+      approved: true,
     }
     // Only include editedInput if the user actually diffed at least one key.
     // Keeps server's wasEdited flag honest and matches call-detail's behavior

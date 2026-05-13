@@ -62,6 +62,362 @@
 
 ## Session Log (recent — older sessions in docs/SESSION_ARCHIVE.md)
 
+### Session 86 — LLM Rewiring Plan patched + Phase 0 baseline shipped (2026-05-12)
+
+Reviewed Corey's "LLM Rewiring Plan (Elite Edition)" against the Session 85
+AI audit. Found 5 issues that would have broken or weakened the build.
+Patched the plan, locked it as source of truth, then executed Phase 0.
+
+**Plan shipped:** [docs/LLM_REWIRING_PLAN.md](docs/LLM_REWIRING_PLAN.md). 10-phase
+plan, ~12-14 sessions, ends with a measurable + learnable + defensible AI
+system. Revision history at the top documents the 5 patches:
+1. Cost cap tiered (critical-path uncapped + anomaly-alerted; discretionary capped) — original blanket cap would have silently blocked 99.9% of legitimate spend.
+2. Verify tool count before Phase 3 — original claim was "74 → 15"; reality is 38 (Section 2 of baseline).
+3. Budget default measured, not guessed — original $25/day was a placeholder; real p95 daily spend for NAH is $22.07, recommended budget $35/day.
+4. Tiered evals (smoke/medium/full) instead of full suite on every commit — original ~$5/dev-push would get bypassed in a week.
+5. LM-DEAC shipped as code in Phase 0, not as a doc — otherwise the +25% claim is unmeasurable.
+
+**Phase 0 executed:** [docs/LLM_AUDIT_BASELINE.md](docs/LLM_AUDIT_BASELINE.md)
++ [lib/kpis/lm-deac.ts](lib/kpis/lm-deac.ts). Key findings:
+
+- **38 tools total** (27 in `assistant-tools.ts`, 11 in `query-tools.ts`).
+  Phase 3 reframes as "quality cleanup, not drastic consolidation."
+- **System-wide spend last 30d: $166.66.** All NAH. Critical-path = $166.42
+  (99.9%). Discretionary = $0.24 (0.1%). The tiered cost model is the only
+  viable shape — confirmed by the data.
+- **NAH p95 daily spend: $22.07.** Max single day $38.13 (2026-05-06, 521
+  calls). Recommended discretionary budget: $35/day.
+- **deal_intel p95 latency: 241 seconds.** call_grading p95: 123s. The
+  original plan's 60s grading budget was unrealistic. Baseline doc has
+  revised budgets calibrated from real p95.
+- **claude-sonnet-4-20250514 (stale model)** had 292 calls last 30d. All
+  historical, dated 2026-04-13 → 2026-04-27 (pre-upgrade residue). No
+  active code path uses it. Model upgrade gate (Phase 9) prevents recurrence.
+- **Haiku has 1 call in 30d** despite being wired in photo-classifier +
+  session-summarizer. Either no photos uploaded or sessions never summarized.
+  Phase 6 verifies.
+- **0% error rate across all surfaces is suspicious** — likely error path
+  doesn't log. Phase 8 adds the missing instrumentation.
+
+**LM-DEAC shipped:** `lib/kpis/lm-deac.ts`, `tsc --noEmit` clean, smoke-tested
+against real NAH data. Sample for 2026-05-06: Daniel Lozano composite=175,
+Chris Segura 65, Kyle Barks 47, Esteban Leiva 8. **`tasksCompleted` is
+always 0** across all users — Phase 1 investigates whether team uses Gunner
+tasks at all or writes them via GHL.
+
+**Phase 0 COMPLETE:**
+- [x] File-by-file audit (Section 1 of baseline doc)
+- [x] Settings storage map (Section 6 — with known gaps)
+- [x] Tool count verified (38, Section 2) — Phase 3 reframed as "quality cleanup"
+- [x] Spend + latency + error baseline (Sections 3-5)
+- [x] LM-DEAC shipped + smoke-tested (Section 7) — `lib/kpis/lm-deac.ts`
+- [x] **Open issue B RESOLVED:** NAH doesn't use Gunner tasks (0 rows). LM-DEAC
+  now counts GHL `TaskComplete` webhooks via `user.ghlUserId` mapping +
+  `tenant.ghlLocationId` scoping. Daniel Lozano now shows 4 tasks/day, not 0.
+- [x] `LmDeacBaseline` Prisma migration shipped (`20260512000000_add_lm_deac_baseline`)
+  + applied to production + 78 baseline rows persisted across 6 NAH users
+  × 13 days (2026-04-29 → 2026-05-11).
+- [x] **Pre-soak baselines (avg composite/day, +25% targets):**
+  - LEAD_MANAGER: 84.83 → **106.04** target (Daniel 126.3 avg max 221; Chris 43.3 avg max 78)
+  - ACQUISITION_MANAGER: 42.34 → 52.93 target (Kyle Barks)
+  - DISPOSITION_MANAGER: 12.15 → 15.19 target (Esteban Leiva)
+  - ADMIN: 8.38 → 10.48 target (Jessica Guzman)
+  - OWNER: 0 (Corey, excluded from soak target)
+- [x] 10 baseline prompts captured → `docs/baseline-prompts/2026-05-12.md`.
+  $0.32 in tokens. Daniel Lozano as test user. **Major qualitative findings**:
+  - Tool-only responses are the default — no narrative wrap, feels like a
+    search box not an assistant. Phase 2 must fix.
+  - Prompt 4 ("Move X to Contract") fired the action with ZERO confirmation —
+    Phase 4's traffic-light rule must be enforced at the API level, not prompt
+    level. Real risk: would have moved a real property to Under Contract.
+  - Prompt 8 hallucinated a tool name (`call_analysis` doesn't exist) — Phase
+    3 (sharper tool descriptions) + Phase 8 (tool-not-found logging) needed.
+  - "What's our buy box?" — excellent (385 tokens of real Nashville-specific
+    detail). Validates settings ARE in the system today; just used inconsistently.
+  - ~9,930 input tokens per turn — 95% of cost is system prompt overhead.
+    Phase 7 prompt optimization is a real cost lever.
+  - Section 8c of baseline doc has expectedBehaviors / mustNotDo seeded for
+    Phase 7 golden eval set.
+
+**Code shipped:**
+- `lib/kpis/lm-deac.ts` (north-star metric implementation)
+- `prisma/schema.prisma` (LmDeacBaseline model added)
+- `prisma/migrations/20260512000000_add_lm_deac_baseline/migration.sql`
+- `docs/baseline-prompts/2026-05-12.md` (Phase 0e transcripts)
+
+**Open issues remaining** (Section 9 of baseline doc):
+- A: Stage-transition audit logging missing → LM-DEAC `apptsSet` proxy
+- ~~B: `tasksCompleted = 0`~~ **RESOLVED 2026-05-12**
+- C: 0% error rate likely under-captured → Phase 8
+- D: Haiku usage ≈ 0 → Phase 6
+- E: 292 stale-model calls = historical, no action
+- F: No `script_adherence` rubric key → LM-DEAC uses avg-of-all proxy
+- G: No `Task.completedBy` field → add when agent auto-complete ships
+
+**`npx tsc --noEmit` exit 0.** Phase 0 fully complete.
+
+---
+
+**Phase 1 — Settings wiring — COMPLETE (continuation 2026-05-13):**
+
+Shipped `lib/ai/settings-context.ts` + integrated into `lib/ai/context-builder.ts`.
+Every LLM surface that uses `buildKnowledgeContext` or `buildGradingContext`
+now automatically receives tenant settings (identity, KPI goals, markets,
+appointment types, full team roster with profiles).
+
+**Verification — Q7 "Who is Chris?" went from generic to dramatic:**
+
+Before:
+> "Chris is the other Lead Manager... handles warm transfers... qualifying sellers..."
+
+After:
+> "Chris Segura — Reports to Kyle Barks. Calls graded: 18. Style: Warm,
+> conversational, calm under pressure — Amiable/Expressive blend. Where you're
+> a Driver type, Chris leans more relational — good complement for different
+> seller personalities."
+
+The assistant now synthesizes across team members from real profile data.
+Q6 "What's our buy box?" now includes the real 4-market list. Cost: +570
+input tokens per turn (3,000-char budget cap holding).
+
+**Real-data findings (Section 11b of baseline doc):**
+- `tenants.scripts`, `companyStandards`, `gradingMaterials` all empty for
+  NAH despite schema designed for them. Scripts/standards live in
+  `knowledge_documents` instead — that's fine, data IS available.
+- `tenants.config` is rich with `kpiGoals` per role + `appointmentTypes`
+  with calendar IDs. These were not previously surfaced to AI; now are.
+- 40 active knowledge docs (242k chars). 4 of 6 users have rich profiles.
+- `call_rubrics` table is empty — rubrics inlined in grading.ts. Phase 6
+  cleanup target.
+
+**LLM call site audit (Section 11d of baseline doc):**
+- 9 sites already use context-builder → automatically inherit settings
+- 6 sites need Phase 6 refactor (dispo-generators, extract-deal-intel,
+  generate-property-story, enrich-property, property-suggestions, buyers
+  route)
+- 6 sites are intentional exceptions (session-summarizer, photo-classifier,
+  ai-edit, outreach-action, buyer-response webhook, audit.ts)
+
+**Phase 1 code shipped:**
+- `lib/ai/settings-context.ts` (new, 245 lines)
+- `lib/ai/context-builder.ts` (updated — settings injected into
+  `KnowledgeContext` and emitted first in `formatKnowledgeForPrompt`)
+
+**`npx tsc --noEmit` exit 0.** Phase 1 complete.
+
+---
+
+**Phase 3a + partial Phase 3b + Phase 4 — COMPLETE (continuation 2026-05-13).**
+The tool audit + 13 safe drops shipped, AND the traffic-light rule is now
+enforced at the API level (not just prompt-level).
+
+Shipped:
+- `docs/TOOL_AUDIT.md` — every one of the **83 tools** categorized into
+  6 domains, each tagged KEEP/MERGE/DROP with risk tier (RED/YELLOW/GREEN).
+- 90-day production usage data: only 5 assistant sessions called tools
+  at all. 78 of 83 tools never called in production.
+
+**Two corrections to earlier findings:**
+1. Real tool count is **83, not 38**. Phase 0's grep used `^\s*name:`
+   which missed ~45 single-line inline shorthand defs in the bottom of
+   `assistant-tools.ts`. Baseline doc Section 2 corrected.
+2. `call_analysis`, `pipeline_health`, `team_overview`, `what_next` are
+   **all real tools**, not hallucinations. The Phase 0 "hallucinated tool"
+   finding was wrong. Baseline doc Section 8b corrected.
+
+Post-cleanup target: **43 tools (~2× reduction)** — not 15. The 15-tool
+target would gut real product capability (appointment management, buyer
+pipeline, CRM creation). DECISIONS.md D-051 fix #2 updated.
+
+**Phase 3b — partial shipped (this continuation):**
+- 13 information-dispatcher tools deleted from `assistant-tools.ts`
+  and `role-gates.ts`: call_analysis, deal_blast_info, deal_health,
+  compare_deals, what_next, rep_performance, team_overview,
+  pipeline_health, explain_field, contact_objections, seller_profile,
+  title_risk, market_analysis.
+- Tool count: **83 → 70.**
+- Verified on 5 real prompts: assistant now picks `search_calls`
+  instead of `call_analysis`, `get_team_performance` instead of
+  `team_overview`, `get_ghl_pipeline_state` instead of `pipeline_health`.
+  Same or better narrative quality (Phase 2 wraps still active).
+
+**Phase 5 — Cross-Session Memory — COMPLETE (this continuation):**
+
+Most infrastructure was already wired (`lib/ai/session-summarizer.ts`
+generates summaries; assistant route loads last 3 via
+`getRecentSessionMemory`). Phase 5 adds user-controlled forgetting +
+privacy audit:
+
+- Prisma migration `20260513000000_session_summary_forget` (applied)
+  adds `excluded_from_history` + `excluded_at` to
+  `assistant_session_summaries`.
+- `getRecentSessionMemory` now filters out excluded rows + writes
+  `assistant.memory.loaded` audit log on every injection (privacy
+  trail).
+- New `forgetSession()` function + `POST /api/ai/assistant/forget`
+  endpoint. User-scoped via `withTenant`. Idempotent.
+- Writes `assistant.memory.forgotten` audit log on each forget.
+
+Carry-forward: UI button in coach-sidebar.tsx for "Forget yesterday's
+conversation" — trivial follow-up. POSTs to the new endpoint with a
+date. ~10 min of UI work.
+
+---
+
+**Phase 4 — Traffic-Light at API Level — COMPLETE (this continuation):**
+
+Closes the security gap from Phase 2 (prompt-level traffic-light rule
+could be bypassed). Now enforced at the code level.
+
+Shipped:
+- `lib/ai/approval-tiers.ts` — single source of truth for RED/YELLOW/GREEN
+  classification per tool. 60 tools classified (RED: 11, YELLOW: 27,
+  GREEN: 22). Unknown tools default to YELLOW (safer than auto-fire).
+- `lib/ai/role-gates.ts` — `isHighStakes` now derives from tier module.
+  Returns true for any RED or YELLOW tool (was: 5 hard-coded tools).
+- `components/ui/coach-sidebar.tsx` — UI's modal-trigger set now imports
+  `RED_TIER_TOOLS` from the server's source of truth. Regular approve
+  button now sends `approved: true` (was: omitted) to satisfy server's
+  expanded check.
+
+**Threat model — what's defended now:**
+- A forged client POST that omits `approved: true` for any RED or
+  YELLOW tool → server returns 409 `requiresApproval`. Was: only 5
+  tools gated; now 38 are gated at the server.
+- A jailbroken model that produces `change_property_status` mid-turn
+  without confirmation → server refuses. Was: would have executed.
+
+**UX impact:**
+- GREEN tools: no change. Click approve, runs.
+- YELLOW tools: no change. Click approve, sends `approved: true`,
+  runs (server now requires the flag).
+- RED tools (11 vs 6 before): confirmation modal fires for every
+  customer-facing send. Higher friction, matches Corey's "very
+  controlled at first" feedback memory.
+
+**Phase 3b — remaining for follow-up sessions (27 tools):**
+- 7 formal-block drops + 1 merge (regrade_call, summarize_property,
+  reclassify_call, mark_call_reviewed, invite_team_member,
+  add_internal_note→add_note, change_pipeline_stage→change_property_status)
+- 12 inline drops (admin/UI-only tools)
+- 8 inline merges (tag/blast/opportunity tools into update_contact /
+  update_property / send_sms / send_email)
+- Description sharpening pass — defer to Phase 6 (per-surface tuning)
+
+Risk-bounded: each MERGE will be a separate commit so rollback is surgical.
+
+---
+
+**Phase 2 — System Prompt Overhaul (Role Assistant) — COMPLETE
+(continuation 2026-05-13):**
+
+Shipped:
+- `lib/ai/prompts/role-overrides.ts` (6 role identity blocks)
+- `lib/ai/prompts/assistant.ts` (VERSION 1.0.0, 7 operating rules)
+- `app/api/ai/assistant/route.ts` (refactored to use the new builder)
+
+**All three Phase 0 baseline failures fixed:**
+
+1. **Tool-only responses** (prompts 1, 5, 9, 10) → Rule 1 fix.
+   All four now produce a narrative wrap ("Pulling X — checking Y now").
+2. **RED action fired without confirmation** (prompt 4) → Rule 2 fix.
+   Now produces: "Confirming before I make this change: 123 Oak St
+   From: Current stage → To: UNDER_CONTRACT. Yes or no?" — NO action fired.
+3. **Tool hallucination** (prompt 8) → Rule 3 partial. Still hallucinated
+   `call_analysis`. Phase 3 (sharper tool descriptions) needed for full fix.
+
+**Bonus win on Q7 "Who is Chris?":** assistant now produces actionable
+team-synthesis output ("How he complements you: You're a Driver, Chris
+works the other end of the spectrum — good pairing on emotional handoffs")
+not just facts. Same team profiles, better prompt → much higher utility.
+
+**Cost impact:** +900 input tokens per assistant turn vs Phase 1 baseline.
+At Sonnet rates: +$0.004/turn. Negligible.
+
+**Scope decision (Session 86, 2026-05-13):** Phase 2 ships ONLY the Role
+Assistant + role-overrides foundation. The other 8 surfaces (coach,
+grading, deal-intel, story, dispo, photo, summarizer, profile) have
+well-tuned inline prompts and would be high-risk to refactor mid-session.
+Phase 6 (per-surface tuning) propagates the pattern with surface-specific
+rules.
+
+**Phase 2 done-state:**
+- [x] role-overrides.ts (6 roles)
+- [x] assistant.ts with VERSION + 7 rules
+- [x] route refactored
+- [x] verified against 7 baseline prompts (Section 12 of baseline doc)
+- [x] `npx tsc --noEmit` exit 0
+- [ ] Corey sign-off before Phase 3 entry
+
+**Carry-forward** (Section 12g of baseline doc):
+- Phase 3: tool descriptions must be sharpened to kill the remaining
+  `call_analysis` hallucination
+- Phase 4: traffic-light rule must enforce at API level (currently
+  prompt-level only)
+- Phase 8: add `prompt_version` to ai_logs so drift detection works
+
+### Session 85 — AI & agent audit + 16-agent roadmap (2026-05-11)
+
+Planning session — no code shipped. Outcome: comprehensive audit of every
+AI call + cron + webhook in Gunner today, plus a full roadmap of 16 worker
+agents (one spec doc each) that will replace manual team work and migrate
+GHL workflows into Gunner-controlled, auditable equivalents.
+
+**Audit shipped:** [docs/AI_AUDIT.md](docs/AI_AUDIT.md). Inventory of:
+- 21 modules in `lib/ai/` (call grading, property AI, coaching, RAG,
+  assistant tools, scoring, transcription).
+- 8 Railway crons (poll-calls every-min, daily-audit, kpi-snapshot,
+  weekly-profiles, regenerate-stories, reconcile-ghl-pipelines,
+  enrich-pending every-5-min, compute-aggregates).
+- 5 GHL webhook event families.
+- 17 AI-calling API routes.
+- Embeddings/RAG layer (OpenAI 1536-dim).
+- Schema fields holding AI output.
+- Gap analysis: where AI is missing today (cron monitoring,
+  webhook drift, lead triage, followup decisions, walkthrough
+  scheduling, pipeline hygiene).
+
+**Roadmap shipped:** [docs/agents/README.md](docs/agents/README.md).
+16 agent candidates ranked into 3 risk-ascending waves:
+
+- **Wave 1 — site-keeping (autonomous):** `cron-sentinel`,
+  `stuck-calls-recovery`, `tcp-anomaly-surfacer`,
+  `webhook-drift-watchdog`.
+- **Wave 2 — internal team work (autonomous, no customer contact):**
+  `lead-triage`, `pipeline-janitor`, `followup-task-builder`,
+  `property-enrichment-iterator`, `buyer-match-outreach-queue`,
+  `daily-operations-briefing`, `internal-alert-hub`.
+- **Wave 3 — customer-facing sends (vetted-template only, controlled):**
+  `_send-framework` (shared infra) + `appointment-reminder`,
+  `drip-cadence-migrator`, `missed-call-autoresponder`,
+  `no-show-recovery`, `walkthrough-coordinator`.
+
+Wave 3 priority order reflects owner's GHL kill-list (2026-05-11):
+appointment reminders + drip campaigns + internal team notifications first.
+
+**Per-agent specs shipped:** 17 docs in [docs/agents/](docs/agents/) — one
+per agent + the shared send framework. Each spec follows a fixed template:
+purpose, trigger, inputs, tools (with JSON shapes), outputs, approval gates,
+completion signal (`stop_reason: "end_turn"` per Rule 4), failure modes,
+test plan (unit → integration → observe-only rollout → graduated autonomy),
+implementation notes (file paths, model, prompt strategy, cost ceiling).
+
+**Key principles locked:**
+- **Autonomy bar (saved as memory):** customer-facing SMS/email restricted
+  to a hard allow-list of pre-approved scenarios with vetted templates. No
+  free-form LLM-generated message content initially. Internal-only actions
+  (scoring, tagging, task creation, routing) can be autonomous from day 1.
+- **Send framework before any customer-facing agent:** template registry,
+  approval queue, code-level send gate, suppression list, quiet hours,
+  per-tenant caps, ESLint rule blocking direct Twilio/SendGrid imports
+  outside the gate.
+- **Live map discipline (Rule 8):** SYSTEM_MAP/OPERATIONS will be updated
+  in the same commit as each agent ships — not before, since this session
+  is plans-only.
+
+**No code changes.** Pure planning artifacts: AI_AUDIT.md, agents/README.md,
+17 agent specs. Owner's call on build order: Wave 1 first.
+
 ### Session 84 — Intake unification + drag-drop pipeline + Buyer-match fixes (2026-05-11)
 
 Owner brought a string of UX + correctness asks, each one tightening a
@@ -2236,8 +2592,132 @@ but leaner.
 
 ## Next Session — exact first task
 
-**First thing next session (owner-side, ~10 minutes):**
-Walk the Session 84 changes end-to-end on Railway.
+**Phases 0 + 1 + 2 + 3a + partial 3b + 4 + 5 of the LLM Rewiring Plan are
+COMPLETE. Next move: commit, then Phase 6 (per-surface tuning) in a fresh
+session.**
+Read [docs/LLM_REWIRING_PLAN.md](docs/LLM_REWIRING_PLAN.md) +
+[docs/LLM_AUDIT_BASELINE.md](docs/LLM_AUDIT_BASELINE.md) before starting.
+
+### Step 1 — Commit Phases 0 + 1 + 2 + 3a + partial 3b + 4 + 5
+
+Files ready for one commit:
+
+**Docs:**
+- `docs/LLM_REWIRING_PLAN.md` (patched plan, source of truth)
+- `docs/LLM_AUDIT_BASELINE.md` (Sections 1-15 covering Phases 0-5)
+- `docs/TOOL_AUDIT.md` (Phase 3a — 83-tool catalog with KEEP/MERGE/DROP)
+- `docs/baseline-prompts/2026-05-12.md` (10-prompt transcripts)
+
+**Code (Phase 0):**
+- `lib/kpis/lm-deac.ts` (north-star metric)
+- `prisma/migrations/20260512000000_add_lm_deac_baseline/migration.sql`
+  (applied to production)
+
+**Code (Phase 1):**
+- `lib/ai/settings-context.ts` (tenant + team + KPI injection)
+- `lib/ai/context-builder.ts` (settings wired into existing pipeline)
+
+**Code (Phase 2):**
+- `lib/ai/prompts/role-overrides.ts` (6 role identity blocks)
+- `lib/ai/prompts/assistant.ts` (VERSION 1.0.0, 7 operating rules)
+- `app/api/ai/assistant/route.ts` (uses new prompt builder)
+
+**Code (Phase 3b partial):**
+- `lib/ai/assistant-tools.ts` (13 dispatcher tools removed)
+- `lib/ai/role-gates.ts` (13 dispatcher tools removed)
+
+**Code (Phase 4):**
+- `lib/ai/approval-tiers.ts` (RED/YELLOW/GREEN tier source of truth)
+- `lib/ai/role-gates.ts` (isHighStakes derives from tier module)
+- `components/ui/coach-sidebar.tsx` (regular approve sends approved=true;
+  HIGH_STAKES_TYPES imports RED_TIER_TOOLS)
+
+**Code (Phase 5):**
+- `lib/ai/session-summarizer.ts` (excluded filter + forgetSession + audit log)
+- `app/api/ai/assistant/forget/route.ts` (new endpoint)
+- `prisma/schema.prisma` (excludedFromHistory + excludedAt fields)
+- `prisma/migrations/20260513000000_session_summary_forget/migration.sql`
+  (applied to production)
+
+**Updated:** `PROGRESS.md`, `docs/DECISIONS.md` (D-051 corrected),
+`docs/SYSTEM_MAP.md` (KPIs section)
+
+Single commit; Phases 0+1+2+3a+partial-3b+4+5 closeout.
+`npx tsc --noEmit` exit 0 verified.
+
+### Step 2 — Phase 6 entry (per-surface tuning)
+
+Once committed:
+1. Phase 6 propagates the Phase 1+2 patterns to the other 8 LLM surfaces:
+   `coach.ts`, `grading.ts`, `deal-intel.ts`, `story.ts`, `dispo.ts`,
+   `photo-classifier.ts`, `session-summarizer.ts`, `user-profile.ts`.
+2. For each surface: extract the inline prompt into `lib/ai/prompts/<surface>.ts`,
+   add `VERSION = "1.0.0"`, wire the 5-section structure where it makes
+   sense (some surfaces don't need IDENTITY/USER CONTEXT because they're
+   automated, not user-facing).
+3. Special focus on `grading.ts` (highest-cost surface, 561 calls in 30d
+   at $0.10/call). Improvements compound across all graded calls.
+4. Add `script_adherence` rubric category to the grading rubric so
+   `lib/kpis/lm-deac.ts` can read a dedicated key instead of averaging
+   all categories.
+5. Re-run baseline + measure cost impact.
+
+Phase 6 ETA: 2 sessions. End with PROGRESS.md updated + Corey sign-off
+before Phase 7.
+
+### Step 3 — Remaining LLM Rewiring Plan work
+
+- Phase 3b remaining: 27 more tool drops/merges (low-risk, mechanical).
+  Do during a quiet session.
+- Phase 7 (eval framework): the elite-grade piece. Creates `evals/`
+  directory with 50+ test prompts + tiered runners. ~2 sessions.
+- Phase 8 (observability + cost guards): adds `prompt_version`,
+  `cost_tier`, `approval_tier` columns to `ai_logs`; AI Health
+  dashboard; hourly anomaly cron. ~1 session.
+- Phase 9 (adversarial + drift): red-team prompt set + model upgrade
+  gate. ~1 session.
+- Phase 10 (learning loop): thumbs UI + weekly review + auto-cluster
+  failures into eval candidates. ~1 session.
+
+---
+
+## Lower-priority tracks (still on the board from Sessions 84-85)
+
+These are deprioritized behind the LLM Rewiring Plan but remain valid work
+when the rewiring program is far enough along.
+
+### Track A — Begin agent build (Wave 1, ~1 week)
+
+Read [docs/agents/README.md](docs/agents/README.md) first. Then start
+[docs/agents/cron-sentinel.md](docs/agents/cron-sentinel.md). Build order
+within Wave 1:
+
+1. `cron-sentinel` — instrument every cron with a heartbeat row in a new
+   `cron_runs` Prisma model; build the sentinel agent in observe-only.
+2. `stuck-calls-recovery` — port existing `scripts/recover-stuck-calls.ts`
+   into a worker agent under `lib/agents/stuck-calls-recovery/`.
+3. `tcp-anomaly-surfacer` — add `property_tcp_history` model + `buy_signals`
+   model; extend `lib/ai/scoring.ts` to fire events on big TCP deltas; build
+   the agent + add "Buy Signals" panel to dashboard.
+4. `webhook-drift-watchdog` — add `webhook_receipts` instrumentation to
+   `app/api/webhooks/ghl/route.ts`; build watchdog after 14 days of
+   baseline data accumulates.
+
+Each agent spec doc has its own test plan + production-rollout sequence
+(observe-only → flag-gated → enabled). Don't skip the observe-only phase
+on any of them.
+
+**Schema migration burden:** Wave 1 alone adds ~4 new Prisma models
+(`CronRun`, `CronExpectation`, `AgentEscalation`, `WebhookReceipt`,
+`PropertyTcpHistory`, `BuySignal`, plus shared `AgentJob` infrastructure).
+Recommend one migration per agent rather than one big-bang.
+
+---
+
+### Track B — Walk Session 84 on Railway (owner-side, ~10 minutes)
+
+Still outstanding from Session 84. Walk these end-to-end on Railway before
+trusting them on real data:
 
 1. **Add property modal** — Inventory → click "Add property". Modal
    opens centered, backdrop click / Esc / Cancel / X all close. Fill

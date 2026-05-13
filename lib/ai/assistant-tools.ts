@@ -431,20 +431,29 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
   { name: 'set_kpi_goals', description: 'Set KPI target goals for a role.', input_schema: { type: 'object' as const, properties: { role: { type: 'string', description: 'Role to set goals for' }, metric: { type: 'string', description: 'Metric name: dials_per_day | appointments_per_week | offers_per_week | contracts_per_month' }, target: { type: 'number', description: 'Target value' } }, required: ['role', 'metric', 'target'] } },
   { name: 'update_pipeline_config', description: 'Update the pipeline trigger configuration.', input_schema: { type: 'object' as const, properties: { pipelineName: { type: 'string', description: 'Pipeline name' }, triggerStageName: { type: 'string', description: 'Stage that triggers property creation' } }, required: ['pipelineName', 'triggerStageName'] } },
 
-  // ═══ INFORMATION ACTIONS (no approval needed — AI answers from context) ═══
-  { name: 'call_analysis', description: 'Provide detailed analysis of the current call: grade, coaching, key moments, next steps.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'deal_blast_info', description: 'Show deal blast specs for the current property: pricing, specs, signals, suggested copy.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'deal_health', description: 'Assess the current deal\'s health: timeline, milestones, activity, risk factors.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'compare_deals', description: 'Compare the current property to similar deals in the pipeline.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'what_next', description: 'Provide prioritized list of recommended actions based on the current deal state.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'rep_performance', description: 'Summarize a rep\'s performance: score trends, strengths, weaknesses, call volume.', input_schema: { type: 'object' as const, properties: { userName: { type: 'string', description: 'Rep name (leave empty for current user)' } }, required: [] } },
-  { name: 'team_overview', description: 'Show team performance overview: all reps compared, who needs attention.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'pipeline_health', description: 'Analyze pipeline health: stage distribution, velocity, stuck deals.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'explain_field', description: 'Explain what a data field means, where it came from, and its confidence level.', input_schema: { type: 'object' as const, properties: { fieldName: { type: 'string', description: 'Field name to explain' } }, required: ['fieldName'] } },
-  { name: 'contact_objections', description: 'List all objections that came up across all calls with this contact.', input_schema: { type: 'object' as const, properties: { contactName: { type: 'string', description: 'Contact name' } }, required: [] } },
-  { name: 'seller_profile', description: 'Build a seller communication profile: personality style, triggers, what not to say, best approach.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'title_risk', description: 'Assess title/legal risks from deal intel: liens, taxes, title issues, encumbrances.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
-  { name: 'market_analysis', description: 'Provide market analysis for the current property based on available data.', input_schema: { type: 'object' as const, properties: {}, required: [] } },
+  // ═══ INFORMATION ACTIONS — REMOVED Phase 3b (Session 86, 2026-05-13) ═══
+  // 13 thin "dispatcher" tools removed: call_analysis, deal_blast_info,
+  // deal_health, compare_deals, what_next, rep_performance, team_overview,
+  // pipeline_health, explain_field, contact_objections, seller_profile,
+  // title_risk, market_analysis.
+  //
+  // Why: they were stub names with no real handler logic — Claude would
+  // call them and the route returned the same data the query tools already
+  // expose (query_properties, search_calls, get_team_performance, etc.).
+  // The overlap made tool selection ambiguous. See docs/TOOL_AUDIT.md.
+  //
+  // Replacement intent map (for prompt training in Phase 6):
+  //   call_analysis      → search_calls + get_call_intel UI link
+  //   pipeline_health    → cross_entity_query + get_ghl_pipeline_state
+  //   what_next          → cross_entity_query with TCP + recency filters
+  //   team_overview      → get_team_performance
+  //   rep_performance    → get_team_performance with userName filter
+  //   seller_profile     → query_sellers with includeProfile (handler todo)
+  //   contact_objections → search_calls with the contact's phone
+  //   deal_health        → query_properties with includeDealIntel
+  //   compare_deals      → find_similar_deals
+  //   explain_field / title_risk / market_analysis / deal_blast_info →
+  //     UI affordance, not assistant work
 
   // ═══ PHASE B — QUERY TOOLS (data retrieval across the whole tenant) ═══
   // These return real data the assistant can narrate. Each is tenant-scoped

@@ -170,6 +170,10 @@ export async function getRecentSessionMemory(
       tenantId,
       userId,
       sessionDate: { gte: cutoff, lt: today() },
+      // Phase 5 (Session 86): respect user's "Forget this conversation"
+      // choice. Excluded rows stay in the table for audit but never
+      // re-enter the prompt.
+      excludedFromHistory: false,
     },
     orderBy: { sessionDate: 'desc' },
     take: Math.max(1, Math.min(limit, 7)),
@@ -177,6 +181,23 @@ export async function getRecentSessionMemory(
   })
 
   if (summaries.length === 0) return ''
+
+  // Phase 5: log every memory injection for privacy audit. Fire-and-forget
+  // so memory loading stays fast.
+  void db.auditLog.create({
+    data: {
+      tenantId,
+      userId,
+      action: 'assistant.memory.loaded',
+      resource: 'assistant_session_summary',
+      source: 'SYSTEM',
+      severity: 'INFO',
+      payload: {
+        summariesInjected: summaries.length,
+        dates: summaries.map((s) => s.sessionDate),
+      },
+    },
+  }).catch((err) => logFailure(tenantId, 'assistant.memory.audit_failed', `user:${userId}`, err))
 
   const formatted = summaries.map(s => {
     const facts = Array.isArray(s.keyFacts) && s.keyFacts.length > 0
@@ -186,6 +207,47 @@ export async function getRecentSessionMemory(
   }).join('\n\n')
 
   return `\nPRIOR CONVERSATIONS WITH THIS USER (memory):\n${formatted}\n\nUse this only if the user references something we discussed before. Don't bring it up unprompted.`
+}
+
+/**
+ * Phase 5: user-controlled "forget" — mark a session summary as excluded
+ * from future memory injection. Row is preserved for audit but
+ * getRecentSessionMemory will skip it.
+ *
+ * Tenant + user scoping enforced by the caller (API route uses withTenant
+ * + checks ownership before invoking).
+ */
+export async function forgetSession(
+  tenantId: string,
+  userId: string,
+  sessionDate: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const existing = await db.assistantSessionSummary.findUnique({
+    where: { tenantId_userId_sessionDate: { tenantId, userId, sessionDate } },
+    select: { id: true, excludedFromHistory: true },
+  })
+  if (!existing) return { ok: false, reason: 'no_summary_for_date' }
+  if (existing.excludedFromHistory) return { ok: true } // idempotent
+
+  await db.assistantSessionSummary.update({
+    where: { id: existing.id },
+    data: { excludedFromHistory: true, excludedAt: new Date() },
+  })
+
+  await db.auditLog.create({
+    data: {
+      tenantId,
+      userId,
+      action: 'assistant.memory.forgotten',
+      resource: 'assistant_session_summary',
+      resourceId: existing.id,
+      source: 'USER',
+      severity: 'INFO',
+      payload: { sessionDate },
+    },
+  }).catch((err) => logFailure(tenantId, 'assistant.memory.forget_audit_failed', `user:${userId}`, err))
+
+  return { ok: true }
 }
 
 /**
