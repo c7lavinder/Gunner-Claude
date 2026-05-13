@@ -31,6 +31,7 @@ Live in `railway.toml`. Healthcheck at `[PRODUCTION_URL]/api/health`.
 | `compute-aggregates` | `0 4 * * *` (daily 4am UTC) | `npx tsx scripts/compute-aggregates.ts` | Seller portfolio rollup + voice analytics + buyer funnel metrics from `PropertyBuyerStage` + **Partner cross-portfolio counters** (Session 67 Phase 2 close — `dealsSourcedToUsCount` / `dealsTakenFromUsCount` / `dealsClosedWithUsCount` / `jvHistoryCount` / `lastDealDate` per Partner, derived from PropertyPartner.role + Property.status). After KPI snapshot, before story regen. |
 | `enrich-pending` | `*/5 * * * *` (every 5 min) | `npx tsx scripts/enrich-pending.ts` | Phase 3 catch-up enrichment. Walks `Property where pendingEnrichment=true`, fetches the real GHL contact, fills in `Property.{address,city,state,zip}` + `Seller.{firstName,lastName,phone,email,mailingAddress,...}`, then fires multi-vendor enrichment (PropertyRadar = subscription, BatchData $15/day cap, Google ~$0.017/call). Batch=100/run; ~6.7h to drain a full Phase 2 backfill (~8000 stubs). |
 | `reconcile-ghl-pipelines` | `0 4 * * *` (daily 4am UTC) | `npx tsx scripts/reconcile-ghl-pipelines.ts` | Phase 4.1 nightly drift fixer. Walks recent ~5 pages of each registered pipeline, compares to Gunner state, creates missing Property stubs, fixes stale lane statuses. Logs auditLog WARNING per fix; CRITICAL if > 5 fixes in one run. Catches dropped/silently-failing webhooks within 24h. |
+| `weekly-evals` | `30 4 * * 0` (Sun 4:30am UTC) | `EVAL_FORCE=1 npm run evals:full` | **Session 88.** Weekly drift-detection run of the full eval suite (44+ evals as of Session 89 keep-going pass 8). `EVAL_FORCE=1` skips the 24h cache so each Sunday is a real measurement. Reports stream to stdout via the markdown renderer; exit code drives cron-failure alerts. Cost ~$5-6/run (~$20-25/month predictable). Catches both model drift (same prompt → different behavior weeks later) and judge drift (Haiku behavior shifts). |
 
 ### HTTP cron wrappers (manual + external trigger surface)
 
@@ -294,6 +295,40 @@ file updated alongside this section when scripts land or rot. Categorized:
 - `raw-field-audit.ts`, `full-leaf-dump.ts` — raw vendor-field exploration.
 - `vendor-comparison.ts` — cross-vendor field-coverage comparison.
 
+### LLM Rewiring Phase 8/9/10 diagnostics (Session 89)
+Read-only, no DB writes, no AI calls. The `_phase8-check.ts` script
+follows the `_baseline-prompts.ts` / `_phase6-signoff.ts` convention —
+prefix-underscore marks it transient, delete after Phase 8 sign-off.
+The other three are persistent operational tooling.
+
+- `_phase8-check.ts` (transient — delete after sign-off). Verifies
+  Phase 8 wiring is healthy: column existence, composite-index
+  presence, fill rate over 24h / 7d, per-(type, bucket) breakdown,
+  and types with NULL prompt_version in last 24h (post-deploy these
+  should be 0). Run post-deploy + post-migration to confirm health.
+- `drift-report.ts` (persistent — Phase 9b). Groups `ai_logs` rows
+  by `(type, page-context bucket, prompt_version)` and prints
+  score / latency / cost / error deltas. Flags any metric that
+  moves >20% between versions within the same surface as a drift
+  warning. Same bucket SQL CASE as `_phase8-check.ts`. Empty output
+  until prod traffic accrues with non-null prompt_version. Flags:
+  `--days N` (window override, default 7), `--type <type>` (one
+  surface).
+- `model-regression.ts` (persistent — Phase 9c). Diffs two
+  full-tier eval-report JSONs. Surfaces PASS→FAIL regressions
+  (exit code 1 — gate signal), FAIL→PASS improvements, score
+  shifts (≥2 behaviors or ≥2 violations), and eval-set deltas.
+  Used when Anthropic ships a new model: save baseline report,
+  swap model IDs in `evals/golden/*.ts`, re-run full eval, diff.
+  Flags: `--baseline <report.json> --candidate <report.json>`.
+- `mine-eval-candidates.ts` (persistent — Phase 10). Queries four
+  production feedback signals (`AiLog.status='rejected'/'edited'`,
+  AI-mentioning `BugReport` rows, `Call.isCalibration` markers,
+  `AiLog.status='error'` patterns) and prints a markdown report
+  of production interactions worth promoting to eval fixtures.
+  Human-in-loop — does NOT auto-generate evals. Flags: `--days N`,
+  `--type <type>`.
+
 ### Backfills (one-shot, mutating)
 - `recover-stuck-calls.ts` — backfill PENDING/FAILED. wf_* ID resolution + recording fetch + transcribe + grade. Idempotent per-row.
 - `import-historical-calls.ts` — historical call import.
@@ -398,6 +433,9 @@ Plus 5 priority items in AUDIT_PLAN: P3 (model fragmentation), P4 (`/tasks/` del
 | 2026-05-11 | `20260511000000_session_summary_and_call_embeddings` | **Session 82 — AI brain rebuild Phases C2 + D.** Two additions in one file, both guarded with `IF NOT EXISTS`. (1) Creates `assistant_session_summaries` table — cross-session memory for the Role Assistant: `(tenant_id, user_id, session_date)` unique, `summary TEXT`, `key_facts JSONB`, `message_count INT`. Cascade-deletes from `tenants` and `users`. Written by `lib/ai/session-summarizer.ts → summarizeSession()` every 6 user turns (fire-and-forget). Read by `getRecentSessionMemory` on new session start (last 3 daily summaries injected into system prompt). (2) Adds `calls.transcript_embedding` (`vector(1536)`) + HNSW cosine index `idx_calls_transcript_embedding_hnsw`. Populated by `scripts/embed-calls-backfill.ts` (use `--dry-run` first; supports `--tenant=<id>` and `--limit=N`). Read by `lib/ai/query-tools.ts → semanticSearchCalls` (graceful fallback if column missing, no API key, or no embedded rows yet). Cost guard: text-embedding-3-small is ~$0.00002 per call (5K calls = $0.10). Additive, zero data risk. |
 | 2026-05-11 | `prisma db push` (no migration file) | **Session 81 — GHL Lost handling.** Adds 3 nullable `DateTime` columns on `properties`: `acq_lost_at`, `dispo_lost_at`, `longterm_lost_at`. Set by `lib/ghl/webhooks.ts:laneLostPayload()` when GHL fires an opportunity event with `status: 'lost' \| 'abandoned'`; cleared on `'open' \| 'won'` (reopens). Read by disposition page query, inventory `visibilityFilter`, server-side `stageCounts`, client-side chip filter in `components/inventory/inventory-client.tsx`, and 5 active-property count queries (`health/page.tsx`, `accountability/page.tsx`, `vieira/summary/route.ts`, `kpi-snapshot.ts`, `coach.ts`). Backfill via `scripts/backfill-lost-opps.ts` — ran 2026-05-11 on `new-again-houses`: 34 stamped (1 acq / 32 dispo / 1 longterm) across 8,658 opps. Additive — no data loss risk, no backfill required for forward changes. Schema added directly via `db push` (project uses push-mode for iteration; no migrations file was generated). |
 | 2026-05-11 | `20260511185452_unique_property_contact_address` | **Session 83 — duplicate-property race fix.** Creates partial UNIQUE INDEX `Property_tenant_ghlContact_address_key` on `properties (tenant_id, ghl_contact_id, lower(address)) WHERE ghl_contact_id IS NOT NULL`. Closes a webhook-race that produced 4 duplicate groups (8 rows) when GHL fired the same contact's trigger 21-128ms apart; the TS check-then-insert dedup in `lib/properties.ts:83` couldn't catch it. The second simultaneous insert now fails with P2002; `createPropertyFromContact` catches and returns the winner's id (see [lib/properties.ts:223-242](lib/properties.ts#L223)). Manually-created properties (no GHL contact linkage) are exempt via the partial predicate. The 4 pre-existing dup groups were merged 2026-05-11 by `scripts/merge-duplicate-properties.ts --apply` (updated to use normalized street + zip canon, catching 1013 Clay St across cities Knoxville/Farragut). Additive index — applied via `prisma migrate deploy`. |
+| 2026-05-12 | `20260512000000_add_lm_deac_baseline` | **Session 87 — LLM Rewiring Phase 0d.** Creates `lm_deac_baselines` table for pre-soak baseline persistence (the comparator for the +25% LM-DEAC soak target). Columns: `tenant_id`, `user_id`, `date`, `dials`, `tasks_completed`, `appts_set`, `script_adherence_score`, `composite`, `captured_at`, `notes JSONB`. Unique on `(tenant_id, user_id, date)`; index on `(tenant_id, date)`. Generated by `lib/kpis/lm-deac.ts`. Additive, zero data risk. |
+| 2026-05-13 | `20260513000000_session_summary_forget` | **Session 88.** Forget-flag column on `AssistantSessionSummary` for explicit user-driven memory purge ("forget what we discussed yesterday"). Additive nullable boolean. |
+| 2026-05-13 | `20260513200000_add_ai_log_prompt_version` | **Session 89 — LLM Rewiring Phase 8 drift signal.** Adds nullable `prompt_version TEXT` column to `ai_logs` + composite index `(type, prompt_version)`. Every `logAiCall` site now stamps the semver of the prompts/<surface>.ts VERSION constant in effect at call time (16 prompt-version sources / 22 logAiCall call sites — see SYSTEM_MAP.md "LLM Rewiring drift signal" for the full surface map). Phase 9 drift queries (`scripts/drift-report.ts`) group ai_logs by `(type, page-context bucket, prompt_version)` to surface score / latency / cost deltas across prompt revisions. Additive, fully nullable, legacy rows stay NULL. `logAiCall` has an internal try/catch at `lib/ai/log.ts:56` so deploy ordering is FLEXIBLE — if migration runs late, the AI surface keeps working, only telemetry is paused until the column lands. |
 
 ---
 

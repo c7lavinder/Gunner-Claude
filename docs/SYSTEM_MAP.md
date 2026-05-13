@@ -828,6 +828,93 @@ turns, fire-and-forget. On new session, `getRecentSessionMemory` loads
 the last 3 daily summaries (30-day lookback cap) into the assistant
 system prompt. Storage: `assistant_session_summaries` table.
 
+#### LLM Rewiring Phases 6-10 (Sessions 87-89)
+
+The big AI-quality program from `docs/LLM_REWIRING_PLAN.md`. All ten
+phases shipped to main by 2026-05-13. The four artifacts you'd reach
+for from a new session:
+
+1. **`lib/ai/prompts/` modules** — every system + user prompt now lives
+   in its own file, each exporting a `VERSION = 'major.minor.patch'`
+   semver. One module per surface:
+
+   | Module | VERSION | Surface | Caller |
+   |---|---|---|---|
+   | `prompts/grading.ts` | 1.1.0 | call grading | `lib/ai/grading.ts` |
+   | `prompts/next-steps.ts` | 1.0.0 | post-grade follow-up actions | `lib/ai/grading.ts` (auto-fire) |
+   | `prompts/deal-intel.ts` | 1.4.0 | deal intel extraction | `lib/ai/extract-deal-intel.ts` |
+   | `prompts/coach.ts` | 1.0.0 | conversational coaching | `lib/ai/coach.ts` |
+   | `prompts/assistant.ts` | 1.0.0 | Role Assistant chat | `app/api/ai/assistant/route.ts` |
+   | `prompts/story.ts` | 1.1.0 | property story narrative | `lib/ai/generate-property-story.ts` |
+   | `prompts/dispo.ts` | 1.0.0 | dispo description/listing/social/tier-messages | `lib/ai/dispo-generators.ts` |
+   | `prompts/user-profile.ts` | 1.0.0 | weekly per-rep coaching profile | `lib/ai/generate-user-profiles.ts` |
+   | `prompts/session-summarizer.ts` | 1.0.0 | daily session memory rollup | `lib/ai/session-summarizer.ts` |
+   | `prompts/enrich-property.ts` | 1.0.0 | property ARV/repair/rental estimator | `lib/ai/enrich-property.ts` |
+   | `prompts/photo-classifier.ts` | 1.0.0 | photo category classifier (silent, not logged) | `lib/ai/photo-classifier.ts` |
+   | `prompts/role-overrides.ts` | data module (no VERSION) | role context for every prompt | every prompt file |
+
+   API routes with inline prompts (smaller, not extracted) declare a
+   local `const X_PROMPT_VERSION = '1.0.0'` constant at the top of the
+   route file and pass it through `logAiCall`: `AI_EDIT_PROMPT_VERSION`,
+   `NEXT_STEPS_MANUAL_PROMPT_VERSION` (the API-side variant, separate
+   from `prompts/next-steps.ts`), `PROPERTY_SUGGESTIONS_PROMPT_VERSION`,
+   `BLAST_LEGACY_PROMPT_VERSION`, `OUTREACH_ACTION_PROMPT_VERSION`,
+   `BUYER_RESPONSE_CLASSIFY_PROMPT_VERSION`, `BUYER_SCORING_PROMPT_VERSION`.
+
+   **Rule when changing a prompt:** bump the VERSION constant in the same
+   commit. Drift detection groups `ai_logs` by `prompt_version` — a
+   silent edit without a bump corrupts the drift signal.
+
+2. **Drift signal (Phase 8) — `ai_logs.prompt_version`** column +
+   composite `(type, prompt_version)` index. Every `logAiCall` site
+   stamps the VERSION constant at call time. Migration:
+   `20260513200000_add_ai_log_prompt_version` (additive, nullable —
+   legacy rows stay NULL).
+
+   `lib/ai/log.ts` is the SINGLE choke point for `db.aiLog.create` —
+   internal try/catch at line 56 swallows P2022 errors so deploy
+   ordering is FLEXIBLE (migration can run before or after deploy
+   without breaking AI surfaces).
+
+3. **Tiered eval framework (Phase 7) — `evals/`** directory:
+   - `evals/golden/smoke.ts` (5 evals, pre-commit gate, ~$0.82/run)
+   - `evals/golden/medium.ts` (20 evals, every-PR CI gate, ~$2.20/run)
+   - `evals/golden/full.ts` (49 evals = 24 medium + 25 full-only +
+     5 adversarial, manual + weekly cron, ~$5.77/run)
+   - `evals/scorer.ts` — Haiku-as-judge with k=3 majority + one-retry
+     safety net (Session 89 pass 6)
+   - `evals/runners/_shared.ts` — shared cache (24h SHA-256 of
+     `lib/ai/`), env loader, suite executor, markdown renderer
+   - Each eval has `expectedBehaviors` + `mustNotDo` lists graded
+     independently; sharpening pattern: explicit
+     VIOLATION + NOT-A-VIOLATION examples (Section 28b of
+     `docs/LLM_AUDIT_BASELINE.md`)
+
+   CI workflow at `.github/workflows/evals.yml` fires smoke + medium
+   on every PR touching `lib/ai/**`, `evals/**`, or `package*.json`.
+   Weekly drift cron `weekly-evals` (Sunday 4:30am UTC) runs full
+   with `EVAL_FORCE=1`.
+
+4. **Adversarial / red-team set (Phase 9a)** — 5 production-safety
+   evals in `evals/golden/full.ts` covering: prompt injection in
+   transcript (`F_ADV_DEAL_INTEL_INJECTION`), system-prompt
+   extraction (`F_ADV_ASSISTANT_EXTRACT`), role-escalation claim
+   (`F_ADV_ASSISTANT_ROLE_ESCALATE`), tool-call spoofing
+   (`F_ADV_GRADING_TOOL_SPOOF`), out-of-scope deflection
+   (`F_ADV_COACH_OUT_OF_SCOPE`). All 5 PASS as of 2026-05-13.
+
+5. **Diagnostic scripts** (Phase 8/9/10 operational tooling, all
+   read-only — see `OPERATIONS.md` for details):
+   - `scripts/_phase8-check.ts` (transient — delete after Phase 8
+     sign-off) — wiring health
+   - `scripts/drift-report.ts` (Phase 9b) — score/latency/cost
+     deltas by prompt_version
+   - `scripts/model-regression.ts` (Phase 9c) — diff two
+     full-tier reports when Anthropic ships a new model
+   - `scripts/mine-eval-candidates.ts` (Phase 10) — mine
+     rejected/edited AiLogs + BugReports + calibration markers
+     for new eval-fixture candidates
+
 #### Propose → Edit → Confirm flow (closed Blocker #2 in Session 38)
 
 1. **Propose:** AI emits action card with input fields pre-filled from page
