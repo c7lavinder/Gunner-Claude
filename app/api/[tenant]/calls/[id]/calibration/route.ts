@@ -31,12 +31,17 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
   })
   if (!call) return NextResponse.json({ error: 'Call not found' }, { status: 404 })
 
-  // Resolve the operation. New shape uses `kind`; legacy uses `isCalibration`.
-  const clearing = body.isCalibration === false || (!body.kind && body.isCalibration !== true)
-  const kindNormalized = body.kind === 'good' || body.kind === 'bad' ? body.kind : null
-  const notesTrim = (body.notes ?? '').trim().slice(0, 1000)
+  // Resolve the operation across three shapes:
+  //   - New typed:  { kind: 'good' | 'bad', notes?: string }      → flag with kind
+  //   - Clear:      { isCalibration: false }                        → unflag
+  //   - Legacy:     { isCalibration: true } (no kind)               → flag un-typed
+  const kindNormalized: 'good' | 'bad' | null =
+    body.kind === 'good' || body.kind === 'bad' ? body.kind : null
+  const notesTrim = (typeof body.notes === 'string' ? body.notes : '').trim().slice(0, 1000)
+  const isLegacyFlag = body.isCalibration === true && !kindNormalized
+  const isClear = body.isCalibration === false
 
-  if (clearing) {
+  if (isClear) {
     await db.call.update({
       where: { id: params.id },
       data: { isCalibration: false, calibrationNotes: null },
@@ -52,9 +57,34 @@ export const POST = withTenant<{ id: string }>(async (req, ctx, params) => {
     return NextResponse.json({ status: 'success', isCalibration: false, kind: null })
   }
 
+  // Legacy `{ isCalibration: true }` — set the flag without a kind. The row
+  // surfaces in mine-eval-candidates Section 3 under "Un-typed" so the
+  // manager can re-classify later.
+  if (isLegacyFlag) {
+    await db.call.update({
+      where: { id: params.id },
+      data: { isCalibration: true, calibrationNotes: null },
+    })
+    await db.auditLog.create({
+      data: {
+        tenantId: ctx.tenantId, userId: ctx.userId,
+        action: 'call.calibration.flagged',
+        resource: 'call', resourceId: params.id,
+        source: 'USER', severity: 'INFO',
+        payload: { kind: null, hasNotes: false, legacy: true },
+      },
+    }).catch(() => {})
+    return NextResponse.json({
+      status: 'success', isCalibration: true, kind: null, calibrationNotes: null,
+    })
+  }
+
   // Setting kind. Format notes as "<kind>: <text>" to match the convention.
   if (!kindNormalized) {
-    return NextResponse.json({ error: 'kind must be "good" or "bad"' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'kind must be "good" or "bad", OR pass { isCalibration: false } to clear' },
+      { status: 400 },
+    )
   }
   const composedNotes = notesTrim.length > 0
     ? `${kindNormalized}: ${notesTrim}`
